@@ -13,30 +13,30 @@
 [![Agent: XiaoZhi-MCP](https://img.shields.io/badge/Agent-Local%20Qwen2.5%20%2B%20MCP-purple.svg)](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Pro)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> 🎓 **Undergraduate Capstone Project — High-Stage Engineering Archive**  
-> Tailored to the rigorous research standards of top-tier Japanese graduate research laboratories (The University of Tokyo / Tokyo Tech / Kyoto Univ. in HCI, Edge AI, and Embodied Intelligence) and world-leading consumer tech enterprises (Sony, Nintendo).  
+> 🎓 **Undergraduate Course Capstone Project — High-Stage Engineering Archive**  
+> This repository archives the high-stage evolution of the intelligent lighting interactive system. Under zero-additional-hardware constraints, it adopts a **"PC Host Compute Core + Single-MCU Physical Actuator"** heterogeneous architecture, featuring complete S3 hardware actuation, local LLM Agent, 3D hand/gaze tracking, advanced audio-reactive streaming, and a custom control terminal.  
 > 🔗 **Mid-Stage Baseline Archive**: [Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid) (Dual-MCU baseline architecture)
 
 ---
 
-## 🌟 Evolution from Mid-Stage: Zero-Hardware-Cost Paradigm Shift
+## 🌟 System Evolution & Comparison with Mid-Stage
 
-Under strict **zero-additional-hardware constraints**, the system leverages the existing **PC Host (RTX 4060 + Webcam) + Single ESP32-S3R16N8 + 16×16 WS2812B Matrix**, transforming the mid-stage reactive lighting board into a **proactive, embodied multimodal interactive ecosystem**:
+Under existing hardware constraints (PC Host + ESP32-S3R16N8 + 16×16 WS2812B Matrix), the system undergoes comprehensive architectural refactoring:
 
 | Dimension | Mid-Stage Baseline | High-Stage Pro Evolution |
 | :--- | :--- | :--- |
 | **Hardware Architecture** | Dual-MCU (S3 Voice + WROOM-32 LEDs) with inter-board UART | **Unified Single-MCU Architecture**: Deprecates WROOM-32 entirely; S3 autonomously schedules audio, networking, and rendering |
-| **Driver & Rendering** | Arduino FastLED bit-banging with blocking global interrupts | **ESP-IDF Native RMT Hardware Driver**: DMA-driven streaming, **0% CPU blocking**, zero interrupt suppression, 60FPS double-buffering |
-| **Spatial Perception** | Jetson Nano 2D finger counting & offline Haar cascade | **Multimodal Embodied Perception**: PC-driven 3D skeletal hand tracking + Gaze attention + Facial affective micro-expression recognition |
-| **Cognitive Brain** | Cloud-tethered proprietary voice server with rigid tools | **Local Private Embodied Agent**: Local Qwen2.5 Kurisu Makise character Agent on RTX 4060, Mem0 long-term memory, MCP bidirectional function calling |
+| **Driver & Rendering** | Arduino FastLED bit-banging with blocking global interrupts | **ESP-IDF Native RMT Hardware Driver**: DMA-driven streaming, 0% CPU blocking, 60FPS double-buffering |
+| **Spatial Perception** | Jetson Nano 2D finger counting & offline Haar cascade | **Multimodal Perception**: PC-driven 3D skeletal hand tracking + Gaze attention + Facial affective recognition |
+| **Cognitive Brain** | Cloud-tethered proprietary voice server with rigid tools | **Local Private Agent**: Local Qwen2.5 Kurisu Makise character Agent on RTX 4060, Mem0 memory, MCP function calling |
 | **Acoustic Interaction** | Static prompt sounds, conventional linear FFT levels | **LAN Full-Duplex Lossless Audio Streaming** + **Advanced MIR Features** (Onset detection, spectral flux, acoustic fluid simulation) |
-| **Games & Control** | Fixed-speed arcade games; third-party Blinker app | **Dynamic Difficulty Adjustment (DDA Flow)** + **Custom Cross-Platform App** + **1:1 3D WebGL Digital Twin Simulation** |
+| **Games & Control** | Fixed-speed arcade games; third-party Blinker app | **Dynamic Difficulty Adjustment (DDA)** + **Custom Cross-Platform App** + **1:1 3D WebGL Digital Twin Simulation** |
 
 ---
 
 ## 🏛️ System Architecture
 
-Adopting a **"Heterogeneous Edge-Device Collaborative"** distributed topology, compute-heavy AI tasks and microsecond-level physical pulse timing are cleanly decoupled:
+The PC Host and ESP32-S3 collaborate via a local high-speed network bus:
 
 ```mermaid
 graph TD
@@ -45,7 +45,7 @@ graph TD
         MP["MediaPipe 3D Skeletal Tracking (21 Joints)<br>• Photonic Gravitational Field (Grasp / Throw / Boundary Bounce)"]
         GAZE["Gaze Tracking & Head Pose Estimation<br>• Focus-point localization<br>• Departure low-power breathing aura"]
         EMO["Affective Micro-Expression Recognition<br>• Fatigue empathy care / Smile fireworks"]
-        LLM["Local Private LLM Kurisu Makise Agent<br>• Qwen2.5-7B-Instruct (4-bit quantized)<br>• Mem0 Long-term Contextual Memory"]
+        LLM["Local Private LLM Kurisu Makise Agent<br>• Qwen2.5-7B-Instruct local inference<br>• Mem0 Long-term Contextual Memory"]
         MIR["Advanced MIR Music Information Retrieval<br>• Onset transients / Spectral flux / LAN streaming"]
     end
 
@@ -74,19 +74,19 @@ graph TD
 
 ---
 
-## 🧮 The 18 Technical Pillars
+## 🧮 18 Technical Features & Implementations
 
-Strictly aligned with [`docs/HIGH_STAGE_SYSTEM_SPEC_18.md`](docs/HIGH_STAGE_SYSTEM_SPEC_18.md):
+Categorized into four technical modules according to system requirements:
 
 ### I. Hardware Driver & Low-Level System Innovation
 1. **Unified Single-MCU Architecture**: Eliminates WROOM-32; runs FreeRTOS dual-core heterogeneously, reducing inter-board latency from 15ms to 0ms.
 2. **ESP-IDF Native RMT Driver**: DMA-driven pulse transmission with zero interrupt masking, preventing Wi-Fi packet drops and audio stutters.
-3. **Double-Buffered Framebuffer & Gamma Correction**: Eliminates tearing at 60FPS; compensates non-linear human visual perception for smooth low-brightness gradients.
+3. **Double-Buffered Framebuffer & Gamma Correction**: Eliminates tearing at 60FPS; compensates non-linear human visual perception.
 4. **1:1 Lossless Mid-Stage Porting**: Preserves all 14 mid-stage modes, expressions, and the 4x 8x8 closed-form mathematical coordinate transformer.
 
 ### II. Embodied Multimodal Brain & Character Agent
-5. **Local Qwen2.5 Deployment on RTX 4060**: 7B-parameter local inference with ultra-low Time-to-First-Token (TTFT) and full privacy protection.
-6. **Kurisu Makise Character Personality & Long-Term Memory**: Fine-tuned tsundere scientist persona with Mem0 memory (remembers master's title "Okabe", habits, past topics).
+5. **Local Qwen2.5 Deployment on RTX 4060**: 7B-parameter local inference with fast local response and full privacy protection.
+6. **Kurisu Makise Character Personality & Long-Term Memory**: Custom tsundere scientist persona with Mem0 memory (remembers master's title "Okabe", habits, past topics).
 7. **XiaoZhi Firmware MCP Function Calling**: Full hardware voice wake-up retained; MCP server provides LLM with bidirectional function-level control over every LED.
 8. **Natural Language Semantic Hourglass Countdown**: "Kurisu, start a 60-second countdown" triggers a physical hourglass particle collapse lasting exactly 60s.
 9. **Steins;Gate Divergence Meter Easter Egg**: Voice trigger initiates nixie tube random number cycling with electrical crackle audio, locking onto the 1.048596% Steins Gate worldline.
@@ -101,8 +101,8 @@ Strictly aligned with [`docs/HIGH_STAGE_SYSTEM_SPEC_18.md`](docs/HIGH_STAGE_SYST
 14. **LAN Real-Time Lossless Audio Streaming**: Streams PC/mobile audio wirelessly to S3 hardware DAC, turning the device into a desktop smart speaker.
 15. **Advanced MIR Engine & Acoustic Fluid Resonance**: Onset transient detection, spectral flux, and beat phase drive dynamic fluid wave equations across the matrix.
 16. **Contactless Gaze/Gesture Game Controls**: Steers Snake and Tetris via eye gaze orientation or airborne hand waves.
-17. **Nintendo-Grade Dynamic Difficulty Adjustment (DDA)**: Adapts drop speeds and turn tolerances based on reaction times and facial stress to sustain player "Flow".
-18. **Custom Cross-Platform App & 3D WebGL Digital Twin**: Replaces Blinker with a native responsive UI and a Three.js 1:1 photorealistic physical diffuse simulator.
+17. **Dynamic Difficulty Adjustment (DDA)**: Adapts drop speeds and turn tolerances based on reaction times and facial stress to sustain player experience.
+18. **Custom Cross-Platform App & 3D WebGL Digital Twin**: Replaces Blinker with a native responsive UI and a Three.js 1:1 physical diffuse simulator.
 
 ---
 
@@ -135,13 +135,13 @@ Intelligent-Lighting-Control-System-Pro/
 
 ## 📊 Target Performance Benchmarks
 
-| Metric | Mid-Stage Baseline | High-Stage Pro Target | Engineering Significance |
+| Metric | Mid-Stage Baseline | High-Stage Pro Target | Engineering Improvement |
 | :--- | :---: | :---: | :--- |
 | **MCU Lighting CPU Utilization** | 85% (Bit-banging blocking) | **< 2% (Hardware RMT DMA)** | Compute freed for audio and network |
 | **Matrix Render Frame Rate** | 30 FPS (Jitter-prone) | **Rock-solid 60 FPS (Double Buffer)** | Zero frame tearing and smooth gradients |
-| **Vision-to-Actuator Latency** | ~120 ms (Serial bottleneck) | **< 35 ms (High-speed LAN bus)** | Imperceptible contactless hand tracking |
+| **Vision-to-Actuator Latency** | ~120 ms (Serial bottleneck) | **< 35 ms (High-speed LAN bus)** | Low-latency contactless tracking |
 | **LLM Time-to-First-Token (TTFT)**| ~1800 ms (Cloud roundtrip) | **< 250 ms (Local RTX 4060)** | Natural conversational pace |
-| **Dynamic Power Limitation** | 5V / 1.2A hard cutoff | **5V / 1.2A soft limiter + Gamma** | Zero brownout risk, extended LED lifespan |
+| **Dynamic Power Limitation** | 5V / 1.2A hard cutoff | **5V / 1.2A soft limiter + Gamma** | Prevents brownouts and voltage drops |
 
 ---
 
