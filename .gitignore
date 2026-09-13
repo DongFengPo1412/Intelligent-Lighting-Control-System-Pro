@@ -1,0 +1,49 @@
+# Build & Temp folders
+build/
+bin/
+obj/
+out/
+dist/
+*.tmp
+*.log
+
+# ESP-IDF
+firmware-s3/build/
+firmware-s3/managed_components/
+firmware-s3/dependencies.lock
+firmware-s3/sdkconfig
+firmware-s3/sdkconfig.old
+
+# Python / PC Agent
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# Mobile App (Flutter / React Native)
+mobile-app/.dart_tool/
+mobile-app/build/
+mobile-app/node_modules/
+mobile-app/.expo/
+mobile-app/.npm/
+
+# IDE & OS
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Sensitive / Private credentials
+*.private.*
+*config.private.*
+secrets.json
+.env.local
