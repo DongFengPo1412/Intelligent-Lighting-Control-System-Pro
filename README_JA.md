@@ -15,7 +15,10 @@
 
 > 🎓 **大学通関型創成プロジェクト——学部上位成果（High-Stage Project）**  
 > 本リポジトリは、スマート照明インタラクティブシステムの上位発展実装をまとめたものです。ハードウェアの追加購入を行わない制約のもと、**「PC上位計算中枢＋単一マイコン物理実行部」**の異種協調アーキテクチャを採用し、単一S3マイコンによる一括駆動、ローカル私有化LLM Agent、3D骨格ジェスチャ・視線追従、高度音響同期、自作制御端末を実現しました。  
-> 🔗 **学部中間成果アーカイブ**：[Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid)（デュアルマイコン通信と基礎マトリクス）
+> 🔗 **シリーズプロジェクトの成長の系譜 (Project Evolution Hierarchy)**：  
+> - 🟢 **初級・基盤**：[Intelligent-Lighting-Control-System-Basic](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Basic)（ASRPRO オフライン音声SoC ＋ 16×16 WS2812B マトリクス物理プロトタイプ）  
+> - 🟡 **中級・進階**：[Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid)（非対称デュアルマイコンスケジューリング ＋ Jetson Nano エッジビジョン ＋ 24kHz 対数FFT音響ストリーム）  
+> - 🔴 **上級・フラッグシップ（本プロジェクト）**：単一ESP32-S3チップのネイティブRMTハードウェアDMA統合 ＋ ローカル大規模言語モデル身体性Agent（Qwen2.5 / MCP）＋ PC算力センター3D空間認識
 
 ---
 

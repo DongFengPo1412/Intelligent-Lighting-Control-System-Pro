@@ -15,7 +15,10 @@
 
 > 🎓 **Undergraduate Course Capstone Project — High-Stage Engineering Archive**  
 > This repository archives the high-stage evolution of the intelligent lighting interactive system. Under zero-additional-hardware constraints, it adopts a **"PC Host Compute Core + Single-MCU Physical Actuator"** heterogeneous architecture, featuring complete S3 hardware actuation, local LLM Agent, 3D hand/gaze tracking, advanced audio-reactive streaming, and a custom control terminal.  
-> 🔗 **Mid-Stage Baseline Archive**: [Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid) (Dual-MCU baseline architecture)
+> 🔗 **Project Evolution Hierarchy**:  
+> - 🟢 **Foundational Baseline**: [Intelligent-Lighting-Control-System-Basic](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Basic) (ASRPRO Edge AI Voice SoC + 16×16 WS2812B Matrix Hardware Baseline)  
+> - 🟡 **Mid-Stage Intermediate**: [Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid) (Dual-MCU Asymmetric Scheduling + Jetson Nano Edge Vision & 24kHz Logarithmic FFT Audio Streaming)  
+> - 🔴 **High-Stage Pro (This Project)**: Unified Single-Chip ESP32-S3 Native RMT DMA Architecture + Local Private Embodied Agent (Qwen2.5 / MCP) + PC Host 3D Spatial Vision Tracking
 
 ---
 

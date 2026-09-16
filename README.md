@@ -15,7 +15,10 @@
 
 > 🎓 **通关式项目课程——大四高阶成果 (High-Stage Project)**  
 > 本仓库为智能光影交互系统的高阶演进实现。在不增加硬件采购的条件下，采用 **“PC 上位机算力中枢 + 单片机物理执行端”** 的异构协同架构，实现了单板 S3 硬件全权接管、本地私有化大模型 Agent、3D 视觉手势与视线追踪、高级音频流随动以及自研控制终端。  
-> 🔗 **大三中阶工程归档**：[Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid)（双片机串口通信与基础音律矩阵）
+> 🔗 **系列项目演进轨迹 (Project Evolution Hierarchy)**：  
+> - 🟢 **初阶基石**：[Intelligent-Lighting-Control-System-Basic](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Basic)（ASRPRO 离线语音 SoC + 16×16 WS2812B 矩阵声光物理原型）  
+> - 🟡 **中阶进阶**：[Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid)（双单片机非对称硬件调度 + Jetson Nano 边缘视觉与 24kHz 对数 FFT 音频流）  
+> - 🔴 **高阶旗舰（本项目）**：单芯片 ESP32-S3 原生 RMT 硬件 DMA 驱动归一化重构 + 本地私有化大模型具身 Agent（Qwen2.5 / MCP）+ PC 算力中枢 3D 空间视觉追踪
 
 ---
 
