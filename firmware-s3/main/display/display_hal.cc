@@ -13,7 +13,7 @@ DisplayHAL& DisplayHAL::GetInstance()
 
 DisplayHAL::DisplayHAL()
     : led_strip_(nullptr),
-      base_brightness_(35),
+      base_brightness_(20),
       enable_compensation_(true),
       is_initialized_(false)
 {
@@ -134,12 +134,7 @@ esp_err_t DisplayHAL::Show()
         uint16_t g = (buffer_[i].g * base_brightness_) / 255;
         uint16_t b = (buffer_[i].b * base_brightness_) / 255;
 
-        // 2. 人眼 Gamma 2.2 伽马色彩拟合 (消除阶梯感与生硬感)
-        r = GAMMA_TABLE_22[r > 255 ? 255 : r];
-        g = GAMMA_TABLE_22[g > 255 ? 255 : g];
-        b = GAMMA_TABLE_22[b > 255 ? 255 : b];
-
-        // 3. 4 块 8x8 级联板非线性压降梯级补偿
+        // 2. 4 块 8x8 级联板非线性压降梯级补偿
         if (enable_compensation_) {
             uint32_t panel = i / 64;
             uint32_t scale_percent;

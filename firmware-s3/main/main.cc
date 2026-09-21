@@ -18,9 +18,9 @@ extern "C" void app_main(void)
     DisplayManager& display = DisplayManager::GetInstance();
     ESP_ERROR_CHECK(display.Init(GPIO_NUM_17));
 
-    // 2. 开启 4 块板硬件压降梯级均光校准与 Gamma 2.2 伽马色彩拟合
+    // 2. 开启 4 块板硬件压降梯级均光校准 (FastLED 线性色阶通透管线)
     display.SetCompensation(true);
-    display.SetBrightness(35);
+    display.SetBrightness(20);
 
     // 3. 启动后台独立渲染任务 (运行在 Core 1，优先级 5)
     ESP_ERROR_CHECK(display.StartTask(5, 1));
