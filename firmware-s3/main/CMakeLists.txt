@@ -1,0 +1,16 @@
+idf_component_register(
+    SRCS
+        "main.cc"
+        "display/display_hal.cc"
+        "display/effect_engine.cc"
+        "display/game_engine.cc"
+        "display/spectrum_engine.cc"
+        "display/display_manager.cc"
+    INCLUDE_DIRS
+        "."
+        "display"
+    REQUIRES
+        esp_driver_gpio
+        led_strip
+        esp_timer
+)

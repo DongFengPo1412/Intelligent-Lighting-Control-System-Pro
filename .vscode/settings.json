@@ -1,0 +1,21 @@
+{
+  "idf.customExtraVars": {
+    "OPENOCD_SCRIPTS": "C:\\Espressif\\tools\\openocd-esp32\\v0.12.0-esp32-20240318\\openocd-esp32\\share\\openocd\\scripts",
+    "OPENOCD_USB_ADAPTER_LOCATION": "2-1"
+  },
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
+  ],
+  "idf.currentSetup": "C:\\esp\\v5.5.4\\esp-idf",
+  "idf.portWin": "COM9",
+  "idf.projectPathWin": "${workspaceFolder}\\firmware-s3",
+  "idf.projectPath": "${workspaceFolder}/firmware-s3",
+  "idf.buildPathWin": "${workspaceFolder}\\firmware-s3\\build",
+  "idf.buildPath": "${workspaceFolder}/firmware-s3/build",
+  "clangd.path": "C:\\Espressif\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=c:\\workspace\\Intelligent-Lighting-Control-System-Pro\\firmware-s3\\build"
+  ]
+}
