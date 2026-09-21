@@ -15,6 +15,8 @@ void SpectrumEngine::Reset()
     for (int i = 0; i < 16; i++) {
         bands_[i] = 0;
         fall_bands_[i] = 0.0f;
+        peak_bands_[i] = 0.0f;
+        peak_hold_ticks_[i] = 0;
     }
 }
 
@@ -80,7 +82,7 @@ uint32_t SpectrumEngine::RenderFrame()
         int current_height = (int)fall_bands_[x];
         if (current_height > 15) current_height = 15;
 
-        // 3. 纵向绘制：15 - y 倒算物理坐标，从底部面板向上生长
+        // 3. 纵向绘制柱体：从底部向上生长
         for (int y = 0; y <= current_height; y++) {
             int target_physical_y = 15 - y;
             if (target_physical_y < 0) target_physical_y = 0;
@@ -88,6 +90,27 @@ uint32_t SpectrumEngine::RenderFrame()
             // 色彩渐变：暖色(红橙)在底，冷色(蓝紫)冲顶
             ColorRGB pixel_color = hsv2rgb_fast(ColorHSV(y * 14 + 140, 245, 255));
             hal.SetPixel(x, target_physical_y, pixel_color);
+        }
+
+        // 4. 专业峰值悬停顶针 (Peak-Hold Floating Dots)
+        if (fall_bands_[x] >= peak_bands_[x]) {
+            peak_bands_[x] = fall_bands_[x];
+            peak_hold_ticks_[x] = 10; // 悬停约 300ms
+        } else {
+            if (peak_hold_ticks_[x] > 0) {
+                peak_hold_ticks_[x]--;
+            } else {
+                peak_bands_[x] -= 0.5f; // 重力跌落
+                if (peak_bands_[x] < fall_bands_[x]) {
+                    peak_bands_[x] = fall_bands_[x];
+                }
+            }
+        }
+
+        int peak_y = 15 - (int)peak_bands_[x];
+        if (peak_y >= 0 && peak_y < 16) {
+            // 峰值悬停顶针以极亮纯白/极浅天蓝呈现，视觉冲击力极强
+            hal.SetPixel(x, peak_y, ColorRGB(255, 255, 255));
         }
     }
 

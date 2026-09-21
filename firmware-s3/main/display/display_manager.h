@@ -38,6 +38,12 @@ public:
     void SetBrightness(uint8_t brightness);
     void SetCompensation(bool enable);
 
+    // 智能倒计时系统 (按秒设置，256灯珠等比逐颗熄灭，精准对齐总耗时)
+    void StartCountdown(uint32_t total_seconds);
+    void StopCountdown();
+    bool IsCountdownActive() const;
+    uint32_t GetCountdownRemainingSeconds() const;
+
     // 获取底层组件 (高级扩展用)
     DisplayHAL& GetHAL() { return hal_; }
     EffectEngine& GetEffectEngine() { return effect_engine_; }
@@ -53,6 +59,7 @@ private:
 
     static void DisplayTaskTrampoline(void* arg);
     void DisplayTaskLoop();
+    uint32_t RenderCountdownTimer();
 
     DisplayHAL& hal_;
     EffectEngine effect_engine_;
@@ -64,4 +71,11 @@ private:
     SemaphoreHandle_t mutex_;
     TaskHandle_t task_handle_;
     bool is_running_;
+
+    // 智能倒计时状态机
+    uint32_t countdown_start_ms_;
+    uint32_t countdown_total_ms_;
+    bool countdown_active_;
+    bool countdown_finished_anim_;
+    uint32_t countdown_finish_start_ms_;
 };

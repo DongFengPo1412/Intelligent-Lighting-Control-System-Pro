@@ -23,6 +23,8 @@ public:
 private:
     int bands_[16];
     float fall_bands_[16]; // 重力滤波器下落高度
+    float peak_bands_[16]; // 专业峰值悬停顶针高度
+    uint8_t peak_hold_ticks_[16]; // 峰值悬停驻留计数
     int is_beat_;
     uint32_t last_feed_time_;
 };

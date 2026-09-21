@@ -15,7 +15,12 @@ DisplayManager::DisplayManager()
       last_mode_(DisplayMode::OFF),
       mutex_(nullptr),
       task_handle_(nullptr),
-      is_running_(false)
+      is_running_(false),
+      countdown_start_ms_(0),
+      countdown_total_ms_(0),
+      countdown_active_(false),
+      countdown_finished_anim_(false),
+      countdown_finish_start_ms_(0)
 {
     mutex_ = xSemaphoreCreateMutex();
 }
@@ -140,6 +145,10 @@ void DisplayManager::DisplayTaskLoop()
                 delay_ms = spectrum_engine_.RenderFrame();
                 break;
 
+            case DisplayMode::COUNTDOWN_TIMER:
+                delay_ms = RenderCountdownTimer();
+                break;
+
             default:
                 // 基础特效与表情包
                 delay_ms = effect_engine_.RenderFrame(mode);
@@ -203,4 +212,133 @@ void DisplayManager::SetBrightness(uint8_t brightness)
 void DisplayManager::SetCompensation(bool enable)
 {
     hal_.SetCompensationEnabled(enable);
+}
+
+// =========================================================================
+// 智能倒计时系统 (按秒设置，256灯珠等比逐颗熄灭，精准对齐总耗时)
+// =========================================================================
+void DisplayManager::StartCountdown(uint32_t total_seconds)
+{
+    if (total_seconds == 0) {
+        StopCountdown();
+        return;
+    }
+
+    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
+        countdown_start_ms_ = get_millis();
+        countdown_total_ms_ = total_seconds * 1000;
+        countdown_active_ = true;
+        countdown_finished_anim_ = false;
+        countdown_finish_start_ms_ = 0;
+        current_mode_ = DisplayMode::COUNTDOWN_TIMER;
+        xSemaphoreGive(mutex_);
+    }
+
+    ESP_LOGI(TAG, ">>> [倒计时启动]: 目标时长 %u 秒 (%u 毫秒), 256颗灯珠进入精确等比退行扫描",
+             (unsigned int)total_seconds, (unsigned int)(total_seconds * 1000));
+}
+
+void DisplayManager::StopCountdown()
+{
+    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
+        countdown_active_ = false;
+        countdown_finished_anim_ = false;
+        current_mode_ = DisplayMode::OFF;
+        xSemaphoreGive(mutex_);
+    }
+}
+
+bool DisplayManager::IsCountdownActive() const
+{
+    return countdown_active_;
+}
+
+uint32_t DisplayManager::GetCountdownRemainingSeconds() const
+{
+    if (!countdown_active_) return 0;
+    uint32_t now = get_millis();
+    uint32_t elapsed = now - countdown_start_ms_;
+    if (elapsed >= countdown_total_ms_) return 0;
+    return (countdown_total_ms_ - elapsed + 999) / 1000;
+}
+
+uint32_t DisplayManager::RenderCountdownTimer()
+{
+    uint32_t now = get_millis();
+
+    // 1. 如果倒计时已完成，播放终结脉冲呼吸闪烁动画 (提示用户时间到)
+    if (countdown_finished_anim_) {
+        uint32_t finish_elapsed = now - countdown_finish_start_ms_;
+        if (finish_elapsed < 1500) {
+            // 2次柔和脉冲呼吸闪烁
+            uint8_t pulse = beatsin8(80, 0, 255);
+            hal_.FillSolid(ColorRGB(pulse, pulse, pulse));
+            hal_.Show();
+            return 33;
+        } else {
+            // 动画完成，自动关屏或复位
+            countdown_active_ = false;
+            countdown_finished_anim_ = false;
+            SetMode(DisplayMode::OFF);
+            hal_.Clear();
+            hal_.Show();
+            return 33;
+        }
+    }
+
+    // 2. 正常倒计时流逝计算
+    uint32_t elapsed_ms = now - countdown_start_ms_;
+
+    // 检查是否恰好耗尽设定时间
+    if (elapsed_ms >= countdown_total_ms_) {
+        countdown_finished_anim_ = true;
+        countdown_finish_start_ms_ = now;
+        ESP_LOGI(TAG, ">>> [倒计时结束]: 耗时精准对齐，播放到时全屏脉冲提示！");
+        return 33;
+    }
+
+    // 剩余进度比例 1.0f -> 0.0f
+    float remaining_ratio = 1.0f - ((float)elapsed_ms / (float)countdown_total_ms_);
+    float active_float = remaining_ratio * 256.0f;
+    int active_leds = (int)active_float;
+    if (active_leds < 0) active_leds = 0;
+    if (active_leds > 256) active_leds = 256;
+
+    // 3. 动态情感色彩计算：根据剩余时间百分比无级渐变
+    ColorRGB current_color;
+    if (remaining_ratio > 0.5f) {
+        // 100% ~ 50%: 青碧绿 -> 翡翠翠绿 (平静、充裕)
+        float t = (1.0f - remaining_ratio) / 0.5f;
+        current_color = ColorRGB::Lerp(ColorRGB(0, 255, 180), ColorRGB(0, 255, 50), t);
+    } else if (remaining_ratio > 0.2f) {
+        // 50% ~ 20%: 翡翠绿 -> 暖调琥珀橙 (提醒、过半)
+        float t = (0.5f - remaining_ratio) / 0.3f;
+        current_color = ColorRGB::Lerp(ColorRGB(0, 255, 50), ColorRGB(255, 160, 0), t);
+    } else {
+        // 20% ~ 0%: 警示烈焰红 (伴随心跳呼吸频闪，压迫感)
+        uint8_t pulse = beatsin8(140, 140, 255);
+        current_color = ColorRGB(pulse, 0, (uint8_t)(pulse * 0.1f));
+    }
+
+    // 4. 256 颗灯珠蛇形逐颗熄灭拓扑
+    // k 从 0 到 255：
+    // k < active_leds 点亮，k >= active_leds 熄灭
+    hal_.Clear();
+
+    for (int k = 0; k < active_leds; k++) {
+        int y = k / 16;
+        int x = (y % 2 == 0) ? (k % 16) : (15 - (k % 16));
+
+        // 如果是正在过渡的临界灯珠，按亚像素浮点进行亮度羽化，使熄灭极其丝滑
+        if (k == active_leds - 1) {
+            float frac = active_float - (float)active_leds;
+            uint8_t scale = (uint8_t)(frac * 80.0f + 20.0f);
+            hal_.SetPixel(x, y, current_color.scale(scale));
+        } else {
+            hal_.SetPixel(x, y, current_color);
+        }
+    }
+
+    hal_.Show();
+    return 33; // 约 30 FPS 高帧率渲染
 }

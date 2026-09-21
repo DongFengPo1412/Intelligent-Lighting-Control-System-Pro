@@ -18,83 +18,92 @@ extern "C" void app_main(void)
     DisplayManager& display = DisplayManager::GetInstance();
     ESP_ERROR_CHECK(display.Init(GPIO_NUM_17));
 
-    // 2. 开启 4 块板硬件压降梯级均光校准 (彻底解决 3V3 下前亮后暗)
+    // 2. 开启 4 块板硬件压降梯级均光校准与 Gamma 2.2 伽马色彩拟合
     display.SetCompensation(true);
-    display.SetBrightness(20);
+    display.SetBrightness(35);
 
     // 3. 启动后台独立渲染任务 (运行在 Core 1，优先级 5)
     ESP_ERROR_CHECK(display.StartTask(5, 1));
 
-    ESP_LOGI(TAG, ">>> [系统就绪]: 进入高阶模式自动巡检演示循环...");
+    ESP_LOGI(TAG, ">>> [系统就绪]: 进入高阶灯效审美重构与倒计时系统自动巡检演示循环...");
 
     int demo_cycle = 0;
     while (1) {
         ESP_LOGI(TAG, "\n========== 演示轮次 %d ==========", ++demo_cycle);
 
-        // 1. 幻彩霓虹 (模式 4)
-        ESP_LOGI(TAG, ">>> [演示 1/8]: 模式 4 - 幻彩霓虹 (Rainbow Wave)");
+        // 1. 真 2D 对角对流彩虹 (模式 4)
+        ESP_LOGI(TAG, ">>> [演示 1/9]: 模式 4 - 真 2D 对角对流彩虹 (True 2D Rainbow Field，零接缝断层)");
         display.SetMode(DisplayMode::RAINBOW_WAVE);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        vTaskDelay(pdMS_TO_TICKS(3500));
 
-        // 2. 呼吸极光 (模式 5)
-        ESP_LOGI(TAG, ">>> [演示 2/8]: 模式 5 - 呼吸极光 (Aurora Breathe)");
+        // 2. 复合流光极光 (模式 5)
+        ESP_LOGI(TAG, ">>> [演示 2/9]: 模式 5 - 复合流光极光 (Aurora Symphony，双波长正弦干涉场)");
         display.SetMode(DisplayMode::AURORA_BREATHE);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        vTaskDelay(pdMS_TO_TICKS(3500));
 
-        // 3. 流星划过 (模式 6)
-        ESP_LOGI(TAG, ">>> [演示 3/8]: 模式 6 - 流星划过 (Meteor Trail)");
-        display.SetMode(DisplayMode::METEOR_TRAIL);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        // 3. 赛博壁炉物理火焰 (模式 23)
+        ESP_LOGI(TAG, ">>> [演示 3/9]: 模式 23 - 赛博物理火焰模拟 (Perlin Cyber Flame，热量对流与黑体辐射)");
+        display.SetMode(DisplayMode::CYBER_FIRE);
+        vTaskDelay(pdMS_TO_TICKS(4000));
 
-        // 4. 中心波纹 (模式 10)
-        ESP_LOGI(TAG, ">>> [演示 4/8]: 模式 10 - 中心波纹 (Center Ripple)");
+        // 4. 黑客帝国代码雨 Pro (模式 24)
+        ESP_LOGI(TAG, ">>> [演示 4/9]: 模式 24 - 黑客帝国代码雨 Pro (Matrix Code Rain 2.0，16列独立长尾流)");
+        display.SetMode(DisplayMode::MATRIX_RAIN_PRO);
+        vTaskDelay(pdMS_TO_TICKS(4000));
+
+        // 5. 抗锯齿中心波纹 (模式 10)
+        ESP_LOGI(TAG, ">>> [演示 5/9]: 模式 10 - 抗锯齿双同心波纹 (Center Ripple)");
         display.SetMode(DisplayMode::CENTER_RIPPLE);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        vTaskDelay(pdMS_TO_TICKS(3500));
 
-        // 5. 经典表情包全家桶 (模式 11, 12, 13, 14)
-        ESP_LOGI(TAG, ">>> [演示 5/8]: 表情包矩阵 - 笑脸 -> 哭脸 -> 平静 -> 动态变换");
+        // 6. AI 灵动微表情系统 (模式 11, 12, 13, 14: 自然生理眨眼 + 眼神游移)
+        ESP_LOGI(TAG, ">>> [演示 6/9]: AI 灵动微表情系统 (生理眨眼 + 眼神张望 + 情绪呼吸)");
         display.SetMode(DisplayMode::FACE_SMILE);
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        vTaskDelay(pdMS_TO_TICKS(2500));
         display.SetMode(DisplayMode::FACE_CRY);
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        vTaskDelay(pdMS_TO_TICKS(2500));
         display.SetMode(DisplayMode::FACE_NEUTRAL);
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        vTaskDelay(pdMS_TO_TICKS(2500));
         display.SetMode(DisplayMode::FACE_DYNAMIC);
         vTaskDelay(pdMS_TO_TICKS(2500));
 
-        // 6. 俄罗斯方块游戏演示 (模式 21)
-        ESP_LOGI(TAG, ">>> [演示 6/8]: 模式 21 - 俄罗斯方块经典游戏");
+        // 7. 经典游戏复刻 (俄罗斯方块与贪吃蛇)
+        ESP_LOGI(TAG, ">>> [演示 7/9]: 经典游戏矩阵 - 俄罗斯方块 & 贪吃蛇");
         display.SetMode(DisplayMode::TETRIS_GAME);
-        for (int step = 0; step < 8; step++) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            if (step % 3 == 0) display.TetrisMove(-1);
-            else if (step % 3 == 1) display.TetrisRotate();
-            else display.TetrisMove(1);
-        }
-
-        // 7. 贪吃蛇游戏演示 (模式 19)
-        ESP_LOGI(TAG, ">>> [演示 7/8]: 模式 19 - 贪吃蛇经典游戏");
-        display.SetMode(DisplayMode::SNAKE_GAME);
-        for (int step = 0; step < 8; step++) {
+        for (int step = 0; step < 6; step++) {
             vTaskDelay(pdMS_TO_TICKS(400));
+            if (step % 2 == 0) display.TetrisMove(-1);
+            else display.TetrisRotate();
+        }
+        display.SetMode(DisplayMode::SNAKE_GAME);
+        for (int step = 0; step < 6; step++) {
+            vTaskDelay(pdMS_TO_TICKS(350));
             if (step == 2) display.SnakeMove(0, 1);
             else if (step == 4) display.SnakeMove(-1, 0);
-            else if (step == 6) display.SnakeMove(0, -1);
         }
 
-        // 8. 音律随动模拟测试 (模式 15)
-        ESP_LOGI(TAG, ">>> [演示 8/8]: 模式 15 - 16频段重力音律随动引擎 (重力跌落+鼓点叠加)");
+        // 8. 专业调音台级音律随动 (模式 15: 峰值悬停顶针 + 重力自由落体)
+        ESP_LOGI(TAG, ">>> [演示 8/9]: 模式 15 - 专业音律随动 (带 Peak-Hold 峰值悬停顶针与重力跌落)");
         display.SetMode(DisplayMode::AUDIO_SPECTRUM);
-        for (int frame = 0; frame < 80; frame++) {
+        for (int frame = 0; frame < 70; frame++) {
             int simulated_bands[16];
             int beat = (frame % 16 == 0) ? 1 : 0;
             for (int b = 0; b < 16; b++) {
-                // 模拟多频段声浪起伏
-                int val = (int)(fabsf(sinf(frame * 0.2f + b * 0.4f)) * 14.0f) + random8(3);
+                int val = (int)(fabsf(sinf(frame * 0.22f + b * 0.45f)) * 14.0f) + random8(3);
                 simulated_bands[b] = (val > 15) ? 15 : val;
             }
             display.FeedSpectrum(beat, simulated_bands);
             vTaskDelay(pdMS_TO_TICKS(50));
         }
+
+        // 9. 智能倒计时系统 (模式 25: 精确等比逐颗熄灭，动态情感色彩流变)
+        ESP_LOGI(TAG, ">>> [演示 9/9]: 模式 25 - 智能高精度倒计时 (演示 8 秒倒计时，256 灯珠逐颗渐次熄灭)");
+        display.StartCountdown(8); // 演示 8 秒倒计时
+        while (display.IsCountdownActive()) {
+            uint32_t rem = display.GetCountdownRemainingSeconds();
+            ESP_LOGI(TAG, "    [倒计时中]: 剩余 %u 秒...", (unsigned int)rem);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        vTaskDelay(pdMS_TO_TICKS(1500)); // 留白呼吸感
     }
 }
