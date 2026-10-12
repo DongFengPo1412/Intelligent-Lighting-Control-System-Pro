@@ -25,6 +25,8 @@ env/
 ENV/
 *.egg-info/
 .pytest_cache/
+models/kurisu_tts/*.ckpt
+models/kurisu_tts/*.pth
 
 # Android Native App
 android-app/bin/

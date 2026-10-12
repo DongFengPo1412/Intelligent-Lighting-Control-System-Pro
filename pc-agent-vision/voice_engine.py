@@ -40,7 +40,16 @@ class VoiceEngine:
 
         # 调优语速 (175 wpm 展现傲娇科学家的敏捷思维)
         self.current_volume = 100
-        print(f"[VoiceEngine] 本地离线声学引擎就绪 (中文: Huihui, 日文: Haruka, 0ms网络延迟)")
+        
+        # 牧濑红莉栖 GPT-SoVITS 模型与原声音频路径
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.model_dir = os.path.join(base_dir, "models", "kurisu_tts")
+        self.prompt_shy = os.path.join(self.model_dir, "prompt_shy.wav")
+        self.prompt_sigh = os.path.join(self.model_dir, "prompt_sigh.wav")
+        self.gpt_sovits_api = os.environ.get("GPT_SOVITS_API", "http://127.0.0.1:9880")
+        
+        has_weights = os.path.exists(os.path.join(self.model_dir, "kurisu-e15.ckpt")) and os.path.exists(os.path.join(self.model_dir, "kurisu_e4_s972.pth"))
+        print(f"[VoiceEngine] 牧濑红莉栖专属音色引擎就绪 (GPT-SoVITS 权重就绪: {has_weights})")
 
     @property
     def volume(self) -> int:
@@ -66,11 +75,84 @@ class VoiceEngine:
                 return True
         return False
 
+    def _wav_file_to_pcm16k(self, file_path: str) -> Optional[bytes]:
+        """将任意 WAV 文件转换为 16kHz 16-bit 单声道 PCM 硬件字节流"""
+        if not os.path.exists(file_path):
+            return None
+        import wave
+        import audioop
+        try:
+            with wave.open(file_path, 'rb') as w:
+                ch = w.getnchannels()
+                sw = w.getsampwidth()
+                fr = w.getframerate()
+                frames = w.readframes(w.getnframes())
+            if ch > 1:
+                frames = audioop.tomono(frames, sw, 0.5, 0.5)
+            if sw != 2:
+                frames = audioop.lin2lin(frames, sw, 2)
+            if fr != 16000:
+                frames, _ = audioop.ratecv(frames, 2, 1, fr, 16000, None)
+            return frames
+        except Exception as e:
+            print(f"[VoiceEngine] 音频转换异常: {e}")
+            return None
+
+    def _synthesize_gpt_sovits(self, text: str) -> Optional[bytes]:
+        """尝试调用本地 GPT-SoVITS 牧濑红莉栖专属微服务 (今井麻美 100% 神经原声)"""
+        try:
+            import urllib.request
+            import json
+            import tempfile
+            
+            payload = json.dumps({
+                "text": text,
+                "text_lang": "zh" if not self._contains_japanese(text) else "ja",
+                "ref_audio_path": self.prompt_shy,
+                "prompt_text": "害羞",
+                "prompt_lang": "zh"
+            }).encode("utf-8")
+            
+            req = urllib.request.Request(
+                f"{self.gpt_sovits_api}/tts",
+                data=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=2.5) as resp:
+                if resp.status == 200:
+                    wav_data = resp.read()
+                    temp_f = os.path.join(tempfile.gettempdir(), f"gsv_{int(time.time()*1000)}.wav")
+                    with open(temp_f, "wb") as f:
+                        f.write(wav_data)
+                    pcm = self._wav_file_to_pcm16k(temp_f)
+                    try:
+                        os.remove(temp_f)
+                    except Exception:
+                        pass
+                    return pcm
+        except Exception:
+            return None
+
     def synthesize_to_pcm(self, text: str) -> Optional[bytes]:
         """合成语音为 16kHz 16-bit 单声道 PCM 原始字节流 (专为 MAX98357A I2S 硬件直推定制)"""
         if not text or not text.strip():
             return None
-        
+
+        # 1. 优先尝试本地 GPT-SoVITS 原声推理微服务
+        gsv_pcm = self._synthesize_gpt_sovits(text)
+        if gsv_pcm:
+            print(f"[VoiceEngine] 成功使用 GPT-SoVITS 今井麻美真原声合成对白！")
+            return gsv_pcm
+
+        # 2. 原声前置特征融合：若触发傲娇/助手词，前置注入今井麻美原作叹息/傲娇语气原声样本
+        authentic_prefix = None
+        if any(k in text for k in ["助手", "克里斯蒂娜", "笨蛋", "气死"]):
+            authentic_prefix = self._wav_file_to_pcm16k(self.prompt_sigh)
+        elif any(k in text for k in ["害羞", "笑", "喜欢", "命运石之门"]):
+            authentic_prefix = self._wav_file_to_pcm16k(self.prompt_shy)
+
+        # 3. 回退为本地零延迟神经声学引擎 (Windows SAPI5)
         import tempfile
         import wave
         import audioop
@@ -86,28 +168,15 @@ class VoiceEngine:
                 self.engine.runAndWait()
 
             if not os.path.exists(temp_wav):
-                return None
+                return authentic_prefix
 
-            with wave.open(temp_wav, 'rb') as w:
-                channels = w.getnchannels()
-                sample_width = w.getsampwidth()
-                framerate = w.getframerate()
-                raw_data = w.readframes(w.getnframes())
-
-            # 若声道数大于1，转单声道
-            if channels > 1:
-                raw_data = audioop.tomono(raw_data, sample_width, 0.5, 0.5)
-            # 若不是 16-bit，转换为 16-bit
-            if sample_width != 2:
-                raw_data = audioop.lin2lin(raw_data, sample_width, 2)
-            # 若采样率不等于 16000Hz，高质量线性重采样
-            if framerate != 16000:
-                raw_data, _ = audioop.ratecv(raw_data, 2, 1, framerate, 16000, None)
-
-            return raw_data
+            pcm = self._wav_file_to_pcm16k(temp_wav)
+            if authentic_prefix and pcm:
+                return authentic_prefix + pcm
+            return pcm or authentic_prefix
         except Exception as e:
             print(f"[VoiceEngine] 合成音频异常: {e}")
-            return None
+            return authentic_prefix
         finally:
             if os.path.exists(temp_wav):
                 try:
