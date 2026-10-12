@@ -1,5 +1,6 @@
 #include "command_dispatcher.h"
 #include "display_manager.h"
+#include "audio_hal.h"
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -208,6 +209,12 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
         cJSON_Delete(root);
         return true;
     }
+    // {"cmd":"beep"}
+    else if (strcasecmp(cmd, "beep") == 0) {
+        AudioHAL::GetInstance().PlayBeep(1000, 200);
+        cJSON_Delete(root);
+        return true;
+    }
     // {"cmd":"game", "name":"snake", "dx":1, "dy":0}
     else if (strcasecmp(cmd, "game") == 0) {
         cJSON* name_item = cJSON_GetObjectItem(root, "name");
@@ -279,6 +286,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     if (strcasecmp(text_str, "tetris") == 0)        { dm.SetMode(DisplayMode::TETRIS_GAME); return true; }
     if (strcasecmp(text_str, "fire") == 0)          { dm.SetMode(DisplayMode::CYBER_FIRE); return true; }
     if (strcasecmp(text_str, "matrix") == 0)        { dm.SetMode(DisplayMode::MATRIX_RAIN_PRO); return true; }
+    if (strcasecmp(text_str, "beep") == 0)          { AudioHAL::GetInstance().PlayBeep(1000, 200); return true; }
 
     // 4. 亮度微调: "brightness 25" / "b 25"
     int br = 0;

@@ -4,6 +4,7 @@
 #include <esp_log.h>
 #include "display_manager.h"
 #include "command_dispatcher.h"
+#include "audio_hal.h"
 
 static const char* TAG = "MainApp";
 
@@ -12,27 +13,39 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "===============================================================");
     ESP_LOGI(TAG, ">>> [智光魔方 Pro]: ESP32-S3 单板高阶多模态中枢正式启动");
     ESP_LOGI(TAG, ">>> [双核架构]: Core 1 (60FPS 光影物理渲染) | Core 0 (实时指令与通信中枢)");
-    ESP_LOGI(TAG, ">>> [硬件外设]: GPIO 17 硬件 RMT 直驱 16x16 矩阵屏 (FastLED 线性色阶)");
-    ESP_LOGI(TAG, ">>> [协议支持]: 纯文本极速短语 (countdown/mode/...) + 工业级 cJSON + 频谱流");
+    ESP_LOGI(TAG, ">>> [声学外设]: I2S INMP441 麦克风 (GPIO 4,5,6) + MAX98357A 扬声器 (GPIO 7,15,16)");
+    ESP_LOGI(TAG, ">>> [光场外设]: GPIO 17 硬件 RMT 直驱 16x16 矩阵屏 (FastLED 线性色阶)");
+    ESP_LOGI(TAG, ">>> [协议支持]: 纯文本极速短语 (countdown/mode/beep/...) + 工业级 cJSON + 频谱流");
     ESP_LOGI(TAG, "===============================================================");
 
     // 1. 初始化显示引擎 (挂载至 GPIO 17)
     DisplayManager& display = DisplayManager::GetInstance();
     ESP_ERROR_CHECK(display.Init(GPIO_NUM_17));
 
-    // 2. 开启 4 块板硬件压降梯级均光校准 (FastLED 纯线性色阶通透管线)
+    // 2. 初始化 I2S 硬件音频驱动 (INMP441 麦克风 + MAX98357 扬声器，开机双音阶自检)
+    AudioHAL& audio = AudioHAL::GetInstance();
+    ESP_ERROR_CHECK(audio.Init(
+        GPIO_NUM_4,  // mic_ws
+        GPIO_NUM_5,  // mic_sck
+        GPIO_NUM_6,  // mic_din
+        GPIO_NUM_7,  // spk_dout
+        GPIO_NUM_15, // spk_bclk
+        GPIO_NUM_16  // spk_lrck
+    ));
+
+    // 3. 开启 4 块板硬件压降梯级均光校准 (FastLED 纯线性色阶通透管线)
     display.SetCompensation(true);
     display.SetBrightness(20);
 
-    // 3. 启动后台独立物理渲染引擎 (运行在 Core 1，优先级 5)
+    // 4. 启动后台独立物理渲染引擎 (运行在 Core 1，优先级 5)
     ESP_ERROR_CHECK(display.StartTask(5, 1));
 
-    // 4. 启动后台串口指令调度中枢 (运行在 Core 0，优先级 4，负责 USB 极速解析)
+    // 5. 启动后台串口指令调度中枢 (运行在 Core 0，优先级 4，负责 USB 极速解析)
     CommandDispatcher& dispatcher = CommandDispatcher::GetInstance();
     ESP_ERROR_CHECK(dispatcher.StartSerialTask(4, 0));
 
-    // 5. 初始默认展示：灵动微表情桌面伴侣 (具备自然生理眨眼与眼神注视)
-    display.SetMode(DisplayMode::FACE_SMILE);
+    // 6. 初始默认展示：灵动微表情桌面伴侣 (具备自然生理眨眼与眼神注视)
+    display.SetMode(DisplayMode::FACE_DYNAMIC);
 
     ESP_LOGI(TAG, ">>> [中枢就绪]: 已就绪监听串口指令！可用命令示例：");
     ESP_LOGI(TAG, "    - 倒计时: 'countdown 60' 或 '{\"cmd\":\"countdown\",\"seconds\":60}'");

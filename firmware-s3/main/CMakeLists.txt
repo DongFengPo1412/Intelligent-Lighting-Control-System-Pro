@@ -7,12 +7,15 @@ idf_component_register(
         "display/spectrum_engine.cc"
         "display/display_manager.cc"
         "protocol/command_dispatcher.cc"
+        "audio/audio_hal.cc"
     INCLUDE_DIRS
         "."
         "display"
         "protocol"
+        "audio"
     REQUIRES
         esp_driver_gpio
+        esp_driver_i2s
         led_strip
         esp_timer
         json
