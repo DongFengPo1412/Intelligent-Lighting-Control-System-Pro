@@ -185,6 +185,26 @@ esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* byt
     );
 }
 
+esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
+    if (!tx_chan_ || !mono_samples) return ESP_ERR_INVALID_STATE;
+    const size_t chunk_size = 256;
+    int16_t stereo_buf[chunk_size * 2];
+    size_t written_total = 0;
+
+    while (written_total < count) {
+        size_t frames = std::min(chunk_size, count - written_total);
+        for (size_t i = 0; i < frames; i++) {
+            int16_t s = mono_samples[written_total + i];
+            stereo_buf[i * 2]     = s;
+            stereo_buf[i * 2 + 1] = s;
+        }
+        size_t bytes_out = 0;
+        i2s_channel_write(tx_chan_, stereo_buf, frames * 2 * sizeof(int16_t), &bytes_out, pdMS_TO_TICKS(100));
+        written_total += frames;
+    }
+    return ESP_OK;
+}
+
 esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms) {
     if (!rx_chan_ || !dest_buf) return ESP_ERR_INVALID_STATE;
 

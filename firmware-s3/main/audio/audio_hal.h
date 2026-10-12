@@ -29,6 +29,9 @@ public:
     // 播放一段 PCM 16-bit 音频数据
     esp_err_t PlayPcm(const int16_t* pcm_data, size_t samples, size_t* bytes_written = nullptr);
 
+    // 播放单声道 16-bit PCM (自动立体声升采样广播至左右声道，防止 MAX98357 静音)
+    esp_err_t PlayMonoPcm(const int16_t* mono_samples, size_t count);
+
     // 从 INMP441 读取一段麦克风采样数据 (16kHz 16-bit 单声道)
     esp_err_t ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms = 50);
 

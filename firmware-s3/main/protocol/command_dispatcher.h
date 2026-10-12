@@ -18,6 +18,10 @@ public:
     // 发送当前系统状态到上位机
     void SendStatus();
 
+    // 麦克风音频流控
+    void SetMicStreaming(bool enabled) { mic_streaming_ = enabled; }
+    bool IsMicStreaming() const { return mic_streaming_; }
+
 private:
     CommandDispatcher();
     ~CommandDispatcher();
@@ -28,9 +32,14 @@ private:
     static void SerialTaskTrampoline(void* arg);
     void SerialTaskLoop();
 
+    static void MicTaskTrampoline(void* arg);
+    void MicTaskLoop();
+
     bool ProcessJsonCommand(const char* json_str);
     bool ProcessTextCommand(const char* text_str);
 
     TaskHandle_t task_handle_;
+    TaskHandle_t mic_task_handle_;
     bool is_running_;
+    bool mic_streaming_;
 };

@@ -26,16 +26,23 @@ CommandDispatcher& CommandDispatcher::GetInstance()
 
 CommandDispatcher::CommandDispatcher()
     : task_handle_(nullptr),
-      is_running_(false)
+      mic_task_handle_(nullptr),
+      is_running_(false),
+      mic_streaming_(false)
 {
 }
 
 CommandDispatcher::~CommandDispatcher()
 {
     is_running_ = false;
+    mic_streaming_ = false;
     if (task_handle_) {
         vTaskDelete(task_handle_);
         task_handle_ = nullptr;
+    }
+    if (mic_task_handle_) {
+        vTaskDelete(mic_task_handle_);
+        mic_task_handle_ = nullptr;
     }
 }
 
@@ -60,7 +67,18 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Serial command task started on Core %d (priority %d)", (int)core_id, (int)priority);
+    // 启动后台麦克风音频流上传任务 (同样绑定至 Core 0，不抢占 Core 1 渲染任务)
+    xTaskCreatePinnedToCore(
+        MicTaskTrampoline,
+        "mic_stream_task",
+        4096,
+        this,
+        priority > 1 ? priority - 1 : 1,
+        &mic_task_handle_,
+        core_id
+    );
+
+    ESP_LOGI(TAG, "Serial & Mic command tasks started on Core %d", (int)core_id);
     return ESP_OK;
 }
 
@@ -68,6 +86,38 @@ void CommandDispatcher::SerialTaskTrampoline(void* arg)
 {
     CommandDispatcher* dispatcher = static_cast<CommandDispatcher*>(arg);
     dispatcher->SerialTaskLoop();
+}
+
+void CommandDispatcher::MicTaskTrampoline(void* arg)
+{
+    CommandDispatcher* dispatcher = static_cast<CommandDispatcher*>(arg);
+    dispatcher->MicTaskLoop();
+}
+
+void CommandDispatcher::MicTaskLoop()
+{
+    const size_t chunk_samples = 128;
+    int16_t mic_buf[chunk_samples];
+    uint8_t packet[4 + chunk_samples * sizeof(int16_t)];
+    packet[0] = 0x55;
+    packet[1] = 0xAA;
+
+    while (is_running_) {
+        if (mic_streaming_) {
+            size_t samples_read = 0;
+            esp_err_t ret = AudioHAL::GetInstance().ReadMic(mic_buf, chunk_samples, &samples_read, 30);
+            if (ret == ESP_OK && samples_read > 0) {
+                uint16_t payload_bytes = (uint16_t)(samples_read * sizeof(int16_t));
+                packet[2] = (payload_bytes >> 8) & 0xFF;
+                packet[3] = payload_bytes & 0xFF;
+                memcpy(&packet[4], mic_buf, payload_bytes);
+                usb_serial_jtag_write_bytes(packet, 4 + payload_bytes, pdMS_TO_TICKS(50));
+            }
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+    vTaskDelete(NULL);
 }
 
 void CommandDispatcher::SerialTaskLoop()
@@ -82,21 +132,78 @@ void CommandDispatcher::SerialTaskLoop()
 
     char line_buf[256];
     int line_idx = 0;
-    uint8_t rx_buf[64];
+    uint8_t rx_buf[128];
+
+    enum AudioRxState {
+        STATE_TEXT = 0,
+        STATE_AUDIO_SYNC2,
+        STATE_AUDIO_LEN1,
+        STATE_AUDIO_LEN2,
+        STATE_AUDIO_PAYLOAD
+    };
+    AudioRxState rx_state = STATE_TEXT;
+    uint16_t audio_expected_len = 0;
+    uint16_t audio_received_len = 0;
+    uint8_t audio_payload[1024];
 
     while (is_running_) {
-        int bytes_read = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(50));
+        int bytes_read = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(40));
         if (bytes_read > 0) {
             for (int i = 0; i < bytes_read; i++) {
-                char c = (char)rx_buf[i];
-                if (c == '\n' || c == '\r') {
-                    if (line_idx > 0) {
-                        line_buf[line_idx] = '\0';
-                        ProcessLine(line_buf);
-                        line_idx = 0;
-                    }
-                } else if (line_idx < (int)sizeof(line_buf) - 1) {
-                    line_buf[line_idx++] = c;
+                uint8_t b = rx_buf[i];
+
+                switch (rx_state) {
+                    case STATE_TEXT:
+                        if (b == 0xAA) {
+                            rx_state = STATE_AUDIO_SYNC2;
+                        } else if (b == '\n' || b == '\r') {
+                            if (line_idx > 0) {
+                                line_buf[line_idx] = '\0';
+                                ProcessLine(line_buf);
+                                line_idx = 0;
+                            }
+                        } else if (line_idx < (int)sizeof(line_buf) - 1) {
+                            line_buf[line_idx++] = (char)b;
+                        }
+                        break;
+
+                    case STATE_AUDIO_SYNC2:
+                        if (b == 0x55) {
+                            rx_state = STATE_AUDIO_LEN1;
+                        } else {
+                            // 0xAA 不是帧头，回退处理
+                            if (line_idx < (int)sizeof(line_buf) - 2) {
+                                line_buf[line_idx++] = (char)0xAA;
+                                line_buf[line_idx++] = (char)b;
+                            }
+                            rx_state = STATE_TEXT;
+                        }
+                        break;
+
+                    case STATE_AUDIO_LEN1:
+                        audio_expected_len = ((uint16_t)b) << 8;
+                        rx_state = STATE_AUDIO_LEN2;
+                        break;
+
+                    case STATE_AUDIO_LEN2:
+                        audio_expected_len |= (uint16_t)b;
+                        audio_received_len = 0;
+                        if (audio_expected_len == 0 || audio_expected_len > sizeof(audio_payload)) {
+                            // 异常长度，重置状态
+                            rx_state = STATE_TEXT;
+                        } else {
+                            rx_state = STATE_AUDIO_PAYLOAD;
+                        }
+                        break;
+
+                    case STATE_AUDIO_PAYLOAD:
+                        audio_payload[audio_received_len++] = b;
+                        if (audio_received_len >= audio_expected_len) {
+                            size_t sample_count = audio_received_len / sizeof(int16_t);
+                            AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)audio_payload, sample_count);
+                            rx_state = STATE_TEXT;
+                        }
+                        break;
                 }
             }
         }
@@ -215,6 +322,15 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
         cJSON_Delete(root);
         return true;
     }
+    // {"cmd":"mic", "enable":true}
+    else if (strcasecmp(cmd, "mic") == 0) {
+        cJSON* en_item = cJSON_GetObjectItem(root, "enable");
+        if (en_item && cJSON_IsBool(en_item)) {
+            SetMicStreaming(cJSON_IsTrue(en_item));
+            cJSON_Delete(root);
+            return true;
+        }
+    }
     // {"cmd":"game", "name":"snake", "dx":1, "dy":0}
     else if (strcasecmp(cmd, "game") == 0) {
         cJSON* name_item = cJSON_GetObjectItem(root, "name");
@@ -287,6 +403,8 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     if (strcasecmp(text_str, "fire") == 0)          { dm.SetMode(DisplayMode::CYBER_FIRE); return true; }
     if (strcasecmp(text_str, "matrix") == 0)        { dm.SetMode(DisplayMode::MATRIX_RAIN_PRO); return true; }
     if (strcasecmp(text_str, "beep") == 0)          { AudioHAL::GetInstance().PlayBeep(1000, 200); return true; }
+    if (strcasecmp(text_str, "mic on") == 0)        { SetMicStreaming(true); return true; }
+    if (strcasecmp(text_str, "mic off") == 0)       { SetMicStreaming(false); return true; }
 
     // 4. 亮度微调: "brightness 25" / "b 25"
     int br = 0;
