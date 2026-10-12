@@ -155,7 +155,9 @@ class LightController:
         """
         向板载 MAX98357A 扬声器下行直推 16kHz 16-bit 单声道 PCM 音频流
         协议格式: [0xAA, 0x55, len_hi, len_lo, <pcm payload>]
-        内置 Jitter Buffer 预填充与 Windows 1ms 高精度多媒体时钟，杜绝硬件 DMA 欠载与杂音卡顿
+        内置基于绝对单调时钟的防溢流控算法：
+        - 始终维持 120ms 的 DMA 硬件安全蓄水深度 (Pre-roll Jitter Buffer)
+        - 杜绝传统相对 sleep 累计时钟漂移，从数学与通信链路上彻底杜绝溢出丢包与欠载断流
         """
         if not pcm_data:
             return False
@@ -163,9 +165,6 @@ class LightController:
         chunk_bytes = chunk_samples * 2 # 16-bit = 2 bytes/sample
         total_len = len(pcm_data)
         offset = 0
-
-        # 每块 512 samples 在 16kHz 下对应 32.0ms 播放时长
-        chunk_interval = chunk_samples / 16000.0 * 0.95
 
         # 启用 Windows 1ms 高精度多媒体计时器
         has_winmm = False
@@ -185,19 +184,26 @@ class LightController:
                     return False
 
             try:
-                chunk_index = 0
+                # 设定 120ms 的前置安全蓄水深度，无论多长音频均严控水位不溢出、不欠载
+                target_lead_sec = 0.120
+                start_clock = time.perf_counter()
+
                 while offset < total_len:
                     part = pcm_data[offset : offset + chunk_bytes]
                     part_len = len(part)
                     header = bytearray([0xAA, 0x55, (part_len >> 8) & 0xFF, part_len & 0xFF])
                     self.ser.write(header + part)
                     offset += part_len
-                    chunk_index += 1
 
-                    # 前 4 个分包 (约 128ms 音频) 零延迟推入硬件 I2S DMA 预载环形队列 (Pre-roll Jitter Buffer)
-                    # 彻底解决 Windows 睡眠时钟抖动引发的硬件欠载断流
-                    if chunk_index > 4:
-                        time.sleep(chunk_interval)
+                    # 16000 采样/秒 * 2 字节/采样 = 32000 字节/秒
+                    sent_audio_duration = offset / 32000.0
+                    target_time = start_clock + (sent_audio_duration - target_lead_sec)
+                    now = time.perf_counter()
+                    sleep_time = target_time - now
+
+                    if sleep_time > 0.002: # 超过 2ms 精度则休眠节流，严防 USB RX 缓冲溢出丢包
+                        time.sleep(sleep_time)
+
                 self.ser.flush()
                 return True
             except Exception as e:

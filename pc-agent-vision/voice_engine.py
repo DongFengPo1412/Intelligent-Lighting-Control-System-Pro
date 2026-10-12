@@ -38,8 +38,8 @@ class VoiceEngine:
                 if not self.zh_voice_id:
                     self.zh_voice_id = v.id
 
-        # 调优语速 (175 wpm 展现傲娇科学家的敏捷思维)
-        self.current_volume = 100
+        # 默认适中清晰音量 (75%)
+        self.current_volume = 75
         
         # 牧濑红莉栖 GPT-SoVITS 模型与原声音频路径
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -139,8 +139,28 @@ class VoiceEngine:
         except Exception:
             return None
 
+    def _pitch_shift_to_kurisu(self, pcm_data: bytes, sample_rate: int = 16000, n_steps: float = 3.5) -> bytes:
+        """使用 PyTorch CUDA/CPU 将声音基频提升 (+3.5 半音)，将沉闷播音音色变换为红莉栖 18 岁傲娇声线"""
+        if not pcm_data or len(pcm_data) < 320:
+            return pcm_data
+        try:
+            import torch
+            import torchaudio
+            samples = torch.frombuffer(bytearray(pcm_data), dtype=torch.int16).to(torch.float32) / 32768.0
+            samples = samples.unsqueeze(0)
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            samples = samples.to(device)
+            shifted = torchaudio.functional.pitch_shift(samples, sample_rate, n_steps=n_steps)
+            shifted = shifted.squeeze(0).clamp(-1.0, 1.0) * 32767.0
+            return shifted.to(torch.int16).cpu().numpy().tobytes()
+        except Exception:
+            return pcm_data
+
     def synthesize_to_pcm(self, text: str) -> Optional[bytes]:
-        """合成语音为 16kHz 16-bit 单声道 PCM 原始字节流 (专为 MAX98357A I2S 硬件直推定制)"""
+        """
+        合成红莉栖全方位声线 (先中文回答，后以红莉栖今井麻美原作正统日语对白傲娇收尾)
+        输出标准: 16kHz 16-bit 单声道 PCM 流
+        """
         if not text or not text.strip():
             return None
 
@@ -150,18 +170,27 @@ class VoiceEngine:
             print(f"[VoiceEngine] 成功使用 GPT-SoVITS 今井麻美真原声合成对白！")
             return gsv_pcm
 
-        # 2. 原声前置特征融合：若触发傲娇/助手词，前置注入今井麻美原作叹息/傲娇语气原声样本
-        authentic_prefix = None
-        if any(k in text for k in ["助手", "克里斯蒂娜", "笨蛋", "气死"]):
-            authentic_prefix = self._wav_file_to_pcm16k(self.prompt_sigh)
-        elif any(k in text for k in ["害羞", "笑", "喜欢", "命运石之门"]):
-            authentic_prefix = self._wav_file_to_pcm16k(self.prompt_shy)
+        # 2. 匹配今井麻美原作正统日语收尾素材 (智能情绪收束)
+        soundbank_dir = os.path.join(self.model_dir, "soundbank")
+        authentic_suffix = None
+        if any(k in text for k in ["助手", "克里斯蒂娜", "老婆"]):
+            authentic_suffix = self._wav_file_to_pcm16k(os.path.join(soundbank_dir, "not_christina.wav"))
+        elif any(k in text for k in ["笨蛋", "玩笑", "气死", "无聊"]):
+            authentic_suffix = self._wav_file_to_pcm16k(os.path.join(soundbank_dir, "baka.wav"))
+        elif any(k in text for k in ["害羞", "喜欢", "笑", "可爱"]):
+            authentic_suffix = self._wav_file_to_pcm16k(self.prompt_shy)
+        elif any(k in text for k in ["实验", "时间跳跃", "科学", "装置", "世界线", "汇报"]):
+            authentic_suffix = self._wav_file_to_pcm16k(os.path.join(soundbank_dir, "lab_experiment.wav"))
+        else:
+            # 默认常驻红莉栖招牌傲娇叹息 / 轻哼
+            authentic_suffix = self._wav_file_to_pcm16k(os.path.join(soundbank_dir, "tsundere_humph.wav"))
 
-        # 3. 回退为本地零延迟神经声学引擎 (Windows SAPI5)
+        # 若未成功加载专用库，回退至全局原声
+        if not authentic_suffix:
+            authentic_suffix = self._wav_file_to_pcm16k(self.prompt_sigh)
+
+        # 3. 本地中文主干语音合成 + 红莉栖专属声线算法变换
         import tempfile
-        import wave
-        import audioop
-
         temp_wav = os.path.join(tempfile.gettempdir(), f"kurisu_tts_{int(time.time()*1000)}.wav")
         try:
             with self._lock:
@@ -169,19 +198,27 @@ class VoiceEngine:
                     self.engine.setProperty('voice', self.jp_voice_id)
                 elif self.zh_voice_id:
                     self.engine.setProperty('voice', self.zh_voice_id)
+                # 调优语速至 180wpm，体现红莉栖敏捷清晰的思维语调
+                self.engine.setProperty('rate', 180)
                 self.engine.save_to_file(text, temp_wav)
                 self.engine.runAndWait()
 
             if not os.path.exists(temp_wav):
-                return authentic_prefix
+                return authentic_suffix
 
-            pcm = self._wav_file_to_pcm16k(temp_wav)
-            if authentic_prefix and pcm:
-                return authentic_prefix + pcm
-            return pcm or authentic_prefix
+            pcm_chinese = self._wav_file_to_pcm16k(temp_wav)
+            if pcm_chinese:
+                # 提升基频，塑形为傲娇少女天才科学家的标志性声线
+                pcm_chinese = self._pitch_shift_to_kurisu(pcm_chinese, 16000, n_steps=3.5)
+
+            # 4. 严谨拼接：【先中文】 + 【0.18s 平滑呼吸停顿】 + 【后今井麻美原作正统日语收尾】
+            if pcm_chinese and authentic_suffix:
+                silence_gap = b'\x00\x00' * int(16000 * 0.18) # 180ms 无杂音换气停顿
+                return pcm_chinese + silence_gap + authentic_suffix
+            return pcm_chinese or authentic_suffix
         except Exception as e:
             print(f"[VoiceEngine] 合成音频异常: {e}")
-            return authentic_prefix
+            return authentic_suffix
         finally:
             if os.path.exists(temp_wav):
                 try:
