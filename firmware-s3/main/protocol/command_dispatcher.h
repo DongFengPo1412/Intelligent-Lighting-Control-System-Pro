@@ -19,7 +19,7 @@ public:
     void SendStatus();
 
     // 麦克风音频流控
-    void SetMicStreaming(bool enabled) { mic_streaming_ = enabled; }
+    void SetMicStreaming(bool enabled);
     bool IsMicStreaming() const { return mic_streaming_; }
 
 private:
@@ -40,6 +40,6 @@ private:
 
     TaskHandle_t task_handle_;
     TaskHandle_t mic_task_handle_;
-    bool is_running_;
-    bool mic_streaming_;
+    volatile bool is_running_;
+    volatile bool mic_streaming_;
 };

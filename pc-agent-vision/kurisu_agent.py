@@ -149,7 +149,7 @@ class KurisuAgent:
                         "temperature": 0.7
                     }).encode("utf-8")
                     req2 = urllib.request.Request(url, data=req_data2, headers={"Content-Type": "application/json"})
-                    with urllib.request.urlopen(req2, timeout=5.0) as resp2:
+                    with opener.open(req2, timeout=5.0) as resp2:
                         final_res = json.loads(resp2.read().decode("utf-8"))
                         final_text = final_res["choices"][0]["message"]["content"]
                         self.history.append({"role": "assistant", "content": final_text})

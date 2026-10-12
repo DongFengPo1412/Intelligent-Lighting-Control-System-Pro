@@ -50,14 +50,83 @@ class VoiceEngine:
                 return True
         return False
 
-    def speak(self, text: str, block: bool = True):
-        """合成并播放对白"""
+    def synthesize_to_pcm(self, text: str) -> Optional[bytes]:
+        """合成语音为 16kHz 16-bit 单声道 PCM 原始字节流 (专为 MAX98357A I2S 硬件直推定制)"""
+        if not text or not text.strip():
+            return None
+        
+        import tempfile
+        import wave
+        import audioop
+
+        temp_wav = os.path.join(tempfile.gettempdir(), f"kurisu_tts_{int(time.time()*1000)}.wav")
+        try:
+            with self._lock:
+                if self._contains_japanese(text) and self.jp_voice_id:
+                    self.engine.setProperty('voice', self.jp_voice_id)
+                elif self.zh_voice_id:
+                    self.engine.setProperty('voice', self.zh_voice_id)
+                self.engine.save_to_file(text, temp_wav)
+                self.engine.runAndWait()
+
+            if not os.path.exists(temp_wav):
+                return None
+
+            with wave.open(temp_wav, 'rb') as w:
+                channels = w.getnchannels()
+                sample_width = w.getsampwidth()
+                framerate = w.getframerate()
+                raw_data = w.readframes(w.getnframes())
+
+            # 若声道数大于1，转单声道
+            if channels > 1:
+                raw_data = audioop.tomono(raw_data, sample_width, 0.5, 0.5)
+            # 若不是 16-bit，转换为 16-bit
+            if sample_width != 2:
+                raw_data = audioop.lin2lin(raw_data, sample_width, 2)
+            # 若采样率不等于 16000Hz，高质量线性重采样
+            if framerate != 16000:
+                raw_data, _ = audioop.ratecv(raw_data, 2, 1, framerate, 16000, None)
+
+            return raw_data
+        except Exception as e:
+            print(f"[VoiceEngine] 合成音频异常: {e}")
+            return None
+        finally:
+            if os.path.exists(temp_wav):
+                try:
+                    os.remove(temp_wav)
+                except Exception:
+                    pass
+
+    def speak(self, text: str, block: bool = True, to_board: bool = True):
+        """
+        合成并播放对白:
+        默认优先通过 ESP32-S3 板载 MAX98357A 扬声器物理发声；
+        若硬件未连接，自动平滑回退至 PC 本地扬声器发声。
+        """
         if not text or not text.strip():
             return
 
+        if not block:
+            threading.Thread(target=self.speak, args=(text, True, to_board), daemon=True).start()
+            return
+
+        if to_board:
+            try:
+                from light_controller import get_light_controller
+                ctrl = get_light_controller()
+                if ctrl.is_connected:
+                    pcm = self.synthesize_to_pcm(text)
+                    if pcm:
+                        ctrl.play_audio_pcm(pcm)
+                        return
+            except Exception as e:
+                print(f"[VoiceEngine] 板载播放降级至本地扬声器: {e}")
+
+        # 本地 PC 扬声器播放
         with self._lock:
             try:
-                # 判断语种切换音色
                 if self._contains_japanese(text) and self.jp_voice_id:
                     self.engine.setProperty('voice', self.jp_voice_id)
                 elif self.zh_voice_id:

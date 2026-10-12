@@ -8,7 +8,7 @@
 
 static const char* TAG = "AudioHAL";
 
-AudioHAL::AudioHAL() : tx_chan_(nullptr), rx_chan_(nullptr), initialized_(false) {}
+AudioHAL::AudioHAL() : tx_chan_(nullptr), rx_chan_(nullptr), initialized_(false), mic_enabled_(false) {}
 
 AudioHAL::~AudioHAL() {
     if (tx_chan_) {
@@ -38,11 +38,11 @@ esp_err_t AudioHAL::Init(
     ESP_LOGI(TAG, "  - INMP441 麦克风: WS=%d, SCK=%d, DIN=%d", mic_ws, mic_sck, mic_din);
     ESP_LOGI(TAG, "  - MAX98357 扬声器: DOUT=%d, BCLK=%d, LRCK=%d", spk_dout, spk_bclk, spk_lrck);
 
-    // 1. 初始化 MAX98357A 扬声器输出通道 (TX)
-    i2s_chan_config_t tx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    // 1. 初始化 MAX98357A 扬声器输出通道 (TX) 绑定至 I2S_NUM_0
+    i2s_chan_config_t tx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     tx_chan_cfg.dma_desc_num = 6;
     tx_chan_cfg.dma_frame_num = 240;
-    tx_chan_cfg.auto_clear = true;
+    tx_chan_cfg.auto_clear_after_cb = true;
 
     esp_err_t ret = i2s_new_channel(&tx_chan_cfg, &tx_chan_, nullptr);
     if (ret != ESP_OK) {
@@ -79,8 +79,8 @@ esp_err_t AudioHAL::Init(
         return ret;
     }
 
-    // 2. 初始化 INMP441 麦克风输入通道 (RX)
-    i2s_chan_config_t rx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    // 2. 初始化 INMP441 麦克风输入通道 (RX) 显式绑定至 I2S_NUM_1
+    i2s_chan_config_t rx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
     rx_chan_cfg.dma_desc_num = 6;
     rx_chan_cfg.dma_frame_num = 240;
 
@@ -90,10 +90,22 @@ esp_err_t AudioHAL::Init(
         return ret;
     }
 
-    // INMP441 输出为 24-bit 数据对齐在 32-bit slot
+    // INMP441 32-bit slot, MONO, LEFT mask (标准单工收音配置)
     i2s_std_config_t rx_std_cfg = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .clk_cfg = {
+            .sample_rate_hz = 16000,
+            .clk_src = I2S_CLK_SRC_DEFAULT,
+            .mclk_multiple = I2S_MCLK_MULTIPLE_256,
+        },
+        .slot_cfg = {
+            .data_bit_width = I2S_DATA_BIT_WIDTH_32BIT,
+            .slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO,
+            .slot_mode = I2S_SLOT_MODE_MONO,
+            .slot_mask = I2S_STD_SLOT_LEFT,
+            .ws_width = I2S_DATA_BIT_WIDTH_32BIT,
+            .ws_pol = false,
+            .bit_shift = true,
+        },
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
             .bclk = mic_sck,
@@ -114,20 +126,36 @@ esp_err_t AudioHAL::Init(
         return ret;
     }
 
-    ret = i2s_channel_enable(rx_chan_);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "启动 I2S RX 通道失败: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
+    // 默认保持 RX 待命，录音开启时再启动 DMA，防止长时间溢出
+    mic_enabled_ = false;
     initialized_ = true;
-    ESP_LOGI(TAG, "I2S 硬件音频全双工驱动初始化成功！");
+    ESP_LOGI(TAG, "I2S 硬件音频全双工驱动初始化成功 (TX 已激活，RX 待命)");
 
     // 开机自检提示音 (双音阶清脆开机蜂鸣 880Hz -> 1320Hz)
     PlayBeep(880, 120);
     PlayBeep(1320, 160);
 
     return ESP_OK;
+}
+
+esp_err_t AudioHAL::EnableMic(bool enable) {
+    if (!rx_chan_) return ESP_ERR_INVALID_STATE;
+    if (enable == mic_enabled_) return ESP_OK;
+    esp_err_t ret = ESP_OK;
+    if (enable) {
+        ret = i2s_channel_enable(rx_chan_);
+        if (ret == ESP_OK) {
+            mic_enabled_ = true;
+            ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 已激活");
+        } else {
+            ESP_LOGE(TAG, "启用 INMP441 失败: %s", esp_err_to_name(ret));
+        }
+    } else {
+        ret = i2s_channel_disable(rx_chan_);
+        mic_enabled_ = false;
+        ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 已挂起休眠");
+    }
+    return ret;
 }
 
 esp_err_t AudioHAL::PlayBeep(uint32_t freq_hz, uint32_t duration_ms) {
@@ -208,15 +236,15 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
 esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms) {
     if (!rx_chan_ || !dest_buf) return ESP_ERR_INVALID_STATE;
 
-    // INMP441 为 32-bit slot，高 24 位为有效数据，右移 14 位映射为 16-bit 线性 PCM
     const size_t raw_buffer_size = 256;
-    int32_t raw_data[raw_buffer_size];
+    int32_t bit32_buffer[raw_buffer_size];
+    size_t samples_to_read = std::min(max_samples, raw_buffer_size);
     size_t bytes_read = 0;
 
     esp_err_t ret = i2s_channel_read(
         rx_chan_,
-        raw_data,
-        sizeof(raw_data),
+        bit32_buffer,
+        samples_to_read * sizeof(int32_t),
         &bytes_read,
         pdMS_TO_TICKS(timeout_ms)
     );
@@ -226,16 +254,14 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
         return ret;
     }
 
-    size_t items = bytes_read / sizeof(int32_t);
-    size_t to_copy = std::min(items, max_samples);
-
-    for (size_t i = 0; i < to_copy; ++i) {
-        // INMP441 24-bit MSB 规整化转 16-bit
-        dest_buf[i] = (int16_t)(raw_data[i] >> 14);
+    size_t count = bytes_read / sizeof(int32_t);
+    for (size_t i = 0; i < count; ++i) {
+        int32_t value = bit32_buffer[i] >> 12;
+        dest_buf[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
     }
 
     if (samples_read) {
-        *samples_read = to_copy;
+        *samples_read = count;
     }
 
     return ESP_OK;

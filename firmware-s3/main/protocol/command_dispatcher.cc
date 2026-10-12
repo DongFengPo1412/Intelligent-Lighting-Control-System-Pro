@@ -45,6 +45,12 @@ CommandDispatcher::~CommandDispatcher()
         mic_task_handle_ = nullptr;
     }
 }
+void CommandDispatcher::SetMicStreaming(bool enabled)
+{
+    mic_streaming_ = enabled;
+    AudioHAL::GetInstance().EnableMic(enabled);
+    ESP_LOGI(TAG, "Mic streaming toggled: %s", enabled ? "ENABLED" : "DISABLED");
+}
 
 esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t core_id)
 {
@@ -96,22 +102,28 @@ void CommandDispatcher::MicTaskTrampoline(void* arg)
 
 void CommandDispatcher::MicTaskLoop()
 {
-    const size_t chunk_samples = 128;
+    const size_t chunk_samples = 240;
     int16_t mic_buf[chunk_samples];
     uint8_t packet[4 + chunk_samples * sizeof(int16_t)];
     packet[0] = 0x55;
     packet[1] = 0xAA;
 
+    int err_cnt = 0;
     while (is_running_) {
         if (mic_streaming_) {
             size_t samples_read = 0;
-            esp_err_t ret = AudioHAL::GetInstance().ReadMic(mic_buf, chunk_samples, &samples_read, 30);
+            esp_err_t ret = AudioHAL::GetInstance().ReadMic(mic_buf, chunk_samples, &samples_read, 200);
             if (ret == ESP_OK && samples_read > 0) {
                 uint16_t payload_bytes = (uint16_t)(samples_read * sizeof(int16_t));
                 packet[2] = (payload_bytes >> 8) & 0xFF;
                 packet[3] = payload_bytes & 0xFF;
                 memcpy(&packet[4], mic_buf, payload_bytes);
                 usb_serial_jtag_write_bytes(packet, 4 + payload_bytes, pdMS_TO_TICKS(50));
+            } else {
+                if (++err_cnt % 50 == 1) {
+                    ESP_LOGW(TAG, "ReadMic failed: %s, read=%u", esp_err_to_name(ret), (unsigned)samples_read);
+                }
+                vTaskDelay(pdMS_TO_TICKS(20));
             }
         } else {
             vTaskDelay(pdMS_TO_TICKS(50));

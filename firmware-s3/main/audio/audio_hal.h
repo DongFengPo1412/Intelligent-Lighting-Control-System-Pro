@@ -33,10 +33,14 @@ public:
     esp_err_t PlayMonoPcm(const int16_t* mono_samples, size_t count);
 
     // 从 INMP441 读取一段麦克风采样数据 (16kHz 16-bit 单声道)
-    esp_err_t ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms = 50);
+    esp_err_t ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms = 200);
+
+    // 麦克风通道硬件启停控制 (按需启动 DMA，防止长时间空载溢出)
+    esp_err_t EnableMic(bool enable);
 
     // 硬件状态查询
     bool IsInitialized() const { return initialized_; }
+    bool IsMicEnabled() const { return mic_enabled_; }
 
 private:
     AudioHAL();
@@ -48,4 +52,5 @@ private:
     i2s_chan_handle_t tx_chan_; // MAX98357A 输出通道
     i2s_chan_handle_t rx_chan_; // INMP441 输入通道
     bool initialized_;
+    bool mic_enabled_;
 };
