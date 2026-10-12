@@ -26,12 +26,7 @@ ENV/
 *.egg-info/
 .pytest_cache/
 
-# Mobile App
-mobile-app/.dart_tool/
-mobile-app/build/
-mobile-app/node_modules/
-mobile-app/.expo/
-mobile-app/.npm/
+# Android Native App
 android-app/bin/
 android-app/gen/
 android-app/tools/
