@@ -69,27 +69,83 @@ class KurisuAgent:
             executed_tools.append(res)
             reply_lines.append("……！变动率探测仪有反应了？\n乱数正在刷新……看这跳动的数据，不会错的！世界线变动率已锁定在 1.048596%！\n这……难道就是‘命运石之门’的选择吗？エル・プサイ・コングルゥ。")
 
-        # 4. 特效主题意图
-        if "火" in user_text or "烈焰" in user_text or "生气" in user_text:
+        # 4. 深度语义灯光意象与颜色映射
+        if any(k in user_text for k in ["红灯", "纯红", "红色", "正红"]):
+            res = execute_tool("set_light_mode", {"mode": 1})
+            executed_tools.append(res)
+            reply_lines.append("纯红高能警戒光场已点亮！这波长……可不是闹着玩的，别把实验室搞过热了！")
+        elif any(k in user_text for k in ["大海", "海洋", "深海", "水波", "涟漪", "波纹"]):
+            res = execute_tool("set_light_mode", {"mode": 10})
+            executed_tools.append(res)
+            reply_lines.append("深海蔚蓝水波已在 16x16 矩阵上漾开。波纹同心扩散模拟很逼真吧？我以前在哥伦比亚大学实验室也做过类似的流体光学模型。")
+        elif any(k in user_text for k in ["灯笼", "元宵", "暖光", "橘红"]):
+            res = execute_tool("set_light_mode", {"mode": 23})
+            executed_tools.append(res)
+            reply_lines.append("暖意灯笼的赤红微光已经为你点燃。哼……虽然我更习惯高能物理粒子光束，但这种柔和的氛围偶尔感受一下也不坏。")
+        elif any(k in user_text for k in ["蓝灯", "纯蓝", "蓝色"]):
+            res = execute_tool("set_light_mode", {"mode": 2})
+            executed_tools.append(res)
+            reply_lines.append("冷色调纯蓝矩阵开启，波长 470nm，有助于理智思考。")
+        elif any(k in user_text for k in ["绿灯", "纯绿", "绿色"]):
+            res = execute_tool("set_light_mode", {"mode": 3})
+            executed_tools.append(res)
+            reply_lines.append("纯绿安全通道开启，就像辉光管变动率仪器的基准绿标一样。")
+        elif any(k in user_text for k in ["极光", "北极光", "极光呼吸"]):
+            res = execute_tool("set_matrix_theme", {"theme": "aurora"})
+            executed_tools.append(res)
+            reply_lines.append("极光呼吸波已载入。高空电离层离子发光效应被完美还原在了点阵屏上。")
+        elif any(k in user_text for k in ["星空", "繁星", "星光"]):
+            res = execute_tool("set_matrix_theme", {"theme": "stars"})
+            executed_tools.append(res)
+            reply_lines.append("浩瀚星空点阵已投射。满天繁星在随机闪烁，可别看得入迷走神了！")
+        elif any(k in user_text for k in ["流星", "陨石"]):
+            res = execute_tool("set_matrix_theme", {"theme": "meteor"})
+            executed_tools.append(res)
+            reply_lines.append("流星穿梭光效激发！有空许愿还不如多推导两条世界线波动方程！")
+        elif "火" in user_text or "烈焰" in user_text or "生气" in user_text:
             res = execute_tool("set_matrix_theme", {"theme": "fire"})
             executed_tools.append(res)
-            reply_lines.append("我现在很生气！赛博烈焰给你点上了，自己好好反省一下！")
+            reply_lines.append("赛博烈焰给你点上了！火舌正在像素级翻滚，自己好好反省一下！")
         elif "代码" in user_text or "黑客" in user_text or "骇客" in user_text or "矩阵" in user_text:
             res = execute_tool("set_matrix_theme", {"theme": "matrix"})
             executed_tools.append(res)
             reply_lines.append("数据流展开！这代码雨的效果还算挺有极客风范的吧？桶子要是看到了估计又得吵吵了。")
-        elif "关灯" in user_text or "关闭" in user_text:
-            res = execute_tool("set_matrix_theme", {"theme": "off"})
-            executed_tools.append(res)
-            reply_lines.append("灯板已经关掉了。节能环保，这也符合实验规范。")
         elif "彩虹" in user_text:
             res = execute_tool("set_matrix_theme", {"theme": "rainbow"})
             executed_tools.append(res)
             reply_lines.append("给你换上彩虹波浪了。哼，偶尔放松一下眼睛也不算坏事。")
+        elif "关灯" in user_text or "关闭" in user_text or "熄灭" in user_text:
+            res = execute_tool("set_matrix_theme", {"theme": "off"})
+            executed_tools.append(res)
+            reply_lines.append("灯板已经关掉了。节能环保，这也符合实验规范。")
         elif "微笑" in user_text or "笑一个" in user_text:
             res = execute_tool("show_expression", {"emotion": "smile"})
             executed_tools.append(res)
             reply_lines.append("……笑一个？我、我才没有对着你笑呢！这只是点阵系统的常规面部渲染测试而已！")
+        elif any(k in user_text for k in ["贪吃蛇", "玩小蛇"]):
+            res = execute_tool("set_light_mode", {"mode": 19})
+            executed_tools.append(res)
+            reply_lines.append("贪吃蛇街机模式已在 16x16 矩阵上启动！快用手机端的实体质感十字按键操作吧，看你能得多少分！")
+        elif any(k in user_text for k in ["俄罗斯方块", "方块游戏"]):
+            res = execute_tool("set_light_mode", {"mode": 21})
+            executed_tools.append(res)
+            reply_lines.append("俄罗斯方块街机模式已启动！消行逻辑已经加载，手机手柄随时待命。")
+
+        # 5. 音量调节意图
+        vol_match = re.search(r'(?:音量|声音)\s*(?:调到|设为|变成)?\s*(\d+)', user_text)
+        if vol_match:
+            vol = int(vol_match.group(1))
+            res = execute_tool("set_volume", {"volume": vol})
+            executed_tools.append(res)
+            reply_lines.append(f"语音播报音量已经调节为 {vol}% 了。这下听清楚本天才的话了吧？")
+        elif "声音大点" in user_text or "音量调大" in user_text:
+            res = execute_tool("set_volume", {"volume": 90})
+            executed_tools.append(res)
+            reply_lines.append("音量调大到 90% 了。")
+        elif "声音小点" in user_text or "音量调小" in user_text:
+            res = execute_tool("set_volume", {"volume": 40})
+            executed_tools.append(res)
+            reply_lines.append("音量调小到 40% 了，别嫌小声就行。")
 
         # 如果没有匹配到专用词，提供傲娇的通用回复
         if not reply_lines:

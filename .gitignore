@@ -26,12 +26,16 @@ ENV/
 *.egg-info/
 .pytest_cache/
 
-# Mobile App (Flutter / React Native)
+# Mobile App
 mobile-app/.dart_tool/
 mobile-app/build/
 mobile-app/node_modules/
 mobile-app/.expo/
 mobile-app/.npm/
+android-app/bin/
+android-app/gen/
+android-app/tools/
+*.keystore
 
 # IDE & OS
 .vscode/*
@@ -47,3 +51,4 @@ Thumbs.db
 *config.private.*
 secrets.json
 .env.local
+

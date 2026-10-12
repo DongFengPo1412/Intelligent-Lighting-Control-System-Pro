@@ -208,8 +208,27 @@ class LightController:
         print(f"[具身指令] 停止物理倒计时")
         return self.send_json({"cmd": "stop_countdown"})
 
+    def set_mode(self, mode_num: int) -> bool:
+        """设置 16x16 矩阵灯板的原生模式编号 (0~25)"""
+        print(f"[具身指令] 设置模式编号: {mode_num}")
+        return self.send_json({"cmd": "mode", "val": int(mode_num)})
+
+    def snake_move(self, dx: int, dy: int) -> bool:
+        """贪吃蛇方向输入 (dx: -1, 0, 1; dy: -1, 0, 1)"""
+        return self.send_json({"cmd": "game", "name": "snake", "dx": int(dx), "dy": int(dy)})
+
+    def tetris_action(self, action: str) -> bool:
+        """俄罗斯方块动作控制 (left, right, rot, drop)"""
+        return self.send_json({"cmd": "game", "name": "tetris", "action": action})
+
     def set_theme(self, theme: str) -> bool:
-        """设置视觉主题 (fire, matrix, rainbow, aurora, meteor, stars, ripple, smile, cry, neutral, dynamic, off)"""
+        """设置视觉主题 (支持英文别名、数字编号、以及语义意象词汇)"""
+        theme_str = theme.lower().strip()
+        
+        # 如果直接是数字，直接切换编号
+        if theme_str.isdigit():
+            return self.set_mode(int(theme_str))
+
         theme_map = {
             "fire": "fire",
             "flame": "fire",
@@ -225,9 +244,18 @@ class LightController:
             "cry": "cry",
             "neutral": "neutral",
             "dynamic": "dynamic",
-            "off": "off"
+            "off": "off",
+            "red": "mode 1",
+            "blue": "mode 2",
+            "green": "mode 3",
+            "ocean": "mode 10",
+            "sea": "mode 10",
+            "lantern": "mode 23",
+            "snake": "mode 19",
+            "tetris": "mode 21",
+            "spectrum": "mode 15"
         }
-        cmd = theme_map.get(theme.lower().strip(), "rainbow")
+        cmd = theme_map.get(theme_str, "rainbow")
         print(f"[具身指令] 切换光场特效主题: {cmd}")
         return self.send_raw(cmd)
 

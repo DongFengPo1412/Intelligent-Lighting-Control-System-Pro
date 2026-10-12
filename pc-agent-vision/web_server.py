@@ -1,0 +1,240 @@
+"""
+未来道具研究所 · 牧濑红莉栖具身交互 Web Server
+基于 aiohttp 异步全双工架构，提供局域网 WiFi HTTP / WebSocket 双通道控制
+支持手机浏览器即开即用、实体板载 MAX98357A 语音播报、16x16 矩阵光影控制与街机手柄搓招
+"""
+
+import sys
+import os
+import json
+import asyncio
+import socket
+from typing import Set
+from aiohttp import web
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
+from kurisu_agent import KurisuAgent
+from light_controller import get_light_controller
+from voice_engine import get_voice_engine
+
+# ==========================================
+# 全局状态与实例初始化
+# ==========================================
+print("[WebServer] 正在载入牧濑红莉栖具身多模态大脑与硬件驱动...")
+agent = KurisuAgent()
+controller = agent.controller
+voice = agent.voice
+
+active_websockets: Set[web.WebSocketResponse] = set()
+
+def get_local_ip() -> str:
+    """自动获取本机局域网 IPv4 地址"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+HOST_IP = get_local_ip()
+WEB_PORT = 8080
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_app")
+
+# ==========================================
+# 异步事件广播
+# ==========================================
+async def broadcast_ws(payload: dict):
+    """向所有在线手机 Web 客户端广播实时事件"""
+    if not active_websockets:
+        return
+    msg = json.dumps(payload, ensure_ascii=False)
+    dead_sockets = set()
+    for ws in list(active_websockets):
+        try:
+            await ws.send_str(msg)
+        except Exception:
+            dead_sockets.add(ws)
+    for dead in dead_sockets:
+        active_websockets.discard(dead)
+
+# ==========================================
+# REST API 路由处理
+# ==========================================
+async def handle_chat(request: web.Request):
+    """处理用户文字/语音对话输入"""
+    try:
+        data = await request.json()
+        message = data.get("message", "").strip()
+        if not message:
+            return web.json_response({"error": "Empty message"}, status=400)
+
+        print(f"[Web 手机端输入]: {message}")
+
+        # 异步线程池调用红莉栖思考与硬件执行，避免阻塞网络轮询
+        loop = asyncio.get_running_loop()
+        reply = await loop.run_in_executor(None, agent.chat, message)
+
+        print(f"[红莉栖回复]: {reply}")
+
+        # 广播给其他协同客户端
+        await broadcast_ws({
+            "type": "chat_reply",
+            "user": message,
+            "text": reply
+        })
+
+        return web.json_response({"reply": reply})
+
+    except Exception as e:
+        print(f"[Chat 异常]: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+async def handle_mode(request: web.Request):
+    """设置光场 25 种原生模式编号"""
+    try:
+        data = await request.json()
+        mode_num = int(data.get("mode", 11))
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, controller.set_mode, mode_num)
+        await broadcast_ws({"type": "mode_changed", "mode": mode_num})
+        return web.json_response({"status": "ok", "mode": mode_num})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def handle_volume(request: web.Request):
+    """调节音量 (0~100)"""
+    try:
+        data = await request.json()
+        vol = int(data.get("volume", 85))
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, voice.set_volume, vol)
+        await broadcast_ws({"type": "status", "volume": vol})
+        return web.json_response({"status": "ok", "volume": vol})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def handle_cmd(request: web.Request):
+    """通用指令控制 (沙漏倒计时、亮度等)"""
+    try:
+        data = await request.json()
+        cmd = data.get("cmd")
+        loop = asyncio.get_running_loop()
+
+        if cmd == "countdown":
+            sec = int(data.get("seconds", 10))
+            await loop.run_in_executor(None, controller.countdown, sec)
+            await broadcast_ws({"type": "countdown_started", "seconds": sec})
+        elif cmd == "stop_countdown":
+            await loop.run_in_executor(None, controller.stop_countdown)
+            await broadcast_ws({"type": "countdown_stopped"})
+        elif cmd == "bright":
+            val = int(data.get("val", 20))
+            await loop.run_in_executor(None, controller.set_brightness, val)
+        else:
+            await loop.run_in_executor(None, controller.send_json, data)
+
+        return web.json_response({"status": "ok"})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def handle_game(request: web.Request):
+    """掌上街机手柄搓键信号直通"""
+    try:
+        data = await request.json()
+        game = data.get("game")
+        loop = asyncio.get_running_loop()
+
+        if game == "snake":
+            dx = int(data.get("dx", 0))
+            dy = int(data.get("dy", 0))
+            await loop.run_in_executor(None, controller.snake_move, dx, dy)
+        elif game == "tetris":
+            action = str(data.get("action", "rot"))
+            await loop.run_in_executor(None, controller.tetris_action, action)
+
+        return web.json_response({"status": "ok"})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def handle_status(request: web.Request):
+    """获取系统整体拓扑状态与 IP"""
+    return web.json_response({
+        "status": "online",
+        "host_ip": HOST_IP,
+        "port": controller.port,
+        "is_connected": controller.is_connected,
+        "volume": voice.volume,
+        "world_line": "1.048596%"
+    })
+
+# ==========================================
+# WebSocket 实时全双工长连接
+# ==========================================
+async def handle_ws(request: web.Request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    active_websockets.add(ws)
+    print(f"[WebSocket] 手机客户端已接入: {request.remote}")
+
+    # 发送初次上线欢迎状态
+    await ws.send_str(json.dumps({
+        "type": "welcome",
+        "host_ip": HOST_IP,
+        "volume": voice.volume
+    }, ensure_ascii=False))
+
+    try:
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                try:
+                    payload = json.loads(msg.data)
+                    action = payload.get("action")
+                    if action == "ping":
+                        await ws.send_str(json.dumps({"type": "pong"}))
+                except Exception:
+                    pass
+            elif msg.type == web.WSMsgType.ERROR:
+                print(f"[WebSocket 错误]: {ws.exception()}")
+    finally:
+        active_websockets.discard(ws)
+        print(f"[WebSocket] 客户端已断开: {request.remote}")
+
+    return ws
+
+# ==========================================
+# 静态首页入口
+# ==========================================
+async def handle_index(request: web.Request):
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    return web.FileResponse(index_path)
+
+# ==========================================
+# 主启动器
+# ==========================================
+def create_app() -> web.Application:
+    app = web.Application()
+    app.router.add_get("/", handle_index)
+    app.router.add_post("/api/chat", handle_chat)
+    app.router.add_post("/api/mode", handle_mode)
+    app.router.add_post("/api/volume", handle_volume)
+    app.router.add_post("/api/cmd", handle_cmd)
+    app.router.add_post("/api/game", handle_game)
+    app.router.add_get("/api/status", handle_status)
+    app.router.add_get("/ws", handle_ws)
+    app.router.add_static("/", STATIC_DIR)
+    return app
+
+if __name__ == "__main__":
+    app = create_app()
+    print("\n" + "="*60)
+    print("  🚀 未来道具研究所 · 牧濑红莉栖具身中枢 Web 服务器启动中...")
+    print(f"  ● 电脑本机访问: http://localhost:{WEB_PORT}")
+    print(f"  ● 手机局域网 WiFi 访问: http://{HOST_IP}:{WEB_PORT}")
+    print("="*60 + "\n")
+    web.run_app(app, host="0.0.0.0", port=WEB_PORT)

@@ -39,9 +39,25 @@ class VoiceEngine:
                     self.zh_voice_id = v.id
 
         # 调优语速 (175 wpm 展现傲娇科学家的敏捷思维)
-        self.engine.setProperty('rate', 178)
-        self.engine.setProperty('volume', 1.0)
+        self.current_volume = 100
         print(f"[VoiceEngine] 本地离线声学引擎就绪 (中文: Huihui, 日文: Haruka, 0ms网络延迟)")
+
+    @property
+    def volume(self) -> int:
+        return self.current_volume
+
+    def set_volume(self, pct: int):
+        """设置音量百分比 (0-100)"""
+        self.current_volume = max(0, min(100, int(pct)))
+        try:
+            if self._lock.acquire(timeout=0.1):
+                try:
+                    self.engine.setProperty('volume', self.current_volume / 100.0)
+                finally:
+                    self._lock.release()
+        except Exception:
+            pass
+        print(f"[VoiceEngine] 音量已调整为: {self.current_volume}%")
 
     def _contains_japanese(self, text: str) -> bool:
         """检测文本是否包含日文假名"""

@@ -106,6 +106,40 @@ LIGHT_TOOL_DEFINITIONS = [
                 "required": ["brightness"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_light_mode",
+            "description": "精确设置 16x16 矩阵灯板的原生模式编号 (0~25)。当用户要求切换特定灯光、颜色或意象时调用。例如: 1(纯红灯), 2(纯蓝/大海), 3(纯绿), 4(彩虹), 5(极光), 6(流星), 7(繁星), 10(水波涟漪/深海), 11(微笑), 14(灵动眨眼), 15(频谱随动), 19(贪吃蛇), 21(俄罗斯方块), 23(赛博烈焰/灯笼暖光), 24(黑客代码雨), 0(关灯)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "integer",
+                        "description": "模式编号 (0~25)"
+                    }
+                },
+                "required": ["mode"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_volume",
+            "description": "调节语音播报音量 (0~100)。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "volume": {
+                        "type": "integer",
+                        "description": "音量百分比 0 到 100"
+                    }
+                },
+                "required": ["volume"]
+            }
+        }
     }
 ]
 
@@ -136,6 +170,17 @@ def execute_tool(func_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             theme = arguments.get("theme", "rainbow")
             ok = controller.set_theme(theme)
             return {"status": "success" if ok else "error", "message": f"光场特效已切换为: {theme}"}
+
+        elif func_name == "set_light_mode":
+            mode = int(arguments.get("mode", 4))
+            ok = controller.set_mode(mode)
+            return {"status": "success" if ok else "error", "message": f"光场模式已切换为编号: {mode}"}
+
+        elif func_name == "set_volume":
+            vol = int(arguments.get("volume", 80))
+            from voice_engine import get_voice_engine
+            get_voice_engine().set_volume(vol)
+            return {"status": "success", "message": f"语音音量已设置为: {vol}%"}
 
         elif func_name == "show_expression":
             emotion = arguments.get("emotion", "dynamic")
