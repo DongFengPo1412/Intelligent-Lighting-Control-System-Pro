@@ -205,6 +205,11 @@ class LightController:
                         time.sleep(sleep_time)
 
                 self.ser.flush()
+                # 确保在退出前让板载 DMA 将最后的尾音完整播完，避免后续指令过早切入造成尾音破损或杂音
+                total_duration = total_len / 32000.0
+                rem_play = (start_clock + total_duration) - time.perf_counter()
+                if rem_play > 0:
+                    time.sleep(rem_play)
                 return True
             except Exception as e:
                 print(f"[LightController] 音频推流异常: {e}")
