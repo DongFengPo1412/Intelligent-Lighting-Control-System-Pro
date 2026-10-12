@@ -16,4 +16,5 @@ idf_component_register(
         led_strip
         esp_timer
         json
+        esp_driver_usb_serial_jtag
 )

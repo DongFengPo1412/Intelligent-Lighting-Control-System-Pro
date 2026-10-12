@@ -5,8 +5,17 @@
 #include <strings.h>
 #include <cJSON.h>
 #include <esp_log.h>
+#include <driver/usb_serial_jtag.h>
 
 static const char* TAG = "CmdDispatcher";
+
+static void SendReply(const char* msg)
+{
+    if (!msg) return;
+    usb_serial_jtag_write_bytes(msg, strlen(msg), pdMS_TO_TICKS(100));
+    printf("%s", msg);
+    fflush(stdout);
+}
 
 CommandDispatcher& CommandDispatcher::GetInstance()
 {
@@ -62,25 +71,33 @@ void CommandDispatcher::SerialTaskTrampoline(void* arg)
 
 void CommandDispatcher::SerialTaskLoop()
 {
-    ESP_LOGI(TAG, "Serial command listening loop entered.");
+    ESP_LOGI(TAG, "Serial command listening loop entered (USB-Serial-JTAG Hardware Driver).");
 
-    char buf[256];
-    int idx = 0;
+    usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    esp_err_t err = usb_serial_jtag_driver_install(&config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "usb_serial_jtag_driver_install: %s (might already be installed)", esp_err_to_name(err));
+    }
+
+    char line_buf[256];
+    int line_idx = 0;
+    uint8_t rx_buf[64];
 
     while (is_running_) {
-        int c = fgetc(stdin);
-        if (c != EOF && c > 0) {
-            if (c == '\n' || c == '\r') {
-                if (idx > 0) {
-                    buf[idx] = '\0';
-                    ProcessLine(buf);
-                    idx = 0;
+        int bytes_read = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(50));
+        if (bytes_read > 0) {
+            for (int i = 0; i < bytes_read; i++) {
+                char c = (char)rx_buf[i];
+                if (c == '\n' || c == '\r') {
+                    if (line_idx > 0) {
+                        line_buf[line_idx] = '\0';
+                        ProcessLine(line_buf);
+                        line_idx = 0;
+                    }
+                } else if (line_idx < (int)sizeof(line_buf) - 1) {
+                    line_buf[line_idx++] = c;
                 }
-            } else if (idx < (int)sizeof(buf) - 1) {
-                buf[idx++] = (char)c;
             }
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
 
@@ -94,9 +111,11 @@ void CommandDispatcher::SendStatus()
     bool cd_active = dm.IsCountdownActive();
     uint32_t cd_rem = dm.GetCountdownRemainingSeconds();
 
-    printf("{\"type\":\"status\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u}\r\n",
-           mode, cd_active ? "true" : "false", (unsigned int)cd_rem);
-    fflush(stdout);
+    char status_buf[160];
+    snprintf(status_buf, sizeof(status_buf),
+             "{\"type\":\"status\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u}\r\n",
+             mode, cd_active ? "true" : "false", (unsigned int)cd_rem);
+    SendReply(status_buf);
 }
 
 void CommandDispatcher::ProcessLine(const char* line)
@@ -107,6 +126,8 @@ void CommandDispatcher::ProcessLine(const char* line)
     while (*line == ' ' || *line == '\t') line++;
     if (*line == '\0') return;
 
+    ESP_LOGI(TAG, ">>> [收到外部指令]: %s", line);
+
     // 1. 旧版音乐频谱流 (兼容中阶 "f,beat,b0,b1...")
     if (strncmp(line, "f,", 2) == 0) {
         DisplayManager::GetInstance().FeedSpectrumSerial(line);
@@ -116,22 +137,19 @@ void CommandDispatcher::ProcessLine(const char* line)
     // 2. JSON 格式指令
     if (*line == '{') {
         if (ProcessJsonCommand(line)) {
-            printf("{\"status\":\"ok\"}\r\n");
-            fflush(stdout);
+            SendReply("{\"status\":\"ok\"}\r\n");
             return;
         }
     }
 
     // 3. 极速纯文本短语指令
     if (ProcessTextCommand(line)) {
-        printf("{\"status\":\"ok\"}\r\n");
-        fflush(stdout);
+        SendReply("{\"status\":\"ok\"}\r\n");
         return;
     }
 
     ESP_LOGW(TAG, "Unrecognized command: %s", line);
-    printf("{\"status\":\"error\",\"msg\":\"unknown_command\"}\r\n");
-    fflush(stdout);
+    SendReply("{\"status\":\"error\",\"msg\":\"unknown_command\"}\r\n");
 }
 
 bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
