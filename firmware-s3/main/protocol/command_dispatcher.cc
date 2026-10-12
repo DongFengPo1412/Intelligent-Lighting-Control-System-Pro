@@ -60,7 +60,7 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
     BaseType_t ret = xTaskCreatePinnedToCore(
         SerialTaskTrampoline,
         "serial_cmd_task",
-        4096,
+        8192,
         this,
         priority,
         &task_handle_,
@@ -136,7 +136,10 @@ void CommandDispatcher::SerialTaskLoop()
 {
     ESP_LOGI(TAG, "Serial command listening loop entered (USB-Serial-JTAG Hardware Driver).");
 
-    usb_serial_jtag_driver_config_t config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    usb_serial_jtag_driver_config_t config = {
+        .tx_buffer_size = 512,
+        .rx_buffer_size = 4096,
+    };
     esp_err_t err = usb_serial_jtag_driver_install(&config);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "usb_serial_jtag_driver_install: %s (might already be installed)", esp_err_to_name(err));
@@ -144,7 +147,7 @@ void CommandDispatcher::SerialTaskLoop()
 
     char line_buf[256];
     int line_idx = 0;
-    uint8_t rx_buf[128];
+    uint8_t rx_buf[512];
 
     enum AudioRxState {
         STATE_TEXT = 0,
@@ -156,10 +159,10 @@ void CommandDispatcher::SerialTaskLoop()
     AudioRxState rx_state = STATE_TEXT;
     uint16_t audio_expected_len = 0;
     uint16_t audio_received_len = 0;
-    uint8_t audio_payload[1024];
+    static uint8_t audio_payload[2048];
 
     while (is_running_) {
-        int bytes_read = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(40));
+        int bytes_read = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(10));
         if (bytes_read > 0) {
             for (int i = 0; i < bytes_read; i++) {
                 uint8_t b = rx_buf[i];
@@ -208,14 +211,20 @@ void CommandDispatcher::SerialTaskLoop()
                         }
                         break;
 
-                    case STATE_AUDIO_PAYLOAD:
-                        audio_payload[audio_received_len++] = b;
+                    case STATE_AUDIO_PAYLOAD: {
+                        size_t needed = audio_expected_len - audio_received_len;
+                        size_t available = bytes_read - i;
+                        size_t take = (needed < available) ? needed : available;
+                        memcpy(&audio_payload[audio_received_len], &rx_buf[i], take);
+                        audio_received_len += take;
+                        i += (take - 1); // for-loop 自增 i++
                         if (audio_received_len >= audio_expected_len) {
                             size_t sample_count = audio_received_len / sizeof(int16_t);
                             AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)audio_payload, sample_count);
                             rx_state = STATE_TEXT;
                         }
                         break;
+                    }
                 }
             }
         }

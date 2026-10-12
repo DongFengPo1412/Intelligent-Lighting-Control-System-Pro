@@ -63,7 +63,7 @@ esp_err_t DisplayManager::StartTask(UBaseType_t priority, BaseType_t core_id)
     BaseType_t ret = xTaskCreatePinnedToCore(
         DisplayTaskTrampoline,
         "display_task",
-        4096,
+        8192,
         this,
         priority,
         &task_handle_,

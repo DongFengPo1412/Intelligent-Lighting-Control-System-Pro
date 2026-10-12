@@ -40,8 +40,8 @@ esp_err_t AudioHAL::Init(
 
     // 1. 初始化 MAX98357A 扬声器输出通道 (TX) 绑定至 I2S_NUM_0
     i2s_chan_config_t tx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-    tx_chan_cfg.dma_desc_num = 6;
-    tx_chan_cfg.dma_frame_num = 240;
+    tx_chan_cfg.dma_desc_num = 8;
+    tx_chan_cfg.dma_frame_num = 512;
     tx_chan_cfg.auto_clear_after_cb = true;
 
     esp_err_t ret = i2s_new_channel(&tx_chan_cfg, &tx_chan_, nullptr);
@@ -130,10 +130,6 @@ esp_err_t AudioHAL::Init(
     mic_enabled_ = false;
     initialized_ = true;
     ESP_LOGI(TAG, "I2S 硬件音频全双工驱动初始化成功 (TX 已激活，RX 待命)");
-
-    // 开机自检提示音 (双音阶清脆开机蜂鸣 880Hz -> 1320Hz)
-    PlayBeep(880, 120);
-    PlayBeep(1320, 160);
 
     return ESP_OK;
 }

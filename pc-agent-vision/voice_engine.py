@@ -93,6 +93,11 @@ class VoiceEngine:
                 frames = audioop.lin2lin(frames, sw, 2)
             if fr != 16000:
                 frames, _ = audioop.ratecv(frames, 2, 1, fr, 16000, None)
+
+            # 缩放至当前音量，并避免 MAX98357A 硬件输出级削波破音失真 (默认 0.65 增益上限，音质更纯净)
+            gain = (self.current_volume / 100.0) * 0.65
+            if gain < 0.98 or gain > 1.02:
+                frames = audioop.mul(frames, 2, gain)
             return frames
         except Exception as e:
             print(f"[VoiceEngine] 音频转换异常: {e}")

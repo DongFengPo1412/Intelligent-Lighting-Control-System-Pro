@@ -151,10 +151,11 @@ class LightController:
         """发送标准 cJSON 指令包"""
         return self.send_raw(json.dumps(payload, separators=(',', ':')))
 
-    def play_audio_pcm(self, pcm_data: bytes, chunk_samples: int = 256) -> bool:
+    def play_audio_pcm(self, pcm_data: bytes, chunk_samples: int = 512) -> bool:
         """
         向板载 MAX98357A 扬声器下行直推 16kHz 16-bit 单声道 PCM 音频流
         协议格式: [0xAA, 0x55, len_hi, len_lo, <pcm payload>]
+        内置 Jitter Buffer 预填充与 Windows 1ms 高精度多媒体时钟，杜绝硬件 DMA 欠载与杂音卡顿
         """
         if not pcm_data:
             return False
@@ -163,27 +164,51 @@ class LightController:
         total_len = len(pcm_data)
         offset = 0
 
-        # 每块 256 samples 在 16kHz 下对应 16ms 播放时长
-        chunk_interval = chunk_samples / 16000.0 * 0.85 # 略快于实时率送入硬件 DMA 缓冲
+        # 每块 512 samples 在 16kHz 下对应 32.0ms 播放时长
+        chunk_interval = chunk_samples / 16000.0 * 0.95
+
+        # 启用 Windows 1ms 高精度多媒体计时器
+        has_winmm = False
+        try:
+            if sys.platform == 'win32':
+                import ctypes
+                ctypes.windll.winmm.timeBeginPeriod(1)
+                has_winmm = True
+        except Exception:
+            pass
 
         with self._lock:
             if not self.is_connected or not self.ser:
                 if not self.connect():
+                    if has_winmm:
+                        ctypes.windll.winmm.timeEndPeriod(1)
                     return False
 
             try:
+                chunk_index = 0
                 while offset < total_len:
                     part = pcm_data[offset : offset + chunk_bytes]
                     part_len = len(part)
                     header = bytearray([0xAA, 0x55, (part_len >> 8) & 0xFF, part_len & 0xFF])
                     self.ser.write(header + part)
                     offset += part_len
-                    time.sleep(chunk_interval)
+                    chunk_index += 1
+
+                    # 前 4 个分包 (约 128ms 音频) 零延迟推入硬件 I2S DMA 预载环形队列 (Pre-roll Jitter Buffer)
+                    # 彻底解决 Windows 睡眠时钟抖动引发的硬件欠载断流
+                    if chunk_index > 4:
+                        time.sleep(chunk_interval)
                 self.ser.flush()
                 return True
             except Exception as e:
                 print(f"[LightController] 音频推流异常: {e}")
                 return False
+            finally:
+                if has_winmm:
+                    try:
+                        ctypes.windll.winmm.timeEndPeriod(1)
+                    except Exception:
+                        pass
 
     def enable_mic(self, enable: bool = True) -> bool:
         """开启或暂停 ESP32 板载 INMP441 麦克风音频流上传"""
