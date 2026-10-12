@@ -1,9 +1,9 @@
 """
-VoiceEngine: 牧濑红莉栖中日双语原生神经语音引擎
-- 中文主干: Windows OneCore 原生高保真少女音色 (Microsoft Yaoyao)，彻底告别 2005 年默认机械音
-- 日语收尾: Windows OneCore 原生二次元日语少女音色 (Microsoft Sayaka / Haruka)，傲娇原声收束
-- 交互结构: 严格遵循【先中文回答 + 180ms 自然换气停顿 + 后正统日语台词傲娇收尾】
-- 声学指标: 16kHz 16-bit 单声道线性 PCM 零重采样损耗直推硬件
+VoiceEngine: 牧濑红莉栖 (Makise Kurisu, CV: 今井麻美) 纯正开源神经声学语音引擎
+- 核心模型: 基于开源 GPT-SoVITS (v2Pro) 架构 + 牧濑红莉栖中日双语大模型权重 (kurisu-e15.ckpt + kurisu_e4_s972.pth)
+- 语言处理: 中文先发，配合 180ms 自然换气微停顿，再以牧濑红莉栖原作正统傲娇日文台词收束
+- 铁律约束: 坚决禁用任何 Microsoft (SAPI/OneCore/系统机械音) 语音包；要么输出清晰纯正红莉栖原声，要么保持静默 (Fail-Silent)
+- 硬件直通: 16kHz 16-bit 单声道线性 PCM 零重采样损耗直推 ESP32-S3 MAX98357A I2S 硬件
 """
 
 import os
@@ -12,6 +12,7 @@ import threading
 import time
 import io
 import wave
+import re
 from typing import Optional
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -20,64 +21,74 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 import numpy as np
+import scipy.signal
+
+# 引入 GPT-SoVITS 环境
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+gpt_sovits_dir = os.path.join(repo_root, "models", "GPT-SoVITS")
+sys.path.insert(0, gpt_sovits_dir)
+sys.path.insert(0, os.path.join(gpt_sovits_dir, "GPT_SoVITS"))
+
+try:
+    from TTS_infer_pack.TTS import TTS_Config, TTS
+    _HAS_GPT_SOVITS = True
+except Exception as e:
+    print(f"[VoiceEngine 致命警报] 无法导入 GPT-SoVITS 依赖: {e}")
+    _HAS_GPT_SOVITS = False
+
 
 class VoiceEngine:
     def __init__(self):
         self._lock = threading.Lock()
         
-        # 默认适中清晰音量 (75%)
+        # 音量控制 (默认 75% 适度清脆)
         self.current_volume = 75
         
-        # 牧濑红莉栖 GPT-SoVITS 权重与微服务预留配置
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.model_dir = os.path.join(base_dir, "models", "kurisu_tts")
-        self.prompt_shy = os.path.join(self.model_dir, "prompt_shy.wav")
-        self.prompt_sigh = os.path.join(self.model_dir, "prompt_sigh.wav")
-        self.gpt_sovits_api = os.environ.get("GPT_SOVITS_API", "http://127.0.0.1:9880")
+        # 模型与提示音频路径
+        self.model_dir = os.path.join(repo_root, "models", "kurisu_tts")
+        self.t2s_weights = os.path.join(self.model_dir, "kurisu-e15.ckpt")
+        self.vits_weights = os.path.join(self.model_dir, "kurisu_e4_s972.pth")
+        self.bert_base_path = os.path.join(repo_root, "models", "pretrained_models", "chinese-roberta-wwm-ext-large")
+        self.cnhuhbert_base_path = os.path.join(repo_root, "models", "pretrained_models", "chinese-hubert-base")
         
-        has_weights = os.path.exists(os.path.join(self.model_dir, "kurisu-e15.ckpt")) and os.path.exists(os.path.join(self.model_dir, "kurisu_e4_s972.pth"))
+        # 牧濑红莉栖正统参考音频 (来自原作录音，今井麻美傲娇原声)
+        self.ref_audio_path = os.path.join(self.model_dir, "soundbank", "not_christina.wav")
+        self.prompt_text = "私、クリスティーナじゃない！"
+        self.prompt_lang = "ja"
         
-        # 探测并锁定 Windows OneCore 高清神经女声
-        self.zh_voice_name, self.jp_voice_name = self._scan_onecore_voices()
-        print(f"[VoiceEngine] 牧濑红莉栖双语神经音色引擎就绪 (中文: {self.zh_voice_name}, 日文: {self.jp_voice_name}, GPT-SoVITS: {has_weights})")
+        self.tts: Optional[TTS] = None
+        self._init_kurisu_model()
 
-    def _scan_onecore_voices(self) -> tuple:
-        """扫描 Windows OneCore 注册表锁定最佳中日双语女声"""
-        zh_selected = "Yaoyao"
-        jp_selected = "Sayaka"
+    def _init_kurisu_model(self):
+        """初始化牧濑红莉栖纯正 GPT-SoVITS 神经网络"""
+        if not _HAS_GPT_SOVITS:
+            print("[VoiceEngine] GPT-SoVITS 未加载，遵从用户铁律：绝不使用任何微软语音包，静音备用。")
+            return
+        
+        if not os.path.exists(self.t2s_weights) or not os.path.exists(self.vits_weights):
+            print(f"[VoiceEngine] 牧濑红莉栖模型权重不存在 ({self.t2s_weights})，静音就绪。")
+            return
+        
         try:
-            import win32com.client
-            import pythoncom
-            pythoncom.CoInitialize()
-            cat = win32com.client.Dispatch('SAPI.SpObjectTokenCategory')
-            cat.SetId(r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices', False)
-            tokens = cat.EnumerateTokens()
-            
-            zh_found = None
-            jp_found = None
-            for t in tokens:
-                tid = t.Id
-                desc = t.GetDescription().lower()
-                if "yaoyao" in tid.lower() or "yaoyao" in desc:
-                    zh_found = "Yaoyao"
-                elif "huihui" in tid.lower() and not zh_found:
-                    zh_found = "Huihui"
-                elif "hanhan" in tid.lower() and not zh_found:
-                    zh_found = "Hanhan"
-                    
-                if "sayaka" in tid.lower() or "sayaka" in desc:
-                    jp_found = "Sayaka"
-                elif "ayumi" in tid.lower() and not jp_found:
-                    jp_found = "Ayumi"
-                elif "haruka" in tid.lower() and not jp_found:
-                    jp_found = "Haruka"
-            if zh_found:
-                zh_selected = zh_found
-            if jp_found:
-                jp_selected = jp_found
+            print("[VoiceEngine] 正在载入牧濑红莉栖 (CV: 今井麻美) 专属中日双语大模型...")
+            t0 = time.time()
+            custom_config = {
+                'custom': {
+                    'device': 'cuda',
+                    'is_half': False,
+                    'version': 'v2Pro',
+                    't2s_weights_path': self.t2s_weights,
+                    'vits_weights_path': self.vits_weights,
+                    'bert_base_path': self.bert_base_path,
+                    'cnhuhbert_base_path': self.cnhuhbert_base_path,
+                }
+            }
+            cfg = TTS_Config(custom_config)
+            self.tts = TTS(cfg)
+            print(f"[VoiceEngine] 牧濑红莉栖专属神经声学模型已就绪 (耗时: {time.time()-t0:.2f}s, GPU RTX 加速)")
         except Exception as e:
-            print(f"[VoiceEngine] 扫描 OneCore 声音失败: {e}")
-        return zh_selected, jp_selected
+            print(f"[VoiceEngine 异常] 加载牧濑红莉栖模型失败: {e}。根据用户要求，绝不使用微软备选语音，保持静音。")
+            self.tts = None
 
     @property
     def volume(self) -> int:
@@ -88,56 +99,24 @@ class VoiceEngine:
         self.current_volume = max(0, min(100, int(pct)))
         print(f"[VoiceEngine] 音量已调整为: {self.current_volume}%")
 
+    def _clean_text_for_tts(self, text: str) -> str:
+        """清洗文本中的特殊标签、微表情、系统记号、连续换行"""
+        if not text:
+            return ""
+        # 移除大模型可能产生的系统标记 [smile], (微笑), 【动作】
+        t = re.sub(r'\[.*?\]|\(.*?\)|\（.*?\）|\【.*?\】', '', text)
+        # 移除 markdown 粗体/斜体
+        t = t.replace('*', '').replace('`', '').replace('#', '')
+        # 连续换行和多余空格清洗
+        t = re.sub(r'\s+', ' ', t).strip()
+        return t
+
     def _contains_japanese(self, text: str) -> bool:
         """检测文本是否包含日文假名"""
         for char in text:
             if '\u3040' <= char <= '\u30ff':
                 return True
         return False
-
-    def _synthesize_onecore_raw(self, text: str, voice_pref: str, rate: int = 1) -> Optional[bytes]:
-        """
-        使用 Windows SAPI OneCore 原生直出 16kHz 16-bit 单声道 PCM
-        SAFT16kHz16BitMono = 18
-        """
-        if not text or not text.strip():
-            return None
-        import pythoncom
-        import win32com.client
-        pythoncom.CoInitialize()
-        try:
-            cat = win32com.client.Dispatch('SAPI.SpObjectTokenCategory')
-            cat.SetId(r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices', False)
-            speaker = win32com.client.Dispatch('SAPI.SpVoice')
-            
-            chosen_token = None
-            for token in cat.EnumerateTokens():
-                if voice_pref.lower() in token.Id.lower():
-                    chosen_token = token
-                    break
-            if not chosen_token:
-                for token in cat.EnumerateTokens():
-                    if voice_pref.lower() in token.GetDescription().lower():
-                        chosen_token = token
-                        break
-            if chosen_token:
-                speaker.Voice = chosen_token
-
-            fmt = win32com.client.Dispatch('SAPI.SpAudioFormat')
-            fmt.Type = 18 # 16kHz 16-bit Mono (零重采样、零 aliasing 杂音)
-            stream = win32com.client.Dispatch('SAPI.SpMemoryStream')
-            stream.Format = fmt
-            speaker.AudioOutputStream = stream
-            speaker.Rate = rate # 敏捷睿智的天才少女语速
-            speaker.Speak(text)
-            
-            raw_pcm = bytes(stream.GetData())
-            return raw_pcm
-        except Exception as e:
-            print(f"[VoiceEngine] OneCore 合成异常: {e}")
-            return None
-        finally:
-            pythoncom.CoUninitialize()
 
     def _pick_kurisu_japanese_suffix(self, context_text: str) -> str:
         """根据回复上下文智能匹配牧濑红莉栖原作正统台词收尾"""
@@ -148,57 +127,102 @@ class VoiceEngine:
         elif any(k in context_text for k in ["喜欢", "可爱", "害羞", "脸红", "笑"]):
             return "べ、別にアンタのためじゃないんだからね！"
         elif any(k in context_text for k in ["倒计时", "沙漏", "实验", "科学", "装置", "中枢", "系统"]):
-            return "実験の進行は順調よ。"
+            return "実験の進行は順调よ。"
         elif any(k in context_text for k in ["世界线", "命运石", "跳跃", "变动"]):
             return "エル・プサイ・コングルゥ。"
         else:
             return "ふん、次は役に立ちなさいよね。"
 
+    def _synthesize_raw(self, text: str, lang: str) -> Optional[np.ndarray]:
+        """调用 GPT-SoVITS 单独合成一段文本 (32kHz numpy float32)"""
+        if not self.tts or not text or not text.strip():
+            return None
+        
+        req = {
+            'text': text,
+            'text_lang': lang,
+            'ref_audio_path': self.ref_audio_path,
+            'prompt_text': self.prompt_text,
+            'prompt_lang': self.prompt_lang,
+            'streaming_mode': False,
+            'use_cuda_graph': False,
+            'parallel_infer': False,
+            'top_k': 15,
+            'top_p': 1.0,
+            'temperature': 1.0,
+        }
+        chunks = []
+        try:
+            for res_sr, data in self.tts.run(req):
+                if data is not None and len(data) > 0:
+                    chunks.append(data)
+            if not chunks:
+                return None
+            return np.concatenate(chunks)
+        except Exception as e:
+            print(f"[VoiceEngine 异常] GPT-SoVITS 合成异常 ({text[:15]}...): {e}")
+            return None
+
     def synthesize_to_pcm(self, text: str) -> Optional[bytes]:
         """
         合成红莉栖全方位声线:
-        架构: 【先中文高保真回答】 + 【180ms 呼吸停顿】 + 【后牧濑红莉栖正统傲娇日语收束】
+        架构: 【先中文高保真回答】 + 【180ms 呼吸微停顿】 + 【后牧濑红莉栖正统傲娇日语收束】
         输出标准: 16kHz 16-bit 单声道 PCM 流 (与 ESP32-S3 MAX98357A 纯硬件直通)
+        严守铁律: 绝不使用任何微软语音包；若未生成红莉栖人声则返回 None (静默)
         """
-        if not text or not text.strip():
+        if not text or not text.strip() or not self.tts:
             return None
 
-        # 1. 中文部分合成 (Microsoft Yaoyao, Rate=1 灵动年轻少女声)
-        if self._contains_japanese(text):
-            # 如果文本本身已是纯日文，直接用 Sayaka 输出
-            pcm_chinese = self._synthesize_onecore_raw(text, self.jp_voice_name, rate=1)
-            pcm_japanese = None
-        else:
-            pcm_chinese = self._synthesize_onecore_raw(text, self.zh_voice_name, rate=1)
-            # 智能收尾台词
-            jp_suffix = self._pick_kurisu_japanese_suffix(text)
-            pcm_japanese = self._synthesize_onecore_raw(jp_suffix, self.jp_voice_name, rate=1)
-
-        # 2. 严谨拼接：【先中文】 + 【0.18s 平滑呼吸静音】 + 【后正统日语】
-        if pcm_chinese and pcm_japanese:
-            silence_gap = b'\x00\x00' * int(16000 * 0.18) # 180ms 静音停顿
-            combined_pcm = pcm_chinese + silence_gap + pcm_japanese
-        elif pcm_chinese:
-            combined_pcm = pcm_chinese
-        elif pcm_japanese:
-            combined_pcm = pcm_japanese
-        else:
+        cleaned = self._clean_text_for_tts(text)
+        if not cleaned:
             return None
 
-        # 3. 数字增益控制与软削波防护 (安全头保留 0.70 上限，杜绝扬声器物理破音)
-        scale = (self.current_volume / 100.0) * 0.70
-        try:
-            arr = np.frombuffer(combined_pcm, dtype=np.int16)
-            arr = (arr.astype(np.float32) * scale).clip(-32768, 32767).astype(np.int16)
-            return arr.tobytes()
-        except Exception:
-            return combined_pcm
+        with self._lock:
+            try:
+                # 判断语言逻辑
+                if self._contains_japanese(cleaned):
+                    # 如果文本本身已有日文，直接以日文单次合成完整输出
+                    audio_res = self._synthesize_raw(cleaned, "ja")
+                else:
+                    # 先中文回答
+                    audio_zh = self._synthesize_raw(cleaned, "zh")
+                    # 后配正统傲娇日文台词收束
+                    jp_suffix = self._pick_kurisu_japanese_suffix(cleaned)
+                    audio_ja = self._synthesize_raw(jp_suffix, "ja")
+                    
+                    if audio_zh is not None and audio_ja is not None:
+                        # 插入 180ms 平滑呼吸换气静音
+                        silence = np.zeros(int(32000 * 0.18), dtype=audio_zh.dtype)
+                        audio_res = np.concatenate([audio_zh, silence, audio_ja])
+                    elif audio_zh is not None:
+                        audio_res = audio_zh
+                    elif audio_ja is not None:
+                        audio_res = audio_ja
+                    else:
+                        audio_res = None
+
+                if audio_res is None or len(audio_res) == 0:
+                    return None
+
+                # 降采样从 32000Hz 到 16000Hz (多相滤波无损抗混叠降采样)
+                resampled_16k = scipy.signal.resample_poly(audio_res.astype(np.float32), 1, 2)
+
+                # 音量控制与削波防护 (安全头保留 0.85 上限)
+                scale = (self.current_volume / 100.0) * 0.85
+                resampled_16k = np.clip(resampled_16k * scale, -32768, 32767).astype(np.int16)
+                
+                return resampled_16k.tobytes()
+
+            except Exception as e:
+                print(f"[VoiceEngine 异常] 牧濑红莉栖语音合成中断: {e}，遵循静音准则，不播放任何杂音。")
+                return None
 
     def speak(self, text: str, block: bool = True, to_board: bool = True):
         """
         合成并播放对白:
         优先通过 ESP32-S3 板载 MAX98357A 扬声器物理发声；
-        若硬件未连接，自动平滑回退至 PC 本地扬声器发声。
+        若硬件未连接，自动回退至 PC 本地扬声器发声。
+        严守铁律: 要么听到红莉栖清晰人声，要么完全静音！
         """
         if not text or not text.strip():
             return
@@ -209,6 +233,7 @@ class VoiceEngine:
 
         pcm = self.synthesize_to_pcm(text)
         if not pcm:
+            # 静默原则：未合成出红莉栖人声则绝对不播放任何替代语音
             return
 
         if to_board:
@@ -221,7 +246,7 @@ class VoiceEngine:
             except Exception as e:
                 print(f"[VoiceEngine] 板载播放降级至本地扬声器: {e}")
 
-        # 本地 PC 扬声器播放回退
+        # 本地 PC 扬声器播放
         try:
             import winsound
             wav_io = io.BytesIO()
@@ -234,6 +259,7 @@ class VoiceEngine:
         except Exception as e:
             print(f"[VoiceEngine] 本地播放异常: {e}")
 
+
 # 单例导出
 _voice_instance: Optional[VoiceEngine] = None
 
@@ -243,8 +269,9 @@ def get_voice_engine() -> VoiceEngine:
         _voice_instance = VoiceEngine()
     return _voice_instance
 
+
 if __name__ == "__main__":
     v = get_voice_engine()
-    print("[测试]: 牧濑红莉栖中日双语先中文后日语原声输出...")
+    print("[测试]: 牧濑红莉栖中日双语原声输出...")
     test_line = "都说了我不是助手！要我说多少遍你这笨蛋才能记住啊！"
     v.speak(test_line, block=True, to_board=False)

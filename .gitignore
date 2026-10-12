@@ -27,6 +27,10 @@ ENV/
 .pytest_cache/
 models/kurisu_tts/*.ckpt
 models/kurisu_tts/*.pth
+models/kurisu_tts/*.wav
+models/GPT-SoVITS/
+models/pretrained_models/
+GPT_SoVITS/
 
 # Android Native App
 android-app/bin/
