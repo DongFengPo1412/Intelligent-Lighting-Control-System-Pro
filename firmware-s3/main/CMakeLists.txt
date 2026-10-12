@@ -6,11 +6,14 @@ idf_component_register(
         "display/game_engine.cc"
         "display/spectrum_engine.cc"
         "display/display_manager.cc"
+        "protocol/command_dispatcher.cc"
     INCLUDE_DIRS
         "."
         "display"
+        "protocol"
     REQUIRES
         esp_driver_gpio
         led_strip
         esp_timer
+        json
 )
