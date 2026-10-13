@@ -12,7 +12,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-MODEL_DIR = r"C:\workspace\Intelligent-Lighting-Control-System-Pro\models\kurisu_tts"
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_DIR = os.path.join(REPO_ROOT, "models", "kurisu_tts")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 FILES = [
