@@ -22,7 +22,7 @@ from light_controller import get_light_controller
 from voice_engine import get_voice_engine
 
 class KurisuAgent:
-    def __init__(self, api_base: Optional[str] = None, api_key: Optional[str] = None, model: str = "qwen2.5:7b"):
+    def __init__(self, api_base: Optional[str] = None, api_key: Optional[str] = None, model: str = "kurisu"):
         self.api_base = api_base or os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1")
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "ollama")
         self.model = model
@@ -244,19 +244,28 @@ class KurisuAgent:
         """主对话接口：接收输入 -> 思考与工具调用 -> 返回红莉栖回复"""
         self.history.append({"role": "user", "content": user_message})
 
-        # 尝试通过远程/本地 LLM (如 Ollama / Qwen2.5) 调用
+        # 尝试通过远程/本地端侧 LLM (Ollama / Qwen2.5 具身大模型) 调用
         try:
             import urllib.request
-            req_data = json.dumps({
+            is_ollama = "11434" in self.api_base
+            endpoint = f"{self.api_base.rstrip('/')}/chat" if (is_ollama and not self.api_base.endswith("/v1")) else (
+                "http://127.0.0.1:11434/api/chat" if is_ollama else f"{self.api_base.rstrip('/')}/chat/completions"
+            )
+
+            req_payload = {
                 "model": self.model,
                 "messages": self.history,
                 "tools": LIGHT_TOOL_DEFINITIONS,
+                "stream": False,
+                "options": {"temperature": 0.7} if is_ollama else None,
                 "temperature": 0.7
-            }).encode("utf-8")
+            }
+            # 清理 None 键
+            req_payload = {k: v for k, v in req_payload.items() if v is not None}
+            req_data = json.dumps(req_payload).encode("utf-8")
 
-            url = f"{self.api_base.rstrip('/')}/chat/completions"
             req = urllib.request.Request(
-                url,
+                endpoint,
                 data=req_data,
                 headers={
                     "Content-Type": "application/json",
@@ -265,44 +274,62 @@ class KurisuAgent:
             )
             
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(req, timeout=1.0) as response:
+            with opener.open(req, timeout=15.0) as response:
                 result = json.loads(response.read().decode("utf-8"))
-                choice = result["choices"][0]["message"]
+                
+                # 兼容 Ollama /api/chat 与 OpenAI /v1/chat/completions 数据结构
+                msg = result.get("message") or (result.get("choices", [{}])[0].get("message", {}))
+                tool_calls = msg.get("tool_calls", [])
+                raw_content = msg.get("content", "")
 
-                # 检查大模型是否发起了 Tool Calls
-                if "tool_calls" in choice and choice["tool_calls"]:
-                    self.history.append(choice)
-                    for tc in choice["tool_calls"]:
-                        fn = tc["function"]["name"]
-                        args = json.loads(tc["function"]["arguments"])
+                # 1. 执行大模型决策的具身物理工具 (Function Calling)
+                if tool_calls:
+                    self.history.append(msg)
+                    for tc in tool_calls:
+                        fn = tc.get("function", {}).get("name", "")
+                        args = tc.get("function", {}).get("arguments", {})
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except Exception:
+                                args = {}
                         tool_res = execute_tool(fn, args)
+                        print(f"[KurisuAgent 具身硬件工具触发]: {fn}({args}) -> {tool_res}")
                         self.history.append({
                             "role": "tool",
-                            "tool_call_id": tc["id"],
+                            "name": fn,
                             "content": json.dumps(tool_res, ensure_ascii=False)
                         })
-                    
-                    # 二次请求获取模型结合工具执行结果后的最终自然语言回复
-                    req_data2 = json.dumps({
+
+                # 2. 提取并净化语音自然语言对白 (过滤可能的 JSON 残留)
+                clean_text = re.sub(r'\{[^{}]*"name"[^{}]*\}', '', raw_content).strip()
+
+                # 如果执行了工具但当前没有自然语言回复，请求模型进行第二轮自然语言陈述
+                if tool_calls and not clean_text:
+                    req_payload2 = {
                         "model": self.model,
                         "messages": self.history,
+                        "stream": False,
                         "temperature": 0.7
-                    }).encode("utf-8")
-                    req2 = urllib.request.Request(url, data=req_data2, headers={"Content-Type": "application/json"})
-                    with opener.open(req2, timeout=5.0) as resp2:
-                        final_res = json.loads(resp2.read().decode("utf-8"))
-                        final_text = final_res["choices"][0]["message"]["content"]
-                        self.history.append({"role": "assistant", "content": final_text})
-                        self.voice.speak(final_text, block=False)
-                        return final_text
-                else:
-                    reply_text = choice.get("content", "")
-                    self.history.append({"role": "assistant", "content": reply_text})
-                    self.voice.speak(reply_text, block=False)
-                    return reply_text
+                    }
+                    req2 = urllib.request.Request(endpoint, data=json.dumps(req_payload2).encode("utf-8"), headers={"Content-Type": "application/json"})
+                    with opener.open(req2, timeout=15.0) as resp2:
+                        res2 = json.loads(resp2.read().decode("utf-8"))
+                        msg2 = res2.get("message") or (res2.get("choices", [{}])[0].get("message", {}))
+                        clean_text = re.sub(r'\{[^{}]*"name"[^{}]*\}', '', msg2.get("content", "")).strip()
+
+                if not clean_text:
+                    clean_text = "哼，本天才已经按你说的处理好了，还有什么事吗？\nフン、言われた通りにしてあげたわよ。他に何かあるの？"
+
+                self.history.append({"role": "assistant", "content": clean_text})
+                print(f"[KurisuAgent 端侧大模型思考完成]: {clean_text[:40]}...")
+                self.voice.speak(clean_text, block=False)
+                return clean_text
+
 
         except Exception as e:
             # 当本地大模型服务未启动时，无缝切换到本地离线规则路由，保证硬件即时可控！
+            print(f"[KurisuAgent 提示] 端侧大模型离线/超时 ({e})，平滑降级至本地具身状态机")
             fallback = self._offline_heuristic_fallback(user_message)
             reply = fallback["reply"]
             self.history.append({"role": "assistant", "content": reply})
