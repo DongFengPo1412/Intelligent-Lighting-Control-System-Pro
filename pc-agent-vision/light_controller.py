@@ -23,6 +23,7 @@ class LightController:
         self._running = True
         self.on_mic_data: Optional[Callable[[bytes], None]] = None
         self.on_status_data: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._chime_pcm: bytes = self._create_chime_pcm()
 
         self.connect()
         self._start_reader()
@@ -262,8 +263,26 @@ class LightController:
         print(f"[LightController] 设置板载麦克风数据流: {'开启' if enable else '关闭'}")
         return self.send_json({"cmd": "mic", "enable": enable})
 
+    @staticmethod
+    def _create_chime_pcm(sample_rate: int = 16000) -> bytes:
+        """生成清脆灵动的配对/唤醒双音阶上扬提示音 (880Hz -> 1320Hz)"""
+        try:
+            import numpy as np
+            t1 = np.linspace(0, 0.08, int(sample_rate * 0.08), False)
+            t2 = np.linspace(0, 0.12, int(sample_rate * 0.12), False)
+            s1 = np.sin(2 * np.pi * 880 * t1) * 0.45
+            s2 = np.sin(2 * np.pi * 1320 * t2) * 0.55
+            env1 = np.sin(np.linspace(0, np.pi, len(s1)))**0.5
+            env2 = np.sin(np.linspace(0, np.pi, len(s2)))**0.5
+            audio = np.concatenate([s1 * env1, s2 * env2])
+            return (audio * 32767).astype(np.int16).tobytes()
+        except Exception:
+            return b""
+
     def play_beep(self) -> bool:
-        """触发硬件板载提示音"""
+        """触发硬件板载提示音 (优先通过 I2S 直推清脆灵动上扬和弦，兼发硬件蜂鸣)"""
+        if hasattr(self, '_chime_pcm') and self._chime_pcm:
+            return self.play_audio_pcm(self._chime_pcm)
         return self.send_json({"cmd": "beep"})
 
     def set_volume(self, volume: int) -> bool:

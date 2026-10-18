@@ -81,13 +81,20 @@ class VoiceListener:
             r'makise\s*kurisu',
             r'kurisu',
             r'makise',
+            r'christina',
+            r'kris',
+            r'chris',
             r'まきせ\s*くりす',
             r'くりす',
             r'クリス',
             r'マキセ',
-            r'牧濑\s*红莉栖',
-            r'红莉栖',
-            r'牧濑',
+            # 中文全称与多音字、同音字容错 (牧濑红莉栖)
+            r'[牧木目穆][濑赖赛莱拉来奶][红洪虹][莉利丽立力栗茜][栖茜夕溪七期齐]',
+            r'[牧木目穆][濑赖赛莱拉来奶]',
+            r'[红洪虹][莉利丽立力栗茜][栖茜夕溪七期齐]',
+            # 克里斯 / 克里斯蒂娜
+            r'[克科库刻客][莉丽里立栗][斯诗思丝四][蒂迪地][娜那]',
+            r'[克科库刻客][莉丽里立栗][斯诗思丝四]',
             r'克里斯蒂娜',
             r'克里斯',
             r'库里斯',
@@ -178,21 +185,22 @@ class VoiceListener:
         with self._work_lock:
             try:
                 text = ""
-                # 1. 本地离线 Whisper 识别 (绝对不加 wake word prompt，杜绝无声时诱发 ASR 幻觉)
+                # 1. 本地离线 Whisper 识别 (锁定为中文 zh，杜绝短语音时误判英文诱发 "Thank you" / "Good" 幻觉)
                 if self.whisper_model is not None:
                     try:
                         audio_np = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
                         segments, info = self.whisper_model.transcribe(
                             audio_np,
+                            language="zh",
                             beam_size=1,
                             initial_prompt=None,
                             condition_on_previous_text=False,
-                            no_speech_threshold=0.7,
+                            no_speech_threshold=0.6,
                             log_prob_threshold=-1.0,
                             compression_ratio_threshold=2.4
                         )
                         parts = [s.text.strip() for s in segments]
-                        text = " ".join(parts).strip()
+                        text = "".join(parts).strip()
                     except Exception as wex:
                         text = ""
 
@@ -348,11 +356,16 @@ class VoiceListener:
                 continue
 
             ambient_energy = 0.98 * ambient_energy + 0.02 * rms
-            threshold = max(3600.0, ambient_energy * 3.2)
+            
+            # 双门限迟滞比较器 (Hysteresis VAD):
+            # 起始阈值: 2000 或 底噪 2.2 倍 (连续 2 帧，防止键盘轻叩或静电杂音)
+            # 持续阈值: 1300 或 底噪 1.5 倍 (防止辅音、字间换气被截断)
+            start_threshold = max(2000.0, ambient_energy * 2.2)
+            continue_threshold = max(1300.0, ambient_energy * 1.5)
 
             if not is_speaking:
                 preroll_chunks.append(filtered_samples)
-                if rms > threshold:
+                if rms > start_threshold:
                     speech_trigger_count += 1
                     # 连续 2 帧超过阈值才确认为人声起始，过滤单点瞬态脉冲
                     if speech_trigger_count >= 2:
@@ -363,14 +376,15 @@ class VoiceListener:
                         speech_chunks.append(filtered_samples)
                         self.controller.set_board_led("hearing") # 鲜亮红光 (检测到人声说话)
                         tag = "【等待指令中】" if self.is_awake else "【待命·等待唤醒词】"
-                        print(f"\n[ESP32 麦克风: {tag} 拾音中...]", end="", flush=True)
+                        print(f"\n[ESP32 麦克风: {tag} 拾音中 (RMS: {rms:.0f})...]", end="", flush=True)
                 else:
                     speech_trigger_count = 0
             else:
                 speech_chunks.append(filtered_samples)
-                if rms < threshold:
+                if rms < continue_threshold:
                     silent_count += 1
-                    silent_limit = 18 if self.is_awake else 14
+                    # 静音容忍帧数: 待命唤醒 26 帧 (~390ms)，等待指令 32 帧 (~480ms)
+                    silent_limit = 32 if self.is_awake else 26
                     if silent_count >= silent_limit:
                         is_speaking = False
                         silent_count = 0
@@ -386,10 +400,11 @@ class VoiceListener:
                         total_samples = sum(len(c) for c in speech_chunks)
                         max_chunk_rms = max(float(np.sqrt(np.mean(c**2))) for c in speech_chunks) if speech_chunks else 0.0
 
-                        # 要求至少 0.6 秒语音且峰值能量真实有效 (>4000)，彻底过滤轻微摩擦声、风扇声与底噪扰动
-                        if total_samples >= 16000 * 0.6 and max_chunk_rms >= 4000.0:
+                        # 要求至少 0.45 秒语音且峰值能量真实有效 (>2200)，过滤日常轻微白噪音
+                        if total_samples >= 16000 * 0.45 and max_chunk_rms >= 2200.0:
                             full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
-                            self._process_utterance(full_pcm)
+                            # 异步分发至工作线程，确保 _process_loop 不被 ASR 推理耗时阻塞
+                            threading.Thread(target=self._process_utterance, args=(full_pcm,), daemon=True).start()
                         else:
                             state_led = "active" if self.is_awake else "listening"
                             self.controller.set_board_led(state_led)

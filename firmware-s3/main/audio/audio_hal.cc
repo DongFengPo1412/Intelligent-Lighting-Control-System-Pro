@@ -259,8 +259,8 @@ esp_err_t AudioHAL::PlayBeep(uint32_t freq_hz, uint32_t duration_ms) {
     float phase = 0.0f;
     size_t samples_generated = 0;
 
-    // 提示音量按当前音量系数换算
-    float amp = (float)volume_factor_ * 0.25f; // 提示音保持适中温和，严防破音
+    // 提示音量按当前音量系数换算 (映射至 32-bit slot 有效振幅区间)
+    float amp = (float)volume_factor_ * 20000.0f; // 适中温和且清晰宏亮
 
     while (samples_generated < total_samples) {
         size_t frames_this_round = std::min(chunk_frames, total_samples - samples_generated);
