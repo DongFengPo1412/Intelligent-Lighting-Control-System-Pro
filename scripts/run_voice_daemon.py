@@ -16,9 +16,9 @@ import signal
 import threading
 
 if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
 if hasattr(sys.stderr, 'reconfigure'):
-    sys.stderr.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
 
 # 确保加载 pc-agent-vision 模块
 agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pc-agent-vision")
