@@ -396,12 +396,15 @@ class VoiceEngine:
 
         pcm_16k, wav_32k_bytes = bundle
 
+        from light_controller import get_light_controller
+        ctrl = get_light_controller()
+        if ctrl.is_connected:
+            ctrl.set_board_led("speaking")
+
         board_thread = None
         if to_board:
             def _push_board():
                 try:
-                    from light_controller import get_light_controller
-                    ctrl = get_light_controller()
                     if ctrl.is_connected:
                         ctrl.play_audio_pcm(pcm_16k)
                 except Exception as e:
@@ -409,7 +412,7 @@ class VoiceEngine:
             board_thread = threading.Thread(target=_push_board, daemon=True)
             board_thread.start()
 
-        # 本地 PC 扬声器以 32000Hz 纯正无损红莉栖原声播放 (保留完整高频，告别电话音)
+        # 本地 PC 扬声器以 32000Hz 纯正无损红莉栖原声播放 (保留完整高频)
         try:
             import winsound
             winsound.PlaySound(wav_32k_bytes, winsound.SND_MEMORY)

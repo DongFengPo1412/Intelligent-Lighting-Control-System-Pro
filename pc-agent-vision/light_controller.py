@@ -185,6 +185,14 @@ class LightController:
                     return False
 
             try:
+                # 硬件级静音：下发关闭麦克风推流指令，杜绝扬声器自激啸叫与回声循环
+                try:
+                    mute_cmd = b'{"cmd":"mic","enable":false}\n'
+                    self.ser.write(mute_cmd)
+                    self.ser.flush()
+                except Exception:
+                    pass
+
                 # 设定 120ms 的前置安全蓄水深度，无论多长音频均严控水位不溢出、不欠载
                 target_lead_sec = 0.120
                 start_clock = time.perf_counter()
@@ -211,6 +219,24 @@ class LightController:
                 rem_play = (start_clock + total_duration) - time.perf_counter()
                 if rem_play > 0:
                     time.sleep(rem_play)
+                
+                # 物理消音缓冲：等待 350ms 让空气回声与声学余震彻底消散
+                time.sleep(0.35)
+
+                # 清空串口输入缓冲，丢弃播放期间残留的无效数据
+                try:
+                    self.ser.reset_input_buffer()
+                except Exception:
+                    pass
+
+                # 硬件级恢复：重新激活麦克风推流
+                try:
+                    unmute_cmd = b'{"cmd":"mic","enable":true}\n'
+                    self.ser.write(unmute_cmd)
+                    self.ser.flush()
+                except Exception:
+                    pass
+
                 return True
             except Exception as e:
                 print(f"[LightController] 音频推流异常: {e}")
@@ -239,62 +265,43 @@ class LightController:
     def set_board_led(self, mode: str = "green") -> bool:
         """
         控制 ESP32-S3 核心板载独立 RGB 指示灯 (GPIO 48):
-        - "pairing" / "breathe": 呼吸灯光 (等待配对)
-        - "green" / "connected": 常亮绿色 (配对成功 / 待唤醒待命)
-        - "active": 灵动微呼吸 (语音交互中)
+        - "pairing" / "breathe": 幽蓝呼吸灯 (模式 1: 等待配对)
+        - "speaking": 翠绿色常亮 (模式 2: 正在播报语音)
+        - "thinking" / "active": 青蓝微呼吸律动 (模式 3: 思考中/大模型运算)
+        - "listening": 微光暗红待命 (模式 4: 静默监听唤醒词)
+        - "hearing": 鲜亮红光 (模式 5: 检测到用户说话 VAD 激活)
+        - "connected" / "blue": 幽蓝常亮 (模式 6: 握手连接确立)
         - "off": 熄灭
         """
         print(f"[LightController] 设置板载指示灯 (GPIO 48): {mode}")
         return self.send_json({"cmd": "board_led", "mode": mode})
 
-    def run_boot_ceremony(self, async_mode: bool = True):
+    def run_boot_ceremony(self, async_mode: bool = False):
         """
-        执行系统上电与配对连接成功正向反馈仪式感 (对齐中阶规范，控制板载LED指示灯):
-        1. 上电进入配对模式：ESP32-S3 板载独立 LED (GPIO 48) 呼吸灯光呈现搜寻等待状态
-        2. 灯板 (16x16 矩阵) 保持灵动微表情桌面伴侣状态
+        执行系统上电与配对连接成功正向反馈仪式感 (严格遵循用户交互规范):
+        1. 上电进入配对模式：ESP32-S3 板载独立 LED (GPIO 48) 幽蓝呼吸灯呈现搜寻配对状态
+        2. 灯板 (16x16 矩阵) 保持 17 号牧濑红莉栖半身桌宠立绘 (亮度 150)
         3. 配对握手校验成功：
-           - 板载 LED 指示灯瞬间锁定为【常亮绿色】 (SOLID_GREEN)
-           - 板载扬声器发出清脆提示音 (beep) 确认物理连接确立
-        4. 广播牧濑红莉栖中日双语开机确认与专属唤醒提示
-        5. 仪式完毕，板载 LED 指示灯持续保持【常亮绿色】待命，静待专属日语唤醒词 (Makise Kurisu)
+           - 板载 LED 瞬间切换为【常亮幽蓝】确认连接
+           - 板载扬声器发出清脆提示音 (play_beep) 确认物理连接确立
+        4. 仪式完毕，板载 LED 进入【微光暗红】(listening) 待命状态，绝不自动播报长语音，静默静候唤醒词！
         """
         def _ceremony():
-            print("\n[配对模式] >>> ESP32-S3 板载 LED 指示灯呼吸律动，正在搜寻并等待配对连接... <<<")
-            self.set_board_led("pairing") # 板载 LED 幽蓝呼吸灯光 (中阶配对态)
-            self.send_raw("kurisu")       # 灯板保持 17 号牧濑红莉栖桌宠伴侣
+            print("\n[配对模式] >>> ESP32-S3 板载指示灯幽蓝呼吸律动，正在搜寻并建立配对连接... <<<")
+            self.set_board_led("pairing") # 幽蓝呼吸
+            self.send_raw("kurisu")       # 灯板维持 17 号牧濑红莉栖桌宠立绘
             self.send_raw("b 150")        # 保持 150 黄金亮度
-            time.sleep(1.8)
+            time.sleep(1.5)
 
-            print("[配对成功] >>> 上位机与 ESP32-S3 配对成功！板载指示灯切为常亮，扬声器发出提示音 <<<")
-            self.set_board_led("connected") # 板载 LED 瞬间切换为幽蓝常亮确立连接
-            time.sleep(0.15)
-            self.play_beep()                # 板载扬声器发出物理提示音确认配对成功
+            print("[配对成功] >>> 上位机与 ESP32-S3 配对成功！发出配对成功物理提示音 <<<")
+            self.set_board_led("connected") # 幽蓝常亮确立连接
             time.sleep(0.3)
+            self.play_beep()                # 板载扬声器发出配对成功提示音
+            time.sleep(0.4)
 
-            cur_dir = os.path.dirname(os.path.abspath(__file__))
-            pcm_path = os.path.join(cur_dir, "kurisu_boot_ceremony.pcm")
-            wav_path = os.path.join(cur_dir, "kurisu_boot_ceremony.wav")
-
-            if os.path.exists(pcm_path):
-                self.set_board_led("speaking") # 播报欢迎语时显示翠绿色 (中阶 Speaking 态)
-                with open(pcm_path, "rb") as f:
-                    pcm_data = f.read()
-
-                def _play_pc():
-                    if os.path.exists(wav_path):
-                        try:
-                            import winsound
-                            winsound.PlaySound(wav_path, winsound.SND_FILENAME)
-                        except Exception:
-                            pass
-                threading.Thread(target=_play_pc, daemon=True).start()
-
-                # 推送板载 MAX98357A 扬声器
-                self.play_audio_pcm(pcm_data)
-
-            # 仪式结束，板载 LED 进入微光暗红监听待命状态 (中阶 Listening 态)
+            # 仪式结束，板载 LED 进入微光暗红监听待命状态，绝无任何自动长语音打扰
             self.set_board_led("listening")
-            print("[配对完成] >>> 板载指示灯保持暗红待命监听，呼喊唤醒词 'Makise Kurisu' 即可开始交互 <<<\n")
+            print("[配对完成] >>> 板载指示灯保持微光暗红待命，静候唤醒词 'Makise Kurisu' 唤醒交互 <<<\n")
 
         if async_mode:
             threading.Thread(target=_ceremony, daemon=True).start()

@@ -1,14 +1,15 @@
 """
 VoiceListener: ESP32-S3 板载 INMP441 数字麦克风实时音频流采集与语音识别中枢 (ASR)
 直接接收来自 ESP32-S3 核心通过 USB-Serial-JTAG 硬件直通的 16kHz 16-bit 原始 PCM 流
-集成单极点 DC 阻断器、动态自适应能量端点检测 (VAD)、声学防自激回声抑制
-本地端侧 Whisper 极速离线识别 (毫秒级响应，原生支持中日双语)
-以及【牧濑红莉栖日语名字专属唤醒词门禁系统 (Makise Kurisu)】
+- 单极点 DC 阻断器、动态自适应能量端点检测 (VAD)
+- 硬件级双工静音 (播放语音时关断麦克风，彻底杜绝自激啸叫与无限回声循环)
+- 本地端侧 Whisper 极速离线识别 (毫秒级响应，中日双语)
+- 【牧濑红莉栖专属唤醒词严格门禁系统】(未检出唤醒词绝对不答话、不乱动)
 """
 
 import os
 import sys
-import torch # 优先加载 PyTorch CUDA/cuDNN
+import torch
 import re
 import time
 import queue
@@ -34,26 +35,25 @@ class VoiceListener:
     def __init__(self, callback: Optional[Callable[[str], None]] = None):
         self.callback = callback
         self.recognizer = sr.Recognizer()
-        self.recognizer.energy_threshold = 400
-        self.recognizer.dynamic_energy_threshold = True
 
         self.is_listening = False
         self.is_paused = False
         self._pcm_queue: queue.Queue = queue.Queue(maxsize=300)
         self._process_thread: Optional[threading.Thread] = None
         self._watchdog_thread: Optional[threading.Thread] = None
+        self._work_lock = threading.Lock()
 
-        # 唤醒词状态机管理
+        # 唤醒状态机 (True 表示已唤醒，正在等待单轮指令)
         self.is_awake = False
         self.last_awake_time = 0.0
-        self.awake_timeout = 30.0 # 唤醒后保持活跃的对话窗口 (秒)
+        self.awake_timeout = 10.0 # 唤醒后等待具体指令的时间窗口 (10秒)
 
         # 硬件控制器引用
         self.controller = get_light_controller()
         self.has_board_audio = False
         self._last_board_frame_time = 0.0
 
-        # DC 阻断滤波器状态 (用于消除 INMP441 MEMS 麦克风硬件直流偏置)
+        # DC 阻断滤波器状态
         self._prev_x = 0.0
         self._prev_y = 0.0
         self._dc_alpha = 0.995
@@ -66,14 +66,14 @@ class VoiceListener:
             self.whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=4)
             print("[VoiceListener] >>> 本地离线 Whisper ASR 引擎就绪 (端侧 0 延迟，0 网络开销，支持中日语) <<<")
         except Exception as e:
-            print(f"[VoiceListener 警告] 加载本地 Whisper 失败: {e}，将采用云端兜底")
+            print(f"[VoiceListener 警告] 加载本地 Whisper 失败: {e}，将采用备用引擎")
 
     def _check_wake_word(self, text: str) -> Tuple[bool, str]:
         """
-        检验语音文本是否包含牧濑红莉栖的专属日语名字唤醒词
+        严格检验语音文本是否包含牧濑红莉栖专属唤醒词:
         支持:
-          - 日语罗马音/假名: Makise Kurisu, Kurisu, Makise, まきせ くりす, くりす, クリス, マキセ
-          - 中文发音识别习惯: 牧濑红莉栖, 红莉栖, 牧濑, 克里斯, 库里斯, 克莉丝, 克里斯蒂娜, 栗子
+          - 日语: Makise Kurisu, Kurisu, まきせくりす, くりす, クリス, マキセ
+          - 中文: 牧濑红莉栖, 红莉栖, 牧濑, 克里斯, 克里斯蒂娜, 助手, 栗子
         返回: (is_wake, stripped_command_text)
         """
         t = text.strip()
@@ -95,7 +95,8 @@ class VoiceListener:
             r'马奇赛',
             r'马基塞',
             r'苦力苏',
-            r'栗子'
+            r'栗子',
+            r'助手' # 叫她助手会气愤回怼“都说了我不是助手！”
         ]
         matched = False
         cleaned = t
@@ -118,8 +119,12 @@ class VoiceListener:
             pass
 
     def pause(self):
-        """暂停收音 (在红莉栖扬声器播报时暂停，杜绝声学自激与回声循环)"""
+        """暂停收音并硬件级关闭麦克风 (在播放扬声器时调用，彻底杜绝回声循环)"""
         self.is_paused = True
+        try:
+            self.controller.enable_mic(False)
+        except Exception:
+            pass
         while not self._pcm_queue.empty():
             try:
                 self._pcm_queue.get_nowait()
@@ -127,7 +132,8 @@ class VoiceListener:
                 break
 
     def resume(self):
-        """恢复收音 (播报完毕后重新唤醒板载麦克风监听)"""
+        """恢复收音 (播报完毕后重新开启麦克风监听)"""
+        time.sleep(0.3) # 等待房间物理混响衰减
         while not self._pcm_queue.empty():
             try:
                 self._pcm_queue.get_nowait()
@@ -135,10 +141,14 @@ class VoiceListener:
                 break
         self._prev_x = 0.0
         self._prev_y = 0.0
+        try:
+            self.controller.enable_mic(True)
+        except Exception:
+            pass
         self.is_paused = False
 
     def _filter_dc(self, samples: np.ndarray) -> np.ndarray:
-        """单极点 IIR 直流滤波 (去除 MEMS 芯片的固有直流电平偏移)"""
+        """单极点 IIR 直流滤波"""
         filtered = np.zeros_like(samples, dtype=np.float32)
         curr_x = self._prev_x
         curr_y = self._prev_y
@@ -153,12 +163,12 @@ class VoiceListener:
         self._prev_y = curr_y
         return filtered
 
-    def _recognize_async(self, pcm_bytes: bytes):
-        """异步执行语音识别，并通过唤醒词门禁调度交互"""
-        def _task():
+    def _process_utterance(self, pcm_bytes: bytes):
+        """同步且单线程处理一段完整用户语音，严格遵循唤醒词与指令状态机"""
+        with self._work_lock:
             try:
                 text = ""
-                # 1. 优先采用本地离线 Whisper 进行极速识别 (毫秒级)
+                # 1. 本地离线 Whisper 识别
                 if self.whisper_model is not None:
                     try:
                         audio_np = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
@@ -172,7 +182,7 @@ class VoiceListener:
                     except Exception as wex:
                         text = ""
 
-                # 2. 若本地引擎输出为空，回退使用 Google ASR
+                # 2. 备用兜底
                 if not text:
                     try:
                         audio_data = sr.AudioData(pcm_bytes, 16000, 2)
@@ -181,93 +191,101 @@ class VoiceListener:
                         text = ""
 
                 if not text or not text.strip():
+                    self.controller.set_board_led("listening")
                     return
 
-                print(f"\n[ESP32-S3 板载麦克风捕获语音]: {text}")
+                print(f"\n[ESP32 麦克风识别文本]: \"{text}\"")
 
-                is_wake, stripped_cmd = self._check_wake_word(text)
-
+                # =========================================================
+                # 状态 A: 当前处于休眠待命状态 (未唤醒)
+                # =========================================================
                 if not self.is_awake:
-                    # 当前处于休眠/待唤醒状态
+                    is_wake, stripped_cmd = self._check_wake_word(text)
                     if not is_wake:
-                        print(f"[VoiceListener 待命]: 未检测到专属唤醒词 'Makise Kurisu'，板载指示灯保持绿色常亮静候呼唤。")
+                        # 【铁律】：未检测到唤醒词，绝对不作任何语音应答！保持暗红静候呼唤
+                        print(f"[待命监听]: 未检测到唤醒词 (仅听到: '{text}')，静默丢弃，指示灯保持暗红。")
+                        self.controller.set_board_led("listening")
                         return
 
-                    # 成功命中专属唤醒词！
-                    print(f"\n★★★★★ [VoiceListener 专属唤醒成功] ★★★★★")
-                    print(f">>> 成功识别牧濑红莉栖日语名字唤醒词！系统进入交互状态！")
+                    # 命中唤醒词！
+                    print(f"\n★★★★★ [专属唤醒成功] 听到唤醒词！进入交互模式 ★★★★★")
                     self.is_awake = True
                     self.last_awake_time = time.time()
 
-                    # 1. 即时声光反馈：板载扬声器提示音 + 板载LED切为灵动活跃微呼吸
-                    self.controller.play_beep()
-                    self.controller.set_board_led("active")
-
-                    # 2. 如果包含紧随的指令 (如 "Makise Kurisu，把灯调成纯蓝模式")
+                    # 情况 1: 一句话指令 (例如: "克里斯，把灯调成烈焰模式")
                     if len(stripped_cmd) >= 2:
+                        print(f"[即时指令]: 提取到伴随指令 -> \"{stripped_cmd}\"")
                         self.pause()
                         try:
                             if self.callback:
                                 self.callback(stripped_cmd)
                         finally:
-                            pass
-                    else:
-                        # 仅呼唤了名字：零延迟直推预缓存的红莉栖傲娇原声应答！
-                        self.pause()
-                        try:
-                            cur_dir = os.path.dirname(os.path.abspath(__file__))
-                            wake_pcm = os.path.join(cur_dir, "kurisu_wake_reply.pcm")
-                            wake_wav = os.path.join(cur_dir, "kurisu_wake_reply.wav")
-                            if os.path.exists(wake_pcm):
-                                with open(wake_pcm, "rb") as f:
-                                    pcm_data = f.read()
-                                def _play_pc():
-                                    if os.path.exists(wake_wav):
-                                        try:
-                                            import winsound
-                                            winsound.PlaySound(wake_wav, winsound.SND_FILENAME)
-                                        except Exception:
-                                            pass
-                                threading.Thread(target=_play_pc, daemon=True).start()
-                                self.controller.play_audio_pcm(pcm_data)
-                            else:
-                                from voice_engine import get_voice_engine
-                                v = get_voice_engine()
-                                v.speak("な、何よ？有事快说！\nふん、何用？早く言いなさいよ！", block=True)
-                        except Exception as ex:
-                            print(f"[VoiceListener 唤醒回复异常]: {ex}")
-                        finally:
+                            # 单轮指令执行完毕，自动恢复待命状态
+                            self.is_awake = False
                             self.resume()
+                            self.controller.set_board_led("listening")
+                        return
 
+                    # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖")
+                    # 给出简短唤醒应答并保持 10 秒窗口等待后续指令
+                    self.pause()
+                    try:
+                        self.controller.play_beep()
+                        self.controller.set_board_led("speaking")
+                        cur_dir = os.path.dirname(os.path.abspath(__file__))
+                        wake_pcm = os.path.join(cur_dir, "kurisu_wake_reply.pcm")
+                        if os.path.exists(wake_pcm):
+                            with open(wake_pcm, "rb") as f:
+                                self.controller.play_audio_pcm(f.read())
+                        else:
+                            from voice_engine import get_voice_engine
+                            get_voice_engine().speak("な、何よ？有事快说！\nふん、何用？早く言いなさいよ！", block=True)
+                    except Exception as ex:
+                        print(f"[唤醒应答异常]: {ex}")
+                    finally:
+                        self.resume()
+                        self.last_awake_time = time.time()
+                        self.controller.set_board_led("active") # 青蓝微呼吸，提示正在等待指令
+                        print("[等待指令]: 红莉栖已就绪，请在 10 秒内说出指令...")
+                    return
+
+                # =========================================================
+                # 状态 B: 当前已处于唤醒等待指令状态 (is_awake == True)
+                # =========================================================
                 else:
-                    # 当前已经处于唤醒活跃状态 (连续对话中)
                     self.last_awake_time = time.time()
-                    cmd_to_send = stripped_cmd if is_wake and len(stripped_cmd) >= 2 else text
+                    is_wake, stripped_cmd = self._check_wake_word(text)
+                    cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
+
+                    print(f"[执行指令]: \"{cmd_to_exec}\"")
                     self.pause()
                     try:
                         if self.callback:
-                            self.callback(cmd_to_send)
+                            self.callback(cmd_to_exec)
                     finally:
-                        pass
+                        # 指令交互完毕，退出唤醒状态，回到暗红待命监听
+                        self.is_awake = False
+                        self.resume()
+                        self.controller.set_board_led("listening")
+                        print("[交互完毕]: 系统已自动退回微光暗红待命状态，再次呼唤唤醒词即可开启新对话。\n")
 
             except Exception as e:
-                print(f"[VoiceListener 任务异常]: {e}")
-
-        threading.Thread(target=_task, daemon=True).start()
+                print(f"[VoiceListener 处理异常]: {e}")
+                self.controller.set_board_led("listening")
 
     def _watchdog_loop(self):
-        """后台看门狗：活跃状态超过 30 秒无指令，自动退回板载指示灯绿色常亮待唤醒状态"""
+        """后台看门狗：唤醒后若 10 秒内未收到具体指令，自动退回暗红待命状态"""
         while self.is_listening:
             time.sleep(1.0)
             if self.is_awake and not self.is_paused:
                 if time.time() - self.last_awake_time > self.awake_timeout:
-                    print("\n[VoiceListener 待命休眠]: 超过 30 秒无指令输入，板载指示灯自动退回常亮绿色待命状态。")
+                    print("\n[待命超时]: 超过 10 秒未输入指令，自动退回暗红待命状态。")
                     self.is_awake = False
-                    self.controller.set_board_led("listening") # 板载 LED 保持暗红微光待命监听
+                    self.controller.set_board_led("listening")
 
     def _process_loop(self):
-        """板载麦克风实时音频流处理与智能动态 VAD 端点检测"""
-        print("[VoiceListener] 正在接管 ESP32-S3 板载 INMP441 麦克风硬件音频流...")
+        """板载麦克风实时音频流处理与 VAD 端点检测"""
+        print("[VoiceListener] 正在接管 ESP32-S3 板载麦克风硬件音频流...")
         preroll_chunks = collections.deque(maxlen=24)
         speech_chunks = []
         is_speaking = False
@@ -294,7 +312,7 @@ class VoiceListener:
             rms = float(np.sqrt(np.mean(filtered_samples**2)))
 
             ambient_energy = 0.98 * ambient_energy + 0.02 * rms
-            threshold = max(1600.0, ambient_energy * 2.0)
+            threshold = max(1800.0, ambient_energy * 2.2)
 
             if not is_speaking:
                 preroll_chunks.append(filtered_samples)
@@ -303,25 +321,26 @@ class VoiceListener:
                     silent_count = 0
                     speech_chunks = list(preroll_chunks)
                     speech_chunks.append(filtered_samples)
-                    self.controller.set_board_led("hearing") # 鲜艳亮红 (中阶 High Brightness VAD)
-                    tag = "【已唤醒·倾听中】" if self.is_awake else "【待命·等待唤醒词】"
-                    print(f"\n[ESP32 板载麦克风: {tag} 正在拾音...]", end="", flush=True)
+                    self.controller.set_board_led("hearing") # 鲜亮红光 (检测到说话)
+                    tag = "【等待指令中】" if self.is_awake else "【待命·等待唤醒词】"
+                    print(f"\n[ESP32 麦克风: {tag} 拾音中...]", end="", flush=True)
             else:
                 speech_chunks.append(filtered_samples)
                 if rms < threshold:
                     silent_count += 1
-                    # 动态端点延迟：待唤醒时仅需 16 帧 (~240ms) 静音即判定结束，大幅缩短唤醒延迟！
-                    silent_limit = 20 if self.is_awake else 16
+                    silent_limit = 18 if self.is_awake else 14
                     if silent_count >= silent_limit:
                         is_speaking = False
                         silent_count = 0
-                        self.controller.set_board_led("thinking") # 青蓝流光 (思考计算中)
+                        self.controller.set_board_led("thinking") # 青蓝流光 (思考/识别中)
                         total_samples = sum(len(c) for c in speech_chunks)
-                        if total_samples >= 16000 * 0.5:
+                        if total_samples >= 16000 * 0.4:
                             full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
-                            self._recognize_async(full_pcm)
+                            # 同步处理，避免并发堆叠冲突
+                            self._process_utterance(full_pcm)
                         else:
-                            self.controller.set_board_led("listening") # 短杂音丢弃，复位暗红待命
+                            state_led = "active" if self.is_awake else "listening"
+                            self.controller.set_board_led(state_led)
                         speech_chunks.clear()
                 else:
                     silent_count = 0
@@ -331,17 +350,13 @@ class VoiceListener:
             return
         self.is_listening = True
         self.is_paused = False
-        self.is_awake = False # 初始处于待唤醒状态
+        self.is_awake = False
 
-        # 1. 注册板载麦克风回调通道
         self.controller.on_mic_data = self._on_board_pcm
-
-        # 2. 向下位机 ESP32-S3 下发启动板载麦克风指令并设置微光暗红监听待命状态
         if self.controller.is_connected:
             self.controller.enable_mic(True)
             self.controller.set_board_led("listening")
 
-        # 3. 启动后台实时 VAD 与看门狗休眠线程
         self._process_thread = threading.Thread(target=self._process_loop, daemon=True)
         self._process_thread.start()
         self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
@@ -349,18 +364,17 @@ class VoiceListener:
 
     def stop(self):
         self.is_listening = False
+        self.pause()
         if self.controller.is_connected:
             self.controller.enable_mic(False)
-        self.controller.on_mic_data = None
+            self.controller.set_board_led("green")
 
-
-# 单例导出
-_listener_instance: Optional[VoiceListener] = None
+_voice_listener_instance: Optional[VoiceListener] = None
 
 def get_voice_listener(callback: Optional[Callable[[str], None]] = None) -> VoiceListener:
-    global _listener_instance
-    if _listener_instance is None:
-        _listener_instance = VoiceListener(callback=callback)
+    global _voice_listener_instance
+    if _voice_listener_instance is None:
+        _voice_listener_instance = VoiceListener(callback)
     elif callback is not None:
-        _listener_instance.callback = callback
-    return _listener_instance
+        _voice_listener_instance.callback = callback
+    return _voice_listener_instance

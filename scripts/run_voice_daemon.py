@@ -72,9 +72,7 @@ def main():
         except Exception as e:
             print(f"❌ [对话处理异常]: {e}")
         finally:
-            # 交互完毕，屏幕确保维持在红莉栖桌宠模式，板载 LED 回到暗红待命监听
-            controller.send_raw("kurisu")
-            controller.send_raw("b 150")
+            # 交互完毕，板载 LED 回到微光暗红待命监听；不强行覆盖用户指定的灯光效果！
             controller.set_board_led("listening")
 
     # 4. 启动免触全自动语音监听中枢
