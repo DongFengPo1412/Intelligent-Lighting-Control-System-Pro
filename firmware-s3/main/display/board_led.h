@@ -7,9 +7,12 @@
 
 enum class BoardLedMode {
     OFF = 0,
-    BREATHE_PAIRING = 1,  // 上电配对搜寻: 板载单颗 LED 呼吸律动 (模拟中阶配对态)
-    SOLID_GREEN = 2,      // 配对成功: 板载 LED 常亮绿色
-    ACTIVE_INTERACT = 3   // 唤醒交互中: 青绿灵动微呼吸
+    BREATHE_PAIRING = 1,  // 上电配对搜寻: 幽蓝呼吸律动 (中阶 kDeviceStateWifiConfiguring/Starting)
+    SOLID_GREEN = 2,      // 语音播发中: 翠绿常亮 (中阶 kDeviceStateSpeaking)
+    ACTIVE_INTERACT = 3,  // 思考运算中: 青蓝流光微呼吸 (中阶 kDeviceStateConnecting)
+    LISTENING_LOW = 4,    // 待命监听中: 微光暗红 (中阶 kDeviceStateListening, Low Brightness)
+    LISTENING_HIGH = 5,   // 人声捕获中: 鲜艳鲜红 (中阶 kDeviceStateListening, High Brightness - VAD Active)
+    SOLID_BLUE = 6        // 配对握手确立: 幽蓝常亮 (中阶 kDeviceStateConnecting)
 };
 
 class BoardLed {

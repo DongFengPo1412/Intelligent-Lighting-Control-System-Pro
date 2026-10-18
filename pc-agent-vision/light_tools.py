@@ -140,6 +140,46 @@ LIGHT_TOOL_DEFINITIONS = [
                 "required": ["volume"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "start_game",
+            "description": "在 16x16 矩阵光场上启动并游玩经典像素游戏 (贪吃蛇 snake 或 俄罗斯方块 tetris)。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "game": {
+                        "type": "string",
+                        "enum": ["snake", "tetris"],
+                        "description": "游戏名称: snake(贪吃蛇, 对应模式19), tetris(俄罗斯方块, 对应模式21)"
+                    }
+                },
+                "required": ["game"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_kurisu_pet",
+            "description": "切换回牧濑红莉栖 1:1 官方高精度半身桌宠立绘与微动态凝视光场 (模式 17)。",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_device_status",
+            "description": "获取当前硬件光场设备的状态信息 (来自小智 MCP self.get_device_status 规范)。包含串口状态、当前显示模式、音量与红莉栖人格状态。",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
     }
 ]
 
@@ -191,6 +231,33 @@ def execute_tool(func_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             val = int(arguments.get("brightness", 20))
             ok = controller.set_brightness(val)
             return {"status": "success" if ok else "error", "message": f"全局亮度已设为 {val}"}
+
+        elif func_name == "start_game":
+            game = arguments.get("game", "snake").lower()
+            if game == "snake":
+                ok = controller.set_mode(19)
+                return {"status": "success" if ok else "error", "message": "已成功启动贪吃蛇游戏 (模式 19)"}
+            elif game == "tetris":
+                ok = controller.set_mode(21)
+                return {"status": "success" if ok else "error", "message": "已成功启动俄罗斯方块游戏 (模式 21)"}
+            else:
+                return {"status": "error", "message": f"未知游戏名称: {game}"}
+
+        elif func_name == "set_kurisu_pet":
+            ok = controller.set_mode(17)
+            return {"status": "success" if ok else "error", "message": "已切换回牧濑红莉栖半身桌宠立绘 (模式 17)"}
+
+        elif func_name == "get_device_status":
+            return {
+                "status": "success",
+                "connected": controller.is_connected,
+                "port": controller.port,
+                "current_mode": getattr(controller, 'current_mode', 17),
+                "device": "ESP32-S3 16x16 Matrix + Board LED WS2812",
+                "persona": "Makise Kurisu (Amadeus)",
+                "tts_engine": "GPT-SoVITS (CV: Asami Imai)",
+                "llm_engine": "Ollama Qwen2.5-7B Kurisu Custom Brain"
+            }
 
         else:
             return {"status": "unknown_function", "message": f"未知的工具名称: {func_name}"}

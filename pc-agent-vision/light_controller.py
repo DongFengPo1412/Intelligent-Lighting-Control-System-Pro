@@ -260,14 +260,15 @@ class LightController:
         """
         def _ceremony():
             print("\n[配对模式] >>> ESP32-S3 板载 LED 指示灯呼吸律动，正在搜寻并等待配对连接... <<<")
-            self.set_board_led("pairing") # 板载 LED 呼吸灯光
-            self.set_mode(14)             # 灯板保持 14 号灵动微表情伙伴状态
+            self.set_board_led("pairing") # 板载 LED 幽蓝呼吸灯光 (中阶配对态)
+            self.send_raw("kurisu")       # 灯板保持 17 号牧濑红莉栖桌宠伴侣
+            self.send_raw("b 150")        # 保持 150 黄金亮度
             time.sleep(1.8)
 
-            print("[配对成功] >>> 上位机与 ESP32-S3 配对成功！板载指示灯常亮绿色，扬声器发出提示音 <<<")
-            self.set_board_led("green")   # 板载 LED 瞬间切换为常亮绿色
+            print("[配对成功] >>> 上位机与 ESP32-S3 配对成功！板载指示灯切为常亮，扬声器发出提示音 <<<")
+            self.set_board_led("connected") # 板载 LED 瞬间切换为幽蓝常亮确立连接
             time.sleep(0.15)
-            self.play_beep()              # 板载扬声器发出物理提示音确认配对成功
+            self.play_beep()                # 板载扬声器发出物理提示音确认配对成功
             time.sleep(0.3)
 
             cur_dir = os.path.dirname(os.path.abspath(__file__))
@@ -275,6 +276,7 @@ class LightController:
             wav_path = os.path.join(cur_dir, "kurisu_boot_ceremony.wav")
 
             if os.path.exists(pcm_path):
+                self.set_board_led("speaking") # 播报欢迎语时显示翠绿色 (中阶 Speaking 态)
                 with open(pcm_path, "rb") as f:
                     pcm_data = f.read()
 
@@ -290,9 +292,9 @@ class LightController:
                 # 推送板载 MAX98357A 扬声器
                 self.play_audio_pcm(pcm_data)
 
-            # 仪式结束，板载 LED 严格保持常亮绿色，静待专属日语唤醒词唤醒
-            self.set_board_led("green")
-            print("[配对完成] >>> 板载指示灯保持常亮绿色待命，必须喊出唤醒词 'Makise Kurisu' 才能开始交互 <<<\n")
+            # 仪式结束，板载 LED 进入微光暗红监听待命状态 (中阶 Listening 态)
+            self.set_board_led("listening")
+            print("[配对完成] >>> 板载指示灯保持暗红待命监听，呼喊唤醒词 'Makise Kurisu' 即可开始交互 <<<\n")
 
         if async_mode:
             threading.Thread(target=_ceremony, daemon=True).start()

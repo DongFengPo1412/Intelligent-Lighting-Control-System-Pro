@@ -435,9 +435,15 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
             const char* m = mode_item->valuestring;
             if (strcasecmp(m, "pairing") == 0 || strcasecmp(m, "breathe") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
-            } else if (strcasecmp(m, "green") == 0 || strcasecmp(m, "connected") == 0) {
+            } else if (strcasecmp(m, "green") == 0 || strcasecmp(m, "speaking") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
-            } else if (strcasecmp(m, "active") == 0 || strcasecmp(m, "wake") == 0) {
+            } else if (strcasecmp(m, "blue") == 0 || strcasecmp(m, "connected") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_BLUE);
+            } else if (strcasecmp(m, "listening") == 0 || strcasecmp(m, "listen") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::LISTENING_LOW);
+            } else if (strcasecmp(m, "hearing") == 0 || strcasecmp(m, "speaking_user") == 0 || strcasecmp(m, "red") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::LISTENING_HIGH);
+            } else if (strcasecmp(m, "active") == 0 || strcasecmp(m, "wake") == 0 || strcasecmp(m, "thinking") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::ACTIVE_INTERACT);
             } else if (strcasecmp(m, "off") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::OFF);
@@ -536,7 +542,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     if (strcasecmp(text_str, "beep") == 0)          { AudioHAL::GetInstance().PlayBeep(1000, 200); return true; }
     if (strcasecmp(text_str, "mic on") == 0)        { SetMicStreaming(true); return true; }
     if (strcasecmp(text_str, "mic off") == 0)       { SetMicStreaming(false); return true; }
-    if (strcasecmp(text_str, "board_led green") == 0 || strcasecmp(text_str, "led green") == 0) {
+    if (strcasecmp(text_str, "board_led green") == 0 || strcasecmp(text_str, "led green") == 0 || strcasecmp(text_str, "led speaking") == 0) {
         BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
         return true;
     }
@@ -544,7 +550,19 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
         BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
         return true;
     }
-    if (strcasecmp(text_str, "board_led active") == 0 || strcasecmp(text_str, "led active") == 0) {
+    if (strcasecmp(text_str, "board_led blue") == 0 || strcasecmp(text_str, "led blue") == 0 || strcasecmp(text_str, "led connected") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_BLUE);
+        return true;
+    }
+    if (strcasecmp(text_str, "board_led listening") == 0 || strcasecmp(text_str, "led listening") == 0 || strcasecmp(text_str, "led listen") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::LISTENING_LOW);
+        return true;
+    }
+    if (strcasecmp(text_str, "board_led hearing") == 0 || strcasecmp(text_str, "led hearing") == 0 || strcasecmp(text_str, "led red") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::LISTENING_HIGH);
+        return true;
+    }
+    if (strcasecmp(text_str, "board_led active") == 0 || strcasecmp(text_str, "led active") == 0 || strcasecmp(text_str, "led thinking") == 0) {
         BoardLed::GetInstance().SetMode(BoardLedMode::ACTIVE_INTERACT);
         return true;
     }

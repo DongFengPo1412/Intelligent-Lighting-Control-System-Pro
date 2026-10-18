@@ -263,7 +263,7 @@ class VoiceListener:
                 if time.time() - self.last_awake_time > self.awake_timeout:
                     print("\n[VoiceListener 待命休眠]: 超过 30 秒无指令输入，板载指示灯自动退回常亮绿色待命状态。")
                     self.is_awake = False
-                    self.controller.set_board_led("green") # 板载 LED 保持常亮绿色
+                    self.controller.set_board_led("listening") # 板载 LED 保持暗红微光待命监听
 
     def _process_loop(self):
         """板载麦克风实时音频流处理与智能动态 VAD 端点检测"""
@@ -303,6 +303,7 @@ class VoiceListener:
                     silent_count = 0
                     speech_chunks = list(preroll_chunks)
                     speech_chunks.append(filtered_samples)
+                    self.controller.set_board_led("hearing") # 鲜艳亮红 (中阶 High Brightness VAD)
                     tag = "【已唤醒·倾听中】" if self.is_awake else "【待命·等待唤醒词】"
                     print(f"\n[ESP32 板载麦克风: {tag} 正在拾音...]", end="", flush=True)
             else:
@@ -314,10 +315,13 @@ class VoiceListener:
                     if silent_count >= silent_limit:
                         is_speaking = False
                         silent_count = 0
+                        self.controller.set_board_led("thinking") # 青蓝流光 (思考计算中)
                         total_samples = sum(len(c) for c in speech_chunks)
                         if total_samples >= 16000 * 0.5:
                             full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
                             self._recognize_async(full_pcm)
+                        else:
+                            self.controller.set_board_led("listening") # 短杂音丢弃，复位暗红待命
                         speech_chunks.clear()
                 else:
                     silent_count = 0
@@ -332,9 +336,10 @@ class VoiceListener:
         # 1. 注册板载麦克风回调通道
         self.controller.on_mic_data = self._on_board_pcm
 
-        # 2. 向下位机 ESP32-S3 下发启动板载麦克风指令
+        # 2. 向下位机 ESP32-S3 下发启动板载麦克风指令并设置微光暗红监听待命状态
         if self.controller.is_connected:
             self.controller.enable_mic(True)
+            self.controller.set_board_led("listening")
 
         # 3. 启动后台实时 VAD 与看门狗休眠线程
         self._process_thread = threading.Thread(target=self._process_loop, daemon=True)

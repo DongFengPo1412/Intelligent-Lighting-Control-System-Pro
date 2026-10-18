@@ -70,10 +70,21 @@ void BoardLed::SetMode(BoardLedMode mode)
     if (!led_strip_) return;
 
     if (current_mode_ == BoardLedMode::SOLID_GREEN) {
-        // 常亮绿色 (亮度适中 32，不刺眼)
-        led_strip_set_pixel(led_strip_, 0, 0, 32, 0);
+        // 语音播发中: 翠绿色常亮 (中阶 kDeviceStateSpeaking)
+        led_strip_set_pixel(led_strip_, 0, 0, 28, 0);
         led_strip_refresh(led_strip_);
-        ESP_LOGI(TAG, "Onboard LED switched to SOLID GREEN (Pairing Success)");
+    } else if (current_mode_ == BoardLedMode::SOLID_BLUE) {
+        // 配对确立: 幽蓝常亮 (中阶 kDeviceStateConnecting)
+        led_strip_set_pixel(led_strip_, 0, 0, 4, 30);
+        led_strip_refresh(led_strip_);
+    } else if (current_mode_ == BoardLedMode::LISTENING_LOW) {
+        // 待命监听中: 微光暗红 (中阶 kDeviceStateListening, Low Brightness)
+        led_strip_set_pixel(led_strip_, 0, 4, 0, 0);
+        led_strip_refresh(led_strip_);
+    } else if (current_mode_ == BoardLedMode::LISTENING_HIGH) {
+        // 人声捕获中: 鲜艳鲜红 (中阶 kDeviceStateListening, High Brightness - VAD Active)
+        led_strip_set_pixel(led_strip_, 0, 42, 0, 0);
+        led_strip_refresh(led_strip_);
     } else if (current_mode_ == BoardLedMode::OFF) {
         led_strip_clear(led_strip_);
     }
@@ -84,25 +95,25 @@ void BoardLed::UpdateAnimation()
     if (!led_strip_ || !is_initialized_) return;
 
     if (current_mode_ == BoardLedMode::BREATHE_PAIRING) {
-        // 配对模式：深邃幽蓝/极光蓝呼吸 (周期约 2.0s = 66 steps)
+        // 配对等待模式：深邃幽蓝呼吸律动 (中阶 kDeviceStateWifiConfiguring 500ms律动)
         step_count_++;
-        float rad = (float)(step_count_ % 66) * (2.0f * M_PI / 66.0f);
+        float rad = (float)(step_count_ % 45) * (2.0f * M_PI / 45.0f);
         float norm = (sinf(rad) + 1.0f) * 0.5f; // 0.0 ~ 1.0
         float curved = norm * norm;
-        uint32_t b = (uint32_t)(curved * 45.0f);
-        uint32_t g = (uint32_t)(curved * 12.0f);
-        uint32_t r = (uint32_t)(curved * 2.0f);
+        uint32_t b = (uint32_t)(curved * 40.0f + 2.0f);
+        uint32_t g = (uint32_t)(curved * 8.0f);
+        uint32_t r = 0;
         led_strip_set_pixel(led_strip_, 0, r, g, b);
         led_strip_refresh(led_strip_);
     }
     else if (current_mode_ == BoardLedMode::ACTIVE_INTERACT) {
-        // 唤醒交互态：青白灵动微呼吸 (周期约 1.2s = 40 steps)
+        // 思考运算中：青白灵动微呼吸 (周期约 1.2s = 40 steps)
         step_count_++;
         float rad = (float)(step_count_ % 40) * (2.0f * M_PI / 40.0f);
         float norm = (sinf(rad) + 1.0f) * 0.5f;
-        uint32_t g = 20 + (uint32_t)(norm * 30.0f);
-        uint32_t b = 15 + (uint32_t)(norm * 35.0f);
-        uint32_t r = (uint32_t)(norm * 10.0f);
+        uint32_t g = 15 + (uint32_t)(norm * 25.0f);
+        uint32_t b = 15 + (uint32_t)(norm * 30.0f);
+        uint32_t r = (uint32_t)(norm * 8.0f);
         led_strip_set_pixel(led_strip_, 0, r, g, b);
         led_strip_refresh(led_strip_);
     }
