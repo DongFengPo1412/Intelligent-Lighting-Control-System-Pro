@@ -322,7 +322,8 @@ class VoiceListener:
             try:
                 pcm_bytes = self._pcm_queue.get(timeout=0.2)
             except queue.Empty:
-                if self.is_listening and not self.is_paused and (time.time() - self._last_board_frame_time > 3.0):
+                if self.is_listening and not self.is_paused and (time.time() - self._last_board_frame_time > 6.0):
+                    self._last_board_frame_time = time.time() # 记录时间戳，严禁每 200ms 重入轰炸串口
                     if self.controller.is_connected:
                         self.controller.enable_mic(True)
                 continue

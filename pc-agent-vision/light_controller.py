@@ -120,16 +120,19 @@ class LightController:
         """建立串口物理连接"""
         with self._lock:
             try:
-                if self.ser and self.ser.is_open:
-                    self.ser.close()
+                if self.ser:
+                    try:
+                        self.ser.close()
+                    except Exception:
+                        pass
+                    self.ser = None
                 self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-                time.sleep(0.1) # 等待 DTR/RTS 稳定
+                time.sleep(0.15) # 等待 DTR/RTS 稳定
                 self.is_connected = True
                 print(f"[LightController] 成功连接 ESP32-S3 光场与声学硬件: {self.port}")
                 return True
             except Exception as e:
                 self.is_connected = False
-                print(f"[LightController] 警告: 无法连接端口 {self.port} ({e})")
                 return False
 
     def send_raw(self, line: str) -> bool:
@@ -146,6 +149,12 @@ class LightController:
             except Exception as e:
                 print(f"[LightController] 串口写入失败: {e}")
                 self.is_connected = False
+                try:
+                    if self.ser:
+                        self.ser.close()
+                except Exception:
+                    pass
+                self.ser = None
                 return False
 
     def send_json(self, payload: Dict[str, Any]) -> bool:

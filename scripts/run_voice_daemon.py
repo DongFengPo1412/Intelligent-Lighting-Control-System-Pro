@@ -38,20 +38,19 @@ def main():
     print("  ● 声学唤醒: 'Makise Kurisu' / '牧濑红莉栖' / '克里斯'")
     print("=" * 65)
 
-    controller = get_light_controller()
-    if not controller.is_connected:
-        print("❌ [错误]: 无法连接至 ESP32-S3 串口 (COM9)！请检查硬件连接。")
-        return
-
-    # 1. 执行中阶风格上电与配对仪式 (幽蓝呼吸 -> 幽蓝常亮+Beep -> 欢迎播报 -> 暗红监听)
-    print("\n[系统启动] >>> 正在启动上电配对自检仪式...")
-    controller.run_boot_ceremony(async_mode=False)
-
-    # 2. 初始化具身大脑
+    # 1. 优先加载具身大脑 (Ollama 7B + GPT-SoVITS + 本地 Whisper，约 4 秒)
+    # 此时硬件处于原生上电配对呼吸灯中，待算法全部就绪后方执行配对确认，实现零时差无缝就绪
     print("\n[具身大脑] >>> 正在加载牧濑红莉栖端侧大模型 (Ollama 7B + GPT-SoVITS)...")
     agent = KurisuAgent()
 
-    # 3. 语音交互处理回调
+    # 2. 建立与 ESP32-S3 的通信物理链路
+    controller = get_light_controller()
+    if not controller.is_connected:
+        print("⏳ [硬件等待]: 正在等待 ESP32-S3 串口 (COM9) 就绪...")
+        while not controller.connect():
+            time.sleep(1.0)
+
+    # 3. 准备语音交互中枢
     def on_voice_command(speech_text: str):
         if not speech_text or not speech_text.strip():
             return
@@ -61,7 +60,7 @@ def main():
         print(f"==================================================")
 
         try:
-            # 切换板载指示灯为青蓝流光 (思考计算中)
+            # 切换板载指示灯为青蓝微呼吸 (思考计算中)
             controller.set_board_led("thinking")
 
             t0 = time.time()
@@ -75,8 +74,13 @@ def main():
             # 交互完毕，板载 LED 回到微光暗红待命监听；不强行覆盖用户指定的灯光效果！
             controller.set_board_led("listening")
 
-    # 4. 启动免触全自动语音监听中枢
     listener = get_voice_listener(on_voice_command)
+
+    # 4. 执行中阶风格上电与配对握手仪式 (幽蓝呼吸 1.5s -> 幽蓝常亮 0.4s + Beep -> 微光暗红监听)
+    print("\n[系统启动] >>> 具身算法全部就绪，正在执行上电配对握手仪式...")
+    controller.run_boot_ceremony(async_mode=False)
+
+    # 5. 瞬间启动免触全自动语音监听中枢 (零延迟无缝进入待命监听)
     listener.start()
 
     print("\n" + "=" * 65)
@@ -85,7 +89,7 @@ def main():
     print("   唤醒词示例: 'Makise Kurisu'、'牧濑红莉栖'、'克里斯，把灯调成烈焰模式'...")
     print("=" * 65 + "\n")
 
-    # 5. 常驻循环保持
+    # 6. 常驻看门狗循环 (支持硬件热插拔断线自动重配对)
     stop_event = threading.Event()
 
     def handle_sig(sig, frame):
@@ -101,7 +105,14 @@ def main():
 
     try:
         while not stop_event.is_set():
-            time.sleep(0.5)
+            time.sleep(1.0)
+            # 硬件断线自动重连与自愈
+            if not controller.is_connected:
+                print("\n[看门狗] 检测到硬件连接断开，正在尝试重新连接 COM9...")
+                if controller.connect():
+                    print("[看门狗恢复] 重新连接至 ESP32-S3，执行配对自检恢复...")
+                    controller.run_boot_ceremony(async_mode=False)
+                    listener.resume()
     except KeyboardInterrupt:
         pass
     finally:
