@@ -314,6 +314,7 @@ class VoiceListener:
         speech_chunks = []
         is_speaking = False
         silent_count = 0
+        ambient_energy = 800.0
         warmup_frames = 60  # 前 60 帧 (约 1.2 秒) 仅用于校准底噪与直流滤波器，严禁触发 VAD 拾音
         speech_trigger_count = 0
 
