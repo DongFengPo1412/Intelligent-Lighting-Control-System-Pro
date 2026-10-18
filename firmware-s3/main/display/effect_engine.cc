@@ -1,4 +1,6 @@
 #include "effect_engine.h"
+#include "kurisu_sprites.h"
+#include "audio_hal.h"
 #include <math.h>
 #include <string.h>
 
@@ -9,7 +11,12 @@ EffectEngine::EffectEngine()
       blink_start_ms_(0),
       is_blinking_(false),
       gaze_x_(0),
-      next_gaze_ms_(0)
+      next_gaze_ms_(0),
+      kurisu_blink_next_ms_(0),
+      kurisu_blink_start_ms_(0),
+      kurisu_is_blinking_(false),
+      kurisu_talk_phase_(0),
+      kurisu_last_talk_ms_(0)
 {
     memset(fire_heat_, 0, sizeof(fire_heat_));
     Reset();
@@ -46,6 +53,13 @@ void EffectEngine::Reset()
     is_blinking_ = false;
     gaze_x_ = 0;
     next_gaze_ms_ = now + 2500 + (esp_random() % 2000);
+
+    // 5. 初始化牧濑红莉栖 16x16 像素桌宠状态机
+    kurisu_blink_next_ms_ = now + 3500 + (esp_random() % 2000);
+    kurisu_blink_start_ms_ = 0;
+    kurisu_is_blinking_ = false;
+    kurisu_talk_phase_ = 0;
+    kurisu_last_talk_ms_ = 0;
 }
 
 // =========================================================================
@@ -77,19 +91,19 @@ void EffectEngine::DrawLivingFace(const ColorRGB& color, int type)
         next_gaze_ms_ = now + 2500 + (esp_random() % 2000);
     }
 
-    // 3. 绘制外围脸部柔和圆环 (以 7.5, 7.5 为中心)
+    // 3. 绘制外围脸部圆环 (严格定格整个 16x16 灯板：最顶行 y=0 开始，最底行 y=15 结束，最左列 x=0 开始，最右列 x=15 结束)
     for (int y = 0; y < 16; y++) {
         for (int x = 0; x < 16; x++) {
             float d = sqrtf((x - 7.5f) * (x - 7.5f) + (y - 7.5f) * (y - 7.5f));
-            if (d < 7.4f && d > 6.2f) {
+            if (d >= 6.8f && d <= 7.8f) {
                 hal.SetPixel(x, y, color);
             }
         }
     }
 
-    // 4. 绘制灵动眼睛 (左眼基准: 5, 右眼基准: 10, 纵向: 5)
-    int left_eye_x = 5 + gaze_x_;
-    int right_eye_x = 10 + gaze_x_;
+    // 4. 绘制对称灵动眼睛 (左眼基准: 5, 右眼基准: 10, 纵向: 4~5 行，绝对水平居中对齐)
+    int left_eye_x = 5;
+    int right_eye_x = 10;
 
     if (is_blinking_) {
         if (blink_elapsed < 40 || blink_elapsed > 120) {
@@ -287,12 +301,16 @@ void EffectEngine::RenderCenterRipple()
 }
 
 // =========================================================================
-// 特效 8: 瞬息万变动态表情
+// 特效 8: 瞬息万变动态表情 (圆形轮廓、全彩渐变、生动变脸切换)
 // =========================================================================
 void EffectEngine::RenderDynamicFace()
 {
-    ColorRGB c = hsv2rgb_fast(ColorHSV(g_hue_, 255, 255));
-    int type = (g_hue_ % 128 > 64) ? 1 : 2;
+    // 全彩流动色相 (随时间优雅渐变)
+    ColorRGB c = hsv2rgb_fast(ColorHSV(g_hue_, 245, 255));
+    // 循环平滑切换三大生动表情: 1 (甜美笑脸), 2 (流泪哭脸), 3 (平静思考/抿嘴)
+    // 配合自然生理眨眼与眼神游移微动画
+    int phase = (g_hue_ / 40) % 3;
+    int type = (phase == 0) ? 1 : ((phase == 1) ? 2 : 3);
     DrawLivingFace(c, type);
 }
 
@@ -396,6 +414,53 @@ void EffectEngine::RenderMatrixRainPro()
 }
 
 // =========================================================================
+// 特效: 牧濑红莉栖 16x16 像素桌宠引擎 (真实还原官方特征 + 自动自然眨眼 + 语音 Lip-Sync 对嘴)
+// =========================================================================
+void EffectEngine::RenderKurisuDeskPet()
+{
+    DisplayHAL& hal = DisplayHAL::GetInstance();
+    uint32_t now = get_millis();
+
+    // 1. 判断是否正在发声播放音频 (自动对嘴联动)
+    bool is_speaking = AudioHAL::GetInstance().IsSpeakerEnabled();
+
+    // 2. 自然生理眨眼系统 (每 3.5 ~ 5.5 秒自然眨动一次，闭眼持续 160ms)
+    if (!kurisu_is_blinking_ && now >= kurisu_blink_next_ms_) {
+        kurisu_is_blinking_ = true;
+        kurisu_blink_start_ms_ = now;
+        kurisu_blink_next_ms_ = now + 3500 + (esp_random() % 2500);
+    }
+    if (kurisu_is_blinking_ && (now - kurisu_blink_start_ms_ > 160)) {
+        kurisu_is_blinking_ = false;
+    }
+
+    // 3. 决定当前渲染帧
+    const ColorRGB (*active_frame)[16] = KURISU_FRAME_IDLE;
+
+    if (is_speaking) {
+        // 语音对嘴中：口型在小张嘴与大张嘴之间生动开合 (每 140ms 切换)
+        if (now - kurisu_last_talk_ms_ > 140) {
+            kurisu_talk_phase_ = (kurisu_talk_phase_ + 1) % 2;
+            kurisu_last_talk_ms_ = now;
+        }
+        active_frame = (kurisu_talk_phase_ == 0) ? KURISU_FRAME_TALK1 : KURISU_FRAME_TALK2;
+    } else if (kurisu_is_blinking_) {
+        // 闭目眨眼帧
+        active_frame = KURISU_FRAME_BLINK;
+    } else {
+        // 待机帧
+        active_frame = KURISU_FRAME_IDLE;
+    }
+
+    // 4. 将高精度色彩直接写入屏幕缓冲区
+    for (int y = 0; y < MATRIX_HEIGHT; y++) {
+        for (int x = 0; x < MATRIX_WIDTH; x++) {
+            hal.SetPixel(x, y, active_frame[y][x]);
+        }
+    }
+}
+
+// =========================================================================
 // 统一模式渲染分发中心
 // =========================================================================
 uint32_t EffectEngine::RenderFrame(DisplayMode mode)
@@ -456,7 +521,8 @@ uint32_t EffectEngine::RenderFrame(DisplayMode mode)
             RenderDynamicFace();
             break;
         case DisplayMode::AI_FEEDBACK:
-            DrawLivingFace(ColorRGB::Yellow(), 1);
+        case DisplayMode::KURISU_DESK_PET:
+            RenderKurisuDeskPet();
             break;
         case DisplayMode::CYBER_FIRE:
             RenderCyberFire();

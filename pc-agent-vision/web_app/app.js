@@ -646,8 +646,38 @@ function updateConnectionUI(connected) {
 function handleServerEvent(event) {
     if (event.type === 'mode_changed') {
         currentMode = event.mode;
+        const wBadge = document.getElementById('wakeStatusBadge');
+        if (wBadge) {
+            if (event.mode === 3) {
+                wBadge.textContent = '🟢 常亮绿 (待唤醒)';
+                wBadge.style.color = '#00ff88';
+                wBadge.style.borderColor = '#00ff88';
+            } else if (event.mode === 5) {
+                wBadge.textContent = '⚡ 呼吸灯 (配对中...)';
+                wBadge.style.color = '#00d2ff';
+                wBadge.style.borderColor = '#00d2ff';
+            } else {
+                wBadge.textContent = '🔴 交互中 (微表情灵动)';
+                wBadge.style.color = '#ffaa00';
+                wBadge.style.borderColor = '#ffaa00';
+            }
+        }
     } else if (event.type === 'chat_reply') {
         appendChatBubble('assistant', 'AMADEUS · 牧濑红莉栖', event.text);
+        const wBadge = document.getElementById('wakeStatusBadge');
+        if (wBadge) {
+            wBadge.textContent = '🔴 交互中 (微表情灵动)';
+            wBadge.style.color = '#ffaa00';
+            wBadge.style.borderColor = '#ffaa00';
+            clearTimeout(window._wakeResetTimer);
+            window._wakeResetTimer = setTimeout(() => {
+                if (wBadge) {
+                    wBadge.textContent = '🟢 常亮绿 (待唤醒)';
+                    wBadge.style.color = '#00ff88';
+                    wBadge.style.borderColor = '#00ff88';
+                }
+            }, 30000);
+        }
     } else if (event.type === 'status') {
         if (event.volume !== undefined) {
             const slider = document.getElementById('volSlider');
@@ -673,5 +703,21 @@ async function fetchSystemStatus() {
         }
     } catch (e) {
         console.warn("获取状态失败:", e);
+    }
+}
+
+// ==========================================
+// 12. 上电握手与配对正向反馈仪式触发
+// ==========================================
+async function triggerBootCeremony() {
+    showNotification("⚡ 正在执行脑波同步握手与配对自检仪式...", "info");
+    try {
+        const resp = await fetch('/api/ceremony', { method: 'POST' });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            showNotification("✅ 配对握手自检完成！牧濑红莉栖系统已就绪！", "success");
+        }
+    } catch (e) {
+        showNotification("触发仪式异常: " + e.message, "error");
     }
 }

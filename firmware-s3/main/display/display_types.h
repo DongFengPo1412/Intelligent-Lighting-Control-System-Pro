@@ -29,6 +29,7 @@ enum class DisplayMode : int {
     FACE_DYNAMIC = 14,          // 14: 瞬息万变
     AUDIO_SPECTRUM = 15,        // 15: 音乐随动
     AI_FEEDBACK = 16,           // 16: AI 对话唤醒反馈
+    KURISU_DESK_PET = 17,       // 17: 牧濑红莉栖桌宠模式 (自然眨眼 + Lip-Sync对嘴)
     SNAKE_GAME = 19,            // 19: 贪吃蛇游戏
     SNAKE_SCORE = 20,           // 20: 贪吃蛇结算看板
     TETRIS_GAME = 21,           // 21: 俄罗斯方块游戏

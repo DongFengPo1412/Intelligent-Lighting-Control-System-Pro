@@ -84,10 +84,25 @@
         <!-- TAB 1: 语音与对白中枢 (COMM) -->
         <!-- ============================================== -->
         <section class="tab-content active" id="tabContentComm">
+            <!-- 配对与专属唤醒词状态提示栏 -->
+            <div class="wake-hint-bar" style="margin-bottom: 12px; background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.35); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.1rem;">🎙️</span>
+                    <div>
+                        <div style="color: #fff; font-weight: 700;">专属日语唤醒词：<span style="color: #00ff88; font-family: 'Share Tech Mono', monospace;">「Makise Kurisu」</span></div>
+                        <div style="color: #88a0b0; font-size: 0.75rem;">喊出 <b>Makise Kurisu</b> 或 <b>牧濑红莉栖</b> 即可唤醒开始交互</div>
+                    </div>
+                </div>
+                <div id="wakeStatusBadge" style="background: rgba(0,255,136,0.25); color: #00ff88; border: 1px solid #00ff88; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 0.78rem; white-space: nowrap;">
+                    🟢 常亮绿 (待唤醒)
+                </div>
+            </div>
+
             <!-- 语义灵感胶囊药丸 (一键体验高阶语义理解灯光) -->
             <div class="pill-carousel-wrap">
                 <div class="section-sub-title">/// 语义理解交互灵感词库</div>
                 <div class="pill-scroll">
+                    <button class="pill-btn" onclick="triggerBootCeremony()" style="background: linear-gradient(90deg, #00d2ff, #0072ff); color: #fff; font-weight: bold; border-color: #00f0ff; box-shadow: 0 0 10px rgba(0,210,255,0.4);">⚡ 脑波配对握手自检</button>
                     <a href="/Kurisu_Amadeus.apk" download="Kurisu_Amadeus.apk" class="pill-btn" style="background: linear-gradient(90deg, #ff5500, #ff8800); color: #fff; font-weight: bold; text-decoration: none; border-color: #ffaa00;">📱 下载安卓 APK</a>
                     <button class="pill-btn" onclick="sendQuickPrompt('助手，我想看大海的颜色')">🌊 大海的颜色</button>
                     <button class="pill-btn" onclick="sendQuickPrompt('来点灯笼的颜色')">🏮 灯笼的颜色</button>
@@ -286,6 +301,13 @@
                         <span class="spec-k">当前世界线收敛率</span>
                         <span class="spec-v highlight">1.048596% (Steins;Gate)</span>
                     </div>
+                </div>
+
+                <!-- 手动握手仪式感按钮 -->
+                <div style="margin-top: 14px; text-align: center;">
+                    <button onclick="triggerBootCeremony()" style="width: 100%; background: linear-gradient(90deg, #00d2ff, #0072ff); color: #fff; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.95rem; border: none; cursor: pointer; box-shadow: 0 0 15px rgba(0,210,255,0.4);">
+                        ⚡ 重新触发端-边脑波握手与自检正向反馈仪式
+                    </button>
                 </div>
 
                 <!-- APK 下载区 -->

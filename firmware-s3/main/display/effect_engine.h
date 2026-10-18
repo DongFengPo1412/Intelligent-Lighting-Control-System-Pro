@@ -35,6 +35,7 @@ private:
     // 2. 高阶新增特效
     void RenderCyberFire();
     void RenderMatrixRainPro();
+    void RenderKurisuDeskPet();
 
     // 赛博物理火焰热量场 (16x16)
     uint8_t fire_heat_[MATRIX_WIDTH][MATRIX_HEIGHT];
@@ -61,4 +62,11 @@ private:
     bool is_blinking_;
     int gaze_x_; // -1: 左看, 0: 正视, +1: 右看
     uint32_t next_gaze_ms_;
+
+    // 牧濑红莉栖 16x16 像素桌宠状态机
+    uint32_t kurisu_blink_next_ms_;
+    uint32_t kurisu_blink_start_ms_;
+    bool kurisu_is_blinking_;
+    int kurisu_talk_phase_;
+    uint32_t kurisu_last_talk_ms_;
 };

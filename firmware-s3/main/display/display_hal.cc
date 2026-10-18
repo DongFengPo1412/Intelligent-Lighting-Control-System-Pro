@@ -13,7 +13,7 @@ DisplayHAL& DisplayHAL::GetInstance()
 
 DisplayHAL::DisplayHAL()
     : led_strip_(nullptr),
-      base_brightness_(20),
+      base_brightness_(150),
       enable_compensation_(true),
       is_initialized_(false)
 {
@@ -36,7 +36,7 @@ esp_err_t DisplayHAL::Init(gpio_num_t gpio_pin)
 
     led_strip_config_t strip_config = {
         .strip_gpio_num = gpio_pin,
-        .max_leds = TOTAL_LEDS,
+        .max_leds = TOTAL_LEDS + 2, // 258: 额外预留2颗虚拟灯珠以确保第256颗灯珠(索引255)硬件时钟与复位锁存裕量
         .led_model = LED_MODEL_WS2812,
         .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
         .flags = {
@@ -47,8 +47,9 @@ esp_err_t DisplayHAL::Init(gpio_num_t gpio_pin)
     led_strip_rmt_config_t rmt_config = {
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 10 * 1000 * 1000, // 10MHz
+        .mem_block_symbols = 128,          // 提升至 128 符号块，保证长链 DMA 传输顺畅
         .flags = {
-            .with_dma = false,
+            .with_dma = true,
         }
     };
 
@@ -151,6 +152,11 @@ esp_err_t DisplayHAL::Show()
 
         led_strip_set_pixel(led_strip_, i, (uint32_t)r, (uint32_t)g, (uint32_t)b);
     }
+
+    // 🌟 核心修复：为第 4 块板的尾端推送 2 颗虚拟黑色灯珠数据
+    // 确保总线末端（第256颗灯珠，即索引255）能够完整移位并接收到充裕的 280us 复位锁存脉冲
+    led_strip_set_pixel(led_strip_, TOTAL_LEDS, 0, 0, 0);
+    led_strip_set_pixel(led_strip_, TOTAL_LEDS + 1, 0, 0, 0);
 
     return led_strip_refresh(led_strip_);
 }

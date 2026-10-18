@@ -4,6 +4,7 @@
 #include <esp_err.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/ringbuf.h>
 
 class CommandDispatcher {
 public:
@@ -35,11 +36,17 @@ private:
     static void MicTaskTrampoline(void* arg);
     void MicTaskLoop();
 
+    static void AudioPlayTaskTrampoline(void* arg);
+    void AudioPlayTaskLoop();
+
     bool ProcessJsonCommand(const char* json_str);
     bool ProcessTextCommand(const char* text_str);
 
     TaskHandle_t task_handle_;
     TaskHandle_t mic_task_handle_;
+    TaskHandle_t audio_play_task_handle_;
+    RingbufHandle_t audio_ring_buf_;
+
     volatile bool is_running_;
     volatile bool mic_streaming_;
 };

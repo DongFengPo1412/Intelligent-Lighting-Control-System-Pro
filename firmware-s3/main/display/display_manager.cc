@@ -1,4 +1,5 @@
 #include "display_manager.h"
+#include "board_led.h"
 #include <esp_log.h>
 
 static const char* TAG = "DisplayManager";
@@ -11,7 +12,7 @@ DisplayManager& DisplayManager::GetInstance()
 
 DisplayManager::DisplayManager()
     : hal_(DisplayHAL::GetInstance()),
-      current_mode_(DisplayMode::RAINBOW_WAVE),
+      current_mode_(DisplayMode::KURISU_DESK_PET),
       last_mode_(DisplayMode::OFF),
       mutex_(nullptr),
       task_handle_(nullptr),
@@ -154,6 +155,9 @@ void DisplayManager::DisplayTaskLoop()
                 delay_ms = effect_engine_.RenderFrame(mode);
                 break;
         }
+
+        // 串行同步刷新板载指示灯 (严格在主屏帧渲染后执行，杜绝并发 RMT 中断破坏 WS2812 800kHz 时序)
+        BoardLed::GetInstance().UpdateAnimation();
 
         vTaskDelay(pdMS_TO_TICKS(delay_ms > 5 ? delay_ms : 5));
     }

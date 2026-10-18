@@ -3,6 +3,7 @@
 #include <freertos/task.h>
 #include <esp_log.h>
 #include "display_manager.h"
+#include "board_led.h"
 #include "command_dispatcher.h"
 #include "audio_hal.h"
 
@@ -15,12 +16,17 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, ">>> [双核架构]: Core 1 (60FPS 光影物理渲染) | Core 0 (实时指令与通信中枢)");
     ESP_LOGI(TAG, ">>> [声学外设]: I2S INMP441 麦克风 (GPIO 4,5,6) + MAX98357A 扬声器 (GPIO 7,15,16)");
     ESP_LOGI(TAG, ">>> [光场外设]: GPIO 17 硬件 RMT 直驱 16x16 矩阵屏 (FastLED 线性色阶)");
+    ESP_LOGI(TAG, ">>> [板载指示]: GPIO 48 硬件 RMT 板载 RGB 指示灯 (开机搜寻呼吸 / 配对常亮绿)");
     ESP_LOGI(TAG, ">>> [协议支持]: 纯文本极速短语 (countdown/mode/beep/...) + 工业级 cJSON + 频谱流");
     ESP_LOGI(TAG, "===============================================================");
 
-    // 1. 初始化显示引擎 (挂载至 GPIO 17)
+    // 1. 初始化显示引擎 (挂载至 GPIO 17，优先获取 RMT Channel 0 与硬件 GDMA)
     DisplayManager& display = DisplayManager::GetInstance();
     ESP_ERROR_CHECK(display.Init(GPIO_NUM_17));
+
+    // 2. 初始化板载独立 RGB 指示灯 (GPIO 48，上电进入配对呼吸灯模式)
+    BoardLed& board_led = BoardLed::GetInstance();
+    ESP_ERROR_CHECK(board_led.Init(GPIO_NUM_48));
 
     // 2. 初始化 I2S 硬件音频驱动 (INMP441 麦克风 + MAX98357 扬声器，开机双音阶自检)
     AudioHAL& audio = AudioHAL::GetInstance();
@@ -44,8 +50,8 @@ extern "C" void app_main(void)
     CommandDispatcher& dispatcher = CommandDispatcher::GetInstance();
     ESP_ERROR_CHECK(dispatcher.StartSerialTask(4, 0));
 
-    // 6. 初始默认展示：灵动微表情桌面伴侣 (具备自然生理眨眼与眼神注视)
-    display.SetMode(DisplayMode::FACE_DYNAMIC);
+    // 6. 初始默认展示：牧濑红莉栖桌宠伴侣 (同时保留模式 14 经典圆形变脸特效)
+    display.SetMode(DisplayMode::KURISU_DESK_PET);
 
     ESP_LOGI(TAG, ">>> [中枢就绪]: 已就绪监听串口指令！可用命令示例：");
     ESP_LOGI(TAG, "    - 倒计时: 'countdown 60' 或 '{\"cmd\":\"countdown\",\"seconds\":60}'");

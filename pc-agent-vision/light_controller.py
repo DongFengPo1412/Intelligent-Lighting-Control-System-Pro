@@ -3,6 +3,7 @@ LightController: 16x16 LED 矩阵硬件驱动控制器 (ESP32-S3 COM9)
 基于 USB-Serial-JTAG 硬件直通协议，支持双协议 (纯文本 + 结构化 cJSON)
 """
 
+import os
 import sys
 import time
 import json
@@ -17,7 +18,7 @@ class LightController:
         self.timeout = timeout
         self.port = port or self.auto_detect_port()
         self.ser: Optional[serial.Serial] = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._rx_thread: Optional[threading.Thread] = None
         self._running = True
         self.on_mic_data: Optional[Callable[[bytes], None]] = None
@@ -230,6 +231,74 @@ class LightController:
         """触发硬件板载提示音"""
         return self.send_json({"cmd": "beep"})
 
+    def set_volume(self, volume: int) -> bool:
+        """设置 ESP32-S3 板载扬声器音量 (0-100，默认 70，采用平方律动态调校)"""
+        print(f"[LightController] 设置板载扬声器音量: {volume}%")
+        return self.send_json({"cmd": "volume", "val": int(volume)})
+
+    def set_board_led(self, mode: str = "green") -> bool:
+        """
+        控制 ESP32-S3 核心板载独立 RGB 指示灯 (GPIO 48):
+        - "pairing" / "breathe": 呼吸灯光 (等待配对)
+        - "green" / "connected": 常亮绿色 (配对成功 / 待唤醒待命)
+        - "active": 灵动微呼吸 (语音交互中)
+        - "off": 熄灭
+        """
+        print(f"[LightController] 设置板载指示灯 (GPIO 48): {mode}")
+        return self.send_json({"cmd": "board_led", "mode": mode})
+
+    def run_boot_ceremony(self, async_mode: bool = True):
+        """
+        执行系统上电与配对连接成功正向反馈仪式感 (对齐中阶规范，控制板载LED指示灯):
+        1. 上电进入配对模式：ESP32-S3 板载独立 LED (GPIO 48) 呼吸灯光呈现搜寻等待状态
+        2. 灯板 (16x16 矩阵) 保持灵动微表情桌面伴侣状态
+        3. 配对握手校验成功：
+           - 板载 LED 指示灯瞬间锁定为【常亮绿色】 (SOLID_GREEN)
+           - 板载扬声器发出清脆提示音 (beep) 确认物理连接确立
+        4. 广播牧濑红莉栖中日双语开机确认与专属唤醒提示
+        5. 仪式完毕，板载 LED 指示灯持续保持【常亮绿色】待命，静待专属日语唤醒词 (Makise Kurisu)
+        """
+        def _ceremony():
+            print("\n[配对模式] >>> ESP32-S3 板载 LED 指示灯呼吸律动，正在搜寻并等待配对连接... <<<")
+            self.set_board_led("pairing") # 板载 LED 呼吸灯光
+            self.set_mode(14)             # 灯板保持 14 号灵动微表情伙伴状态
+            time.sleep(1.8)
+
+            print("[配对成功] >>> 上位机与 ESP32-S3 配对成功！板载指示灯常亮绿色，扬声器发出提示音 <<<")
+            self.set_board_led("green")   # 板载 LED 瞬间切换为常亮绿色
+            time.sleep(0.15)
+            self.play_beep()              # 板载扬声器发出物理提示音确认配对成功
+            time.sleep(0.3)
+
+            cur_dir = os.path.dirname(os.path.abspath(__file__))
+            pcm_path = os.path.join(cur_dir, "kurisu_boot_ceremony.pcm")
+            wav_path = os.path.join(cur_dir, "kurisu_boot_ceremony.wav")
+
+            if os.path.exists(pcm_path):
+                with open(pcm_path, "rb") as f:
+                    pcm_data = f.read()
+
+                def _play_pc():
+                    if os.path.exists(wav_path):
+                        try:
+                            import winsound
+                            winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+                        except Exception:
+                            pass
+                threading.Thread(target=_play_pc, daemon=True).start()
+
+                # 推送板载 MAX98357A 扬声器
+                self.play_audio_pcm(pcm_data)
+
+            # 仪式结束，板载 LED 严格保持常亮绿色，静待专属日语唤醒词唤醒
+            self.set_board_led("green")
+            print("[配对完成] >>> 板载指示灯保持常亮绿色待命，必须喊出唤醒词 'Makise Kurisu' 才能开始交互 <<<\n")
+
+        if async_mode:
+            threading.Thread(target=_ceremony, daemon=True).start()
+        else:
+            _ceremony()
+
     # ==========================
     # 核心具身光场交互 API
     # ==========================
@@ -243,6 +312,11 @@ class LightController:
         """停止倒计时"""
         print(f"[具身指令] 停止物理倒计时")
         return self.send_json({"cmd": "stop_countdown"})
+
+    def enable_mic(self, enable: bool = True) -> bool:
+        """开启或挂起 ESP32-S3 板载 INMP441 麦克风硬件音频采集回传"""
+        print(f"[具身指令] 板载麦克风数据流: {'开启' if enable else '挂起'}")
+        return self.send_json({"cmd": "mic", "enable": bool(enable)})
 
     def set_mode(self, mode_num: int) -> bool:
         """设置 16x16 矩阵灯板的原生模式编号 (0~25)"""
@@ -280,6 +354,10 @@ class LightController:
             "cry": "cry",
             "neutral": "neutral",
             "dynamic": "dynamic",
+            "face": "dynamic",
+            "emoji": "dynamic",
+            "kurisu": "kurisu",
+            "pet": "kurisu",
             "off": "off",
             "red": "mode 1",
             "blue": "mode 2",

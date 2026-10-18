@@ -6,6 +6,7 @@ idf_component_register(
         "display/game_engine.cc"
         "display/spectrum_engine.cc"
         "display/display_manager.cc"
+        "display/board_led.cc"
         "protocol/command_dispatcher.cc"
         "audio/audio_hal.cc"
     INCLUDE_DIRS
@@ -20,4 +21,5 @@ idf_component_register(
         esp_timer
         json
         esp_driver_usb_serial_jtag
-)
+        esp_ringbuf
+    )

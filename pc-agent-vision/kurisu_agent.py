@@ -274,7 +274,7 @@ class KurisuAgent:
             )
             
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(req, timeout=15.0) as response:
+            with opener.open(req, timeout=60.0) as response:
                 result = json.loads(response.read().decode("utf-8"))
                 
                 # 兼容 Ollama /api/chat 与 OpenAI /v1/chat/completions 数据结构
@@ -282,7 +282,7 @@ class KurisuAgent:
                 tool_calls = msg.get("tool_calls", [])
                 raw_content = msg.get("content", "")
 
-                # 1. 执行大模型决策的具身物理工具 (Function Calling)
+                # 1. 执行大模型决策的具身物理工具 (Function Calling 与内嵌指令解析)
                 if tool_calls:
                     self.history.append(msg)
                     for tc in tool_calls:
@@ -300,9 +300,31 @@ class KurisuAgent:
                             "name": fn,
                             "content": json.dumps(tool_res, ensure_ascii=False)
                         })
+                else:
+                    # 容错：解析文本中可能内嵌的动作指令 (如 zion, set_light_mode 2 等)
+                    mode_m = re.search(r'(?:zion,\s*)?set_light_mode\s*[:=\s]\s*(\d+)', raw_content, re.I)
+                    if mode_m:
+                        execute_tool("set_light_mode", {"mode": int(mode_m.group(1))})
+                    theme_m = re.search(r'(?:zion,\s*)?set_matrix_theme\s*[:=\s\(\'\"]+([a-zA-Z]+)', raw_content, re.I)
+                    if theme_m:
+                        execute_tool("set_matrix_theme", {"theme": theme_m.group(1).lower()})
+                    cd_m = re.search(r'(?:zion,\s*)?start_countdown\s*[:=\s\(\'\"]+(\d+)', raw_content, re.I)
+                    if cd_m:
+                        execute_tool("start_countdown", {"seconds": int(cd_m.group(1))})
+                    if re.search(r'trigger_steins_gate_worldline', raw_content, re.I):
+                        execute_tool("trigger_steins_gate_worldline", {})
 
-                # 2. 提取并净化语音自然语言对白 (过滤可能的 JSON 残留)
-                clean_text = re.sub(r'\{[^{}]*"name"[^{}]*\}', '', raw_content).strip()
+                # 2. 提取并净化语音自然语言对白 (过滤代码标记与工具残渣)
+                clean_text = raw_content
+                clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL | re.I)
+                clean_text = re.sub(r'</?tool_call>', '', clean_text, flags=re.I)
+                clean_text = re.sub(r'(?:zion|arton|xon)[,\s]*\{.*?(?:\}|$|\n)', '', clean_text, flags=re.I)
+                clean_text = re.sub(r'(?:zion|arton|xon)[,\s]+[a-zA-Z0-9_]+(?:\s+\w+)?', '', clean_text, flags=re.I)
+                clean_text = re.sub(r'[a-zA-Z_]+_mode\s+\d+', '', clean_text, flags=re.I)
+                clean_text = re.sub(r'[a-zA-Z_]+\([^\)]*\)', '', clean_text)
+                clean_text = re.sub(r'\{[^{}]*\}', '', clean_text)
+                clean_text = re.sub(r'\b(?:arton|zion|xon)\b', '', clean_text, flags=re.I)
+                clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
                 # 如果执行了工具但当前没有自然语言回复，请求模型进行第二轮自然语言陈述
                 if tool_calls and not clean_text:
@@ -313,19 +335,30 @@ class KurisuAgent:
                         "temperature": 0.7
                     }
                     req2 = urllib.request.Request(endpoint, data=json.dumps(req_payload2).encode("utf-8"), headers={"Content-Type": "application/json"})
-                    with opener.open(req2, timeout=15.0) as resp2:
+                    with opener.open(req2, timeout=60.0) as resp2:
                         res2 = json.loads(resp2.read().decode("utf-8"))
                         msg2 = res2.get("message") or (res2.get("choices", [{}])[0].get("message", {}))
-                        clean_text = re.sub(r'\{[^{}]*"name"[^{}]*\}', '', msg2.get("content", "")).strip()
+                        raw_c2 = msg2.get("content", "")
+                        clean_text = re.sub(r'zion,\s*set_[a-zA-Z0-9_]+(?:\s+\w+)?', '', raw_c2, flags=re.I)
+                        clean_text = re.sub(r'\{[^{}]*"name"[^{}]*\}', '', clean_text).strip()
 
-                if not clean_text:
-                    clean_text = "哼，本天才已经按你说的处理好了，还有什么事吗？\nフン、言われた通りにしてあげたわよ。他に何かあるの？"
+                # 3. 严格落实中日双语互译铁律：
+                # 始终提取大模型产出的纯中文台词，并通过本地端侧大模型动态对译为精准一致的日文
+                zh_line, _ = self.voice._split_zh_ja(clean_text)
+                if not zh_line:
+                    zh_line = clean_text
 
-                self.history.append({"role": "assistant", "content": clean_text})
-                print(f"[KurisuAgent 端侧大模型思考完成]: {clean_text[:40]}...")
-                self.voice.speak(clean_text, block=False)
-                return clean_text
+                # 无论输入为何种中文，实时动态生成分毫不差、完全一致的牧濑红莉栖原声傲娇日文
+                ja_dyn = self.voice._translate_zh_to_ja_kurisu(zh_line)
+                if not ja_dyn:
+                    ja_dyn = "ふん、言われた通りにしてあげたわよ。他に何かあるの？"
 
+                final_text = f"{zh_line}\n{ja_dyn}"
+
+                self.history.append({"role": "assistant", "content": final_text})
+                print(f"[KurisuAgent 端侧大模型思考完成]:\n[中文]: {zh_line}\n[日文动态互译]: {ja_dyn}")
+                self.voice.speak(final_text, block=True)
+                return final_text
 
         except Exception as e:
             # 当本地大模型服务未启动时，无缝切换到本地离线规则路由，保证硬件即时可控！
@@ -333,7 +366,7 @@ class KurisuAgent:
             fallback = self._offline_heuristic_fallback(user_message)
             reply = fallback["reply"]
             self.history.append({"role": "assistant", "content": reply})
-            self.voice.speak(reply, block=False)
+            self.voice.speak(reply, block=True)
             return reply
 
 if __name__ == "__main__":

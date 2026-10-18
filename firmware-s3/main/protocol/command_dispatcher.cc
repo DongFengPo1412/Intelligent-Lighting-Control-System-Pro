@@ -1,5 +1,6 @@
 #include "command_dispatcher.h"
 #include "display_manager.h"
+#include "board_led.h"
 #include "audio_hal.h"
 #include <stdio.h>
 #include <string.h>
@@ -27,6 +28,8 @@ CommandDispatcher& CommandDispatcher::GetInstance()
 CommandDispatcher::CommandDispatcher()
     : task_handle_(nullptr),
       mic_task_handle_(nullptr),
+      audio_play_task_handle_(nullptr),
+      audio_ring_buf_(nullptr),
       is_running_(false),
       mic_streaming_(false)
 {
@@ -44,6 +47,14 @@ CommandDispatcher::~CommandDispatcher()
         vTaskDelete(mic_task_handle_);
         mic_task_handle_ = nullptr;
     }
+    if (audio_play_task_handle_) {
+        vTaskDelete(audio_play_task_handle_);
+        audio_play_task_handle_ = nullptr;
+    }
+    if (audio_ring_buf_) {
+        vRingbufferDelete(audio_ring_buf_);
+        audio_ring_buf_ = nullptr;
+    }
 }
 void CommandDispatcher::SetMicStreaming(bool enabled)
 {
@@ -57,7 +68,32 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
     if (is_running_) return ESP_OK;
 
     is_running_ = true;
+
+    // 0. 创建 32KB 深度环形缓冲蓄水池 (RingBuffer)，将 USB 极速接收与 I2S DMA 发声彻底解耦！
+    if (!audio_ring_buf_) {
+        audio_ring_buf_ = xRingbufferCreate(32768, RINGBUF_TYPE_BYTEBUF);
+        if (!audio_ring_buf_) {
+            ESP_LOGE(TAG, "Failed to create audio ring buffer!");
+            is_running_ = false;
+            return ESP_FAIL;
+        }
+    }
+
+    // 1. 启动专用音频播放消费任务 (运行在 Core 0，不与 Core 1 渲染任务争抢)
     BaseType_t ret = xTaskCreatePinnedToCore(
+        AudioPlayTaskTrampoline,
+        "audio_play_task",
+        4096,
+        this,
+        priority > 1 ? priority : 2,
+        &audio_play_task_handle_,
+        core_id
+    );
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create audio play task!");
+    }
+
+    ret = xTaskCreatePinnedToCore(
         SerialTaskTrampoline,
         "serial_cmd_task",
         8192,
@@ -84,7 +120,7 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
         core_id
     );
 
-    ESP_LOGI(TAG, "Serial & Mic command tasks started on Core %d", (int)core_id);
+    ESP_LOGI(TAG, "Serial, Mic & AudioPlay tasks started on Core %d", (int)core_id);
     return ESP_OK;
 }
 
@@ -129,6 +165,43 @@ void CommandDispatcher::MicTaskLoop()
             vTaskDelay(pdMS_TO_TICKS(50));
         }
     }
+    vTaskDelete(NULL);
+}
+
+void CommandDispatcher::AudioPlayTaskTrampoline(void* arg)
+{
+    CommandDispatcher* dispatcher = static_cast<CommandDispatcher*>(arg);
+    dispatcher->AudioPlayTaskLoop();
+}
+
+void CommandDispatcher::AudioPlayTaskLoop()
+{
+    ESP_LOGI(TAG, "Audio playback consumer task started (DMA RingBuffer Pipeline)");
+
+    while (is_running_) {
+        if (!audio_ring_buf_) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        size_t item_size = 0;
+        // 每次从环形缓冲区提取最多 960 字节 (480 个 16-bit 采样 = 30ms 音频)
+        uint8_t* item = (uint8_t*)xRingbufferReceiveUpTo(
+            audio_ring_buf_,
+            &item_size,
+            pdMS_TO_TICKS(50),
+            960
+        );
+
+        if (item && item_size > 0) {
+            size_t sample_count = item_size / sizeof(int16_t);
+            AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)item, sample_count);
+            vRingbufferReturnItem(audio_ring_buf_, (void*)item);
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+    }
+
     vTaskDelete(NULL);
 }
 
@@ -219,8 +292,9 @@ void CommandDispatcher::SerialTaskLoop()
                         audio_received_len += take;
                         i += (take - 1); // for-loop 自增 i++
                         if (audio_received_len >= audio_expected_len) {
-                            size_t sample_count = audio_received_len / sizeof(int16_t);
-                            AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)audio_payload, sample_count);
+                            if (audio_ring_buf_) {
+                                xRingbufferSend(audio_ring_buf_, audio_payload, audio_received_len, pdMS_TO_TICKS(20));
+                            }
                             rx_state = STATE_TEXT;
                         }
                         break;
@@ -343,6 +417,41 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
         cJSON_Delete(root);
         return true;
     }
+    // {"cmd":"volume", "val":70}
+    else if (strcasecmp(cmd, "volume") == 0) {
+        cJSON* val_item = cJSON_GetObjectItem(root, "val");
+        if (!val_item) val_item = cJSON_GetObjectItem(root, "volume");
+        if (val_item && cJSON_IsNumber(val_item)) {
+            AudioHAL::GetInstance().SetVolume(val_item->valueint);
+            cJSON_Delete(root);
+            return true;
+        }
+    }
+    // {"cmd":"board_led", "mode":"green"} / {"cmd":"board_led", "val":"green"}
+    else if (strcasecmp(cmd, "board_led") == 0) {
+        cJSON* mode_item = cJSON_GetObjectItem(root, "mode");
+        if (!mode_item) mode_item = cJSON_GetObjectItem(root, "val");
+        if (mode_item && cJSON_IsString(mode_item)) {
+            const char* m = mode_item->valuestring;
+            if (strcasecmp(m, "pairing") == 0 || strcasecmp(m, "breathe") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
+            } else if (strcasecmp(m, "green") == 0 || strcasecmp(m, "connected") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
+            } else if (strcasecmp(m, "active") == 0 || strcasecmp(m, "wake") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::ACTIVE_INTERACT);
+            } else if (strcasecmp(m, "off") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::OFF);
+            }
+            cJSON_Delete(root);
+            return true;
+        }
+    }
+    // {"cmd":"kurisu"} / {"cmd":"pet"}
+    else if (strcasecmp(cmd, "kurisu") == 0 || strcasecmp(cmd, "pet") == 0) {
+        dm.SetMode(DisplayMode::KURISU_DESK_PET);
+        cJSON_Delete(root);
+        return true;
+    }
     // {"cmd":"mic", "enable":true}
     else if (strcasecmp(cmd, "mic") == 0) {
         cJSON* en_item = cJSON_GetObjectItem(root, "enable");
@@ -417,7 +526,8 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     if (strcasecmp(text_str, "smile") == 0)         { dm.SetMode(DisplayMode::FACE_SMILE); return true; }
     if (strcasecmp(text_str, "cry") == 0)           { dm.SetMode(DisplayMode::FACE_CRY); return true; }
     if (strcasecmp(text_str, "neutral") == 0)       { dm.SetMode(DisplayMode::FACE_NEUTRAL); return true; }
-    if (strcasecmp(text_str, "dynamic") == 0)       { dm.SetMode(DisplayMode::FACE_DYNAMIC); return true; }
+    if (strcasecmp(text_str, "dynamic") == 0 || strcasecmp(text_str, "face") == 0 || strcasecmp(text_str, "emoji") == 0) { dm.SetMode(DisplayMode::FACE_DYNAMIC); return true; }
+    if (strcasecmp(text_str, "kurisu") == 0 || strcasecmp(text_str, "pet") == 0) { dm.SetMode(DisplayMode::KURISU_DESK_PET); return true; }
     if (strcasecmp(text_str, "spectrum") == 0)      { dm.SetMode(DisplayMode::AUDIO_SPECTRUM); return true; }
     if (strcasecmp(text_str, "snake") == 0)         { dm.SetMode(DisplayMode::SNAKE_GAME); return true; }
     if (strcasecmp(text_str, "tetris") == 0)        { dm.SetMode(DisplayMode::TETRIS_GAME); return true; }
@@ -426,11 +536,36 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     if (strcasecmp(text_str, "beep") == 0)          { AudioHAL::GetInstance().PlayBeep(1000, 200); return true; }
     if (strcasecmp(text_str, "mic on") == 0)        { SetMicStreaming(true); return true; }
     if (strcasecmp(text_str, "mic off") == 0)       { SetMicStreaming(false); return true; }
+    if (strcasecmp(text_str, "board_led green") == 0 || strcasecmp(text_str, "led green") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
+        return true;
+    }
+    if (strcasecmp(text_str, "board_led pairing") == 0 || strcasecmp(text_str, "led pairing") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
+        return true;
+    }
+    if (strcasecmp(text_str, "board_led active") == 0 || strcasecmp(text_str, "led active") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::ACTIVE_INTERACT);
+        return true;
+    }
+    if (strcasecmp(text_str, "board_led off") == 0 || strcasecmp(text_str, "led off") == 0) {
+        BoardLed::GetInstance().SetMode(BoardLedMode::OFF);
+        return true;
+    }
 
     // 4. 亮度微调: "brightness 25" / "b 25"
     int br = 0;
     if (sscanf(text_str, "brightness %d", &br) == 1 || sscanf(text_str, "b %d", &br) == 1) {
         dm.SetBrightness((uint8_t)br);
+        return true;
+    }
+    if (strcasecmp(text_str, "comp on") == 0)  { dm.SetCompensation(true);  return true; }
+    if (strcasecmp(text_str, "comp off") == 0) { dm.SetCompensation(false); return true; }
+
+    // 4.1 音量微调: "volume 70" / "v 70"
+    int vol = 0;
+    if (sscanf(text_str, "volume %d", &vol) == 1 || sscanf(text_str, "v %d", &vol) == 1) {
+        AudioHAL::GetInstance().SetVolume(vol);
         return true;
     }
 

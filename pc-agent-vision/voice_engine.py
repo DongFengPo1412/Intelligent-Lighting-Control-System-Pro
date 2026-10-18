@@ -105,14 +105,19 @@ class VoiceEngine:
         print(f"[VoiceEngine] 音量已调整为: {self.current_volume}%")
 
     def _clean_text_for_tts(self, text: str) -> str:
-        """清洗文本中的特殊标签、微表情、系统记号、连续换行"""
+        """清洗文本中的特殊标签、微表情、系统记号、工具残渣、连续换行"""
         if not text:
             return ""
-        # 移除大模型可能产生的系统标记 [smile], (微笑), 【动作】
-        t = re.sub(r'\[.*?\]|\(.*?\)|\（.*?\）|\【.*?\】', '', text)
-        # 移除 markdown 粗体/斜体
+        t = re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL | re.I)
+        t = re.sub(r'</?tool_call>', '', t, flags=re.I)
+        t = re.sub(r'(?:zion|arton|xon)[,\s]*\{.*?(?:\}|$|\n)', '', t, flags=re.I)
+        t = re.sub(r'(?:zion|arton|xon)[,\s]+[a-zA-Z0-9_]+(?:\s+\w+)?', '', t, flags=re.I)
+        t = re.sub(r'[a-zA-Z_]+_mode\s+\d+', '', t, flags=re.I)
+        t = re.sub(r'[a-zA-Z_]+\([^\)]*\)', '', t)
+        t = re.sub(r'\{[^{}]*\}', '', t)
+        t = re.sub(r'\b(?:arton|zion|xon)\b', '', t, flags=re.I)
+        t = re.sub(r'\[.*?\]|\(.*?\)|\（.*?\）|\【.*?\】', '', t)
         t = t.replace('*', '').replace('`', '').replace('#', '')
-        # 连续换行和多余空格清洗
         t = re.sub(r'\s+', ' ', t).strip()
         return t
 
@@ -125,59 +130,60 @@ class VoiceEngine:
 
     def _translate_zh_to_ja_kurisu(self, zh_text: str) -> str:
         """
-        根据中文内容生成严格对应的牧濑红莉栖正统日文互译 (确保二者含义完全对齐，绝不独立割裂)
+        基于本地端侧 Qwen2.5-7B 实施 100% 动态实时中日互译
+        将输入的中文精准、完全一致地翻译为牧濑红莉栖原声傲娇语气的日文对白
+        彻底杜绝任何固定死板的模板句子！
         """
-        # 1. 语义与关键短语模式精准映射
-        if any(k in zh_text for k in ["测试", "听得清", "听得到"]):
-            return "脳波接続テストは正常よ。音響パラメータも安定稼働中、これで十分クリアに聞こえるかしら？"
-        elif "都说了我不是助手" in zh_text or "助手" in zh_text:
-            return "助手じゃないって言ってるでしょ！何回言えば覚えるのよ、このバカ！"
-        elif "不要在后面擅自加上蒂娜" in zh_text or "克里斯蒂娜" in zh_text:
-            return "勝手に後ろにティーナって付けないでって言ってるでしょ！私はれっきとした脳科学の研究者よ！"
-        elif "沙漏" in zh_text or "倒计时" in zh_text:
-            m = re.search(r'(\d+)', zh_text)
-            sec = m.group(1) if m else "10"
-            if "停" in zh_text or "取消" in zh_text:
-                return "カウントダウンは止めてあげたわよ。まったく、どうしてそんなに中途半端なのよ……"
-            return f"フン、そこまで言うなら……物理砂時計を{sec}秒に設定してあげたわ。見てなさい、この天才の時間を無駄にしないでよね！"
-        elif "世界线" in zh_text or "变动率" in zh_text or "1.048596" in zh_text:
-            return "ダイバージェンスメーターが反応した？世界線変動率は1.048596%に固定されたわ！これがシュタインズ・ゲートの選択だと言うの？エル・プサイ・コングルゥ。"
-        elif "红灯" in zh_text or "纯红" in zh_text:
-            return "真紅の高エネルギー警戒光を展開したわ！この波長は冗談じゃないんだから、ラボをオーバーヒートさせないでよね！"
-        elif "深海" in zh_text or "大海" in zh_text or "水波" in zh_text:
-            return "深海の蒼い水紋を16×16マトリクスに広げたわ。同心円状の波紋シミュレーション、リアルでしょ？"
-        elif "灯笼" in zh_text or "暖光" in zh_text:
-            return "温もりある提灯の赤らんだ光を灯してあげたわ。こういう穏やかな雰囲気も、たまには悪くないわね。"
-        elif "蓝灯" in zh_text or "纯蓝" in zh_text:
-            return "クールな純青マトリクスを起動したわ。波長470ナノメートル、冷静な思考に役立つはずよ。"
-        elif "绿灯" in zh_text or "纯绿" in zh_text:
-            return "純緑のセーフティチャンネルを起動したわ。ニキシー管メーターの基準グリーンと同じね。"
-        elif "极光" in zh_text:
-            return "オーロラブレスウェーブをロードしたわ。電離層のイオン発光現象がドットスクリーンに見事に再現されているでしょ。"
-        elif "星空" in zh_text:
-            return "広大な星空のドットを投影したわ。満天の星が瞬いているけど、見惚れてボーッとしないでよね！"
-        elif "流星" in zh_text:
-            return "流星のエフェクトを励起したわ！願い事をする暇があるなら、世界線の波動方程式でも解きなさいよね！"
-        elif "烈焰" in zh_text or "火" in zh_text or "生气" in zh_text:
-            return "サイバーフレイムを点火してあげたわ！炎がピクセル単位で渦巻いているから、しっかり反省しなさい！"
-        elif "代码" in zh_text or "矩阵" in zh_text or "黑客" in zh_text:
-            return "データストリーム展開！このコードレインのエフェクト、なかなかギークっぽくていいでしょ？"
-        elif "彩虹" in zh_text:
-            return "レインボーウェーブに切り替えてあげたわ。ふん、たまには目を休めるのも悪くないわね。"
-        elif "关灯" in zh_text or "关掉" in zh_text or "熄灭" in zh_text:
-            return "ライトパネルをオフにしたわ。省エネだし、実験プロトコルにも合致しているわね。"
-        elif "笑" in zh_text or "表情" in zh_text:
-            return "笑ってって？べ、別にアンタに笑いかけたわけじゃないわよ！単なるフェイシャルレンダリングのテストよ！"
-        elif "贪吃蛇" in zh_text:
-            return "16×16マトリクスでスネークゲームを起動したわ！スマホの十字キーで早速操作してみなさい！"
-        elif "俄罗斯方块" in zh_text:
-            return "テトリスアーケードモードを起動したわ！ライン消去ロジックもロード完了、コントローラー準備完了よ。"
-        elif "音量" in zh_text:
-            m = re.search(r'(\d+)', zh_text)
-            vol = m.group(1) if m else "75"
-            return f"音声の音量を{vol}%に調整したわよ。これで私の声がちゃんと聞こえたかしら？"
-        else:
-            return "急に話しかけてきて、何か実験の報告でもあるの？言っておくけど、オカルトやくだらない冗談に付き合う暇はないわよ。何よ？"
+        if not zh_text or not zh_text.strip():
+            return ""
+
+        # 清洗待翻译的中文，避免工具代码污染翻译
+        clean_zh = self._clean_text_for_tts(zh_text)
+        if not clean_zh:
+            return ""
+
+        try:
+            import urllib.request
+            import json
+            payload = {
+                "model": "qwen2.5:7b",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是《命运石之门》中的牧濑红莉栖(CV:今井麻美)。\n"
+                            "你的任务：将用户提供的【中文台词】精准翻译为【完全对应含义的日语台词】。\n"
+                            "翻译铁律：\n"
+                            "1. 意思必须与中文分毫不差、完全一致。\n"
+                            "2. 语气为牧濑红莉栖经典的傲娇少女、天才学者语调（口癖自然，如「ふん」「〜でしょ」「〜わよ」「アンタ」「バカ」）。\n"
+                            "3. 纯正日文输出，严禁任何英文，严禁任何多余解释或前缀。"
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": clean_zh
+                    }
+                ],
+                "stream": False,
+                "temperature": 0.2
+            }
+            req = urllib.request.Request(
+                "http://127.0.0.1:11434/api/chat",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=10.0) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+                ja = res.get("message", {}).get("content", "").strip()
+                ja = re.sub(r'^(日文翻译[：:]|翻译[：:]|日本語[：:]|牧濑红莉栖[：:]|紅莉栖[：:])', '', ja).strip()
+                ja = ja.replace('`', '').replace('"', '').strip()
+                if ja and re.search(r'[\u3040-\u30ff]', ja):
+                    return ja
+        except Exception as e:
+            print(f"[VoiceEngine 动态中译日异常]: {e}")
+
+        return ""
 
     def _split_zh_ja(self, text: str):
         """将混合文本拆分为中文段落与日文段落 (严格中日互译对齐)"""

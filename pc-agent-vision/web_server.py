@@ -6,10 +6,11 @@
 
 import sys
 import os
+import torch  # 必须置顶导入，杜绝 ctranslate2 与 CUDA/cuDNN DLL 冲突
 import json
 import asyncio
 import socket
-from typing import Set
+from typing import Set, Optional
 from aiohttp import web
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -20,6 +21,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 from kurisu_agent import KurisuAgent
 from light_controller import get_light_controller
 from voice_engine import get_voice_engine
+from voice_listener import get_voice_listener
 
 # ==========================================
 # 全局状态与实例初始化
@@ -28,6 +30,9 @@ print("[WebServer] 正在载入牧濑红莉栖具身多模态大脑与硬件驱�
 agent = KurisuAgent()
 controller = agent.controller
 voice = agent.voice
+
+server_loop: Optional[asyncio.AbstractEventLoop] = None
+listener = None
 
 active_websockets: Set[web.WebSocketResponse] = set()
 
@@ -214,13 +219,76 @@ async def handle_index(request: web.Request):
     index_path = os.path.join(STATIC_DIR, "index.html")
     return web.FileResponse(index_path)
 
+async def handle_ceremony(request: web.Request):
+    """手动触发上电自检与配对握手正向反馈仪式"""
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, controller.run_boot_ceremony, True)
+    await broadcast_ws({"type": "ceremony_started"})
+    return web.json_response({"status": "ok", "message": "Boot ceremony triggered"})
+
+# ==========================================
+# 全自动麦克风免触语音拾音交互链路
+# ==========================================
+def on_voice_detected(speech_text: str):
+    """当麦克风检测到用户说话时的回调"""
+    global server_loop
+    if not speech_text or not speech_text.strip():
+        return
+    print(f"\n[免触麦克风输入]: {speech_text}")
+    if server_loop and not server_loop.is_closed():
+        asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text), server_loop)
+
+async def process_voice_interaction(speech_text: str):
+    """异步执行大模型思考并向全端广播"""
+    global listener, agent
+    try:
+        if listener:
+            listener.pause()
+        
+        loop = asyncio.get_running_loop()
+        reply = await loop.run_in_executor(None, agent.chat, speech_text)
+        print(f"[免触语音回复]: {reply}")
+
+        await broadcast_ws({
+            "type": "chat_reply",
+            "user": speech_text,
+            "text": reply
+        })
+    except Exception as e:
+        print(f"[免触语音交互异常]: {e}")
+    finally:
+        await asyncio.sleep(1.0)
+        if listener:
+            listener.resume()
+
 # ==========================================
 # 主启动器
 # ==========================================
+async def on_startup(app: web.Application):
+    global server_loop, listener
+    server_loop = asyncio.get_running_loop()
+
+    # 1. 触发上电与配对连接成功正向反馈仪式感
+    if controller.is_connected:
+        controller.run_boot_ceremony(async_mode=True)
+
+    # 2. 启动全自动麦克风免触拾音监听
+    listener = get_voice_listener(on_voice_detected)
+    listener.start()
+    print("[WebServer] >>> 全自动麦克风免触对讲与端侧大模型闭环已全面启动 <<<")
+
+async def on_cleanup(app: web.Application):
+    global listener
+    if listener:
+        listener.stop()
+
 def create_app() -> web.Application:
     app = web.Application()
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
     app.router.add_get("/", handle_index)
     app.router.add_post("/api/chat", handle_chat)
+    app.router.add_post("/api/ceremony", handle_ceremony)
     app.router.add_post("/api/mode", handle_mode)
     app.router.add_post("/api/volume", handle_volume)
     app.router.add_post("/api/cmd", handle_cmd)
@@ -238,3 +306,4 @@ if __name__ == "__main__":
     print(f"  ● 手机局域网 WiFi 访问: http://{HOST_IP}:{WEB_PORT}")
     print("="*60 + "\n")
     web.run_app(app, host="0.0.0.0", port=WEB_PORT)
+
