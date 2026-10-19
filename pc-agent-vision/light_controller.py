@@ -143,7 +143,7 @@ class LightController:
                 if not self.connect():
                     return False
             try:
-                msg = (line.strip() + "\n").encode("utf-8")
+                msg = ("\n" + line.strip() + "\n").encode("utf-8")
                 self.ser.write(msg)
                 self.ser.flush()
                 return True
@@ -197,9 +197,10 @@ class LightController:
             try:
                 # 硬件级静音：下发关闭麦克风推流指令，杜绝扬声器自激啸叫与回声循环
                 try:
-                    mute_cmd = b'{"cmd":"mic","enable":false}\n'
+                    mute_cmd = b'\n{"cmd":"mic","enable":false}\n'
                     self.ser.write(mute_cmd)
                     self.ser.flush()
+                    time.sleep(0.04)
                 except Exception:
                     pass
 
@@ -233,15 +234,16 @@ class LightController:
                 # 物理消音缓冲：等待 350ms 让空气回声与声学余震彻底消散
                 time.sleep(0.35)
 
-                # 清空串口输入缓冲，丢弃播放期间残留的无效数据
+                # 清空串口输入与输出缓冲，丢弃播放期间残留的无效数据
                 try:
                     self.ser.reset_input_buffer()
+                    self.ser.reset_output_buffer()
                 except Exception:
                     pass
 
                 # 硬件级恢复：重新激活麦克风推流
                 try:
-                    unmute_cmd = b'{"cmd":"mic","enable":true}\n'
+                    unmute_cmd = b'\n{"cmd":"mic","enable":true}\n'
                     self.ser.write(unmute_cmd)
                     self.ser.flush()
                 except Exception:
