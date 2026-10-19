@@ -92,9 +92,11 @@ class VoiceListener:
             r'[牧木目穆][濑赖赛莱拉来奶][红洪虹][莉利丽立力栗茜][栖茜夕溪七期齐]',
             r'[牧木目穆][濑赖赛莱拉来奶]',
             r'[红洪虹][莉利丽立力栗茜][栖茜夕溪七期齐]',
-            # 克里斯 / 克里斯蒂娜
-            r'[克科库刻客][莉丽里立栗][斯诗思丝四][蒂迪地][娜那]',
-            r'[克科库刻客][莉丽里立栗][斯诗思丝四]',
+            # 克里斯 / 克里斯蒂娜 (增加骨皮丝、古皮丝、柯里斯等常见轻量 ASR 谐音)
+            r'[克科库刻客骨古顾格柯酷][莉丽里立栗皮匹佩][斯诗思丝四][蒂迪地][娜那]',
+            r'[克科库刻客骨古顾格柯酷][莉丽里立栗皮匹佩][斯诗思丝四]',
+            r'骨皮丝',
+            r'古皮丝',
             r'克里斯蒂娜',
             r'克里斯',
             r'库里斯',
@@ -194,22 +196,12 @@ class VoiceListener:
                             language="zh",
                             beam_size=1,
                             initial_prompt=None,
-                            condition_on_previous_text=False,
-                            no_speech_threshold=0.6,
-                            log_prob_threshold=-1.0,
-                            compression_ratio_threshold=2.4
+                            condition_on_previous_text=False
                         )
                         parts = [s.text.strip() for s in segments]
                         text = "".join(parts).strip()
                     except Exception as wex:
-                        text = ""
-
-                # 2. 备用兜底
-                if not text:
-                    try:
-                        audio_data = sr.AudioData(pcm_bytes, 16000, 2)
-                        text = self.recognizer.recognize_google(audio_data, language="zh-CN")
-                    except Exception:
+                        print(f"[Whisper ASR 异常]: {wex}")
                         text = ""
 
                 # 过滤 ASR 常见的重复字符幻觉 (如 "黏黏黏黏黏", "引引引引引")
@@ -358,17 +350,18 @@ class VoiceListener:
             ambient_energy = 0.98 * ambient_energy + 0.02 * rms
             
             # 双门限迟滞比较器 (Hysteresis VAD):
-            # 起始阈值: 2000 或 底噪 2.2 倍 (连续 2 帧，防止键盘轻叩或静电杂音)
-            # 持续阈值: 1300 或 底噪 1.5 倍 (防止辅音、字间换气被截断)
-            start_threshold = max(2000.0, ambient_energy * 2.2)
-            continue_threshold = max(1300.0, ambient_energy * 1.5)
+            # 实测安静状态下麦克风供电与底噪偶尔脉冲可达 3000~4900 RMS，人声正常说话在 7500~20000 RMS。
+            # 起始阈值: 设定为 6200 (并连续 3 帧)，彻底杜绝未说话时底噪引发的忽亮忽暗！
+            # 持续阈值: 3500 (防止人声说话字词间停顿断流)
+            start_threshold = max(6200.0, ambient_energy * 3.2)
+            continue_threshold = max(3500.0, ambient_energy * 1.6)
 
             if not is_speaking:
                 preroll_chunks.append(filtered_samples)
                 if rms > start_threshold:
                     speech_trigger_count += 1
-                    # 连续 2 帧超过阈值才确认为人声起始，过滤单点瞬态脉冲
-                    if speech_trigger_count >= 2:
+                    # 连续 3 帧 (>45ms) 超过阈值才确认为人声起始，杜绝单点杂音脉冲
+                    if speech_trigger_count >= 3:
                         is_speaking = True
                         silent_count = 0
                         speech_trigger_count = 0
@@ -400,8 +393,8 @@ class VoiceListener:
                         total_samples = sum(len(c) for c in speech_chunks)
                         max_chunk_rms = max(float(np.sqrt(np.mean(c**2))) for c in speech_chunks) if speech_chunks else 0.0
 
-                        # 要求至少 0.45 秒语音且峰值能量真实有效 (>2200)，过滤日常轻微白噪音
-                        if total_samples >= 16000 * 0.45 and max_chunk_rms >= 2200.0:
+                        # 要求至少 0.45 秒语音且峰值能量真实有效 (>6200)，彻底过滤日常环境白噪音
+                        if total_samples >= 16000 * 0.45 and max_chunk_rms >= 6200.0:
                             full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
                             # 异步分发至工作线程，确保 _process_loop 不被 ASR 推理耗时阻塞
                             threading.Thread(target=self._process_utterance, args=(full_pcm,), daemon=True).start()
