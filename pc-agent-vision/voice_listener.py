@@ -39,7 +39,12 @@ class VoiceListener:
         self.is_listening = False
         self.is_paused = False
         self._pcm_queue: queue.Queue = queue.Queue(maxsize=300)
+        self._utterance_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._is_processing = False
+        self._current_led_mode = "listening"
+
         self._process_thread: Optional[threading.Thread] = None
+        self._worker_thread: Optional[threading.Thread] = None
         self._watchdog_thread: Optional[threading.Thread] = None
         self._work_lock = threading.Lock()
 
@@ -57,16 +62,43 @@ class VoiceListener:
         self._prev_x = 0.0
         self._prev_y = 0.0
         self._dc_alpha = 0.995
+        self._resume_warmup_frames = 0
 
-        # 初始化本地 faster-whisper 极速离线 ASR 模型
+        # 初始化本地 faster-whisper 极速离线 ASR 模型 (优先 NVIDIA RTX GPU CUDA 加速 ~65ms)
         self.whisper_model = None
+        torch_lib = r'C:\Users\Liu\anaconda3\envs\ai_cv_env\Lib\site-packages\torch\lib'
+        if os.path.exists(torch_lib):
+            if hasattr(os, 'add_dll_directory'):
+                try:
+                    os.add_dll_directory(torch_lib)
+                except Exception:
+                    pass
+            if 'PATH' in os.environ and torch_lib not in os.environ['PATH']:
+                os.environ['PATH'] = torch_lib + os.pathsep + os.environ['PATH']
+
         try:
-            from faster_whisper import WhisperModel
-            print("[VoiceListener] 正在载入本地 Whisper 离线极速语音识别引擎 (CPU int8)...")
-            self.whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=4)
-            print("[VoiceListener] >>> 本地离线 Whisper ASR 引擎就绪 (端侧 0 延迟，0 网络开销，支持中日语) <<<")
+            import torch
+            if torch.cuda.is_available():
+                from faster_whisper import WhisperModel
+                print("[VoiceListener] 正在载入本地 Whisper 离线极速 ASR (NVIDIA RTX CUDA fp16)...")
+                self.whisper_model = WhisperModel("tiny", device="cuda", compute_type="float16")
+                print("[VoiceListener] >>> 本地离线 Whisper ASR 已就绪 (GPU CUDA 加速: ~65ms 瞬间响应) <<<")
+            else:
+                raise RuntimeError("CUDA not available")
         except Exception as e:
-            print(f"[VoiceListener 警告] 加载本地 Whisper 失败: {e}，将采用备用引擎")
+            print(f"[VoiceListener] CUDA 加速未能启动 ({e})，回退至 CPU int8 引擎...")
+            from faster_whisper import WhisperModel
+            self.whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=4)
+            print("[VoiceListener] >>> 本地离线 Whisper ASR CPU int8 就绪 <<<")
+
+    def _update_board_led(self, mode: str):
+        """板载指示灯状态去重发送 (严格只在状态跳变时发送单条指令，彻底杜绝每15ms轰炸串口引发崩溃)"""
+        if self._current_led_mode != mode:
+            self._current_led_mode = mode
+            try:
+                self.controller.set_board_led(mode)
+            except Exception:
+                pass
 
     def _check_wake_word(self, text: str) -> Tuple[bool, str]:
         """
@@ -74,10 +106,10 @@ class VoiceListener:
         支持:
           - 英文/罗曼音/Whisper常见音标: Makise Kurisu, Kurisu, Christina, Chris, Kris, Kolies, Kolis, Koli, Curis, Cris, Kelisi
           - 日语假名: まきせくりす, くりす, クリス, マキセ
-          - 中文原称与同音容错: 牧濑红莉栖, 红莉栖, 牧濑, 木濑, 暴力(短音高频同音)
-          - 克里斯/克里斯蒂娜及ASR谐音: 克里斯, 柯里斯, 科里斯, 库里斯, 克莉丝, 骨皮丝, 古皮丝, 鼓勵, 鼓励, 苦力苏, 栗子
+          - 中文原称与同音容错: 牧濑红莉栖, 红莉栖, 牧濑, 木濑, 暴力(短音高频同音), 沒有想
+          - 克里斯/克里斯蒂娜及ASR谐音: 克里斯, 柯里斯, 科里斯, 库里斯, 克莉丝, 骨皮丝, 古皮丝, 铁里斯蒂娜, 铁里斯, 鼓勵, 鼓励, 苦力苏, 栗子
           - 角色别名: 助手, 牧濑助手, 克里斯助手
-          - 中阶小智生态兼容与自然问候: 你好小智, 小智, 你好, 在吗, 在不在, 出来
+          - 中阶小智生态兼容与自然问候: 你好小智, 链好小智, 小智, 你好, 链好, 连好, 在吗, 在不在, 出来
         返回: (is_wake, stripped_command_text)
         """
         t = text.strip()
@@ -107,8 +139,17 @@ class VoiceListener:
             r'[牧木目穆莫][濑赖赛莱拉来奶耐]',
             r'[红洪虹烘][莉利丽立力栗茜荔][栖茜夕溪七期齐气]?',
             r'暴力',
-            # 克里斯 / 克里斯蒂娜 (及常见 ASR 误识同音/谐音)
-            r'[克科库刻客骨古顾格柯酷各][莉丽里立栗皮匹佩利丽][斯诗思丝四市世][蒂迪地底]?[娜那南]?',
+            r'沒有想',
+            r'没有想',
+            # 克里斯 / 克里斯蒂娜 (及常见 ASR 误识同音/谐音，包含实测中出现的'洛陀斯'等变体)
+            r'[克科库刻客骨古顾格柯酷各铁贴帖特洛罗落乐诺][莉丽里立栗皮匹佩陀托脱妥拓德特底]?[斯诗思丝四市世][蒂迪地底]?[娜那南]?',
+            r'洛陀斯',
+            r'洛托斯',
+            r'罗德斯',
+            r'罗托斯',
+            r'诺里斯',
+            r'诺利斯',
+            r'罗利斯',
             r'骨皮丝',
             r'古皮丝',
             r'鼓勵',
@@ -120,9 +161,9 @@ class VoiceListener:
             # 助手
             r'助手',
             # 中阶常用唤醒词与自然问候
-            r'你好\s*小智',
+            r'[你链连恋您][好号豪]\s*小智',
             r'小智',
-            r'你好',
+            r'[你链连恋您][好号豪]',
             r'在吗',
             r'在不在',
             r'出来',
@@ -134,14 +175,14 @@ class VoiceListener:
                 matched = True
                 cleaned = re.sub(pat, '', cleaned, flags=re.I).strip()
 
-        cleaned = re.sub(r'^[，,。！!？?\s~～…]+', '', cleaned).strip()
-        cleaned = re.sub(r'[，,。！!？?\s~～…]+$', '', cleaned).strip()
+        cleaned = re.sub(r'^[，,。！!？?\s~～…﹑]+', '', cleaned).strip()
+        cleaned = re.sub(r'[，,。！!？?\s~～…﹑]+$', '', cleaned).strip()
         # 剥离无意义语气词
         cleaned = re.sub(r'^[啊呢吧呀哦啦嗯\s]+', '', cleaned).strip()
         cleaned = re.sub(r'[啊呢吧呀哦啦嗯\s]+$', '', cleaned).strip()
 
         # 常见打招呼与问候词视为纯唤醒
-        greetings = {"在吗", "在不在", "你好", "在嘛", "在呀", "听得到吗", "听得见吗", "出来", "出来呀"}
+        greetings = {"在吗", "在不在", "你好", "链好", "连好", "您好", "在嘛", "在呀", "听得到吗", "听得见吗", "出来", "出来呀"}
         if cleaned in greetings:
             cleaned = ""
 
@@ -159,15 +200,21 @@ class VoiceListener:
             pass
 
     def pause(self):
-        """暂停收音并硬件级关闭麦克风 (在播放扬声器时调用，彻底杜绝回声循环)"""
+        """暂停收音并硬件级关闭麦克风 (在播放扬声器或思考时调用，彻底杜绝回声循环与幽灵触发)"""
         self.is_paused = True
         try:
             self.controller.enable_mic(False)
         except Exception:
             pass
+        # 彻底清空所有音频缓冲与待处理任务，防止恢复时滞后触发
         while not self._pcm_queue.empty():
             try:
                 self._pcm_queue.get_nowait()
+            except queue.Empty:
+                break
+        while not self._utterance_queue.empty():
+            try:
+                self._utterance_queue.get_nowait()
             except queue.Empty:
                 break
 
@@ -179,8 +226,14 @@ class VoiceListener:
                 self._pcm_queue.get_nowait()
             except queue.Empty:
                 break
+        while not self._utterance_queue.empty():
+            try:
+                self._utterance_queue.get_nowait()
+            except queue.Empty:
+                break
         self._prev_x = 0.0
         self._prev_y = 0.0
+        self._resume_warmup_frames = 20 # 恢复后前 300ms 帧仅校准底噪，绝不触发 VAD，彻底杜绝扬声器尾音残留
         try:
             self.controller.enable_mic(True)
         except Exception:
@@ -203,39 +256,60 @@ class VoiceListener:
         self._prev_y = curr_y
         return filtered
 
+    def _worker_loop(self):
+        """专属单任务 ASR 消费线程：保证先进先出且不堆积，彻底消除并发排队引发的十几秒延迟与自言自语"""
+        while self.is_listening:
+            try:
+                pcm_bytes = self._utterance_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+
+            if self.is_paused:
+                continue
+
+            self._is_processing = True
+            try:
+                self._process_utterance(pcm_bytes)
+            finally:
+                self._is_processing = False
+
     def _process_utterance(self, pcm_bytes: bytes):
         """同步且单线程处理一段完整用户语音，严格遵循唤醒词与指令状态机"""
         with self._work_lock:
             try:
                 text = ""
-                # 1. 本地离线 Whisper 识别 (锁定为中文 zh，杜绝短语音时误判英文诱发 "Thank you" / "Good" 幻觉)
+                # 1. 本地离线 Whisper 极速识别 (~65ms GPU CUDA 加速，锁定中文 zh 与唤醒先验词引导)
                 if self.whisper_model is not None:
                     try:
                         audio_np = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                        t_asr_start = time.perf_counter()
                         segments, info = self.whisper_model.transcribe(
                             audio_np,
                             language="zh",
-                            beam_size=3,
-                            initial_prompt="你好，牧濑红莉栖，克里斯，助手，红莉栖，克里斯蒂娜，开灯，关灯，调光。",
+                            beam_size=1,
+                            initial_prompt="你好，牧濑红莉栖。克里斯，助手，克里斯蒂娜。开灯，关灯，彩虹模式，烈焰模式。",
+                            without_timestamps=True,
                             condition_on_previous_text=False
                         )
                         parts = [s.text.strip() for s in segments]
                         text = "".join(parts).strip()
+                        dt_asr = (time.perf_counter() - t_asr_start) * 1000.0
                     except Exception as wex:
                         print(f"[Whisper ASR 异常]: {wex}")
                         text = ""
+                        dt_asr = 0.0
 
-                # 过滤 ASR 常见的重复字符幻觉 (如 "黏黏黏黏黏", "引引引引引")
+                # 过滤 ASR 常见的重复字符幻觉 (如 "黏黏黏黏黏", "引引引引引", "铁铁铁铁")
                 if re.search(r'(.)\1{4,}', text) or re.search(r'(.{2,4})\1{3,}', text):
                     print(f"[待命监听]: 过滤到 ASR 重复字符噪声: \"{text[:30]}...\"，静默丢弃。")
                     text = ""
 
                 if not text or not text.strip():
                     if not self.is_awake:
-                        self.controller.set_board_led("listening")
+                        self._update_board_led("listening")
                     return
 
-                print(f"\n[ESP32 麦克风识别文本]: \"{text}\"")
+                print(f"\n[ESP32 麦克风识别文本]: \"{text}\" (ASR 耗时: {dt_asr:.1f}ms)")
 
                 # =========================================================
                 # 状态 A: 当前处于休眠待命状态 (未唤醒，严格等待唤醒词)
@@ -245,7 +319,7 @@ class VoiceListener:
                     if not is_wake:
                         # 【铁律】：未检测到唤醒词，绝对不作任何语音应答！指示灯严格保持微光暗红
                         print(f"[待命监听]: 未检测到唤醒词 (仅听到: '{text}')，静默丢弃，指示灯保持暗红。")
-                        self.controller.set_board_led("listening")
+                        self._update_board_led("listening")
                         return
 
                     # 命中唤醒词！
@@ -253,11 +327,11 @@ class VoiceListener:
                     self.is_awake = True
                     self.last_awake_time = time.time()
 
-                    # 情况 1: 一句话指令 (例如: "克里斯，把灯调成烈焰模式")
+                    # 情况 1: 一句话指令 (例如: "克里斯，把灯调成烈焰模式" / "克里斯蒂娜，开灯")
                     if len(stripped_cmd) >= 2:
                         print(f"[即时指令]: 提取到伴随指令 -> \"{stripped_cmd}\"")
                         # 即时指令进入思考计算状态 (青蓝微呼吸)
-                        self.controller.set_board_led("thinking")
+                        self._update_board_led("thinking")
                         self.pause()
                         try:
                             if self.callback:
@@ -266,15 +340,15 @@ class VoiceListener:
                             # 单轮指令执行完毕，自动恢复暗红待命状态
                             self.is_awake = False
                             self.resume()
-                            self.controller.set_board_led("listening")
+                            self._update_board_led("listening")
                         return
 
-                    # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖")
+                    # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖" / "你好")
                     # 给出简短唤醒应答并保持 10 秒窗口等待后续指令
                     self.pause()
                     try:
                         self.controller.play_beep()
-                        self.controller.set_board_led("speaking") # 绿色 (语音播报中)
+                        self._update_board_led("speaking") # 绿色 (语音播报中)
                         cur_dir = os.path.dirname(os.path.abspath(__file__))
                         wake_pcm = os.path.join(cur_dir, "kurisu_wake_reply.pcm")
                         if os.path.exists(wake_pcm):
@@ -288,7 +362,7 @@ class VoiceListener:
                     finally:
                         self.resume()
                         self.last_awake_time = time.time()
-                        self.controller.set_board_led("active") # 青蓝微呼吸，提示已唤醒，正在等待指令
+                        self._update_board_led("active") # 青蓝微呼吸，提示已唤醒，正在等待指令
                         print("[等待指令]: 红莉栖已就绪，请在 10 秒内说出指令...")
                     return
 
@@ -300,9 +374,16 @@ class VoiceListener:
                     is_wake, stripped_cmd = self._check_wake_word(text)
                     cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
 
+                    # 严格过滤无意义语气助词、单字杂音、环境底噪幻觉 (防止用户不说话时杂音触发自言自语)
+                    clean_check = re.sub(r'^[啊呢吧呀哦啦嗯哈哇诶欸在好的对嗯哼\s，。！？、…~]+$', '', cmd_to_exec).strip()
+                    if len(clean_check) < 2:
+                        print(f"[等待指令]: 过滤杂音/短叹词 (仅听到: '{cmd_to_exec}')，继续等待有效语音指令...")
+                        self._update_board_led("active")
+                        return
+
                     print(f"[执行指令]: \"{cmd_to_exec}\"")
                     # 进入大模型思考运算状态 (青蓝微呼吸)
-                    self.controller.set_board_led("thinking")
+                    self._update_board_led("thinking")
                     self.pause()
                     try:
                         if self.callback:
@@ -311,12 +392,12 @@ class VoiceListener:
                         # 指令交互完毕，退出唤醒状态，回到暗红待命监听
                         self.is_awake = False
                         self.resume()
-                        self.controller.set_board_led("listening")
+                        self._update_board_led("listening")
                         print("[交互完毕]: 系统已自动退回微光暗红待命状态，再次呼唤唤醒词即可开启新对话。\n")
 
             except Exception as e:
                 print(f"[VoiceListener 处理异常]: {e}")
-                self.controller.set_board_led("listening")
+                self._update_board_led("listening")
 
     def _watchdog_loop(self):
         """后台看门狗：唤醒后若 10 秒内未收到具体指令，自动退回暗红待命状态"""
@@ -326,7 +407,7 @@ class VoiceListener:
                 if time.time() - self.last_awake_time > self.awake_timeout:
                     print("\n[待命超时]: 超过 10 秒未输入指令，自动退回暗红待命状态。")
                     self.is_awake = False
-                    self.controller.set_board_led("listening")
+                    self._update_board_led("listening")
 
     def _process_loop(self):
         """板载麦克风实时音频流处理与 VAD 端点检测"""
@@ -370,12 +451,18 @@ class VoiceListener:
 
             ambient_energy = 0.98 * ambient_energy + 0.02 * rms
             
-            # 双门限迟滞比较器 (Hysteresis VAD):
-            # 对齐中阶声学灵敏度：正常人声说话能量集中在 6900~17000 RMS，安静底噪 <3800 RMS。
-            # 起始阈值: 5000 (连续 2 帧 >30ms 确认人声起始，灵敏拾音且杜绝单点杂音脉冲)
-            # 持续阈值: 2600 (平滑连接字词间微小气口停顿)
-            start_threshold = max(5000.0, ambient_energy * 2.5)
-            continue_threshold = max(2600.0, ambient_energy * 1.5)
+            # 恢复期丢弃扬声器残留尾音与声学混响
+            if self._resume_warmup_frames > 0:
+                self._resume_warmup_frames -= 1
+                preroll_chunks.clear()
+                ambient_energy = 0.9 * ambient_energy + 0.1 * rms
+                continue
+
+            # 动态自适应双门限 VAD (基于实测 INMP441 真实声学环境校准: 环境噪音峰值 ~2550 RMS, 人声谈话 3200~8000 RMS)
+            # 起始阈值: max(3200.0, ambient_energy * 2.2)，连续 2 帧 (>30ms) 触发，彻底杜绝待命时红灯闪烁与环境虚假拾音
+            # 持续阈值: max(2300.0, ambient_energy * 1.5)，说话停顿后 240ms 内迅速收敛切断
+            start_threshold = max(3200.0, ambient_energy * 2.2)
+            continue_threshold = max(2300.0, ambient_energy * 1.5)
 
             if not is_speaking:
                 preroll_chunks.append(filtered_samples)
@@ -388,43 +475,59 @@ class VoiceListener:
                         speech_trigger_count = 0
                         speech_chunks = list(preroll_chunks)
                         speech_chunks.append(filtered_samples)
-                        self.controller.set_board_led("hearing") # 鲜亮红光 (检测到人声说话)
+                        self._update_board_led("hearing") # 鲜亮红光 (状态去重，绝不重复轰炸串口)
                         tag = "【等待指令中】" if self.is_awake else "【待命·等待唤醒词】"
                         print(f"\n[ESP32 麦克风: {tag} 拾音中 (RMS: {rms:.0f})...]", end="", flush=True)
                 else:
                     speech_trigger_count = 0
             else:
                 speech_chunks.append(filtered_samples)
-                if rms < continue_threshold:
+                
+                # 最大拾音时长硬截断：唤醒等待期最多 1.5 秒 (100帧)，等待指令期最多 3.0 秒 (200帧)
+                max_speech_frames = 200 if self.is_awake else 100
+                if len(speech_chunks) >= max_speech_frames:
+                    silent_count = 30 # 强制立即切断并交付，杜绝长尾拖延几秒
+                elif rms < continue_threshold:
                     silent_count += 1
-                    # 静音容忍帧数: 待命唤醒 24 帧 (~360ms)，等待指令 28 帧 (~420ms)
-                    silent_limit = 28 if self.is_awake else 24
-                    if silent_count >= silent_limit:
-                        is_speaking = False
-                        silent_count = 0
-                        speech_trigger_count = 0
-                        # 说话结束：
-                        # 若当前未唤醒 (待命状态)，指示灯立刻退回【微光暗红】(listening)，绝不闪现浅青蓝！
-                        # 仅当已处于唤醒中，才切换为青蓝流光 (thinking) 提示大模型正在运算
-                        if not self.is_awake:
-                            self.controller.set_board_led("listening")
-                        else:
-                            self.controller.set_board_led("thinking")
-
-                        total_samples = sum(len(c) for c in speech_chunks)
-                        max_chunk_rms = max(float(np.sqrt(np.mean(c**2))) for c in speech_chunks) if speech_chunks else 0.0
-
-                        # 要求至少 0.35 秒语音且峰值能量真实有效 (>5000)，彻底过滤日常环境白噪音
-                        if total_samples >= 16000 * 0.35 and max_chunk_rms >= 5000.0:
-                            full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
-                            # 异步分发至工作线程，确保 _process_loop 不被 ASR 推理耗时阻塞
-                            threading.Thread(target=self._process_utterance, args=(full_pcm,), daemon=True).start()
-                        else:
-                            state_led = "active" if self.is_awake else "listening"
-                            self.controller.set_board_led(state_led)
-                        speech_chunks.clear()
                 else:
                     silent_count = 0
+
+                # 静音容忍帧数: 待命唤醒 16 帧 (~240ms 极速瞬间触发)，等待指令 24 帧 (~360ms)
+                silent_limit = 24 if self.is_awake else 16
+                if silent_count >= silent_limit:
+                    is_speaking = False
+                    silent_count = 0
+                    speech_trigger_count = 0
+                    # 说话结束：
+                    # 若当前未唤醒 (待命状态)，指示灯立刻退回【微光暗红】(listening)，绝不闪现浅青蓝！
+                    # 仅当已处于唤醒中，才切换为青蓝流光 (thinking) 提示大模型正在运算
+                    if not self.is_awake:
+                        self._update_board_led("listening")
+                    else:
+                        self._update_board_led("thinking")
+
+                    total_samples = sum(len(c) for c in speech_chunks)
+                    max_chunk_rms = max(float(np.sqrt(np.mean(c**2))) for c in speech_chunks) if speech_chunks else 0.0
+
+                    # 要求至少 0.20 秒语音且峰值能量真实有效 (>3300)，彻底过滤日常环境底噪
+                    peak_threshold = max(3300.0, ambient_energy * 2.2)
+                    if total_samples >= 16000 * 0.20 and max_chunk_rms >= peak_threshold:
+                        full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
+                        # 核心改进：非阻塞单任务消费队列，抛弃旧有堆积，杜绝排队滞后十几秒！
+                        if not self.is_paused and not self._is_processing:
+                            while not self._utterance_queue.empty():
+                                try:
+                                    self._utterance_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                            try:
+                                self._utterance_queue.put_nowait(full_pcm)
+                            except queue.Full:
+                                pass
+                    else:
+                        state_led = "active" if self.is_awake else "listening"
+                        self._update_board_led(state_led)
+                    speech_chunks.clear()
 
     def start(self):
         if self.is_listening:
@@ -432,14 +535,17 @@ class VoiceListener:
         self.is_listening = True
         self.is_paused = False
         self.is_awake = False
+        self._is_processing = False
 
         self.controller.on_mic_data = self._on_board_pcm
         if self.controller.is_connected:
             self.controller.enable_mic(True)
-            self.controller.set_board_led("listening")
+            self._update_board_led("listening")
 
         self._process_thread = threading.Thread(target=self._process_loop, daemon=True)
         self._process_thread.start()
+        self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self._worker_thread.start()
         self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
         self._watchdog_thread.start()
 
@@ -448,7 +554,7 @@ class VoiceListener:
         self.pause()
         if self.controller.is_connected:
             self.controller.enable_mic(False)
-            self.controller.set_board_led("green")
+            self._update_board_led("green")
 
 _voice_listener_instance: Optional[VoiceListener] = None
 

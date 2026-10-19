@@ -60,9 +60,6 @@ def main():
         print(f"==================================================")
 
         try:
-            # 切换板载指示灯为青蓝微呼吸 (思考计算中)
-            controller.set_board_led("thinking")
-
             t0 = time.time()
             reply = agent.chat(speech_text)
             print(f"-> 思考耗时: {time.time()-t0:.2f}s")
@@ -70,9 +67,6 @@ def main():
 
         except Exception as e:
             print(f"❌ [对话处理异常]: {e}")
-        finally:
-            # 交互完毕，板载 LED 回到微光暗红待命监听；不强行覆盖用户指定的灯光效果！
-            controller.set_board_led("listening")
 
     listener = get_voice_listener(on_voice_command)
 
