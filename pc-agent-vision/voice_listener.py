@@ -72,40 +72,60 @@ class VoiceListener:
         """
         严格检验语音文本是否包含牧濑红莉栖专属唤醒词:
         支持:
-          - 日语: Makise Kurisu, Kurisu, まきせくりす, くりす, クリス, マキセ
-          - 中文: 牧濑红莉栖, 红莉栖, 牧濑, 克里斯, 克里斯蒂娜, 助手, 栗子
+          - 英文/罗曼音/Whisper常见音标: Makise Kurisu, Kurisu, Christina, Chris, Kris, Kolies, Kolis, Koli, Curis, Cris, Kelisi
+          - 日语假名: まきせくりす, くりす, クリス, マキセ
+          - 中文原称与同音容错: 牧濑红莉栖, 红莉栖, 牧濑, 木濑, 暴力(短音高频同音)
+          - 克里斯/克里斯蒂娜及ASR谐音: 克里斯, 柯里斯, 科里斯, 库里斯, 克莉丝, 骨皮丝, 古皮丝, 鼓勵, 鼓励, 苦力苏, 栗子
+          - 角色别名: 助手, 牧濑助手, 克里斯助手
+          - 中阶小智生态兼容与自然问候: 你好小智, 小智, 你好, 在吗, 在不在, 出来
         返回: (is_wake, stripped_command_text)
         """
         t = text.strip()
         wake_patterns = [
-            r'makise\s*kurisu',
-            r'kurisu',
-            r'makise',
-            r'christina',
-            r'kris',
-            r'chris',
+            # 英文、拉丁字母与 Whisper 常见音素拼写
+            r'\bmakise\s*kurisu\b',
+            r'\bkurisu\b',
+            r'\bmakise\b',
+            r'\bchristina\b',
+            r'\bkris\b',
+            r'\bchris\b',
+            r'\bkolie[sz]?\b',
+            r'\bkolis\b',
+            r'\bkoli\b',
+            r'\bcuris\b',
+            r'\bcurice\b',
+            r'\bcris\b',
+            r'\bcriss\b',
+            r'\bkelisi\b',
+            # 日文假名
             r'まきせ\s*くりす',
             r'くりす',
             r'クリス',
             r'マキセ',
-            # 中文全称与多音字、同音字容错 (牧濑红莉栖)
-            r'[牧木目穆][濑赖赛莱拉来奶][红洪虹][莉利丽立力栗茜][栖茜夕溪七期齐]',
-            r'[牧木目穆][濑赖赛莱拉来奶]',
-            r'[红洪虹][莉利丽立力栗茜][栖茜夕溪七期齐]',
-            # 克里斯 / 克里斯蒂娜 (增加骨皮丝、古皮丝、柯里斯等常见轻量 ASR 谐音)
-            r'[克科库刻客骨古顾格柯酷][莉丽里立栗皮匹佩][斯诗思丝四][蒂迪地][娜那]',
-            r'[克科库刻客骨古顾格柯酷][莉丽里立栗皮匹佩][斯诗思丝四]',
+            # 牧濑红莉栖 (全称、简称、同音字)
+            r'[牧木目穆莫][濑赖赛莱拉来奶耐][红洪虹烘][莉利丽立力栗茜荔][栖茜夕溪七期齐气]?',
+            r'[牧木目穆莫][濑赖赛莱拉来奶耐]',
+            r'[红洪虹烘][莉利丽立力栗茜荔][栖茜夕溪七期齐气]?',
+            r'暴力',
+            # 克里斯 / 克里斯蒂娜 (及常见 ASR 误识同音/谐音)
+            r'[克科库刻客骨古顾格柯酷各][莉丽里立栗皮匹佩利丽][斯诗思丝四市世][蒂迪地底]?[娜那南]?',
             r'骨皮丝',
             r'古皮丝',
-            r'克里斯蒂娜',
-            r'克里斯',
-            r'库里斯',
-            r'克莉丝',
+            r'鼓勵',
+            r'鼓励',
             r'马奇赛',
             r'马基塞',
             r'苦力苏',
             r'栗子',
-            r'助手' # 叫她助手会气愤回怼“都说了我不是助手！”
+            # 助手
+            r'助手',
+            # 中阶常用唤醒词与自然问候
+            r'你好\s*小智',
+            r'小智',
+            r'你好',
+            r'在吗',
+            r'在不在',
+            r'出来',
         ]
         matched = False
         cleaned = t
@@ -113,6 +133,7 @@ class VoiceListener:
             if re.search(pat, cleaned, flags=re.I):
                 matched = True
                 cleaned = re.sub(pat, '', cleaned, flags=re.I).strip()
+
         cleaned = re.sub(r'^[，,。！!？?\s~～…]+', '', cleaned).strip()
         cleaned = re.sub(r'[，,。！!？?\s~～…]+$', '', cleaned).strip()
         # 剥离无意义语气词
@@ -194,8 +215,8 @@ class VoiceListener:
                         segments, info = self.whisper_model.transcribe(
                             audio_np,
                             language="zh",
-                            beam_size=1,
-                            initial_prompt=None,
+                            beam_size=3,
+                            initial_prompt="你好，牧濑红莉栖，克里斯，助手，红莉栖，克里斯蒂娜，开灯，关灯，调光。",
                             condition_on_previous_text=False
                         )
                         parts = [s.text.strip() for s in segments]
@@ -350,18 +371,18 @@ class VoiceListener:
             ambient_energy = 0.98 * ambient_energy + 0.02 * rms
             
             # 双门限迟滞比较器 (Hysteresis VAD):
-            # 实测安静状态下麦克风供电与底噪偶尔脉冲可达 3000~4900 RMS，人声正常说话在 7500~20000 RMS。
-            # 起始阈值: 设定为 6200 (并连续 3 帧)，彻底杜绝未说话时底噪引发的忽亮忽暗！
-            # 持续阈值: 3500 (防止人声说话字词间停顿断流)
-            start_threshold = max(6200.0, ambient_energy * 3.2)
-            continue_threshold = max(3500.0, ambient_energy * 1.6)
+            # 对齐中阶声学灵敏度：正常人声说话能量集中在 6900~17000 RMS，安静底噪 <3800 RMS。
+            # 起始阈值: 5000 (连续 2 帧 >30ms 确认人声起始，灵敏拾音且杜绝单点杂音脉冲)
+            # 持续阈值: 2600 (平滑连接字词间微小气口停顿)
+            start_threshold = max(5000.0, ambient_energy * 2.5)
+            continue_threshold = max(2600.0, ambient_energy * 1.5)
 
             if not is_speaking:
                 preroll_chunks.append(filtered_samples)
                 if rms > start_threshold:
                     speech_trigger_count += 1
-                    # 连续 3 帧 (>45ms) 超过阈值才确认为人声起始，杜绝单点杂音脉冲
-                    if speech_trigger_count >= 3:
+                    # 连续 2 帧 (>30ms) 超过阈值确认为人声起始，杜绝单点杂音脉冲
+                    if speech_trigger_count >= 2:
                         is_speaking = True
                         silent_count = 0
                         speech_trigger_count = 0
@@ -376,8 +397,8 @@ class VoiceListener:
                 speech_chunks.append(filtered_samples)
                 if rms < continue_threshold:
                     silent_count += 1
-                    # 静音容忍帧数: 待命唤醒 26 帧 (~390ms)，等待指令 32 帧 (~480ms)
-                    silent_limit = 32 if self.is_awake else 26
+                    # 静音容忍帧数: 待命唤醒 24 帧 (~360ms)，等待指令 28 帧 (~420ms)
+                    silent_limit = 28 if self.is_awake else 24
                     if silent_count >= silent_limit:
                         is_speaking = False
                         silent_count = 0
@@ -393,8 +414,8 @@ class VoiceListener:
                         total_samples = sum(len(c) for c in speech_chunks)
                         max_chunk_rms = max(float(np.sqrt(np.mean(c**2))) for c in speech_chunks) if speech_chunks else 0.0
 
-                        # 要求至少 0.45 秒语音且峰值能量真实有效 (>6200)，彻底过滤日常环境白噪音
-                        if total_samples >= 16000 * 0.45 and max_chunk_rms >= 6200.0:
+                        # 要求至少 0.35 秒语音且峰值能量真实有效 (>5000)，彻底过滤日常环境白噪音
+                        if total_samples >= 16000 * 0.35 and max_chunk_rms >= 5000.0:
                             full_pcm = np.clip(np.concatenate(speech_chunks), -32768, 32767).astype(np.int16).tobytes()
                             # 异步分发至工作线程，确保 _process_loop 不被 ASR 推理耗时阻塞
                             threading.Thread(target=self._process_utterance, args=(full_pcm,), daemon=True).start()
