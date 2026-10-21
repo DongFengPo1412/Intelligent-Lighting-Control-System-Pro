@@ -8,6 +8,7 @@ idf_component_register(
         "display/display_manager.cc"
         "display/board_led.cc"
         "protocol/command_dispatcher.cc"
+        "protocol/wifi_manager.cc"
         "audio/audio_hal.cc"
     INCLUDE_DIRS
         "."
@@ -22,4 +23,9 @@ idf_component_register(
         json
         esp_driver_usb_serial_jtag
         esp_ringbuf
+        esp_wifi
+        esp_event
+        esp_netif
+        nvs_flash
+        lwip
     )

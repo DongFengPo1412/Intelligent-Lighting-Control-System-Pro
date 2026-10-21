@@ -5,6 +5,9 @@
 #include <driver/gpio.h>
 #include <led_strip.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
 enum class BoardLedMode {
     OFF = 0,
     BREATHE_PAIRING = 1,  // 上电配对搜寻: 幽蓝呼吸律动 (中阶 kDeviceStateWifiConfiguring/Starting)
@@ -34,6 +37,7 @@ private:
     BoardLedMode current_mode_;
     uint32_t step_count_;
     bool is_initialized_;
+    SemaphoreHandle_t mutex_;
 };
 
 #endif // BOARD_LED_H

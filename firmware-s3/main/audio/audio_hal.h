@@ -4,6 +4,8 @@
 #include <driver/gpio.h>
 #include <driver/i2s_std.h>
 #include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <cstdint>
 #include <cstddef>
 
@@ -63,6 +65,8 @@ private:
     i2s_chan_handle_t tx_chan_; // MAX98357A 输出通道
     i2s_chan_handle_t rx_chan_; // INMP441 输入通道
     esp_timer_handle_t spk_power_timer_; // 扬声器自动休眠定时器
+    SemaphoreHandle_t playback_mutex_;
+    int32_t tx_buffer_[480]; // Protected by playback_mutex_; never on a task's stack.
     int output_volume_;
     int64_t volume_factor_;
     bool initialized_;

@@ -83,7 +83,7 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
     BaseType_t ret = xTaskCreatePinnedToCore(
         AudioPlayTaskTrampoline,
         "audio_play_task",
-        4096,
+        8192,
         this,
         priority > 1 ? priority : 2,
         &audio_play_task_handle_,
@@ -144,25 +144,22 @@ void CommandDispatcher::MicTaskLoop()
     packet[0] = 0x55;
     packet[1] = 0xAA;
 
-    int err_cnt = 0;
     while (is_running_) {
-        if (mic_streaming_) {
-            size_t samples_read = 0;
-            esp_err_t ret = AudioHAL::GetInstance().ReadMic(mic_buf, chunk_samples, &samples_read, 200);
-            if (ret == ESP_OK && samples_read > 0) {
-                uint16_t payload_bytes = (uint16_t)(samples_read * sizeof(int16_t));
-                packet[2] = (payload_bytes >> 8) & 0xFF;
-                packet[3] = payload_bytes & 0xFF;
-                memcpy(&packet[4], mic_buf, payload_bytes);
-                usb_serial_jtag_write_bytes(packet, 4 + payload_bytes, pdMS_TO_TICKS(50));
-            } else {
-                if (++err_cnt % 50 == 1) {
-                    ESP_LOGW(TAG, "ReadMic failed: %s, read=%u", esp_err_to_name(ret), (unsigned)samples_read);
-                }
-                vTaskDelay(pdMS_TO_TICKS(20));
-            }
-        } else {
+        if (!mic_streaming_) {
             vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        size_t samples_read = 0;
+        esp_err_t ret = AudioHAL::GetInstance().ReadMic(mic_buf, chunk_samples, &samples_read, 200);
+        if (ret == ESP_OK && samples_read > 0) {
+            uint16_t payload_bytes = (uint16_t)(samples_read * sizeof(int16_t));
+            packet[2] = (payload_bytes >> 8) & 0xFF;
+            packet[3] = payload_bytes & 0xFF;
+            memcpy(&packet[4], mic_buf, payload_bytes);
+            usb_serial_jtag_write_bytes(packet, 4 + payload_bytes, pdMS_TO_TICKS(50));
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(15));
         }
     }
     vTaskDelete(NULL);
@@ -195,7 +192,11 @@ void CommandDispatcher::AudioPlayTaskLoop()
 
         if (item && item_size > 0) {
             size_t sample_count = item_size / sizeof(int16_t);
-            AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)item, sample_count);
+            if (AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)item, sample_count) == ESP_OK) {
+                audio_played_.fetch_add(sample_count);
+            } else {
+                audio_errors_.fetch_add(1);
+            }
             vRingbufferReturnItem(audio_ring_buf_, (void*)item);
         } else {
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -293,7 +294,10 @@ void CommandDispatcher::SerialTaskLoop()
                         i += (take - 1); // for-loop 自增 i++
                         if (audio_received_len >= audio_expected_len) {
                             if (audio_ring_buf_) {
-                                xRingbufferSend(audio_ring_buf_, audio_payload, audio_received_len, pdMS_TO_TICKS(20));
+                                audio_received_.fetch_add(audio_received_len / 2);
+                                if (xRingbufferSend(audio_ring_buf_, audio_payload, audio_received_len, pdMS_TO_TICKS(100)) != pdTRUE) {
+                                    audio_dropped_.fetch_add(audio_received_len / 2);
+                                }
                             }
                             rx_state = STATE_TEXT;
                         }
@@ -321,41 +325,42 @@ void CommandDispatcher::SendStatus()
     SendReply(status_buf);
 }
 
-void CommandDispatcher::ProcessLine(const char* line)
+bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
 {
-    if (!line || strlen(line) == 0) return;
+    if (!line || strlen(line) == 0) return false;
 
     // 去除前导空白
     while (*line == ' ' || *line == '\t') line++;
-    if (*line == '\0') return;
+    if (*line == '\0') return false;
 
     ESP_LOGI(TAG, ">>> [收到外部指令]: %s", line);
 
     // 1. 旧版音乐频谱流 (兼容中阶 "f,beat,b0,b1...")
     if (strncmp(line, "f,", 2) == 0) {
         DisplayManager::GetInstance().FeedSpectrumSerial(line);
-        return;
+        return true;
     }
 
     // 2. JSON 格式指令
     if (*line == '{') {
-        if (ProcessJsonCommand(line)) {
-            SendReply("{\"status\":\"ok\"}\r\n");
-            return;
+        if (ProcessJsonCommand(line, reply_serial)) {
+            if (reply_serial) SendReply("{\"status\":\"ok\"}\r\n");
+            return true;
         }
     }
 
     // 3. 极速纯文本短语指令
-    if (ProcessTextCommand(line)) {
-        SendReply("{\"status\":\"ok\"}\r\n");
-        return;
+    if (*line != '{' && ProcessTextCommand(line, reply_serial)) {
+        if (reply_serial) SendReply("{\"status\":\"ok\"}\r\n");
+        return true;
     }
 
     ESP_LOGW(TAG, "Unrecognized command: %s", line);
-    SendReply("{\"status\":\"error\",\"msg\":\"unknown_command\"}\r\n");
+    if (reply_serial) SendReply("{\"status\":\"error\",\"msg\":\"unknown_command\"}\r\n");
+    return false;
 }
 
-bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
+bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_serial)
 {
     cJSON* root = cJSON_Parse(json_str);
     if (!root) {
@@ -375,7 +380,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
     // {"cmd":"countdown", "seconds":60}
     if (strcasecmp(cmd, "countdown") == 0) {
         cJSON* sec_item = cJSON_GetObjectItem(root, "seconds");
-        if (sec_item && cJSON_IsNumber(sec_item)) {
+        if (cJSON_IsNumber(sec_item) && sec_item->valuedouble == sec_item->valueint && sec_item->valueint > 0 && sec_item->valueint <= 86400) {
             dm.StartCountdown((uint32_t)sec_item->valueint);
             cJSON_Delete(root);
             return true;
@@ -390,7 +395,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
     // {"cmd":"mode", "val":4}
     else if (strcasecmp(cmd, "mode") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
-        if (val_item && cJSON_IsNumber(val_item)) {
+        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 25 && val_item->valueint != 18) {
             dm.SetMode(val_item->valueint);
             cJSON_Delete(root);
             return true;
@@ -399,7 +404,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
     // {"cmd":"brightness", "val":20}
     else if (strcasecmp(cmd, "brightness") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
-        if (val_item && cJSON_IsNumber(val_item)) {
+        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 60) {
             dm.SetBrightness((uint8_t)val_item->valueint);
             cJSON_Delete(root);
             return true;
@@ -407,21 +412,21 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
     }
     // {"cmd":"status"}
     else if (strcasecmp(cmd, "status") == 0) {
-        SendStatus();
+        if (reply_serial) SendStatus();
         cJSON_Delete(root);
         return true;
     }
     // {"cmd":"beep"}
     else if (strcasecmp(cmd, "beep") == 0) {
-        AudioHAL::GetInstance().PlayBeep(1000, 200);
+        bool ok = AudioHAL::GetInstance().PlayBeep(1000, 200) == ESP_OK;
         cJSON_Delete(root);
-        return true;
+        return ok;
     }
     // {"cmd":"volume", "val":70}
     else if (strcasecmp(cmd, "volume") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
         if (!val_item) val_item = cJSON_GetObjectItem(root, "volume");
-        if (val_item && cJSON_IsNumber(val_item)) {
+        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 100) {
             AudioHAL::GetInstance().SetVolume(val_item->valueint);
             cJSON_Delete(root);
             return true;
@@ -447,6 +452,9 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
                 BoardLed::GetInstance().SetMode(BoardLedMode::ACTIVE_INTERACT);
             } else if (strcasecmp(m, "off") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::OFF);
+            } else {
+                cJSON_Delete(root);
+                return false;
             }
             cJSON_Delete(root);
             return true;
@@ -474,7 +482,10 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
             if (strcasecmp(name_item->valuestring, "snake") == 0) {
                 cJSON* dx = cJSON_GetObjectItem(root, "dx");
                 cJSON* dy = cJSON_GetObjectItem(root, "dy");
-                if (dx && dy) {
+                if (cJSON_IsNumber(dx) && cJSON_IsNumber(dy) &&
+                    dx->valuedouble == dx->valueint && dy->valuedouble == dy->valueint &&
+                    ((dx->valueint == 0 && (dy->valueint == -1 || dy->valueint == 1)) ||
+                     (dy->valueint == 0 && (dx->valueint == -1 || dx->valueint == 1)))) {
                     dm.SnakeMove(dx->valueint, dy->valueint);
                     cJSON_Delete(root);
                     return true;
@@ -486,6 +497,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
                     else if (strcasecmp(act->valuestring, "right") == 0) dm.TetrisMove(1);
                     else if (strcasecmp(act->valuestring, "rot") == 0) dm.TetrisRotate();
                     else if (strcasecmp(act->valuestring, "drop") == 0) dm.TetrisDrop();
+                    else { cJSON_Delete(root); return false; }
                     cJSON_Delete(root);
                     return true;
                 }
@@ -497,7 +509,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str)
     return false;
 }
 
-bool CommandDispatcher::ProcessTextCommand(const char* text_str)
+bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_serial)
 {
     DisplayManager& dm = DisplayManager::GetInstance();
 
@@ -505,6 +517,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     int seconds = 0;
     if (sscanf(text_str, "countdown %d", &seconds) == 1 ||
         sscanf(text_str, "cd %d", &seconds) == 1) {
+        if (seconds <= 0 || seconds > 86400) return false;
         dm.StartCountdown((uint32_t)seconds);
         return true;
     }
@@ -516,6 +529,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     // 2. 模式数字切换: "mode 23"
     int mode_num = -1;
     if (sscanf(text_str, "mode %d", &mode_num) == 1) {
+        if (mode_num < 0 || mode_num > 25 || mode_num == 18) return false;
         dm.SetMode(mode_num);
         return true;
     }
@@ -539,7 +553,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     if (strcasecmp(text_str, "tetris") == 0)        { dm.SetMode(DisplayMode::TETRIS_GAME); return true; }
     if (strcasecmp(text_str, "fire") == 0)          { dm.SetMode(DisplayMode::CYBER_FIRE); return true; }
     if (strcasecmp(text_str, "matrix") == 0)        { dm.SetMode(DisplayMode::MATRIX_RAIN_PRO); return true; }
-    if (strcasecmp(text_str, "beep") == 0)          { AudioHAL::GetInstance().PlayBeep(1000, 200); return true; }
+    if (strcasecmp(text_str, "beep") == 0)          { return AudioHAL::GetInstance().PlayBeep(1000, 200) == ESP_OK; }
     if (strcasecmp(text_str, "mic on") == 0)        { SetMicStreaming(true); return true; }
     if (strcasecmp(text_str, "mic off") == 0)       { SetMicStreaming(false); return true; }
     if (strcasecmp(text_str, "board_led green") == 0 || strcasecmp(text_str, "led green") == 0 || strcasecmp(text_str, "led speaking") == 0) {
@@ -574,6 +588,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     // 4. 亮度微调: "brightness 25" / "b 25"
     int br = 0;
     if (sscanf(text_str, "brightness %d", &br) == 1 || sscanf(text_str, "b %d", &br) == 1) {
+        if (br < 0 || br > 60) return false;
         dm.SetBrightness((uint8_t)br);
         return true;
     }
@@ -583,13 +598,14 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str)
     // 4.1 音量微调: "volume 70" / "v 70"
     int vol = 0;
     if (sscanf(text_str, "volume %d", &vol) == 1 || sscanf(text_str, "v %d", &vol) == 1) {
+        if (vol < 0 || vol > 100) return false;
         AudioHAL::GetInstance().SetVolume(vol);
         return true;
     }
 
     // 5. 状态查询: "status"
     if (strcasecmp(text_str, "status") == 0) {
-        SendStatus();
+        if (reply_serial) SendStatus();
         return true;
     }
 

@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ff3b30">
     <title>未来道具研究所 · 牧濑红莉栖具身交互中枢</title>
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="assets/icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -203,8 +207,13 @@
                     <button class="mode-item" onclick="setMode(13)">😐 平静表情</button>
                     <button class="mode-item" onclick="setMode(14)">👁️ 灵动凝视</button>
                     <button class="mode-item" onclick="setMode(15)">🎵 音乐律动</button>
+                    <button class="mode-item" onclick="setMode(16)">🤖 唤醒反馈</button>
+                    <button class="mode-item" onclick="setMode(17)">👩‍🔬 红莉栖桌宠</button>
+                    <button class="mode-item" onclick="setMode(19)">🐍 贪吃蛇</button>
+                    <button class="mode-item" onclick="setMode(21)">🧱 俄罗斯方块</button>
                     <button class="mode-item" onclick="setMode(23)">🔥 赛博烈焰</button>
                     <button class="mode-item" onclick="setMode(24)">💻 代码雨Pro</button>
+                    <button class="mode-item" onclick="setMode(25)">⏳ 物理沙漏</button>
                     <button class="mode-item mode-off" onclick="setMode(0)">⬛ 关闭光场</button>
                 </div>
             </div>
@@ -288,6 +297,18 @@
                     <div class="spec-row">
                         <span class="spec-k">本地访问 IP</span>
                         <span class="spec-v" id="sysIp">http://192.168.0.181:8080</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-k">全时 WiFi 热点 (SoftAP)</span>
+                        <span class="spec-v" style="color: #00ff88; font-weight: 700;">Kurisu-Matrix-AP (192.168.4.1)</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-k">局域网 STA IP (热点)</span>
+                        <span class="spec-v" id="wifiStaIp" style="color: #00d2ff;">搜寻中...</span>
+                    </div>
+                    <div class="spec-row">
+                        <span class="spec-k">通信模式保障</span>
+                        <span class="spec-v" id="commStatus" style="color: #ffaa00;">双通道自适应 (USB + 全时 WiFi)</span>
                     </div>
                     <div class="spec-row">
                         <span class="spec-k">声学驱动</span>

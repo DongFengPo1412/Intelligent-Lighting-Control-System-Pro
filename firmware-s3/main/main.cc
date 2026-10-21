@@ -6,6 +6,12 @@
 #include "board_led.h"
 #include "command_dispatcher.h"
 #include "audio_hal.h"
+#include "wifi_manager.h"
+#if __has_include("wifi_config.private.h")
+#include "wifi_config.private.h"
+#else
+#include "wifi_config.example.h"
+#endif
 
 static const char* TAG = "MainApp";
 
@@ -17,7 +23,7 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, ">>> [声学外设]: I2S INMP441 麦克风 (GPIO 4,5,6) + MAX98357A 扬声器 (GPIO 7,15,16)");
     ESP_LOGI(TAG, ">>> [光场外设]: GPIO 17 硬件 RMT 直驱 16x16 矩阵屏 (FastLED 线性色阶)");
     ESP_LOGI(TAG, ">>> [板载指示]: GPIO 48 硬件 RMT 板载 RGB 指示灯 (开机搜寻呼吸 / 配对常亮绿)");
-    ESP_LOGI(TAG, ">>> [协议支持]: 纯文本极速短语 (countdown/mode/beep/...) + 工业级 cJSON + 频谱流");
+    ESP_LOGI(TAG, ">>> [通信架构]: USB-Serial-JTAG 物理串口 + 局域网 WiFi UDP 8888 双通道自适应");
     ESP_LOGI(TAG, "===============================================================");
 
     // 1. 初始化显示引擎 (挂载至 GPIO 17，优先获取 RMT Channel 0 与硬件 GDMA)
@@ -50,7 +56,12 @@ extern "C" void app_main(void)
     CommandDispatcher& dispatcher = CommandDispatcher::GetInstance();
     ESP_ERROR_CHECK(dispatcher.StartSerialTask(4, 0));
 
-    // 6. 初始默认展示：牧濑红莉栖桌宠伴侣 (同时保留模式 14 经典圆形变脸特效)
+    // 6. 启动全时无线 WiFi APSTA 双模共存与 UDP 8888 监听 (脱离 USB 数据线，外部电源供电依然100%互联！)
+    WifiManager& wifi = WifiManager::GetInstance();
+    wifi.InitAndConnect(KURISU_WIFI_STA_SSID, KURISU_WIFI_STA_PASSWORD,
+                        KURISU_WIFI_AP_SSID, KURISU_WIFI_AP_PASSWORD, 8888);
+
+    // 7. 初始默认展示：牧濑红莉栖桌宠伴侣 (同时保留模式 14 经典圆形变脸特效)
     display.SetMode(DisplayMode::KURISU_DESK_PET);
 
     ESP_LOGI(TAG, ">>> [中枢就绪]: 已就绪监听串口指令！可用命令示例：");

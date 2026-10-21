@@ -57,4 +57,9 @@ Thumbs.db
 *config.private.*
 secrets.json
 .env.local
+pc-agent-vision/.device_state.json
 
+pc-agent-vision/.voice_cache/
+pc-agent-vision/.voice_diagnostics/
+pc-agent-vision/.runtime_deps/
+models/wake_kws/

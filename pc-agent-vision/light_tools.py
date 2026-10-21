@@ -63,9 +63,10 @@ LIGHT_TOOL_DEFINITIONS = [
                         "type": "string",
                         "enum": [
                             "fire", "matrix", "rainbow", "aurora", 
-                            "meteor", "stars", "ripple", "off"
+                            "meteor", "stars", "ripple", "cycle", "rain",
+                            "red", "blue", "green", "off"
                         ],
-                        "description": "特效主题名称: fire(赛博烈焰/生气或警告), matrix(黑客代码雨/运算状态), rainbow(彩虹波浪/愉悦开朗), aurora(极光呼吸/宁静温和), meteor(流星穿梭), stars(星空闪烁), ripple(中心水波扩散), off(关闭灯板)"
+                        "description": "特效主题名称: fire(赛博烈焰/生气或警告), matrix(黑客代码雨/运算状态), rainbow(彩虹波浪/愉悦开朗), aurora(极光呼吸/宁静温和), meteor(流星穿梭), stars(星空闪烁), ripple(中心水波扩散), cycle(全屏色彩循环), rain(乱序雨滴), red(纯红警戒), blue(纯蓝矩阵), green(纯绿通道), off(关闭灯板)"
                     }
                 },
                 "required": ["theme"]
@@ -76,14 +77,14 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "show_expression",
-            "description": "切换牧濑红莉栖的生命微表情。当智能体想要表达情绪、反馈当前心情、或进行眼神接触时调用。",
+            "description": "切换牧濑红莉栖经典生命微表情 (继承中阶表情并升级生理眨眼与眼神巡视机制)。微表情类型: smile(开心微笑/模式11), cry(沮丧哭泣含眼泪/模式12), neutral(平静凝视/模式13), dynamic(灵动瞬息万变与视线追踪/模式14)。注意：若要呈现全身/半身细腻桌宠形象，请调用 set_kurisu_pet (模式17)。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "emotion": {
                         "type": "string",
                         "enum": ["smile", "cry", "neutral", "dynamic"],
-                        "description": "微表情类型: smile(开心/微笑), cry(委屈/难过), neutral(平静凝视), dynamic(灵动眨眼与视线追踪)"
+                        "description": "微表情类型: smile(笑脸), cry(哭脸), neutral(平静), dynamic(动态灵动)"
                     }
                 },
                 "required": ["emotion"]
@@ -111,7 +112,16 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "set_light_mode",
-            "description": "精确设置 16x16 矩阵灯板的原生模式编号 (0~25)。当用户要求切换特定灯光、颜色或意象时调用。例如: 1(纯红灯), 2(纯蓝/大海), 3(纯绿), 4(彩虹), 5(极光), 6(流星), 7(繁星), 10(水波涟漪/深海), 11(微笑), 14(灵动眨眼), 15(频谱随动), 19(贪吃蛇), 21(俄罗斯方块), 23(赛博烈焰/灯笼暖光), 24(黑客代码雨), 0(关灯)",
+            "description": "精确设置 16x16 矩阵灯板的原生模式编号 (0~25)，100% 完整兼容中阶原有所有模式并扩展高阶新特性:\n"
+                           "0: 清屏关灯\n"
+                           "1: 纯红模式, 2: 纯蓝模式, 3: 纯绿模式\n"
+                           "4: 幻彩霓虹, 5: 呼吸极光, 6: 流星划过, 7: 繁星点点, 8: 全屏色彩, 9: 乱序雨滴, 10: 中心波纹\n"
+                           "11: 笑脸盈盈, 12: 垂头丧气(哭脸落泪), 13: 面无表情, 14: 瞬息万变(动态眨眼表情)\n"
+                           "15: 音乐随动(频谱律动), 16: AI 对话唤醒反馈\n"
+                           "17: 牧濑红莉栖半身桌宠立绘 (自然眨眼 + 语音对嘴)\n"
+                           "19: 贪吃蛇游戏, 20: 贪吃蛇结算看板\n"
+                           "21: 俄罗斯方块游戏, 22: 俄罗斯方块结算看板\n"
+                           "23: 赛博壁炉物理火焰, 24: 黑客帝国代码雨 Pro, 25: 智能高精度物理沙漏倒计时",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -188,6 +198,13 @@ LIGHT_TOOL_DEFINITIONS = [
 # =========================================================================
 
 def execute_tool(func_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    result = _execute_tool_impl(func_name, arguments)
+    if result.get("status") not in ("success", "ok"):
+        result["message"] = "操作未获确认，请检查参数及板端 Wi-Fi 连接。"
+    return result
+
+
+def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """统一执行工具调用并返回执行结果状态"""
     controller = get_light_controller()
     print(f"\n[MCP 工具执行] 正在执行具身函数: {func_name}({arguments})")
@@ -218,9 +235,10 @@ def execute_tool(func_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
         elif func_name == "set_volume":
             vol = int(arguments.get("volume", 80))
-            from voice_engine import get_voice_engine
-            get_voice_engine().set_volume(vol)
-            return {"status": "success", "message": f"语音音量已设置为: {vol}%"}
+            if not 0 <= vol <= 100:
+                raise ValueError('Volume must be between 0 and 100')
+            ok = controller.set_volume(vol)
+            return {"status": "success" if ok else "error", "message": f"语音音量已设置为: {vol}%"}
 
         elif func_name == "show_expression":
             emotion = arguments.get("emotion", "dynamic")
@@ -248,11 +266,15 @@ def execute_tool(func_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             return {"status": "success" if ok else "error", "message": "已切换回牧濑红莉栖半身桌宠立绘 (模式 17)"}
 
         elif func_name == "get_device_status":
+            from wifi_gateway import get_wifi_gateway
+            gateway = get_wifi_gateway()
+            confirmed = controller.send_json({"cmd": "status"})
             return {
-                "status": "success",
-                "connected": controller.is_connected,
+                "status": "success" if confirmed else "error",
+                "connected": gateway.is_online(),
+                "audio_usb_connected": controller.is_connected,
                 "port": controller.port,
-                "current_mode": getattr(controller, 'current_mode', 17),
+                "current_mode": gateway.last_result.get("mode"),
                 "device": "ESP32-S3 16x16 Matrix + Board LED WS2812",
                 "persona": "Makise Kurisu (Amadeus)",
                 "tts_engine": "GPT-SoVITS (CV: Asami Imai)",

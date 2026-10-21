@@ -17,6 +17,7 @@ AudioHAL::AudioHAL()
     : tx_chan_(nullptr),
       rx_chan_(nullptr),
       spk_power_timer_(nullptr),
+      playback_mutex_(xSemaphoreCreateMutex()),
       output_volume_(70),
       volume_factor_(32112),
       initialized_(false),
@@ -36,6 +37,7 @@ AudioHAL::~AudioHAL() {
         i2s_channel_disable(rx_chan_);
         i2s_del_channel(rx_chan_);
     }
+    if (playback_mutex_) vSemaphoreDelete(playback_mutex_);
 }
 
 void AudioHAL::SetVolume(int volume_percent) {
@@ -51,6 +53,8 @@ void AudioHAL::SetVolume(int volume_percent) {
 esp_err_t AudioHAL::EnableSpeaker(bool enable) {
     if (!tx_chan_) return ESP_ERR_INVALID_STATE;
     if (enable == speaker_enabled_) return ESP_OK;
+    // Timer callbacks must not disable DMA during a write or block the timer task.
+    if (!enable && xSemaphoreTake(playback_mutex_, 0) != pdTRUE) return ESP_OK;
 
     esp_err_t ret = ESP_OK;
     if (enable) {
@@ -66,6 +70,7 @@ esp_err_t AudioHAL::EnableSpeaker(bool enable) {
             ESP_LOGI(TAG, "MAX98357A 进入自动静音休眠 (BCLK 停止，彻底杜绝电磁底噪)");
         }
     }
+    if (!enable) xSemaphoreGive(playback_mutex_);
     return ret;
 }
 
@@ -122,8 +127,8 @@ esp_err_t AudioHAL::Init(
         .slot_cfg = {
             .data_bit_width = I2S_DATA_BIT_WIDTH_32BIT,
             .slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO,
-            .slot_mode = I2S_SLOT_MODE_MONO,
-            .slot_mask = I2S_STD_SLOT_LEFT,
+            .slot_mode = I2S_SLOT_MODE_STEREO,
+            .slot_mask = I2S_STD_SLOT_BOTH,
             .ws_width = I2S_DATA_BIT_WIDTH_32BIT,
             .ws_pol = false,
             .bit_shift = true,
@@ -190,7 +195,7 @@ esp_err_t AudioHAL::Init(
             .ws_width = I2S_DATA_BIT_WIDTH_32BIT,
             .ws_pol = false,
             .bit_shift = true,
-            .left_align = false,
+            .left_align = true,
             .big_endian = false,
             .bit_order_lsb = false,
         },
@@ -214,80 +219,33 @@ esp_err_t AudioHAL::Init(
         return ret;
     }
 
-    // 默认保持 RX 待命，录音开启时再启动 DMA，防止长时间溢出
-    mic_enabled_ = false;
+    // INMP441 硬件 DMA 通道初始化完毕后常驻使能，杜绝频繁开启关断导致 DMA 悬垂与死锁超时
+    ret = i2s_channel_enable(rx_chan_);
+    if (ret == ESP_OK) {
+        mic_enabled_ = true;
+        ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 通道常驻使能就绪");
+    }
     initialized_ = true;
-    ESP_LOGI(TAG, "I2S 硬件驱动初始化成功 (对齐中阶 70%% 音量 + 自动休眠静音防啸叫)");
+    ESP_LOGI(TAG, "I2S 硬件驱动初始化成功 (默认 70%% 音量 + 自动休眠静音防啸叫)");
 
     return ESP_OK;
 }
 
 esp_err_t AudioHAL::EnableMic(bool enable) {
-    if (!rx_chan_) return ESP_ERR_INVALID_STATE;
-    if (enable == mic_enabled_) return ESP_OK;
-    esp_err_t ret = ESP_OK;
-    if (enable) {
-        ret = i2s_channel_enable(rx_chan_);
-        if (ret == ESP_OK) {
-            mic_enabled_ = true;
-            ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 已激活");
-        } else {
-            ESP_LOGE(TAG, "启用 INMP441 失败: %s", esp_err_to_name(ret));
-        }
-    } else {
-        ret = i2s_channel_disable(rx_chan_);
-        mic_enabled_ = false;
-        ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 已挂起休眠");
-    }
-    return ret;
+    mic_enabled_ = enable;
+    return ESP_OK;
 }
 
 esp_err_t AudioHAL::PlayBeep(uint32_t freq_hz, uint32_t duration_ms) {
-    if (!tx_chan_) return ESP_ERR_INVALID_STATE;
-
-    EnableSpeaker(true);
-    ResetSpeakerTimer();
-
-    const uint32_t sample_rate = 16000;
-    size_t total_samples = (sample_rate * duration_ms) / 1000;
-    const float two_pi = 6.28318530718f;
-    float phase_step = (two_pi * freq_hz) / sample_rate;
-
-    const size_t chunk_frames = 240;
-    int32_t buffer[chunk_frames]; // 32-bit 单声道
-
-    float phase = 0.0f;
-    size_t samples_generated = 0;
-
-    // 提示音量按当前音量系数换算 (映射至 32-bit slot 有效振幅区间)
-    float amp = (float)volume_factor_ * 20000.0f; // 适中温和且清晰宏亮
-
-    while (samples_generated < total_samples) {
-        size_t frames_this_round = std::min(chunk_frames, total_samples - samples_generated);
-        for (size_t i = 0; i < frames_this_round; ++i) {
-            int32_t val = (int32_t)(std::sin(phase) * amp);
-            buffer[i] = val;
-            phase += phase_step;
-            if (phase >= two_pi) phase -= two_pi;
-        }
-
-        size_t bytes_written = 0;
-        esp_err_t ret = i2s_channel_write(
-            tx_chan_,
-            buffer,
-            frames_this_round * sizeof(int32_t),
-            &bytes_written,
-            portMAX_DELAY
-        );
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "I2S 写入超时或失败: %s", esp_err_to_name(ret));
-            break;
-        }
-        samples_generated += frames_this_round;
+    if (!freq_hz || freq_hz > 8000 || !duration_ms || duration_ms > 1000) return ESP_ERR_INVALID_ARG;
+    // Use the same bounded, serialized PCM path as speech playback. Keep the
+    // waveform off the UDP task's limited stack and the notification gentle.
+    const size_t count = 16000 * duration_ms / 1000;
+    std::vector<int16_t> samples(count);
+    for (size_t i = 0; i < count; ++i) {
+        samples[i] = (int16_t)(std::sin(6.28318530718f * freq_hz * i / 16000.0f) * 6000.0f);
     }
-
-    ResetSpeakerTimer();
-    return ESP_OK;
+    return PlayMonoPcm(samples.data(), samples.size());
 }
 
 esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* bytes_written) {
@@ -296,12 +254,16 @@ esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* byt
 
 esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
     if (!tx_chan_ || !mono_samples || count == 0) return ESP_ERR_INVALID_STATE;
-
-    EnableSpeaker(true);
-    ResetSpeakerTimer();
+    if (!playback_mutex_ || xSemaphoreTake(playback_mutex_, pdMS_TO_TICKS(500)) != pdTRUE) return ESP_ERR_TIMEOUT;
+    if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
+    esp_err_t ret = EnableSpeaker(true);
+    if (ret != ESP_OK) {
+        xSemaphoreGive(playback_mutex_);
+        return ret;
+    }
 
     const size_t chunk_size = 240;
-    int32_t bit32_buf[chunk_size];
+    int32_t* bit32_buf = tx_buffer_;
     size_t written_total = 0;
 
     // 采用对齐中阶 NoAudioCodec 的音量平方律映射:
@@ -313,15 +275,22 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
             int64_t temp = (int64_t)mono_samples[written_total + i] * v_factor;
             if (temp > INT32_MAX) temp = INT32_MAX;
             else if (temp < INT32_MIN) temp = INT32_MIN;
-            bit32_buf[i] = (int32_t)temp;
+            bit32_buf[2 * i] = (int32_t)temp;
+            bit32_buf[2 * i + 1] = (int32_t)temp;
         }
         size_t bytes_out = 0;
-        i2s_channel_write(tx_chan_, bit32_buf, frames * sizeof(int32_t), &bytes_out, portMAX_DELAY);
+        ret = i2s_channel_write(tx_chan_, bit32_buf, frames * 2 * sizeof(int32_t), &bytes_out, 200);
+        if (ret != ESP_OK || bytes_out != frames * 2 * sizeof(int32_t)) {
+            if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
+            ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
+            break;
+        }
         written_total += frames;
     }
 
     ResetSpeakerTimer();
-    return ESP_OK;
+    xSemaphoreGive(playback_mutex_);
+    return ret;
 }
 
 esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms) {
@@ -347,7 +316,9 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
 
     size_t count = bytes_read / sizeof(int32_t);
     for (size_t i = 0; i < count; ++i) {
-        int32_t value = bit32_buffer[i] >> 12;
+        // Preserve native PCM16 headroom. Shifting by 12 applies 16x gain
+        // before clipping; host gain cannot recover those destroyed samples.
+        int32_t value = bit32_buffer[i] >> 16;
         dest_buf[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
     }
 

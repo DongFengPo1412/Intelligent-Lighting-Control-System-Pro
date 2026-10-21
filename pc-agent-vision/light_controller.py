@@ -21,6 +21,7 @@ class LightController:
         self._lock = threading.RLock()
         self._rx_thread: Optional[threading.Thread] = None
         self._running = True
+        self._mic_enabled = False
         self.on_mic_data: Optional[Callable[[bytes], None]] = None
         self.on_status_data: Optional[Callable[[Dict[str, Any]], None]] = None
         self._chime_pcm: bytes = self._create_chime_pcm()
@@ -118,7 +119,7 @@ class LightController:
         return "COM9"
 
     def connect(self) -> bool:
-        """建立串口物理连接"""
+        """建立串口物理连接 (用于物理供电与底层声学流，交互控制恒定使用 WiFi)"""
         with self._lock:
             try:
                 if self.ser:
@@ -130,33 +131,39 @@ class LightController:
                 self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
                 time.sleep(0.15) # 等待 DTR/RTS 稳定
                 self.is_connected = True
-                print(f"[LightController] 成功连接 ESP32-S3 光场与声学硬件: {self.port}")
+                print(f"[LightController] 识别到 ESP32-S3 USB 接口: {self.port} (核心交互控制强制通过 WiFi 通信)")
                 return True
             except Exception as e:
                 self.is_connected = False
+                print("[LightController] 识别为外部独立电源供电模式 (核心交互控制强制通过 WiFi 通信)")
                 return False
 
     def send_raw(self, line: str) -> bool:
-        """发送单行原始指令"""
-        with self._lock:
-            if not self.is_connected or not self.ser:
-                if not self.connect():
-                    return False
-            try:
-                msg = ("\n" + line.strip() + "\n").encode("utf-8")
-                self.ser.write(msg)
-                self.ser.flush()
+        """
+        发送单行控制指令 (核心规范: 恒定必须使用 WiFi 通信)
+        不论是 USB 接在电脑上还是外部单独供电，所有光场与交互控制指令均强制使用 WiFi (UDP 8888) 发送与执行！
+        """
+        line_clean = line.strip()
+        if not line_clean:
+            return False
+
+        from wifi_gateway import get_wifi_gateway
+        return get_wifi_gateway().send_command(line_clean)
+
+    @property
+    def control_connected(self) -> bool:
+        from wifi_gateway import get_wifi_gateway
+        return get_wifi_gateway().is_online()
+
+    def wait_for_control(self, timeout: float = 8.0) -> bool:
+        from wifi_gateway import get_wifi_gateway
+        gateway = get_wifi_gateway()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if gateway.send_command('{"cmd":"status"}', timeout=0.3, retries=0):
                 return True
-            except Exception as e:
-                print(f"[LightController] 串口写入失败: {e}")
-                self.is_connected = False
-                try:
-                    if self.ser:
-                        self.ser.close()
-                except Exception:
-                    pass
-                self.ser = None
-                return False
+            time.sleep(0.1)
+        return False
 
     def send_json(self, payload: Dict[str, Any]) -> bool:
         """发送标准 cJSON 指令包"""
@@ -172,6 +179,9 @@ class LightController:
         """
         if not pcm_data:
             return False
+        if len(pcm_data) % 2:
+            raise ValueError('PCM16 payload must contain complete samples')
+        self.last_audio_error = None
             
         chunk_bytes = chunk_samples * 2 # 16-bit = 2 bytes/sample
         total_len = len(pcm_data)
@@ -194,15 +204,19 @@ class LightController:
                         ctypes.windll.winmm.timeEndPeriod(1)
                     return False
 
+            restore_mic = self._mic_enabled
+            muted = False
             try:
                 # 硬件级静音：下发关闭麦克风推流指令，杜绝扬声器自激啸叫与回声循环
-                try:
-                    mute_cmd = b'\n{"cmd":"mic","enable":false}\n'
-                    self.ser.write(mute_cmd)
-                    self.ser.flush()
-                    time.sleep(0.04)
-                except Exception:
-                    pass
+                if not self.enable_mic(False):
+                    return False
+                muted = True
+                time.sleep(0.04)
+                from wifi_gateway import get_wifi_gateway
+                gateway = get_wifi_gateway()
+                if not self.send_json({'cmd': 'status'}):
+                    return False
+                before_audio = dict(gateway.last_result)
 
                 # 设定 120ms 的前置安全蓄水深度，无论多长音频均严控水位不溢出、不欠载
                 target_lead_sec = 0.120
@@ -234,36 +248,33 @@ class LightController:
                 # 物理消音缓冲：等待 350ms 让空气回声与声学余震彻底消散
                 time.sleep(0.35)
 
-                # 清空串口输入与输出缓冲，丢弃播放期间残留的无效数据
-                try:
-                    self.ser.reset_input_buffer()
-                    self.ser.reset_output_buffer()
-                except Exception:
-                    pass
-
-                # 硬件级恢复：重新激活麦克风推流
-                try:
-                    unmute_cmd = b'\n{"cmd":"mic","enable":true}\n'
-                    self.ser.write(unmute_cmd)
-                    self.ser.flush()
-                except Exception:
-                    pass
-
-                return True
+                # Sending bytes is not playback confirmation. Check board counters.
+                if not self.send_json({'cmd': 'status'}):
+                    self.last_audio_error = 'audio_status_timeout'
+                    return False
+                after_audio = dict(gateway.last_result)
+                expected = total_len // 2
+                delta = {key: (after_audio.get(key, 0) - before_audio.get(key, 0)) & 0xffffffff
+                         for key in ('audio_rx', 'audio_played', 'audio_dropped', 'audio_errors')}
+                ok = ('audio_played' in before_audio and delta['audio_rx'] == expected
+                      and delta['audio_played'] == expected and not delta['audio_dropped'] and not delta['audio_errors'])
+                if not ok:
+                    self.last_audio_error = {'expected_samples': expected, **delta}
+                    print(f'[板端音频未完整确认]: {self.last_audio_error}')
+                return ok
             except Exception as e:
                 print(f"[LightController] 音频推流异常: {e}")
                 return False
             finally:
+                # Preserve the listener's pause ownership: playback must not
+                # re-enable capture while the model callback is still running.
+                if muted and restore_mic:
+                    self.enable_mic(True)
                 if has_winmm:
                     try:
                         ctypes.windll.winmm.timeEndPeriod(1)
                     except Exception:
                         pass
-
-    def enable_mic(self, enable: bool = True) -> bool:
-        """开启或暂停 ESP32 板载 INMP441 麦克风音频流上传"""
-        print(f"[LightController] 设置板载麦克风数据流: {'开启' if enable else '关闭'}")
-        return self.send_json({"cmd": "mic", "enable": enable})
 
     @staticmethod
     def _create_chime_pcm(sample_rate: int = 16000) -> bytes:
@@ -317,26 +328,24 @@ class LightController:
         4. 仪式完毕，板载 LED 进入【微光暗红】(listening) 待命状态，绝不自动播报长语音，静默静候唤醒词！
         """
         def _ceremony():
-            print("\n[配对模式] >>> ESP32-S3 板载指示灯幽蓝呼吸律动，正在搜寻并建立配对连接... <<<")
-            self.set_board_led("pairing") # 幽蓝呼吸
-            self.send_raw("kurisu")       # 灯板维持 17 号牧濑红莉栖桌宠立绘
-            self.send_raw("b 150")        # 保持 150 黄金亮度
-            time.sleep(1.5)
-
-            print("[配对成功] >>> 上位机与 ESP32-S3 配对成功！发出配对成功物理提示音 <<<")
-            self.set_board_led("connected") # 幽蓝常亮确立连接
-            time.sleep(0.3)
-            self.play_beep()                # 板载扬声器发出配对成功提示音
+            if not self.wait_for_control(3.0):
+                print("[配对失败] 未收到 Wi-Fi 回执")
+                return False
+            if not self.set_board_led("pairing"):
+                return False
             time.sleep(0.4)
-
-            # 仪式结束，板载 LED 进入微光暗红监听待命状态，绝无任何自动长语音打扰
-            self.set_board_led("listening")
-            print("[配对完成] >>> 板载指示灯保持微光暗红待命，静候唤醒词 'Makise Kurisu' 唤醒交互 <<<\n")
+            if not self.set_board_led("connected"):
+                return False
+            if not self.play_beep():
+                print("[配对] 控制已连接，但提示音播放失败")
+            time.sleep(0.2)
+            return self.set_board_led("listening")
 
         if async_mode:
-            threading.Thread(target=_ceremony, daemon=True).start()
-        else:
-            _ceremony()
+            thread = threading.Thread(target=_ceremony, daemon=True)
+            thread.start()
+            return thread
+        return _ceremony()
 
     # ==========================
     # 核心具身光场交互 API
@@ -345,7 +354,10 @@ class LightController:
     def countdown(self, seconds: int) -> bool:
         """启动物理沙漏倒计时 (秒)"""
         print(f"[具身指令] 启动物理沙漏倒计时: {seconds} 秒")
-        return self.send_json({"cmd": "countdown", "seconds": int(seconds)})
+        seconds = int(seconds)
+        if not 1 <= seconds <= 86400:
+            raise ValueError("Countdown must be between 1 and 86400 seconds")
+        return self.send_json({"cmd": "countdown", "seconds": seconds})
 
     def stop_countdown(self) -> bool:
         """停止倒计时"""
@@ -355,12 +367,18 @@ class LightController:
     def enable_mic(self, enable: bool = True) -> bool:
         """开启或挂起 ESP32-S3 板载 INMP441 麦克风硬件音频采集回传"""
         print(f"[具身指令] 板载麦克风数据流: {'开启' if enable else '挂起'}")
-        return self.send_json({"cmd": "mic", "enable": bool(enable)})
+        ok = self.send_json({"cmd": "mic", "enable": bool(enable)})
+        if ok:
+            self._mic_enabled = bool(enable)
+        return ok
 
     def set_mode(self, mode_num: int) -> bool:
         """设置 16x16 矩阵灯板的原生模式编号 (0~25)"""
         print(f"[具身指令] 设置模式编号: {mode_num}")
-        return self.send_json({"cmd": "mode", "val": int(mode_num)})
+        mode_num = int(mode_num)
+        if mode_num not in set(range(26)) - {18}:
+            raise ValueError("Invalid display mode")
+        return self.send_json({"cmd": "mode", "val": mode_num})
 
     def snake_move(self, dx: int, dy: int) -> bool:
         """贪吃蛇方向输入 (dx: -1, 0, 1; dy: -1, 0, 1)"""
@@ -401,14 +419,26 @@ class LightController:
             "red": "mode 1",
             "blue": "mode 2",
             "green": "mode 3",
+            "cycle": "cycle",
+            "palette": "cycle",
+            "rain": "rain",
+            "raindrop": "rain",
             "ocean": "mode 10",
             "sea": "mode 10",
+            "feedback": "mode 16",
+            "ai": "mode 16",
             "lantern": "mode 23",
             "snake": "mode 19",
             "tetris": "mode 21",
-            "spectrum": "mode 15"
+            "spectrum": "mode 15",
+            "countdown": "mode 25",
+            "timer": "mode 25",
+            "hourglass": "mode 25",
+            "sand": "mode 25"
         }
-        cmd = theme_map.get(theme_str, "rainbow")
+        cmd = theme_map.get(theme_str)
+        if cmd is None:
+            raise ValueError(f"Unknown theme: {theme}")
         print(f"[具身指令] 切换光场特效主题: {cmd}")
         return self.send_raw(cmd)
 
@@ -424,17 +454,11 @@ class LightController:
         乱数滚动震颤 -> 切换至绿光代码雨 -> 定格生命微表情，代表收敛至 1.048596% 命运石之门世界线
         """
         print("[具身指令] ★★★ 触发世界线变动率 1.048596% (Steins;Gate) ★★★")
-        # 1. 乱数闪烁震荡 (先切烈焰激发物理扰动)
-        self.set_theme("fire")
-        time.sleep(0.35)
-        # 2. 模拟辉光管高频刷新 (流星穿梭)
-        self.set_theme("meteor")
-        time.sleep(0.35)
-        # 3. 绿光字符矩阵暴走 (矩阵代码雨)
-        self.set_theme("matrix")
-        time.sleep(1.2)
-        # 4. 锁定在灵动的红莉栖微表情
-        self.set_theme("dynamic")
+        for theme, delay in (("fire", 0.35), ("meteor", 0.35), ("matrix", 1.2), ("dynamic", 0)):
+            if not self.set_theme(theme):
+                return False
+            if delay:
+                time.sleep(delay)
         return True
 
     def close(self):

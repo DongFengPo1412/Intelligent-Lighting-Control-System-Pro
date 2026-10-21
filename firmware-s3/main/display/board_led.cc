@@ -14,12 +14,18 @@ BoardLed::BoardLed()
     : led_strip_(nullptr),
       current_mode_(BoardLedMode::BREATHE_PAIRING),
       step_count_(0),
-      is_initialized_(false)
+      is_initialized_(false),
+      mutex_(nullptr)
 {
+    mutex_ = xSemaphoreCreateMutex();
 }
 
 BoardLed::~BoardLed()
 {
+    if (mutex_) {
+        vSemaphoreDelete(mutex_);
+        mutex_ = nullptr;
+    }
     if (led_strip_) {
         led_strip_del(led_strip_);
         led_strip_ = nullptr;
@@ -65,9 +71,19 @@ esp_err_t BoardLed::Init(gpio_num_t gpio_pin)
 
 void BoardLed::SetMode(BoardLedMode mode)
 {
+    if (!led_strip_ || !is_initialized_) return;
+
+    // 状态去重：静态模式未改变时，严禁重复触发 RMT 硬件刷新，杜绝通道冲突
+    if (current_mode_ == mode && mode != BoardLedMode::BREATHE_PAIRING && mode != BoardLedMode::ACTIVE_INTERACT) {
+        return;
+    }
+
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) != pdTRUE) {
+        return;
+    }
+
     current_mode_ = mode;
     step_count_ = 0;
-    if (!led_strip_) return;
 
     if (current_mode_ == BoardLedMode::SOLID_GREEN) {
         // 语音播发中: 翠绿色常亮 (中阶 kDeviceStateSpeaking)
@@ -88,11 +104,22 @@ void BoardLed::SetMode(BoardLedMode mode)
     } else if (current_mode_ == BoardLedMode::OFF) {
         led_strip_clear(led_strip_);
     }
+
+    if (mutex_) {
+        xSemaphoreGive(mutex_);
+    }
 }
 
 void BoardLed::UpdateAnimation()
 {
     if (!led_strip_ || !is_initialized_) return;
+    if (current_mode_ != BoardLedMode::BREATHE_PAIRING && current_mode_ != BoardLedMode::ACTIVE_INTERACT) {
+        return;
+    }
+
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(10)) != pdTRUE) {
+        return;
+    }
 
     if (current_mode_ == BoardLedMode::BREATHE_PAIRING) {
         // 配对等待模式：深邃幽蓝呼吸律动 (中阶 kDeviceStateWifiConfiguring 500ms律动)
@@ -116,5 +143,9 @@ void BoardLed::UpdateAnimation()
         uint32_t r = (uint32_t)(norm * 8.0f);
         led_strip_set_pixel(led_strip_, 0, r, g, b);
         led_strip_refresh(led_strip_);
+    }
+
+    if (mutex_) {
+        xSemaphoreGive(mutex_);
     }
 }

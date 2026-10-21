@@ -13,6 +13,8 @@ import time
 import io
 import wave
 import re
+import hashlib
+from pathlib import Path
 from typing import Optional, Tuple
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -314,8 +316,17 @@ class VoiceEngine:
         if not cleaned:
             return None
 
+        cache_dir = Path(__file__).resolve().parent / '.voice_cache'
+        cache_key = hashlib.sha256(f'original-v1:{self.current_volume}:{cleaned}'.encode('utf-8')).hexdigest()
+        cache_file = cache_dir / (cache_key + '.wav')
         with self._lock:
             try:
+                if cache_file.exists():
+                    wav_bytes = cache_file.read_bytes()
+                    with wave.open(io.BytesIO(wav_bytes), 'rb') as w:
+                        samples = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+                    pcm = scipy.signal.resample_poly(samples.astype(np.float32), 1, 2)
+                    return np.clip(pcm, -32768, 32767).astype(np.int16).tobytes(), wav_bytes
                 # 严格分离中文与日文
                 zh_text, ja_text = self._split_zh_ja(cleaned)
                 
@@ -360,6 +371,11 @@ class VoiceEngine:
                     w.setframerate(32000)
                     w.writeframes(processed_32k.tobytes())
                 wav_32k_bytes = wav_io.getvalue()
+                cache_dir.mkdir(exist_ok=True)
+                cache_file.write_bytes(wav_32k_bytes)
+                cached = sorted(cache_dir.glob('*.wav'), key=lambda path: path.stat().st_mtime)
+                for old_file in cached[:-64]:
+                    old_file.unlink()
 
                 # 生成 ESP32 板载专用的 16000Hz PCM 流
                 resampled_16k = scipy.signal.resample_poly(processed_32k.astype(np.float32), 1, 2)
@@ -380,7 +396,7 @@ class VoiceEngine:
         """
         合成并播放对白:
         优先通过 ESP32-S3 板载 MAX98357A 扬声器物理发声；
-        同时在 PC 本地扬声器以 32kHz 高保真原声播放。
+        未使用板载输出时在 PC 扬声器播放。
         严守铁律: 要么听到红莉栖清晰人声，要么完全静音！
         """
         if not text or not text.strip():
@@ -401,26 +417,16 @@ class VoiceEngine:
         if ctrl.is_connected:
             ctrl.set_board_led("speaking")
 
-        board_thread = None
-        if to_board:
-            def _push_board():
-                try:
-                    if ctrl.is_connected:
-                        ctrl.play_audio_pcm(pcm_16k)
-                except Exception as e:
-                    print(f"[VoiceEngine] 板载硬件播放异常: {e}")
-            board_thread = threading.Thread(target=_push_board, daemon=True)
-            board_thread.start()
-
-        # 本地 PC 扬声器以 32000Hz 纯正无损红莉栖原声播放 (保留完整高频)
+        if to_board and ctrl.is_connected:
+            # One physical output avoids delayed PC/board copies sounding like echo.
+            if not ctrl.play_audio_pcm(pcm_16k):
+                print('[VoiceEngine] 板载语音播放失败')
+            return
         try:
             import winsound
             winsound.PlaySound(wav_32k_bytes, winsound.SND_MEMORY)
         except Exception as e:
             print(f"[VoiceEngine] 本地电脑扬声器播放异常: {e}")
-
-        if board_thread and board_thread.is_alive():
-            board_thread.join()
 
 
 # 单例导出

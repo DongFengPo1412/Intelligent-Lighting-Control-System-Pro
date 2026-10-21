@@ -4,6 +4,18 @@
  * Steins;Gate Cyberpunk / Amadeus Interface Controller
  */
 
+// Reject failed HTTP operations before updating the simulated display.
+async function apiFetch(url, options) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const message = data.error || `请求失败 (${response.status})`;
+        showNotification(message, "error");
+        throw new Error(message);
+    }
+    return response;
+}
+
 // ==========================================
 // 1. 全局状态与网络通信
 // ==========================================
@@ -196,7 +208,7 @@ async function sendMessage(explicitText = null) {
     updateAmadeusMood("思考与具身推演中...", "演算中");
 
     try {
-        const resp = await fetch('/api/chat', {
+        const resp = await apiFetch('/api/chat', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({message: text})
@@ -270,7 +282,7 @@ async function changeVolume(val) {
     if (valText) valText.textContent = `${val}%`;
 
     try {
-        await fetch('/api/volume', {
+        await apiFetch('/api/volume', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({volume: parseInt(val)})
@@ -285,7 +297,7 @@ async function changeBrightness(val) {
     if (bVal) bVal.textContent = val;
 
     try {
-        await fetch('/api/cmd', {
+        await apiFetch('/api/cmd', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({cmd: 'bright', val: parseInt(val)})
@@ -299,38 +311,37 @@ async function changeBrightness(val) {
 // 7. 光场模式与物理沙漏控制 (MATRIX)
 // ==========================================
 async function setMode(modeNum) {
-    currentMode = parseInt(modeNum);
+    const requestedMode = parseInt(modeNum);
     console.log(`[光场指令] 切换模式 -> ${modeNum}`);
     
-    // 如果离开游戏模式，重置游戏标记
-    if (currentMode !== 19 && currentMode !== 21) {
-        currentGame = null;
-        updateGameIndicator(null);
-    }
-
     try {
-        await fetch('/api/mode', {
+        await apiFetch('/api/mode', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({mode: currentMode})
+            body: JSON.stringify({mode: requestedMode})
         });
+        currentMode = requestedMode;
+        if (currentMode !== 19 && currentMode !== 21) {
+            currentGame = null;
+            updateGameIndicator(null);
+        }
     } catch (e) {
         console.warn("切换光场模式失败:", e);
     }
 }
 
 async function setCountdown(sec) {
-    countdownTotal = sec;
-    countdownRemaining = sec;
-    currentMode = 25; // 物理沙漏模式
     console.log(`[物理沙漏] 启动倒计时 ${sec} 秒`);
 
     try {
-        await fetch('/api/cmd', {
+        await apiFetch('/api/cmd', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({cmd: 'countdown', seconds: sec})
         });
+        countdownTotal = sec;
+        countdownRemaining = sec;
+        currentMode = 25;
         appendChatBubble('assistant', 'AMADEUS · 物理沙漏', `物理沙漏已设定: ${sec} 秒倒计时开始，256 颗灯珠呈等比线性衰减！`);
     } catch (e) {
         console.warn("倒计时启动失败:", e);
@@ -348,13 +359,13 @@ function setCustomCountdown() {
 }
 
 async function stopCountdown() {
-    countdownRemaining = 0;
     try {
-        await fetch('/api/cmd', {
+        await apiFetch('/api/cmd', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({cmd: 'stop_countdown'})
         });
+        countdownRemaining = 0;
         setMode(11); // 恢复微笑表情
     } catch (e) {
         console.warn("停止倒计时失败:", e);
@@ -412,7 +423,7 @@ async function sendGameKey(direction, event) {
         snakeState.dir = {x: dx, y: dy};
 
         try {
-            await fetch('/api/game', {
+            await apiFetch('/api/game', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({game: 'snake', dx: dx, dy: dy})
@@ -426,7 +437,7 @@ async function sendGameKey(direction, event) {
         else if (direction === 'down') act = 'drop';
 
         try {
-            await fetch('/api/game', {
+            await apiFetch('/api/game', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({game: 'tetris', action: act})
@@ -445,7 +456,7 @@ async function sendGameAction(action, event) {
     if (navigator.vibrate) navigator.vibrate(35);
 
     try {
-        await fetch('/api/game', {
+        await apiFetch('/api/game', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({game: 'tetris', action: action})
@@ -541,6 +552,16 @@ function getLedColorForMode(mode, x, y, frame) {
             const noise = Math.sin(x * 17.1 + y * 83.3 + frame * 0.1);
             return noise > 0.6 ? '#ffffff' : (noise > 0.4 ? '#4488ff' : '#111720');
 
+        case 8: // 全屏色彩循环 (Color Cycle)
+            return `hsl(${(frame * 2) % 360}, 100%, 50%)`;
+
+        case 9: // 乱序雨滴 (Matrix Rain)
+            const rainX = (frame * 3) % 16;
+            const rainY = (frame * 5 + x * 7) % 16;
+            if (x === rainX && Math.abs(y - rainY) < 2) return '#00ffcc';
+            if ((x * 13 + y * 7 + frame) % 23 === 0) return '#0088ff';
+            return '#111720';
+
         case 10: // 中心水波 (Ripple)
             const dx = x - 7.5;
             const dy = y - 7.5;
@@ -549,13 +570,76 @@ function getLedColorForMode(mode, x, y, frame) {
             return wave > 0 ? '#00bfff' : '#002244';
 
         case 11: // 微笑表情 (Smile)
-            // 眼睛 (3,4) (12,4)
-            if ((x === 4 || x === 5) && (y === 4 || y === 5)) return '#00ffcc';
-            if ((x === 10 || x === 11) && (y === 4 || y === 5)) return '#00ffcc';
-            // 嘴巴
-            if (y === 11 && x >= 4 && x <= 11) return '#ffaa00';
-            if ((y === 10) && (x === 3 || x === 12)) return '#ffaa00';
-            if ((y === 9) && (x === 2 || x === 13)) return '#ffaa00';
+        case 16: // AI 唤醒反馈 (AI Feedback)
+            // 外圈圆环
+            const d11 = Math.sqrt((x - 7.5) ** 2 + (y - 7.5) ** 2);
+            if (d11 >= 6.8 && d11 <= 7.8) return '#ffcc00';
+            // 眼睛
+            if ((x === 5 || x === 10) && (y === 4 || y === 5)) return '#ffcc00';
+            // 嘴角微扬
+            if ((y === 10 && (x === 4 || x === 11)) || (y === 11 && (x === 5 || x === 10)) || (y === 12 && x >= 6 && x <= 9)) return '#ffcc00';
+            return '#111720';
+
+        case 12: // 垂头丧气哭脸 (Cry)
+            const d12 = Math.sqrt((x - 7.5) ** 2 + (y - 7.5) ** 2);
+            if (d12 >= 6.8 && d12 <= 7.8) return '#00aaff';
+            // 眼睛
+            if ((x === 5 || x === 10) && (y === 4 || y === 5)) return '#00aaff';
+            // 眼泪 (动态滴落)
+            if ((x === 5 || x === 10) && (y === 7 + Math.floor((frame % 20) / 7))) return '#00ffff';
+            // 嘴角下耷
+            if ((y === 12 && (x === 4 || x === 11)) || (y === 11 && (x === 5 || x === 10)) || (y === 10 && x >= 6 && x <= 9)) return '#00aaff';
+            return '#111720';
+
+        case 13: // 平静表情 (Neutral)
+            const d13 = Math.sqrt((x - 7.5) ** 2 + (y - 7.5) ** 2);
+            if (d13 >= 6.8 && d13 <= 7.8) return '#00ff88';
+            if ((x === 5 || x === 10) && (y === 4 || y === 5)) return '#00ff88';
+            if (y === 11 && x >= 6 && x <= 9) return '#00ff88';
+            return '#111720';
+
+        case 14: // 瞬息万变动态微表情 (Dynamic Face)
+            const d14 = Math.sqrt((x - 7.5) ** 2 + (y - 7.5) ** 2);
+            const dynHue = (frame * 2) % 360;
+            if (d14 >= 6.8 && d14 <= 7.8) return `hsl(${dynHue}, 100%, 50%)`;
+            // 眨眼动画
+            const isBlink = (frame % 80) < 6;
+            if (!isBlink && (x === 5 || x === 10) && (y === 4 || y === 5)) return `hsl(${dynHue}, 100%, 65%)`;
+            if (isBlink && (x >= 4 && x <= 6 || x >= 9 && x <= 11) && y === 5) return `hsl(${dynHue}, 100%, 65%)`;
+            // 嘴巴根据时间在笑脸和平静切换
+            const isSmile = Math.sin(frame * 0.05) > 0;
+            if (isSmile) {
+                if ((y === 10 && (x === 4 || x === 11)) || (y === 11 && (x === 5 || x === 10)) || (y === 12 && x >= 6 && x <= 9)) return `hsl(${dynHue}, 100%, 65%)`;
+            } else {
+                if (y === 11 && x >= 6 && x <= 9) return `hsl(${dynHue}, 100%, 65%)`;
+            }
+            return '#111720';
+
+        case 15: // 音乐随动 (Audio Spectrum)
+            const colHeight = Math.abs(Math.sin(x * 0.8 + frame * 0.2)) * 14 + 1;
+            if (15 - y < colHeight) {
+                return `hsl(${x * 20 + 120}, 100%, 50%)`;
+            }
+            return '#111720';
+
+        case 17: // 牧濑红莉栖半身桌宠立绘 (Kurisu Desk Pet)
+            // 头发 (栗色 / 赤褐色: #a33b2a, #782618)
+            // 脸部 (肤色: #ffd1b3, 眼睛: #4488ff / #880022, 领带: #cc1122, 白衬衫: #e8ecf0)
+            if (y >= 1 && y <= 3 && x >= 4 && x <= 11) return '#8c2d19'; // 头发顶
+            if (y >= 4 && y <= 10 && (x <= 3 || x >= 12)) return '#782618'; // 两侧长发
+            if (y >= 4 && y <= 9 && x >= 4 && x <= 11) {
+                // 脸部
+                if (y === 6 && (x === 5 || x === 10)) {
+                    // 眨眼
+                    return ((frame % 90) < 6) ? '#8c2d19' : '#0066cc';
+                }
+                if (y === 7 && (x === 4 || x === 11)) return '#ff8888'; // 腮红
+                if (y === 8 && (x === 7 || x === 8)) return '#cc3344'; // 嘴唇
+                return '#ffdfc4'; // 肤色
+            }
+            if (y >= 10 && y <= 12 && (x === 7 || x === 8)) return '#cc0022'; // 红领带
+            if (y >= 10 && y <= 15 && x >= 4 && x <= 11) return '#f0f4f8'; // 白衬衫/制服
+            if (y >= 13 && (x < 4 || x > 11)) return '#632014'; // 发梢
             return '#111720';
 
         case 19: // 贪吃蛇 (Snake)
@@ -640,7 +724,7 @@ function updateConnectionUI(connected) {
     const badge = document.getElementById('connBadge');
     const text = document.getElementById('connText');
     if (badge) badge.classList.toggle('offline', !connected);
-    if (text) text.textContent = connected ? 'WiFi 在线' : '重连中...';
+    if (text) text.textContent = connected ? 'WiFi 恒定直通' : 'WiFi 搜寻中...';
 }
 
 function handleServerEvent(event) {
@@ -693,12 +777,40 @@ function handleServerEvent(event) {
 // ==========================================
 async function fetchSystemStatus() {
     try {
-        const resp = await fetch('/api/status');
+        const resp = await apiFetch('/api/status');
         if (resp.ok) {
             const data = await resp.json();
             const ipEl = document.getElementById('sysIp');
             if (ipEl && data.host_ip) {
                 ipEl.textContent = `http://${data.host_ip}:8080`;
+            }
+            if (data.wifi) {
+                const staEl = document.getElementById('wifiStaIp');
+                if (staEl) {
+                    if (data.wifi.board_sta_ip && data.wifi.board_sta_ip !== "0.0.0.0" && data.wifi.board_sta_ip !== "搜寻中...") {
+                        staEl.textContent = `${data.wifi.board_sta_ip}:8888 (已连入局域网)`;
+                        staEl.style.color = '#00ff88';
+                    } else {
+                        staEl.textContent = `搜寻热点中 (SoftAP 192.168.4.1 恒定在线)`;
+                        staEl.style.color = '#ffaa00';
+                    }
+                }
+            }
+            const commEl = document.getElementById('commStatus');
+            if (commEl) {
+                if (data.audio_usb_connected && data.wifi && data.wifi.wifi_online) {
+                    commEl.textContent = "Wi-Fi 控制在线 · USB 音频已连接";
+                    commEl.style.color = "#00ff88";
+                } else if (data.wifi && data.wifi.wifi_online) {
+                    commEl.textContent = "Wi-Fi 控制在线 · USB 音频未连接";
+                    commEl.style.color = "#00d2ff";
+                } else if (data.audio_usb_connected) {
+                    commEl.textContent = "USB 音频已连接 · Wi-Fi 控制未确认";
+                    commEl.style.color = "#ffaa00";
+                } else {
+                    commEl.textContent = "未发现板端连接";
+                    commEl.style.color = "#ff6666";
+                }
             }
         }
     } catch (e) {
@@ -706,13 +818,16 @@ async function fetchSystemStatus() {
     }
 }
 
+// 启动周期性状态轮询
+setInterval(fetchSystemStatus, 4000);
+
 // ==========================================
 // 12. 上电握手与配对正向反馈仪式触发
 // ==========================================
 async function triggerBootCeremony() {
     showNotification("⚡ 正在执行脑波同步握手与配对自检仪式...", "info");
     try {
-        const resp = await fetch('/api/ceremony', { method: 'POST' });
+        const resp = await apiFetch('/api/ceremony', { method: 'POST' });
         const data = await resp.json();
         if (data.status === 'ok') {
             showNotification("✅ 配对握手自检完成！牧濑红莉栖系统已就绪！", "success");

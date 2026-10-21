@@ -10,6 +10,7 @@ import torch  # 必须置顶导入，杜绝 ctranslate2 与 CUDA/cuDNN DLL 冲�
 import json
 import asyncio
 import socket
+import time
 from typing import Set, Optional
 from aiohttp import web
 
@@ -36,11 +37,12 @@ listener = None
 
 active_websockets: Set[web.WebSocketResponse] = set()
 
-def get_local_ip() -> str:
+def get_local_ip(board_ip: Optional[str] = None) -> str:
     """自动获取本机局域网 IPv4 地址"""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
+        # Route toward the board instead of a VPN's default Internet interface.
+        s.connect((board_ip or "8.8.8.8", 8888))
         ip = s.getsockname()[0]
         s.close()
         return ip
@@ -71,6 +73,31 @@ async def broadcast_ws(payload: dict):
 # ==========================================
 # REST API 路由处理
 # ==========================================
+chat_lock = asyncio.Lock()
+
+
+async def run_chat(message: str):
+    async with chat_lock:
+        loop = asyncio.get_running_loop()
+        owns_pause = listener is not None and not listener.is_paused
+        if owns_pause:
+            await loop.run_in_executor(None, listener.pause)
+        try:
+            response_text = await loop.run_in_executor(None, agent.chat, message)
+            return {"reply": response_text, "model_error": agent.last_model_error,
+                    "translation_error": agent.last_translation_error}
+        finally:
+            if owns_pause:
+                await loop.run_in_executor(None, listener.resume)
+
+
+async def device_call(function, *args):
+    ok = await asyncio.get_running_loop().run_in_executor(None, function, *args)
+    if not ok:
+        raise ConnectionError("板端未确认操作，请检查 Wi-Fi 连接后重试")
+    return ok
+
+
 async def handle_chat(request: web.Request):
     """处理用户文字/语音对话输入"""
     try:
@@ -83,7 +110,8 @@ async def handle_chat(request: web.Request):
 
         # 异步线程池调用红莉栖思考与硬件执行，避免阻塞网络轮询
         loop = asyncio.get_running_loop()
-        reply = await loop.run_in_executor(None, agent.chat, message)
+        result = await run_chat(message)
+        reply = result["reply"]
 
         print(f"[红莉栖回复]: {reply}")
 
@@ -94,7 +122,7 @@ async def handle_chat(request: web.Request):
             "text": reply
         })
 
-        return web.json_response({"reply": reply})
+        return web.json_response(result)
 
     except Exception as e:
         print(f"[Chat 异常]: {e}")
@@ -106,9 +134,13 @@ async def handle_mode(request: web.Request):
         data = await request.json()
         mode_num = int(data.get("mode", 11))
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, controller.set_mode, mode_num)
+        await device_call(controller.set_mode, mode_num)
         await broadcast_ws({"type": "mode_changed", "mode": mode_num})
         return web.json_response({"status": "ok", "mode": mode_num})
+    except (ValueError, TypeError) as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except ConnectionError as e:
+        return web.json_response({"error": str(e)}, status=503)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -118,9 +150,15 @@ async def handle_volume(request: web.Request):
         data = await request.json()
         vol = int(data.get("volume", 85))
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, voice.set_volume, vol)
+        if not 0 <= vol <= 100:
+            raise ValueError('Volume must be between 0 and 100')
+        await device_call(controller.set_volume, vol)
         await broadcast_ws({"type": "status", "volume": vol})
         return web.json_response({"status": "ok", "volume": vol})
+    except (ValueError, TypeError) as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except ConnectionError as e:
+        return web.json_response({"error": str(e)}, status=503)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -133,18 +171,22 @@ async def handle_cmd(request: web.Request):
 
         if cmd == "countdown":
             sec = int(data.get("seconds", 10))
-            await loop.run_in_executor(None, controller.countdown, sec)
+            await device_call(controller.countdown, sec)
             await broadcast_ws({"type": "countdown_started", "seconds": sec})
         elif cmd == "stop_countdown":
-            await loop.run_in_executor(None, controller.stop_countdown)
+            await device_call(controller.stop_countdown)
             await broadcast_ws({"type": "countdown_stopped"})
         elif cmd == "bright":
             val = int(data.get("val", 20))
-            await loop.run_in_executor(None, controller.set_brightness, val)
+            await device_call(controller.set_brightness, val)
         else:
-            await loop.run_in_executor(None, controller.send_json, data)
+            await device_call(controller.send_json, data)
 
         return web.json_response({"status": "ok"})
+    except (ValueError, TypeError) as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except ConnectionError as e:
+        return web.json_response({"error": str(e)}, status=503)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -158,23 +200,40 @@ async def handle_game(request: web.Request):
         if game == "snake":
             dx = int(data.get("dx", 0))
             dy = int(data.get("dy", 0))
-            await loop.run_in_executor(None, controller.snake_move, dx, dy)
+            await device_call(controller.snake_move, dx, dy)
         elif game == "tetris":
             action = str(data.get("action", "rot"))
-            await loop.run_in_executor(None, controller.tetris_action, action)
+            await device_call(controller.tetris_action, action)
+        else:
+            return web.json_response({"error": "Unknown game"}, status=400)
 
         return web.json_response({"status": "ok"})
+    except (ValueError, TypeError) as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except ConnectionError as e:
+        return web.json_response({"error": str(e)}, status=503)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
 async def handle_status(request: web.Request):
-    """获取系统整体拓扑状态与 IP"""
+    """获取系统整体拓扑状态与全时 WiFi / 硬件双通道信息"""
+    from wifi_gateway import get_wifi_gateway
+    gw = get_wifi_gateway()
+    wifi_info = gw.get_status()
+
     return web.json_response({
         "status": "online",
-        "host_ip": HOST_IP,
+        "host_ip": get_local_ip(wifi_info.get("board_sta_ip")),
         "port": controller.port,
-        "is_connected": controller.is_connected,
-        "volume": voice.volume,
+        "is_connected": wifi_info["wifi_online"],
+        "audio_usb_connected": controller.is_connected,
+        "board_audio_recent": bool(listener and listener.has_board_audio and time.time() - listener._last_board_frame_time < 3),
+        "model_error": agent.last_model_error,
+        "translation_error": agent.last_translation_error,
+        "wifi": wifi_info,
+        "volume": wifi_info.get('last_command', {}).get('volume', 70),
+        "last_audio_error": getattr(controller, 'last_audio_error', None),
+        "wake_detector_ready": bool(listener and listener.wake_detector),
         "world_line": "1.048596%"
     })
 
@@ -222,7 +281,15 @@ async def handle_index(request: web.Request):
 async def handle_ceremony(request: web.Request):
     """手动触发上电自检与配对握手正向反馈仪式"""
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, controller.run_boot_ceremony, True)
+    async with chat_lock:
+        owns_pause = listener is not None and not listener.is_paused
+        if owns_pause:
+            await loop.run_in_executor(None, listener.pause)
+        try:
+            await device_call(controller.run_boot_ceremony, False)
+        finally:
+            if owns_pause:
+                await loop.run_in_executor(None, listener.resume)
     await broadcast_ws({"type": "ceremony_started"})
     return web.json_response({"status": "ok", "message": "Boot ceremony triggered"})
 
@@ -236,17 +303,17 @@ def on_voice_detected(speech_text: str):
         return
     print(f"\n[免触麦克风输入]: {speech_text}")
     if server_loop and not server_loop.is_closed():
-        asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text), server_loop)
+        # The ASR worker stays paused until inference AND playback finish.
+        # This callback runs on the ASR thread, never on the event-loop thread.
+        future = asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text), server_loop)
+        future.result()
 
 async def process_voice_interaction(speech_text: str):
     """异步执行大模型思考并向全端广播"""
     global listener, agent
     try:
-        if listener:
-            listener.pause()
-        
-        loop = asyncio.get_running_loop()
-        reply = await loop.run_in_executor(None, agent.chat, speech_text)
+        result = await run_chat(speech_text)
+        reply = result["reply"]
         print(f"[免触语音回复]: {reply}")
 
         await broadcast_ws({
@@ -256,26 +323,34 @@ async def process_voice_interaction(speech_text: str):
         })
     except Exception as e:
         print(f"[免触语音交互异常]: {e}")
-    finally:
-        await asyncio.sleep(1.0)
-        if listener:
-            listener.resume()
 
 # ==========================================
 # 主启动器
 # ==========================================
 async def on_startup(app: web.Application):
-    global server_loop, listener
+    global server_loop, listener, HOST_IP
     server_loop = asyncio.get_running_loop()
 
     # 1. 触发上电与配对连接成功正向反馈仪式感
-    if controller.is_connected:
-        controller.run_boot_ceremony(async_mode=True)
+    loop = asyncio.get_running_loop()
+    if await loop.run_in_executor(None, controller.wait_for_control, 8.0):
+        await loop.run_in_executor(None, controller.run_boot_ceremony, False)
+    else:
+        print("[WebServer] 尚未收到板端 Wi-Fi 回执，未宣告配对成功。")
+    from wifi_gateway import get_wifi_gateway
+    HOST_IP = get_local_ip(get_wifi_gateway().board_sta_ip)
+    print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
+
+    # Generate once; subsequent wake/color confirmations play the same Kurisu voice from cache.
+    from semantic_control import describe_action
+    for mode in (1, 2, 3, 7, 23):
+        lines = describe_action({'tool': 'set_light_mode', 'value': mode})
+        await loop.run_in_executor(None, voice.synthesize_speech_bundle, '\n'.join(lines))
 
     # 2. 启动全自动麦克风免触拾音监听
     listener = get_voice_listener(on_voice_detected)
     listener.start()
-    print("[WebServer] >>> 全自动麦克风免触对讲与端侧大模型闭环已全面启动 <<<")
+    print("[WebServer] 语音监听已启动；板载音频是否就绪请查看 /api/status。")
 
 async def on_cleanup(app: web.Application):
     global listener
@@ -301,9 +376,10 @@ def create_app() -> web.Application:
 if __name__ == "__main__":
     app = create_app()
     print("\n" + "="*60)
-    print("  🚀 未来道具研究所 · 牧濑红莉栖具身中枢 Web 服务器启动中...")
+    print("  🚀 未来道具研究所 · 牧濑红莉栖具身中枢 (全时强制 WiFi 通信)")
+    print("  ● 控制协议: 强制经由局域网 WiFi UDP 8888 直通传输 (不论 USB 是否插接)")
     print(f"  ● 电脑本机访问: http://localhost:{WEB_PORT}")
-    print(f"  ● 手机局域网 WiFi 访问: http://{HOST_IP}:{WEB_PORT}")
+    print("  ● 手机控制地址将在板端连接后显示")
     print("="*60 + "\n")
     web.run_app(app, host="0.0.0.0", port=WEB_PORT)
 
