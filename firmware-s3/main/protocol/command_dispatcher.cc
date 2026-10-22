@@ -337,8 +337,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
 
     // 1. 旧版音乐频谱流 (兼容中阶 "f,beat,b0,b1...")
     if (strncmp(line, "f,", 2) == 0) {
-        DisplayManager::GetInstance().FeedSpectrumSerial(line);
-        return true;
+        return DisplayManager::GetInstance().FeedSpectrumSerial(line);
     }
 
     // 2. JSON 格式指令
@@ -395,7 +394,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     // {"cmd":"mode", "val":4}
     else if (strcasecmp(cmd, "mode") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
-        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 25 && val_item->valueint != 18) {
+        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 24 && val_item->valueint != 18) {
             dm.SetMode(val_item->valueint);
             cJSON_Delete(root);
             return true;
@@ -529,7 +528,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     // 2. 模式数字切换: "mode 23"
     int mode_num = -1;
     if (sscanf(text_str, "mode %d", &mode_num) == 1) {
-        if (mode_num < 0 || mode_num > 25 || mode_num == 18) return false;
+        if (mode_num < 0 || mode_num > 24 || mode_num == 18) return false;
         dm.SetMode(mode_num);
         return true;
     }

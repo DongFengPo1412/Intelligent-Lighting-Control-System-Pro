@@ -112,7 +112,7 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "set_light_mode",
-            "description": "精确设置 16x16 矩阵灯板的原生模式编号 (0~25)，100% 完整兼容中阶原有所有模式并扩展高阶新特性:\n"
+            "description": "设置矩阵直接模式（0–24，18除外）；倒计时必须使用 start_countdown 并提供秒数:\n"
                            "0: 清屏关灯\n"
                            "1: 纯红模式, 2: 纯蓝模式, 3: 纯绿模式\n"
                            "4: 幻彩霓虹, 5: 呼吸极光, 6: 流星划过, 7: 繁星点点, 8: 全屏色彩, 9: 乱序雨滴, 10: 中心波纹\n"
@@ -121,13 +121,14 @@ LIGHT_TOOL_DEFINITIONS = [
                            "17: 牧濑红莉栖半身桌宠立绘 (自然眨眼 + 语音对嘴)\n"
                            "19: 贪吃蛇游戏, 20: 贪吃蛇结算看板\n"
                            "21: 俄罗斯方块游戏, 22: 俄罗斯方块结算看板\n"
-                           "23: 赛博壁炉物理火焰, 24: 黑客帝国代码雨 Pro, 25: 智能高精度物理沙漏倒计时",
+                           "23: 火焰, 24: 代码雨；倒计时另调用 start_countdown(seconds)",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "mode": {
                         "type": "integer",
-                        "description": "模式编号 (0~25)"
+                        "description": "直接模式编号，18和25不可直接选择",
+                        "enum": list(range(18)) + list(range(19, 25))
                     }
                 },
                 "required": ["mode"]

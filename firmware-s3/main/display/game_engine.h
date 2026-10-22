@@ -33,6 +33,9 @@ public:
     void TetrisDrop();
 
 private:
+    bool PlaceSnakeFood();
+    int pending_snake_direction_ = 0;
+
     // 贪吃蛇状态
     int snake_x_[TOTAL_LEDS];
     int snake_y_[TOTAL_LEDS];

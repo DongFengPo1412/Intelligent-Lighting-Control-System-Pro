@@ -54,7 +54,7 @@ Gesture control, face enrollment, and PC-input spectrum analysis have separate r
 
 | Evidence | Result | Scope |
 | :--- | :--- | :--- |
-| Current offline checks | 22 interaction regressions, 6 planning tests, 11 palette checks, and two C++ compile-time checks passed. | Mocks/static data; not a complete service or hardware test. |
+| Earlier offline records | 22 interaction regressions, 6 planning tests, 11 palette checks, and two C++ compile-time checks passed. | Mocks/static data; not a complete service or hardware test. |
 | Historical single-panel record | Build/flash logs, board ACKs, and user confirmation of corners, row scanning, asymmetric patterns, and multiple modes. | The recorded firmware/prototype, not comprehensive timing or power evaluation. |
 | Historical voice/semantic record | Thirty fixed local-model cases passed; two real voice commands operated stars/ripples with user confirmation. | Small samples, not overall ASR accuracy or long-term false-wake rates. |
 | Current companion-color record | Complete firmware and ACK records are available; dark-brown outline remains unmet, and four-phase flickering was rejected. | Numeric checks, successful flashing, and visual acceptance are distinct results. |
@@ -78,3 +78,11 @@ Next work is to reconcile outdated client parameters/status displays, verify mod
 [Technical notes](docs/technical-notes.en.md) · [Setup](docs/setup.en.md) · [Development workflow](docs/DEVELOPMENT_WORKFLOW.md)
 
 No standalone `LICENSE` file currently exists, so the old MIT badge is not retained as a complete licensing statement. ESP-IDF, `led_strip`, Qwen, Whisper, Sherpa ONNX, GPT-SoVITS, MediaPipe, character images/audio, and model resources remain subject to their respective source licenses.
+
+## Maintenance and validation
+
+The 2026-10 revision validates spectrum fields/ranges and propagates rejection. After 500 ms without input, targets clear and decay continues; zero values no longer keep bottom pixels/peak markers lit. Snake fixes food exclusion, old-tail growth, full-board completion and once-per-tick direction application with a strict 80 ms speed floor. Tetris has a strict 100 ms floor. Rendering, mode/game/spectrum input, brightness and timer state share a recursive mutex.
+
+Countdown requires its dedicated command with integer duration 1–86400 seconds. Direct modes are 0–24 except 18; selecting 25 without duration is rejected consistently by the PC controller, tool schema and firmware. Independent gesture/spectrum scripts now check Wi-Fi control readiness and restore legal brightness 20, without requiring a USB audio connection. They remain standalone programs without unified camera/mode arbitration.
+
+An isolated ESP-IDF 5.5.4 build with public example network configuration succeeds; the image is 874800 bytes. Eleven real C++ engine cases and nine Python control/resource-release cases pass. C++ uses a fake clock/LED HAL; Python does not connect serial, UDP, microphones or models. No flashing, recording, audible output or new hardware acceptance occurred. Historical listening/hardware records do not validate this revision.

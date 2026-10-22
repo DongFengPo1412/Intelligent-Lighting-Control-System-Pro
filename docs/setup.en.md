@@ -4,7 +4,7 @@
 
 [Structure](#structure) · [Hardware](#hardware) · [Firmware](#firmware) · [PC/models](#pc) · [Operation](#operation) · [Checks](#verification)
 
-This guide follows current source. This pass changed documentation and ran offline checks without launching device services or reflashing. Read the [implementation scope](technical-notes.en.md#implementation-status), rather than treating historical requirements as completed deployment.
+An isolated ESP-IDF 5.5.4 build with public example network configuration succeeds; the image is 874800 bytes. Eleven real C++ engine cases and nine Python control/resource-release cases pass. C++ uses a fake clock/LED HAL; Python does not connect serial, UDP, microphones or models. No flashing, recording, audible output or new hardware acceptance occurred. Historical listening/hardware records do not validate this revision.
 
 <a id="structure"></a>
 
@@ -176,3 +176,14 @@ xtensa-esp32s3-elf-g++ -std=c++14 -fsyntax-only tests/srgb_transfer_test.cpp
 | Browser and physical pixels differ | Canvas is independent, without pixel readback; companion artwork also differs. |
 | Colors remain wrong | Check role recipes and physical feedback; generation tests do not establish color acceptance. |
 | Capture/playback interfere | Pause ownership, sample deltas, drops/errors, and stack margin; PC write completion is insufficient. |
+
+
+Countdown requires its dedicated command with integer duration 1–86400 seconds. Direct modes are 0–24 except 18; selecting 25 without duration is rejected consistently by the PC controller, tool schema and firmware. Independent gesture/spectrum scripts now check Wi-Fi control readiness and restore legal brightness 20, without requiring a USB audio connection. They remain standalone programs without unified camera/mode arbitration.
+
+An isolated ESP-IDF 5.5.4 build with public example network configuration succeeds; the image is 874800 bytes. Eleven real C++ engine cases and nine Python control/resource-release cases pass. C++ uses a fake clock/LED HAL; Python does not connect serial, UDP, microphones or models. No flashing, recording, audible output or new hardware acceptance occurred. Historical listening/hardware records do not validate this revision.
+
+`requirements-control.txt` pins pyserial 3.5 for the control clients only; it does not install the complete web/vision/voice stack. Full dependencies are not locked and external models/original-machine paths still need configuration. Maintenance fixes preserve historical records and do not imply authorship of all frameworks, models or assets.
+
+```shell
+python -m pip install -r pc-agent-vision/requirements-control.txt
+```

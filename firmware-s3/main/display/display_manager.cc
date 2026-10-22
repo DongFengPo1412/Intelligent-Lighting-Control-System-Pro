@@ -2,6 +2,19 @@
 #include "board_led.h"
 #include <esp_log.h>
 
+namespace {
+class DisplayLock {
+    SemaphoreHandle_t mutex_;
+public:
+    explicit DisplayLock(SemaphoreHandle_t mutex):mutex_(mutex) {
+        if(!mutex_ || xSemaphoreTakeRecursive(mutex_,portMAX_DELAY)!=pdTRUE) abort();
+    }
+    ~DisplayLock(){xSemaphoreGiveRecursive(mutex_);}
+    DisplayLock(const DisplayLock&)=delete;
+    DisplayLock& operator=(const DisplayLock&)=delete;
+};
+}
+
 static const char* TAG = "DisplayManager";
 
 DisplayManager& DisplayManager::GetInstance()
@@ -23,7 +36,7 @@ DisplayManager::DisplayManager()
       countdown_finished_anim_(false),
       countdown_finish_start_ms_(0)
 {
-    mutex_ = xSemaphoreCreateMutex();
+    mutex_ = xSemaphoreCreateRecursiveMutex();
 }
 
 DisplayManager::~DisplayManager()
@@ -92,85 +105,89 @@ void DisplayManager::DisplayTaskLoop()
     ESP_LOGI(TAG, "Display task loop entered.");
 
     while (is_running_) {
-        DisplayMode mode;
-        if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
-            mode = current_mode_;
-            xSemaphoreGive(mutex_);
-        } else {
-            mode = current_mode_;
-        }
-
-        // 模式切换瞬间的初始化工作 (复刻中阶 changeToMode)
-        if (mode != last_mode_) {
-            ESP_LOGI(TAG, ">>> Mode switched from %d to %d", (int)last_mode_, (int)mode);
-            hal_.Clear();
-            if (mode == DisplayMode::SNAKE_GAME) {
-                game_engine_.InitSnake();
-            } else if (mode == DisplayMode::TETRIS_GAME) {
-                game_engine_.InitTetris();
-            } else if (mode == DisplayMode::AUDIO_SPECTRUM) {
-                spectrum_engine_.Reset();
-            }
-            last_mode_ = mode;
-        }
-
         uint32_t delay_ms = 33;
+        {
+            DisplayLock lock(mutex_);
+            DisplayMode mode = current_mode_;
 
-        // 根据模式路由到各个引擎
-        switch (mode) {
-            case DisplayMode::SNAKE_GAME:
-                delay_ms = game_engine_.RunSnake();
-                if (game_engine_.IsSnakeGameOver()) {
-                    SetMode(DisplayMode::SNAKE_SCORE);
+            // 模式切换瞬间的初始化工作 (复刻中阶 changeToMode)
+            if (mode != last_mode_) {
+                ESP_LOGI(TAG, ">>> Mode switched from %d to %d", (int)last_mode_, (int)mode);
+                hal_.Clear();
+                if (mode == DisplayMode::SNAKE_GAME) {
+                    game_engine_.InitSnake();
+                } else if (mode == DisplayMode::TETRIS_GAME) {
+                    game_engine_.InitTetris();
+                } else if (mode == DisplayMode::AUDIO_SPECTRUM) {
+                    spectrum_engine_.Reset();
                 }
-                break;
+                last_mode_ = mode;
+            }
 
-            case DisplayMode::SNAKE_SCORE:
-                game_engine_.DrawScore(game_engine_.GetSnakeScore());
-                delay_ms = 100;
-                break;
+            // 根据模式路由到各个引擎
+            switch (mode) {
+                case DisplayMode::SNAKE_GAME:
+                    delay_ms = game_engine_.RunSnake();
+                    if (game_engine_.IsSnakeGameOver()) {
+                        SetMode(DisplayMode::SNAKE_SCORE);
+                    }
+                    break;
 
-            case DisplayMode::TETRIS_GAME:
-                delay_ms = game_engine_.RunTetris();
-                if (game_engine_.IsTetrisGameOver()) {
-                    SetMode(DisplayMode::TETRIS_SCORE);
-                }
-                break;
+                case DisplayMode::SNAKE_SCORE:
+                    game_engine_.DrawScore(game_engine_.GetSnakeScore());
+                    delay_ms = 100;
+                    break;
 
-            case DisplayMode::TETRIS_SCORE:
-                game_engine_.DrawScore(game_engine_.GetTetrisScore());
-                delay_ms = 100;
-                break;
+                case DisplayMode::TETRIS_GAME:
+                    delay_ms = game_engine_.RunTetris();
+                    if (game_engine_.IsTetrisGameOver()) {
+                        SetMode(DisplayMode::TETRIS_SCORE);
+                    }
+                    break;
 
-            case DisplayMode::AUDIO_SPECTRUM:
-                delay_ms = spectrum_engine_.RenderFrame();
-                break;
+                case DisplayMode::TETRIS_SCORE:
+                    game_engine_.DrawScore(game_engine_.GetTetrisScore());
+                    delay_ms = 100;
+                    break;
 
-            case DisplayMode::COUNTDOWN_TIMER:
-                delay_ms = RenderCountdownTimer();
-                break;
+                case DisplayMode::AUDIO_SPECTRUM:
+                    delay_ms = spectrum_engine_.RenderFrame();
+                    break;
 
-            default:
-                // 基础特效与表情包
-                delay_ms = effect_engine_.RenderFrame(mode);
-                break;
-        }
+                case DisplayMode::COUNTDOWN_TIMER:
+                    delay_ms = RenderCountdownTimer();
+                    break;
 
-        // 串行同步刷新板载指示灯 (严格在主屏帧渲染后执行，杜绝并发 RMT 中断破坏 WS2812 800kHz 时序)
-        BoardLed::GetInstance().UpdateAnimation();
+                default:
+                    // 基础特效与表情包
+                    delay_ms = effect_engine_.RenderFrame(mode);
+                    break;
+            }
 
+            // 串行同步刷新板载指示灯 (严格在主屏帧渲染后执行，杜绝并发 RMT 中断破坏 WS2812 800kHz 时序)
+            BoardLed::GetInstance().UpdateAnimation();
+
+        } // Release before sleeping so network/input tasks can proceed.
         vTaskDelay(pdMS_TO_TICKS(delay_ms > 5 ? delay_ms : 5));
     }
 
     vTaskDelete(NULL);
 }
 
+DisplayMode DisplayManager::GetMode() const
+{
+    DisplayLock lock(mutex_);return current_mode_;
+}
+
 void DisplayManager::SetMode(DisplayMode mode)
 {
-    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
-        current_mode_ = mode;
-        xSemaphoreGive(mutex_);
+    DisplayLock lock(mutex_);
+    int number=static_cast<int>(mode);
+    if(number<0 || number>24 || number==18)return;
+    if(mode!=DisplayMode::COUNTDOWN_TIMER) {
+        countdown_active_=false;countdown_finished_anim_=false;
     }
+    current_mode_=mode;
 }
 
 void DisplayManager::SetMode(int mode_number)
@@ -180,36 +197,43 @@ void DisplayManager::SetMode(int mode_number)
 
 void DisplayManager::SnakeMove(int dx, int dy)
 {
+    DisplayLock lock(mutex_);
     game_engine_.SnakeSetDirection(dx, dy);
 }
 
 void DisplayManager::TetrisMove(int dx)
 {
+    DisplayLock lock(mutex_);
     game_engine_.TetrisMove(dx);
 }
 
 void DisplayManager::TetrisRotate()
 {
+    DisplayLock lock(mutex_);
     game_engine_.TetrisRotate();
 }
 
 void DisplayManager::TetrisDrop()
 {
+    DisplayLock lock(mutex_);
     game_engine_.TetrisDrop();
 }
 
 void DisplayManager::FeedSpectrum(int beat, const int bands[16])
 {
+    DisplayLock lock(mutex_);
     spectrum_engine_.FeedBands(beat, bands);
 }
 
-void DisplayManager::FeedSpectrumSerial(const char* cmd)
+bool DisplayManager::FeedSpectrumSerial(const char* cmd)
 {
-    spectrum_engine_.ParseSerialCommand(cmd);
+    DisplayLock lock(mutex_);
+    return spectrum_engine_.ParseSerialCommand(cmd);
 }
 
 void DisplayManager::SetBrightness(uint8_t brightness)
 {
+    DisplayLock lock(mutex_);
     hal_.SetGlobalBrightness(brightness);
 }
 
@@ -218,19 +242,20 @@ void DisplayManager::SetBrightness(uint8_t brightness)
 // =========================================================================
 void DisplayManager::StartCountdown(uint32_t total_seconds)
 {
+    if(total_seconds>86400)return;
     if (total_seconds == 0) {
         StopCountdown();
         return;
     }
 
-    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
+    {
+        DisplayLock lock(mutex_);
         countdown_start_ms_ = get_millis();
         countdown_total_ms_ = total_seconds * 1000;
         countdown_active_ = true;
         countdown_finished_anim_ = false;
         countdown_finish_start_ms_ = 0;
         current_mode_ = DisplayMode::COUNTDOWN_TIMER;
-        xSemaphoreGive(mutex_);
     }
 
     ESP_LOGI(TAG, ">>> [倒计时启动]: 目标时长 %u 秒 (%u 毫秒), 256颗灯珠进入精确等比退行扫描",
@@ -239,21 +264,23 @@ void DisplayManager::StartCountdown(uint32_t total_seconds)
 
 void DisplayManager::StopCountdown()
 {
-    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
+    {
+        DisplayLock lock(mutex_);
         countdown_active_ = false;
         countdown_finished_anim_ = false;
         current_mode_ = DisplayMode::OFF;
-        xSemaphoreGive(mutex_);
     }
 }
 
 bool DisplayManager::IsCountdownActive() const
 {
+    DisplayLock lock(mutex_);
     return countdown_active_;
 }
 
 uint32_t DisplayManager::GetCountdownRemainingSeconds() const
 {
+    DisplayLock lock(mutex_);
     if (!countdown_active_) return 0;
     uint32_t now = get_millis();
     uint32_t elapsed = now - countdown_start_ms_;

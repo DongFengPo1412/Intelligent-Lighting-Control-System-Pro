@@ -132,7 +132,7 @@ async def handle_mode(request: web.Request):
     """设置光场 25 种原生模式编号"""
     try:
         data = await request.json()
-        mode_num = int(data.get("mode", 11))
+        mode_num = data.get("mode", 11)
         loop = asyncio.get_running_loop()
         await device_call(controller.set_mode, mode_num)
         await broadcast_ws({"type": "mode_changed", "mode": mode_num})

@@ -54,6 +54,24 @@ void GameEngine::DrawScore(int score)
 
 // ------------------- 贪吃蛇 -------------------
 
+bool GameEngine::PlaceSnakeFood()
+{
+    int free_count=0;
+    for(int i=0;i<TOTAL_LEDS;++i) {
+        bool occupied=false;
+        for(int j=0;j<snake_len_;++j)if(snake_x_[j]==i%16 && snake_y_[j]==i/16){occupied=true;break;}
+        if(!occupied)++free_count;
+    }
+    if(!free_count)return false;
+    int choice=esp_random()%free_count;
+    for(int i=0;i<TOTAL_LEDS;++i) {
+        bool occupied=false;
+        for(int j=0;j<snake_len_;++j)if(snake_x_[j]==i%16 && snake_y_[j]==i/16){occupied=true;break;}
+        if(!occupied && choice--==0){food_x_=i%16;food_y_=i/16;return true;}
+    }
+    return false;
+}
+
 void GameEngine::InitSnake()
 {
     snake_len_ = 3;
@@ -67,19 +85,17 @@ void GameEngine::InitSnake()
         snake_x_[i] = 5 - i;
         snake_y_[i] = 7;
     }
-    food_x_ = random8(16);
-    food_y_ = random8(16);
+    pending_snake_direction_ = 0;
+    PlaceSnakeFood();
     last_snake_tick_ = get_millis();
 }
 
 void GameEngine::SnakeSetDirection(int dx, int dy)
 {
-    // 防止直接掉头自杀
-    if (snake_len_ > 1 && (snake_x_[0] + dx == snake_x_[1]) && (snake_y_[0] + dy == snake_y_[1])) {
-        return;
-    }
-    snake_dx_ = dx;
-    snake_dy_ = dy;
+    if (dx == 1 && dy == 0) pending_snake_direction_=1;
+    else if (dx == -1 && dy == 0) pending_snake_direction_=2;
+    else if (dx == 0 && dy == 1) pending_snake_direction_=3;
+    else if (dx == 0 && dy == -1) pending_snake_direction_=4;
 }
 
 uint32_t GameEngine::RunSnake()
@@ -93,6 +109,12 @@ uint32_t GameEngine::RunSnake()
     uint32_t now = get_millis();
     if (now - last_snake_tick_ >= (uint32_t)snake_speed_ms_) {
         last_snake_tick_ = now;
+        int direction=pending_snake_direction_;pending_snake_direction_=0;
+        if(direction==1 && snake_dx_!=-1){snake_dx_=1;snake_dy_=0;}
+        else if(direction==2 && snake_dx_!=1){snake_dx_=-1;snake_dy_=0;}
+        else if(direction==3 && snake_dy_!=-1){snake_dx_=0;snake_dy_=1;}
+        else if(direction==4 && snake_dy_!=1){snake_dx_=0;snake_dy_=-1;}
+        int tail_x=snake_x_[snake_len_-1],tail_y=snake_y_[snake_len_-1];
 
         // 移动蛇身
         for (int i = snake_len_ - 1; i > 0; i--) {
@@ -116,11 +138,12 @@ uint32_t GameEngine::RunSnake()
         if (snake_x_[0] == food_x_ && snake_y_[0] == food_y_) {
             snake_score_++;
             if (snake_len_ < TOTAL_LEDS) {
+                snake_x_[snake_len_]=tail_x;snake_y_[snake_len_]=tail_y;
                 snake_len_++;
             }
-            snake_speed_ms_ = (snake_speed_ms_ > 80) ? (450 - (snake_score_ * 15)) : 80;
-            food_x_ = random8(16);
-            food_y_ = random8(16);
+            snake_speed_ms_ = 450 - snake_score_ * 15;
+            if(snake_speed_ms_<80)snake_speed_ms_=80;
+            if(!PlaceSnakeFood()){snake_game_over_=true;return 50;}
         }
     }
 
@@ -235,7 +258,8 @@ uint32_t GameEngine::RunTetris()
                 }
                 if (full) {
                     tetris_score_++;
-                    tetris_speed_ms_ = (tetris_speed_ms_ > 100) ? (tetris_speed_ms_ - 30) : 100;
+                    tetris_speed_ms_ = tetris_speed_ms_ - 30;
+                    if(tetris_speed_ms_<100)tetris_speed_ms_=100;
                     for (int ty = y; ty > 0; ty--) {
                         for (int tx = BOARD_LEFT; tx <= BOARD_RIGHT; tx++) {
                             tetris_field_[ty][tx] = tetris_field_[ty - 1][tx];

@@ -1,4 +1,5 @@
 #include "spectrum_engine.h"
+#include "spectrum_packet.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -12,6 +13,7 @@ SpectrumEngine::SpectrumEngine()
 void SpectrumEngine::Reset()
 {
     is_beat_ = 0;
+    last_feed_time_ = get_millis();
     for (int i = 0; i < 16; i++) {
         bands_[i] = 0;
         fall_bands_[i] = 0.0f;
@@ -22,14 +24,18 @@ void SpectrumEngine::Reset()
 
 void SpectrumEngine::FeedBands(int beat, const int bands[16])
 {
+    if (!bands || (beat != 0 && beat != 1)) return;
+    for (int i=0;i<16;++i) if (bands[i]<0 || bands[i]>15) return;
     is_beat_ = beat;
+    bool energy = false;
     for (int i = 0; i < 16; i++) {
         bands_[i] = bands[i];
+        energy = energy || bands[i]>0;
     }
 
     // 最左列低频补偿与鼓点爆发 (复刻中阶调优逻辑)
-    if (bands_[0] <= 1) {
-        bands_[0] = bands_[1] + 1;
+    if (energy && bands_[0] <= 1) {
+        bands_[0] = bands_[1] < 15 ? bands_[1] + 1 : 15;
     }
     if (is_beat_ == 1) {
         bands_[0] = 15; // 鼓点爆发，低音冲顶
@@ -38,27 +44,26 @@ void SpectrumEngine::FeedBands(int beat, const int bands[16])
     last_feed_time_ = get_millis();
 }
 
-void SpectrumEngine::ParseSerialCommand(const char* cmd)
+bool SpectrumEngine::ParseSerialCommand(const char* cmd)
 {
-    if (!cmd || strncmp(cmd, "f,", 2) != 0) return;
+    if (!cmd || strncmp(cmd, "f,", 2) != 0) return false;
 
     int beat = 0;
     int b[16] = {0};
-    int parsed = sscanf(cmd, "f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-                        &beat,
-                        &b[0], &b[1], &b[2], &b[3],
-                        &b[4], &b[5], &b[6], &b[7],
-                        &b[8], &b[9], &b[10], &b[11],
-                        &b[12], &b[13], &b[14], &b[15]);
-
-    if (parsed == 17) {
+    if (ParseSpectrumPacket(cmd, beat, b)) {
         FeedBands(beat, b);
+        return true;
     }
+    return false;
 }
 
 uint32_t SpectrumEngine::RenderFrame()
 {
     DisplayHAL& hal = DisplayHAL::GetInstance();
+    if (get_millis() - last_feed_time_ > 500) {
+        is_beat_ = 0;
+        for (int i=0;i<16;++i) bands_[i]=0;
+    }
 
     // 1. 整体渐暗：保留拖尾余晖 (复刻中阶 fadeToBlackBy 160)
     hal.FadeToBlackBy(160);
@@ -83,7 +88,7 @@ uint32_t SpectrumEngine::RenderFrame()
         if (current_height > 15) current_height = 15;
 
         // 3. 纵向绘制柱体：从底部向上生长
-        for (int y = 0; y <= current_height; y++) {
+        for (int y = 0; current_height > 0 && y <= current_height; y++) {
             int target_physical_y = 15 - y;
             if (target_physical_y < 0) target_physical_y = 0;
 
@@ -108,7 +113,7 @@ uint32_t SpectrumEngine::RenderFrame()
         }
 
         int peak_y = 15 - (int)peak_bands_[x];
-        if (peak_y >= 0 && peak_y < 16) {
+        if (peak_bands_[x] >= 1.0f && peak_y >= 0 && peak_y < 16) {
             // 峰值悬停顶针以极亮纯白/极浅天蓝呈现，视觉冲击力极强
             hal.SetPixel(x, peak_y, ColorRGB(255, 255, 255));
         }

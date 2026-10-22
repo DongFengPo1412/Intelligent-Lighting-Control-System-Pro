@@ -41,7 +41,7 @@ Display task priority 5 runs on Core 1; USB/audio and UDP tasks run on Core 0. M
 
 Startup brightness is 20; the protocol accepts 0–60, with channels approximately RGB×brightness/255. Mid's FastLED 5 V/1200 mA estimator is absent. Brightness limits are not hardware current limits. GPIO48 is another RMT device with `with_dma=false`, indicating pairing/listening/thinking/speaking; not every LED is DMA-driven.
 
-Mode setters use a mutex, but game/band data are not all routed through one serialized task queue. ACKs are not atomic snapshots of the entire system.
+A shared recursive mutex serializes rendering, mode/game/spectrum input, brightness and timer operations; it is released before the render task sleeps. Internal game-completion mode changes can re-enter the lock. This is not a single-task command FIFO and ACKs are not global atomic snapshots. Advanced direct-engine access requires caller-managed synchronization.
 
 <a id="display"></a>
 
@@ -90,9 +90,9 @@ It adds edge-pixel fading and green/orange/red progress colors. Expiry starts ab
 
 ### Game mechanisms and limits
 
-Snake uses 256-entry coordinates, starts at length 3, wraps 16×16, and checks self-collision. Food does not exclude the body, and growth does not explicitly copy the old tail. Score changes speed; checking the old speed before assignment can produce 75 ms before returning to 80 ms, so 80 ms is not a strict lower bound. Direct head/neck reversal checks need boundary-wrap testing.
+Snake retains 256 coordinates, initial length 3, 16×16 wrapping and self-collision. Bounded enumeration selects an unoccupied food cell; growth preserves the old tail, and a full board ends play. The latest direction is applied once per tick and cannot reverse the last committed direction. Speed is clamped to at least 80 ms; arbitrary multi-digit score display remains incomplete.
 
-Tetris stores seven shapes/four rotations and a 16×16 field with ten columns x=3..12. It implements collision, stepping, rotation, locking, line clearing, and scoring. Initial 800 ms decreases 30 ms per line; the conditional can briefly reach 80 ms before 100 ms. `drop` moves one cell, without hard drop/wall kicks. No reaction-time/facial-state DDA exists. A tens glyph outside 0–9 is rejected, so arbitrary multi-digit scores are not fully rendered.
+Tetris retains seven shapes/four rotations, a 16×16 field and ten columns x=3..12, with collision, rotation, locking, line clearing and scoring. The initial 800 ms interval decreases by 30 ms per line and is clamped at 100 ms. Drop moves one cell; hard drop, wall kicks and DDA are absent.
 
 <a id="voice-agent"></a>
 
@@ -150,7 +150,7 @@ Android is a Java WebView, loading a configured PC URL and falling back to bundl
 
 | Program | Actual implementation | Boundary |
 | :--- | :--- | :--- |
-| [vision_gesture.py](../pc-agent-vision/vision_gesture.py) | MediaPipe single-hand x/y rules; 0 off, 1 red, 2/victory companion, 3 fire, 4 code rain, 5 rainbow. | Changed result and >0.6 s since last trigger, not a 0.6 s pose hold. Still gates sending on USB-connected state; no 3D grasp/throw. |
+| [vision_gesture.py](../pc-agent-vision/vision_gesture.py) | MediaPipe single-hand x/y rules; 0 off, 1 red, 2/victory companion, 3 fire, 4 code rain, 5 rainbow. | Changed result and >0.6 s since last trigger, not a 0.6 s pose hold. Still gates sending on Wi-Fi control readiness; no 3D grasp/throw. |
 | [vision_face.py](../pc-agent-vision/vision_face.py) | Haar/100×100 grayscale LBPH, S capture/T retrain; ylk red, zzc blue, other names smile; 15 s greeting cooldown. | No liveness/security evaluation; synchronous synthesis may block GUI; not online incremental learning. |
 | [vision_tracker.py](../pc-agent-vision/vision_tracker.py) | Face Mesh mouth width/height>2.8 triggers smile, timed dynamic-face return, presence flag. | Geometric heuristic, not emotion/head-pose/gaze/fatigue classification; absence does not activate power saving. |
 | [audio_visualizer.py](../pc-agent-vision/audio_visualizer.py) | PyAudio default 16 kHz input, 512-point Hann/rFFT, sixteen averages, peak normalization, log amplitude, low-frequency transients. | PC input, not automatic phone/system-playback capture; separate from Web startup, without MIR fluids. |
@@ -162,15 +162,15 @@ P_t=\max(0.96P_{t-1},\max_i a_i,0.01),\qquad
 b_i=\left\lfloor15\frac{\ln(1+9a_i/P_t)}{\ln10}\right\rfloor
 ```
 
-Indices 13–15 are multiplied by 0.7 and clamped 0–15. Beat uses magnitude bins 1–3, a 1.35 previous-level ratio, magnitude>0.12, and RMS>0.02. At 16 kHz: 32 ms windows, 31.25 Hz bins, bins 1–199 used. S3 renders sixteen bands with empirical decay and white peak markers; `last_feed_time_` does not implement a stale-stream reset, so old targets remain after input stops.
+Spectrum rendering retains empirical decay and white peak markers. `last_feed_time_` now enforces a 500 ms stale-input threshold and clears old targets without new packets. This threshold is not an end-to-end latency result.
 
-Old `b 150` commands in vision/spectrum programs exceed the firmware range of 0–60 and fail; printed restoration messages do not prove success. Vision programs compete for the camera and can overwrite voice/Web modes, without central arbitration. Uncompiled fingertip code does not fill those gaps.
+Old `b 150` in the independent gesture/spectrum scripts is replaced by legal brightness 20 and Wi-Fi readiness. Spectrum startup requires a mode ACK, failure releases capture, and restoration messages follow command results. Vision programs still compete for the camera/modes; uncompiled fingertip sources do not resolve those gaps.
 
 <a id="implementation-status"></a>
 
 ## Validation, incomplete work, and next steps
 
-This pass reran 22 interaction regressions, 6 semantic unit tests, 11 palette checks, two C++ static-assert files, and two JS syntax checks. Regressions use AST extraction/mocks, without CUDA/TTS or hardware. No new real-model run, complete firmware build, flash, recording, or playback occurred.
+An isolated ESP-IDF 5.5.4 build with public example network configuration succeeds; the image is 874800 bytes. Eleven real C++ engine cases and nine Python control/resource-release cases pass. C++ uses a fake clock/LED HAL; Python does not connect serial, UDP, microphones or models. No flashing, recording, audible output or new hardware acceptance occurred. Historical listening/hardware records do not validate this revision.
 
 Historical [voice recovery](VOICE_CONTROL_RECOVERY.md) records thirty fixed semantic cases, two user-confirmed voice scenarios, and 223360 samples written during silent-output checks. These scopes cannot be combined into accuracy/listening metrics. [Panel validation](MATRIX_16X16_VALIDATION.md) records diagnostic patterns and multimode confirmation; 73/74 hardware-check counts include variable polling and are not identical fixed benchmarks.
 
@@ -181,6 +181,10 @@ The latest color record describes an 873920-byte binary whose local SHA256 match
 | Traceable main implementation | Single-board driver, effects/companion/games/timer, UDP ACK, single-turn voice, Web control. |
 | Independent or lacking unified acceptance | Three vision programs, PyAudio spectra, Android packaging/offline pages, unintegrated fingertip sources. |
 | Future targets | Continuous dialogue, MCP service, persistent memory, gaze/pose/fatigue, grasp/throw, gesture games, DDA, wireless audio, MIR, 3D twin. |
-| Known issues | Old b150, browser/board state mismatch, mode 25 without duration, game growth/food/speed/scores, shared data/camera arbitration, missing stale-stream reset. |
+| Remaining limits | Remaining limits include browser/board state mismatch, camera/mode arbitration, arbitrary multi-digit scoring, external models/environments and stale Android bundled pages. New locking, timeout and input behavior still require physical tests. |
 
-Dependencies are not fully pinned; private models are omitted, and Python paths include the original machine. Missing directories/LICENSE links and unsupported 85% CPU/latency/TTFT claims were removed or identified as targets. Core source and historical records are unchanged; only the old specification receives a design-status notice. Maintenance does not imply authorship of every framework/model/asset.
+`requirements-control.txt` pins pyserial 3.5 for the control clients only; it does not install the complete web/vision/voice stack. Full dependencies are not locked and external models/original-machine paths still need configuration. Maintenance fixes preserve historical records and do not imply authorship of all frameworks, models or assets.
+
+The 2026-10 revision validates spectrum fields/ranges and propagates rejection. After 500 ms without input, targets clear and decay continues; zero values no longer keep bottom pixels/peak markers lit. Snake fixes food exclusion, old-tail growth, full-board completion and once-per-tick direction application with a strict 80 ms speed floor. Tetris has a strict 100 ms floor. Rendering, mode/game/spectrum input, brightness and timer state share a recursive mutex.
+
+Countdown requires its dedicated command with integer duration 1–86400 seconds. Direct modes are 0–24 except 18; selecting 25 without duration is rejected consistently by the PC controller, tool schema and firmware. Independent gesture/spectrum scripts now check Wi-Fi control readiness and restore legal brightness 20, without requiring a USB audio connection. They remain standalone programs without unified camera/mode arbitration.

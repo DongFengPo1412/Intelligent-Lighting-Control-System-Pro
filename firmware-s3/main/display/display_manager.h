@@ -22,7 +22,7 @@ public:
     // 模式切换与查询 (线程安全)
     void SetMode(DisplayMode mode);
     void SetMode(int mode_number);
-    DisplayMode GetMode() const { return current_mode_; }
+    DisplayMode GetMode() const;
 
     // 游戏交互输入
     void SnakeMove(int dx, int dy);
@@ -32,7 +32,7 @@ public:
 
     // 音频频谱注入
     void FeedSpectrum(int beat, const int bands[16]);
-    void FeedSpectrumSerial(const char* cmd);
+    bool FeedSpectrumSerial(const char* cmd);
 
     // 整板统一亮度
     void SetBrightness(uint8_t brightness);

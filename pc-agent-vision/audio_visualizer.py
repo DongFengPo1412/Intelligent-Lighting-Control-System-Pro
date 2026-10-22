@@ -1,7 +1,7 @@
 """
 audio_visualizer.py: 16 频段真音乐物理频谱发射机 (移植自中阶 audio_service.cc)
 将麦克风或声卡音频流实时转换为 16 频段对数能谱与鼓点 (Beat Detection)
-并通过串口向 ESP32-S3 Mode 15 直推 "f,beat,b0,b1...b15" 物理驱动协议
+并通过 Wi-Fi 命令通道向 ESP32-S3 Mode 15 直推 "f,beat,b0,b1...b15" 物理驱动协议
 """
 
 import sys
@@ -47,12 +47,10 @@ class AudioVisualizer:
         print("  ● 正在切换灯板至: 模式 15 (音乐随动频谱)...")
         print("=" * 60)
 
-        # 切换灯板为频谱模式
-        if self.controller.is_connected:
-            self.controller.set_mode(15)
-
         self.is_running = True
         try:
+            if not self.controller.set_mode(15):
+                raise ConnectionError("Spectrum mode was not acknowledged over Wi-Fi")
             while self.is_running:
                 data = stream.read(self.chunk_size, exception_on_overflow=False)
                 samples = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
@@ -105,7 +103,7 @@ class AudioVisualizer:
                 band_str = ",".join(str(b) for b in bands)
                 packet = f"f,{is_beat},{band_str}"
 
-                if self.controller.is_connected:
+                if self.controller.control_connected:
                     self.controller.send_raw(packet)
 
         finally:
@@ -113,10 +111,11 @@ class AudioVisualizer:
             stream.close()
             p.terminate()
             # 退出时恢复为红莉栖桌宠模式
-            if self.controller.is_connected:
-                self.controller.send_raw("kurisu")
-                self.controller.send_raw("b 150")
-            print("[AudioVisualizer] 频谱推流已停止，恢复红莉栖桌宠伴侣。")
+            restored = False
+            if self.controller.control_connected:
+                restored = self.controller.set_mode(17) and self.controller.set_brightness(20)
+            print("[AudioVisualizer] 推流停止；桌宠已恢复。" if restored else
+                  "[AudioVisualizer] 推流停止；灯板恢复未获确认。")
 
 if __name__ == "__main__":
     vis = AudioVisualizer()

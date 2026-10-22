@@ -15,7 +15,7 @@ public:
     void FeedBands(int beat, const int bands[16]);
 
     // 数据输入接口 2: 兼容中阶 "f,beat,b0,b1..." 串口字符串格式
-    void ParseSerialCommand(const char* cmd);
+    bool ParseSerialCommand(const char* cmd);
 
     // 渲染一帧频谱画面 (返回渲染耗时/建议延时)
     uint32_t RenderFrame();

@@ -67,8 +67,8 @@ def run_gesture_controller(cam_index=0, headless=False):
     print("=" * 60)
 
     ctrl = get_light_controller()
-    if not ctrl.is_connected:
-        print("[Gesture 警告]: 硬件串口未就绪，将仅运行手势视觉识别预览")
+    if not ctrl.control_connected:
+        print("[Gesture 警告]: 灯板Wi-Fi未就绪，将仅运行手势视觉识别预览")
 
     mp_hands = mp.solutions.hands
     mp_draw = mp.solutions.drawing_utils
@@ -120,12 +120,12 @@ def run_gesture_controller(cam_index=0, headless=False):
                 if current_gesture != last_gesture and (now - last_trigger_time > 0.6):
                     last_gesture = current_gesture
                     last_trigger_time = now
-                    if cmd_info and ctrl.is_connected:
+                    if cmd_info and ctrl.control_connected:
                         cmd, name = cmd_info
                         print(f"✨ [隔空手势触发]: {name} (执行指令: '{cmd}')")
                         ctrl.send_raw(cmd)
                         if cmd == "kurisu":
-                            ctrl.send_raw("b 150")
+                            ctrl.set_brightness(20)
             else:
                 last_gesture = None
 

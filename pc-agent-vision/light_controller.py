@@ -354,7 +354,8 @@ class LightController:
     def countdown(self, seconds: int) -> bool:
         """启动物理沙漏倒计时 (秒)"""
         print(f"[具身指令] 启动物理沙漏倒计时: {seconds} 秒")
-        seconds = int(seconds)
+        if isinstance(seconds, bool) or not isinstance(seconds, int):
+            raise ValueError("Countdown seconds must be an integer")
         if not 1 <= seconds <= 86400:
             raise ValueError("Countdown must be between 1 and 86400 seconds")
         return self.send_json({"cmd": "countdown", "seconds": seconds})
@@ -373,10 +374,11 @@ class LightController:
         return ok
 
     def set_mode(self, mode_num: int) -> bool:
-        """设置 16x16 矩阵灯板的原生模式编号 (0~25)"""
+        """Select a direct mode (0..24 except 18); countdown requires seconds."""
         print(f"[具身指令] 设置模式编号: {mode_num}")
-        mode_num = int(mode_num)
-        if mode_num not in set(range(26)) - {18}:
+        if isinstance(mode_num, bool) or not isinstance(mode_num, int):
+            raise ValueError("Mode must be an integer")
+        if mode_num not in set(range(25)) - {18}:
             raise ValueError("Invalid display mode")
         return self.send_json({"cmd": "mode", "val": mode_num})
 
@@ -391,6 +393,8 @@ class LightController:
     def set_theme(self, theme: str) -> bool:
         """设置视觉主题 (支持英文别名、数字编号、以及语义意象词汇)"""
         theme_str = theme.lower().strip()
+        if theme_str in {"countdown", "timer", "hourglass", "sand"}:
+            raise ValueError("Countdown requires seconds; use countdown(seconds)")
         
         # 如果直接是数字，直接切换编号
         if theme_str.isdigit():
@@ -431,10 +435,6 @@ class LightController:
             "snake": "mode 19",
             "tetris": "mode 21",
             "spectrum": "mode 15",
-            "countdown": "mode 25",
-            "timer": "mode 25",
-            "hourglass": "mode 25",
-            "sand": "mode 25"
         }
         cmd = theme_map.get(theme_str)
         if cmd is None:

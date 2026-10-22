@@ -1,0 +1,4 @@
+# Minimal control clients only: light_controller.py, wifi_gateway.py,
+# semantic_control.py. Voice, camera, web server and USB PCM need their own
+# documented environments; this file does not install that complete stack.
+pyserial==3.5
