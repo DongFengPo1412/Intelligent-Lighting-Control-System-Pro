@@ -536,6 +536,7 @@ uint32_t EffectEngine::RenderFrame(DisplayMode mode)
     }
 
     const bool desk_pet = mode == DisplayMode::KURISU_DESK_PET || mode == DisplayMode::AI_FEEDBACK;
-    hal.Show(desk_pet ? KURISU_BRIGHTNESS_PERCENT : 100, desk_pet);
+    // Desk-pet frames already contain LED drive colors; do not decode them again.
+    hal.Show(desk_pet ? KURISU_BRIGHTNESS_PERCENT : 100);
     return 33; // 约 30 FPS 刷新
 }

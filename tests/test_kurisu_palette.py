@@ -38,6 +38,37 @@ class OriginalPaletteTests(unittest.TestCase):
         actual = (ROOT / 'firmware-s3/main/display/srgb_transfer.h').read_text(encoding='utf-8')
         self.assertEqual(actual, palette.generate_transfer_header())
 
+    def test_led_drive_targets_survive_output_scaling(self):
+        for role, target in palette.LED_REFERENCE_PWM.items():
+            actual = tuple(v * palette.LED_REFERENCE_BRIGHTNESS // 255 for v in palette.LED_PALETTE[role])
+            self.assertEqual(actual, target, role)
+        # Output data must not accidentally become source sRGB again.
+        self.assertNotEqual(palette.LED_PALETTE['HAIR'], palette.HAIR)
+
+    def test_visual_roles_retain_requested_contrast(self):
+        p = palette.LED_REFERENCE_PWM
+        self.assertGreater(p['HAIR'][0], 5 * max(p['HAIR'][1:]))
+        self.assertGreater(p['HR_D'][0], p['HR_D'][1])
+        self.assertGreater(p['HR_D'][1], p['HR_D'][2])
+        self.assertLess(p['HR_M'][0], p['HAIR'][0])
+        self.assertLess(p['HAIR'][0], p['HR_L'][0])
+        self.assertGreater(p['SKIN'][0], 2 * p['SKIN'][1])
+        self.assertGreater(p['IRIS'][2], p['IRIS'][0])
+        self.assertGreater(p['EYEL'][2], p['EYEL'][0])
+        self.assertLess(sum(p['LASH']), sum(p['IRIS']))
+        self.assertLess(sum(p['IRIS']), sum(p['EYEL']))
+        self.assertGreater(p['COAT'][1] / p['COAT'][0], p['HAIR'][1] / p['HAIR'][0])
+        self.assertLess(sum(p['PANTS']), sum(p['COAT']))
+        self.assertTrue(all(v > 0 for v in p['SOLE']))
+        self.assertEqual(p['BG_OFF'], (0, 0, 0))
+        self.assertEqual(p['TIE'][1:], (0, 0))
+        self.assertGreater(p['TIE'][0], max(max(c) for role, c in p.items() if role != 'TIE'))
+
+    def test_penultimate_row_uses_darker_coffee_pants(self):
+        self.assertEqual(palette.grid_roles[14][6:10], ['PANTS'] * 4)
+        self.assertEqual(palette.grid_roles[15][6:10], ['SOLE'] * 4)
+        self.assertEqual(palette.grid_roles[5][15], 'HR_D')
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
