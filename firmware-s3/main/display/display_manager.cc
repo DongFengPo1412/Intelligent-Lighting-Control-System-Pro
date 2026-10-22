@@ -213,11 +213,6 @@ void DisplayManager::SetBrightness(uint8_t brightness)
     hal_.SetGlobalBrightness(brightness);
 }
 
-void DisplayManager::SetCompensation(bool enable)
-{
-    hal_.SetCompensationEnabled(enable);
-}
-
 // =========================================================================
 // 智能倒计时系统 (按秒设置，256灯珠等比逐颗熄灭，精准对齐总耗时)
 // =========================================================================

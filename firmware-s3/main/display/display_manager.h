@@ -34,9 +34,8 @@ public:
     void FeedSpectrum(int beat, const int bands[16]);
     void FeedSpectrumSerial(const char* cmd);
 
-    // 亮度与均光补偿
+    // 整板统一亮度
     void SetBrightness(uint8_t brightness);
-    void SetCompensation(bool enable);
 
     // 智能倒计时系统 (按秒设置，256灯珠等比逐颗熄灭，精准对齐总耗时)
     void StartCountdown(uint32_t total_seconds);

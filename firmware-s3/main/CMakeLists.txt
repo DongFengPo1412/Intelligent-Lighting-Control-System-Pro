@@ -1,6 +1,12 @@
+option(PRO_MATRIX_DIAGNOSTIC "Build the opt-in 16x16 wiring test instead of the full application" OFF)
+set(PRO_APP_MAIN "main.cc")
+if(PRO_MATRIX_DIAGNOSTIC)
+    set(PRO_APP_MAIN "../diagnostics/matrix_layout_main.cc")
+endif()
+
 idf_component_register(
     SRCS
-        "main.cc"
+        "${PRO_APP_MAIN}"
         "display/display_hal.cc"
         "display/effect_engine.cc"
         "display/game_engine.cc"

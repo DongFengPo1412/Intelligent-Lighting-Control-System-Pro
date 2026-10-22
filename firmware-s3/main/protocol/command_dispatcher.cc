@@ -592,8 +592,6 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
         dm.SetBrightness((uint8_t)br);
         return true;
     }
-    if (strcasecmp(text_str, "comp on") == 0)  { dm.SetCompensation(true);  return true; }
-    if (strcasecmp(text_str, "comp off") == 0) { dm.SetCompensation(false); return true; }
 
     // 4.1 音量微调: "volume 70" / "v 70"
     int vol = 0;

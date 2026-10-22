@@ -14,7 +14,6 @@ DisplayHAL& DisplayHAL::GetInstance()
 DisplayHAL::DisplayHAL()
     : led_strip_(nullptr),
       base_brightness_(150),
-      enable_compensation_(true),
       is_initialized_(false)
 {
     memset(buffer_, 0, sizeof(buffer_));
@@ -135,25 +134,10 @@ esp_err_t DisplayHAL::Show()
         uint16_t g = (buffer_[i].g * base_brightness_) / 255;
         uint16_t b = (buffer_[i].b * base_brightness_) / 255;
 
-        // 2. 4 块 8x8 级联板非线性压降梯级补偿
-        if (enable_compensation_) {
-            uint32_t panel = i / 64;
-            uint32_t scale_percent;
-            switch (panel) {
-                case 0: scale_percent = 45;  break; // 第 1 块板
-                case 1: scale_percent = 62;  break; // 第 2 块板
-                case 2: scale_percent = 80;  break; // 第 3 块板
-                default: scale_percent = 100; break; // 第 4 块板
-            }
-            r = (r * scale_percent) / 100;
-            g = (g * scale_percent) / 100;
-            b = (b * scale_percent) / 100;
-        }
-
         led_strip_set_pixel(led_strip_, i, (uint32_t)r, (uint32_t)g, (uint32_t)b);
     }
 
-    // 🌟 核心修复：为第 4 块板的尾端推送 2 颗虚拟黑色灯珠数据
+    // 保留已验证的尾端时序裕量：整板末尾附加 2 颗虚拟黑色灯珠数据。
     // 确保总线末端（第256颗灯珠，即索引255）能够完整移位并接收到充裕的 280us 复位锁存脉冲
     led_strip_set_pixel(led_strip_, TOTAL_LEDS, 0, 0, 0);
     led_strip_set_pixel(led_strip_, TOTAL_LEDS + 1, 0, 0, 0);

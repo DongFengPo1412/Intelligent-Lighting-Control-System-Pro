@@ -45,8 +45,7 @@ extern "C" void app_main(void)
         GPIO_NUM_16  // spk_lrck
     ));
 
-    // 3. 开启 4 块板硬件压降梯级均光校准 (FastLED 纯线性色阶通透管线)
-    display.SetCompensation(true);
+    // 3. 单块 16x16 蛇形灯板统一亮度，不再应用四块拼接板的梯级补偿。
     display.SetBrightness(20);
 
     // 4. 启动后台独立物理渲染引擎 (运行在 Core 1，优先级 5)

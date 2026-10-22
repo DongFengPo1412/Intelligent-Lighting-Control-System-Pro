@@ -5,10 +5,11 @@
 #include <math.h>
 #include <esp_random.h>
 #include <esp_timer.h>
+#include "matrix_layout.h"
 
-#define MATRIX_WIDTH   16
-#define MATRIX_HEIGHT  16
-#define TOTAL_LEDS     (MATRIX_WIDTH * MATRIX_HEIGHT) // 256
+#define MATRIX_WIDTH   MatrixLayout::kWidth
+#define MATRIX_HEIGHT  MatrixLayout::kHeight
+#define TOTAL_LEDS     MatrixLayout::kPixelCount // 256
 
 // 预定义模式枚举 (对齐中阶模式定义)
 enum class DisplayMode : int {

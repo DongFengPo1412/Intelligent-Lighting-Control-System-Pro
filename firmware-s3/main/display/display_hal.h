@@ -20,20 +20,16 @@ public:
     void FadeToBlackBy(uint8_t fade_by);
     void DrawDigit(int n, int x, int y, const ColorRGB& color);
 
-    // 亮度与均光控制
+    // 整板统一亮度控制
     void SetGlobalBrightness(uint8_t brightness);
     uint8_t GetGlobalBrightness() const { return base_brightness_; }
-    void SetCompensationEnabled(bool enable) { enable_compensation_ = enable; }
-    bool IsCompensationEnabled() const { return enable_compensation_; }
 
     // 将显存数据推送到物理矩阵屏
     esp_err_t Show();
 
-    // 坐标索引换算
-    static inline int GetPixelIndex(int x, int y) {
-        if (x < 0 || x >= MATRIX_WIDTH || y < 0 || y >= MATRIX_HEIGHT) return -1;
-        int blockID = (y / 8) * 2 + (x / 8); 
-        return blockID * 64 + (y % 8) * 8 + (x % 8);
+    // 左上角为原点，16x16 整板逐行蛇形走线。
+    static constexpr int GetPixelIndex(int x, int y) {
+        return MatrixLayout::PixelIndex(x, y);
     }
 
     ColorRGB* GetBuffer() { return buffer_; }
@@ -48,6 +44,5 @@ private:
     led_strip_handle_t led_strip_;
     ColorRGB buffer_[TOTAL_LEDS];
     uint8_t base_brightness_;
-    bool enable_compensation_;
     bool is_initialized_;
 };
