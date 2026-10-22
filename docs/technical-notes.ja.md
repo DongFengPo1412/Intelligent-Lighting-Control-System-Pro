@@ -23,7 +23,7 @@
 | 対話と合成 | [kurisu_agent.py](../pc-agent-vision/kurisu_agent.py)、[voice_engine.py](../pc-agent-vision/voice_engine.py)、[light_tools.py](../pc-agent-vision/light_tools.py) | 短期会話、ツール、二言語応答、GPT-SoVITSとキャッシュ。 |
 | クライアント | [Web JS](../pc-agent-vision/web_app/app.js)、[Android Activity](../android-app/src/org/fglab/kurisu/MainActivity.java) | 操作、独立Canvasアニメーション、WebView。 |
 
-Webは`vision_gesture.py`、`vision_face.py`、`vision_tracker.py`、`audio_visualizer.py`を自動起動しません。ルート`fingertip_tracker.*`は正式CMakeに含まれず、26／trackの解析・列挙もありません。[INTEGRATION](../INTEGRATION.md)は統合待ちの提案です。
+Webは`vision_gesture.py`、`vision_face.py`、`vision_tracker.py`、`audio_visualizer.py`を自動起動しません。`firmware-s3/main/display/fingertip_tracker.*`は正式CMakeに含まれず、26／trackの解析・列挙もありません。[INTEGRATION](../INTEGRATION.md)は統合待ちの提案です。
 
 <a id="driver"></a>
 

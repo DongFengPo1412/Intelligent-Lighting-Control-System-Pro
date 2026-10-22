@@ -1,11 +1,18 @@
-> 交接状态：本文与根目录指尖源码是待集成参考资料，当前运行固件尚未接入模式 26 和 track 命令。本文描述的是接入方案，并非已实现功能。当前普通灯控已支持板端 Wi-Fi UDP 接收与确认；文末关于仅支持串口的描述属于旧状态。
+> 状态（2026-10-23）：组员提供的三份指尖追踪源码已放入对应模块目录，原始内容保留。Python 语法检查与 ESP32-S3 工具链的 C++ 语法／头文件兼容性检查通过。当前正式固件仍未接入模式 26、`track` 或 `track_cal`，下文是待实施方案，不是现成功能的运行说明。
 
 # 指尖追踪灯光效果接入说明
 
 这套代码分成两半：
 
-- `pc/finger_tip_stream.py`：在 PC 上用 MediaPipe 找到食指指尖，持续把归一化坐标通过串口发给 ESP32-S3。
-- `firmware/fingertip_tracker.h/.cc`：在 ESP32-S3 上把坐标映射到 16×16 灯板，负责平滑、拖尾、变色和丢失后的呼吸动画。
+- `pc-agent-vision/finger_tip_stream.py`：在 PC 上用 MediaPipe 找到食指指尖，调用现有控制器发送归一化坐标。
+- `firmware-s3/main/display/fingertip_tracker.h/.cc`：在 ESP32-S3 上把坐标映射到 16×16 灯板，负责平滑、拖尾、变色和丢失后的呼吸动画；尚未加入正式 CMake 源文件列表。
+
+### 接入前必须处理的差异
+
+- 正式控制器的直接模式入口只接受 0～24（排除 18；25 倒计时另需时长），直接运行脚本的 `set_mode(26)` 会被拒绝。需同时补齐枚举、PC／HTTP／语义目录的模式校验、命令解析、显示任务与构建入口，并遵循现有显示状态互斥策略。
+- 现有 `LightController.send_json()` 经 Wi-Fi UDP 发送并等待回执。脚本中的 `is_connected` 判断和串口文字仍是旧接口假设，接入时应改用 `wait_for_control()`／`control_connected`，并处理模式与坐标发送失败。
+- 脚本的 `conf` 来源是 MediaPipe 左右手分类分数，不是指尖定位置信度，不能据此声称坐标具有相同置信度。
+- `RenderFrame()` 返回的 8 ms 只是建议延时；真实刷新率还受 RTOS tick、RMT 刷新和调度影响，尚未验证 60 FPS。语法检查不等于链接、烧录或摄像头到灯板的实机验收。
 
 摄像头识别和灯效渲染是解耦的。以后换成别的手部检测模型，只要继续发送同样的 `track` JSON 即可。
 
@@ -22,7 +29,7 @@ MediaPipe Hands
    │
    ▼
 {"cmd":"track","x":0.42,"y":0.63,"visible":true,"conf":0.98}
-   │  USB-Serial-JTAG
+   │  Wi-Fi UDP（完成下述协议接入后）
    ▼
 CommandDispatcher
    │
@@ -148,44 +155,11 @@ else if (strcasecmp(cmd, "track_cal") == 0) {
 }
 ```
 
-### 2.4 高频坐标包不要回 ACK
+### 2.4 高频坐标与现有 ACK 协议
 
-现有 `ProcessLine()` 会对每条成功指令回一条 `{"status":"ok"}`，并且会用 `ESP_LOGI` 打印整条指令。跟踪坐标每秒 30～60 包，如果每包都回 ACK、都打日志，会明显浪费串口带宽并增加延迟。
+现有 PC 控制器通过 Wi-Fi 等待带 `request_id` 的板端回执。不能直接照旧串口方案取消 ACK，否则发送会等待超时并重试。模式切换、校准和坐标注入先保持现有回执契约；参数非法时返回失败，不能回假成功。
 
-建议在 `CommandDispatcher` 中增加一个 `bool suppress_reply_` 成员（构造函数里初始化为 `false`），并在 `ProcessLine()` 里这样处理：
-
-```cpp
-suppress_reply_ = false;   // 每次解析新行前重置
-
-if (*line == '{') {
-    if (ProcessJsonCommand(line)) {
-        if (!suppress_reply_) {
-            SendReply("{\"status\":\"ok\"}\r\n");
-        }
-        return;
-    }
-}
-```
-
-在 `track` 分支成功调用 `dm.FeedFingertip(...)` 后加上：
-
-```cpp
-suppress_reply_ = true;
-```
-
-同时把高频坐标包的日志关掉。可以在 `ProcessLine()` 打印日志之前加：
-
-```cpp
-const bool is_track_stream =
-    (strstr(line, "\"cmd\":\"track\"") != nullptr) ||
-    (strncmp(line, "track ", 6) == 0);
-
-if (!is_track_stream) {
-    ESP_LOGI(TAG, ">>> [收到外部指令]: %s", line);
-}
-```
-
-`track_cal` 不是高频指令，仍然会正常打印和回复。
+高频坐标的逐帧 INFO 日志可改为 DEBUG 或限频统计。脚本的发送速率只是上限，同步等待回执时实际频率由链路决定。若后续实测需要独立的无回执坐标流，须同时设计 PC 非阻塞发送、序号、过期丢弃、最新目标替换及超时恢复，再单独验收，不能只屏蔽固件回复。
 
 纯文本模式可以再加一条：
 
@@ -274,7 +248,7 @@ fingertip_tracker_.SetColors(ColorRGB(230, 255, 255),
 
 ## 5. 运行
 
-先把固件烧录好，确认 PC 能通过 `light_controller.py` 连接 ESP32-S3。把 `pc/finger_tip_stream.py` 复制到项目的 `pc-agent-vision/` 目录（和 `light_controller.py` 放在一起），然后：
+完成上述接入与接口修正后，构建并烧录完整固件，确认 PC 能通过 Wi-Fi 获得板端回执。脚本已放在 `pc-agent-vision/`，届时可以运行：
 
 ```bash
 cd pc-agent-vision
@@ -288,7 +262,7 @@ python finger_tip_stream.py --camera 0 --rate 40
 --no-mirror         不镜像摄像头
 --no-square-crop    使用完整画面而不是中央正方形
 --camera 1          切换摄像头
---rate 30           降低串口发送频率
+--rate 30           降低坐标发送频率
 ```
 
 ## 6. 视觉说明
@@ -305,4 +279,4 @@ python finger_tip_stream.py --camera 0 --rate 40
 
 ## 7. 关于 Wi-Fi
 
-当前固件的命令入口是 USB-Serial-JTAG，`LightController.send_json()` 走的是串口。仓库里的 `wifi_gateway.py` 只是 PC 端 UDP 发送器，固件端还没有对应的 UDP 接收任务。如果要走 Wi-Fi，需要在 S3 侧增加 UDP/WebSocket 接收，并把收到的同一份 `track` JSON 交给 `CommandDispatcher::ProcessLine()`；灯效引擎本身不需要改动。
+当前正式工程已有板端 Wi-Fi UDP 接收和回执，`LightController.send_json()` 经 `wifi_gateway.py` 发送控制命令。后续需要把 `track`／`track_cal` 接入现有命令解析与显示任务，并保持输入状态的临界区保护，无需另造一套网络传输。当前仍未完成这项接入，请勿直接运行推流脚本并期待灯板跟随。

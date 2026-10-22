@@ -23,7 +23,7 @@
 | 对话／合成 | [kurisu_agent.py](../pc-agent-vision/kurisu_agent.py)、[voice_engine.py](../pc-agent-vision/voice_engine.py)、[light_tools.py](../pc-agent-vision/light_tools.py) | 短期会话、工具执行、双语回复、GPT-SoVITS及缓存。 |
 | 客户端 | [Web JS](../pc-agent-vision/web_app/app.js)、[Android Activity](../android-app/src/org/fglab/kurisu/MainActivity.java) | 页面控制、独立Canvas动画与WebView封装。 |
 
-Web服务不会自动启动 `vision_gesture.py`、`vision_face.py`、`vision_tracker.py` 或 `audio_visualizer.py`。根目录 `fingertip_tracker.*` 未被正式CMake列入，命令解析与枚举也没有26/track；[INTEGRATION](../INTEGRATION.md)是待实施接入方案。
+Web服务不会自动启动 `vision_gesture.py`、`vision_face.py`、`vision_tracker.py` 或 `audio_visualizer.py`。`firmware-s3/main/display/fingertip_tracker.*` 未被正式CMake列入，命令解析与枚举也没有26/track；[INTEGRATION](../INTEGRATION.md)是待实施接入方案。
 
 <a id="driver"></a>
 
@@ -164,7 +164,7 @@ b_i=\left\lfloor15\frac{\ln(1+9a_i/P_t)}{\ln10}\right\rfloor
 
 频谱渲染保留经验衰减与白色峰值；`last_feed_time_` 现在实际用于500 ms断流判定，并在无新数据时清除旧目标。该阈值不是端到端延迟成绩。
 
-视觉／频谱脚本中的旧`b 150`超出固件0–60范围，恢复命令会被拒绝；不要照其打印文字认定设置成功。三种视觉程序争用相机，可能覆盖语音／网页模式，没有统一输入仲裁。根目录指尖引擎仍未编译接入，不能用它补齐上述功能。
+视觉／频谱脚本中的旧`b 150`超出固件0–60范围，恢复命令会被拒绝；不要照其打印文字认定设置成功。三种视觉程序争用相机，可能覆盖语音／网页模式，没有统一输入仲裁。指尖引擎源码仍未编译接入，不能用它补齐上述功能。
 
 <a id="implementation-status"></a>
 

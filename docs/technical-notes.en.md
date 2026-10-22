@@ -23,7 +23,7 @@ Audit baseline: `d548868`. Current source, configuration, and available records 
 | Chat/synthesis | [kurisu_agent.py](../pc-agent-vision/kurisu_agent.py), [voice_engine.py](../pc-agent-vision/voice_engine.py), [light_tools.py](../pc-agent-vision/light_tools.py) | Short-term conversation, tool execution, bilingual replies, GPT-SoVITS/cache. |
 | Clients | [Web JS](../pc-agent-vision/web_app/app.js), [Android Activity](../android-app/src/org/fglab/kurisu/MainActivity.java) | Controls, independent Canvas animation, WebView wrapper. |
 
-The Web service does not launch `vision_gesture.py`, `vision_face.py`, `vision_tracker.py`, or `audio_visualizer.py`. Root `fingertip_tracker.*` is excluded from production CMake, and neither mode 26 nor `track` exists in dispatch/enums. [INTEGRATION](../INTEGRATION.md) is an unimplemented integration proposal.
+The Web service does not launch `vision_gesture.py`, `vision_face.py`, `vision_tracker.py`, or `audio_visualizer.py`. `firmware-s3/main/display/fingertip_tracker.*` is excluded from production CMake, and neither mode 26 nor `track` exists in dispatch/enums. [INTEGRATION](../INTEGRATION.md) is an unimplemented integration proposal.
 
 <a id="driver"></a>
 

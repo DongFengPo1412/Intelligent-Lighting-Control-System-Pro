@@ -71,7 +71,7 @@ This pass did not reflash, launch the full voice service, or retest physical aud
 
 ## Scope, further work, and attribution
 
-The [18-item specification](docs/HIGH_STAGE_SYSTEM_SPEC_18.md) records historical design targets. Gaze/head-pose control, fatigue classification, a 3D grasp/throw sandbox, gesture/gaze game steering, long-term memory, wireless full-duplex audio, MIR fluids, and a Three.js digital twin are not completed. Root-level fingertip sources are **pending integration**; mode 26 and `track` are absent from production firmware.
+The [18-item specification](docs/HIGH_STAGE_SYSTEM_SPEC_18.md) records historical design targets. Gaze/head-pose control, fatigue classification, a 3D grasp/throw sandbox, gesture/gaze game steering, long-term memory, wireless full-duplex audio, MIR fluids, and a Three.js digital twin are not completed. The fingertip sources in the PC/firmware module directories are **pending integration**; mode 26 and `track` are absent from production firmware.
 
 Next work is to reconcile outdated client parameters/status displays, verify mode transitions and game edge cases, pin a reproducible environment, and then develop continuous conversation and vision integration. **Chaoran Liu / 刘超然** maintains the project. Frameworks, pretrained models, and third-party assets retain their attribution; integration is not presented as original model training or algorithm invention.
 
