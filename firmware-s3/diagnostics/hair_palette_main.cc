@@ -1,4 +1,5 @@
-// Temporary opt-in comparison: restore PRO_HAIR_CALIBRATION=OFF after use.
+// REJECTED EXPERIMENT: user observed shimmer and yellow/orange/pink, 2026-10-22.
+// Archival opt-in comparison only. Keep PRO_HAIR_CALIBRATION=OFF in production.
 // Keep the complete character fixed and replace only the outer hair color.
 #include "display_hal.h"
 #include "kurisu_sprites.h"

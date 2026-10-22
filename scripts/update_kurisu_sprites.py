@@ -26,7 +26,7 @@ BOOT = (136, 103, 84)       # #886754: Boots
 # These are a tuning starting point; the user judges the actual panel appearance.
 LED_REFERENCE_PWM = {
     'BG_OFF': (0, 0, 0),
-    'HR_D': (2, 1, 0),       # Previous border; looked yellow, pending calibration selection
+    'HR_D': (4, 1, 0),       # Stable 4:1 fallback; closest tested hue, NOT accepted dark brown
     'HAIR': (3, 0, 0),       # Deeper red: less than half the previous red output
     'HR_M': (1, 0, 0),       # Dark red hair accents
     'HR_L': (5, 0, 0),       # Lighter red accents, same pure-red hue
@@ -38,7 +38,7 @@ LED_REFERENCE_PWM = {
     'SHIRT_A': (9, 10, 12),
     'SHIRT_W': (9, 10, 12),
     'TIE': (20, 0, 0),       # Strongest red accent in the whole character
-    'COAT': (5, 3, 1),       # Deeper coffee coat, retaining the accepted brown family
+    'COAT': (5, 1, 0),       # Earlier orange-brown candidate, now requested for the coat
     'PANTS': (4, 2, 1),      # Darker coffee brown, penultimate row
     'DARK_BLK': (2, 1, 1),   # Dim seams, distinct from the unlit background
     'SOLE': (1, 1, 1),       # Near-black shoes stay faintly visible
