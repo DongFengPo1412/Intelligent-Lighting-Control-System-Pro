@@ -1,3 +1,8 @@
+> **历史设计目标 / Historical design targets / 過去の設計目標**
+> 本文保留2026-09-14的18项需求，不是已完成功能清单；部分目标尚未实现，部分架构已被当前工程替换。当前实现与验证范围见[技术说明](technical-notes.zh-CN.md#implementation-status)和[项目首页](../README.md)。
+> These are historical requirements, not delivered features. See the [current implementation](technical-notes.en.md#implementation-status).
+> 過去の要求であり、完成機能ではありません。[現在の実装範囲](technical-notes.ja.md#implementation-status)を参照してください。
+
 # 基于异构协同的多模态具身光影交互系统 (Intelligent Lighting Control System Pro)
 ## 18项终极升级规划与系统技术规格说明书 (SRS)
 

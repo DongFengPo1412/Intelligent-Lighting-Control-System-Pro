@@ -1,162 +1,80 @@
-# Intelligent Lighting Control System Pro (高阶具身多模态智能光影交互系统)
-### 基于异构协同的多模态具身光影交互系统 (High-Stage Capstone Project)
+# Intelligent Lighting Control System — Pro
 
-<p align="left">
-  <b>语言切换 / Language / 言語切替:</b><br>
-  <a href="README.md"><b>🇨🇳 中文</b></a> | 
-  <a href="README_EN.md"><b>🇺🇸 English</b></a> | 
-  <a href="README_JA.md"><b>🇯🇵 日本語</b></a>
-</p>
+PC 本地语音智能体与 ESP32-S3 协同的交互灯板、像素桌宠及点阵游戏平台。
 
-[![Platform: ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.4-blue.svg)](https://idf.espressif.com/)
-[![CUDA](https://img.shields.io/badge/NVIDIA-RTX%204060%20Accelerated-green.svg)](https://developer.nvidia.com/cuda-zone)
-[![Agent: XiaoZhi-MCP](https://img.shields.io/badge/Agent-Local%20Qwen2.5%20%2B%20MCP-purple.svg)](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Pro)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**简体中文** · [English](README_EN.md) · [日本語](README_JA.md)
 
-> 🎓 **通关式项目课程——大四高阶成果 (High-Stage Project)**  
-> 本仓库为智能光影交互系统的高阶演进实现。在不增加硬件采购的条件下，采用 **“PC 上位机算力中枢 + 单片机物理执行端”** 的异构协同架构，实现了单板 S3 硬件全权接管、本地私有化大模型 Agent、3D 视觉手势与视线追踪、高级音频流随动以及自研控制终端。  
-> 🔗 **系列项目演进轨迹 (Project Evolution Hierarchy)**：  
-> - 🟢 **初阶基石**：[Intelligent-Lighting-Control-System-Basic](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Basic)（ASRPRO 离线语音 SoC + 16×16 WS2812B 矩阵声光物理原型）  
-> - 🟡 **中阶进阶**：[Intelligent-Lighting-Control-System-Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid)（双单片机非对称硬件调度 + Jetson Nano 边缘视觉与 24kHz 对数 FFT 音频流）  
-> - 🔴 **高阶旗舰（本项目）**：单芯片 ESP32-S3 原生 RMT 硬件 DMA 驱动归一化重构 + 本地私有化大模型具身 Agent（Qwen2.5 / MCP）+ PC 算力中枢 3D 空间视觉追踪
+**深入阅读：** [源码与架构](docs/technical-notes.zh-CN.md#source-map) · [语音与语义控制](docs/technical-notes.zh-CN.md#voice-agent) · [显示与游戏](docs/technical-notes.zh-CN.md#display) · [视觉与频谱](docs/technical-notes.zh-CN.md#vision-audio) · [实现范围](docs/technical-notes.zh-CN.md#implementation-status) · [部署操作](docs/setup.zh-CN.md)
 
----
+Pro 是 **Basic → Mid → Pro** 系列的高阶开发项目。PC 运行声学唤醒、语音识别、本地语言模型、语义计划与语音合成；ESP32-S3 集中执行 LED 显示、I2S 麦克风／扬声器、游戏和倒计时。浏览器及 Android WebView 客户端通过 PC 服务操作设备。
 
-## 🌟 演进与系统升级对比 (Evolution from Mid-Stage)
+相较于 [Basic](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Basic) 的固定离线词条，以及 [Mid](https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Mid) 的双 ESP32 与 Jetson 架构，Pro 将灯板执行统一到单颗 S3，把模型计算移至 PC，并为控制加入板端回执与重复请求处理。
 
-系统在现有硬件条件（PC 上位机 + ESP32-S3R16N8 + 16×16 WS2812B 矩阵）下，对大三中阶工程进行了系统级重构与升级：
-
-| 维度 | 大三中阶 (Mid-Stage) | 大四高阶 (Pro-Stage) |
-| :--- | :--- | :--- |
-| **硬件架构** | 双芯片架构 (S3 语音 + WROOM-32 灯控)，跨芯片串口通信 | **单芯片归一化融合架构**：淘汰 WROOM-32，单颗 S3 统一调度音频流、网络与光影渲染 |
-| **底层渲染驱动** | Arduino 框架 + FastLED 库，软件延时发脉冲，关中断 | **ESP-IDF 原生 RMT 硬件外设驱动**：硬件 DMA 自动推流，0% CPU 阻塞，60FPS 双缓冲 |
-| **空间感知能力** | Jetson Nano 基础 2D 手指计数与 Haar 离线人脸分类 | **多模态感知系统**：PC 端 3D 骨骼空间手势 + 视线注意力朝向 (Gaze) + 面部情绪识别 |
-| **智能决策大脑** | 云端小智固定服务器，指令集固定 | **本地私有化 Agent**：RTX 4060 本地部署 Qwen2.5 牧濑红莉栖 Agent，Mem0 记忆，MCP 函数调用 |
-| **音频交互体验** | 固定提示音，常规电平 FFT 频谱映射 | **局域网全双工无损音频推流** + **高级 MIR 声学特征提取**（瞬态 Onset 检测、频域通量、声学流体） |
-| **游戏与控制端** | 机械固定下落速度；依赖第三方平台 Blinker | **自适应动态难度调节 (DDA)** + **自研跨端轻量控制 App** + **3D WebGL 数字孪生虚拟矩阵** |
-
----
-
-## 🏛️ 系统拓扑架构 (System Architecture)
-
-系统由 PC 上位机与 ESP32-S3 物理端通过局域网高速数据总线协同交互：
+## 当前架构与数据流
 
 ```mermaid
-graph TD
-    subgraph "PC 上位机算力中枢 (PC Host / RTX 4060)"
-        CAM["PC 高清摄像头视频流 (1080P 60FPS)"]
-        MP["MediaPipe 3D 骨骼空间手势跟踪 (21 关节)<br>• 空中光子引力场 (抓取 / 投掷 / 弹性反弹)"]
-        GAZE["Gaze Tracking & 头部姿态 (Head Pose)<br>• 视线注视焦点落点估算<br>• 离开自动低功耗呼吸微光"]
-        EMO["面部微表情识别 (Affective Mirroring)<br>• 疲劳主动关怀 / 微笑绽放烟花"]
-        LLM["本地私有化 LLM 牧濑红莉栖 Agent<br>• Qwen2.5-7B-Instruct 本地推理<br>• Mem0 长期上下文记忆引擎"]
-        MIR["高级 MIR 音乐信息检索引擎<br>• 瞬态 Onset 检测 / 频域通量 / 局域网音频推流"]
-    end
-
-    subgraph "通信中继总线 (Local High-Speed Transport)"
-        WS["局域网高速 WebSocket / UDP 数据总线 (时延 < 10ms)<br>• 传输 3D 空间坐标、视线向量、音频特征包与 MCP 工具指令"]
-    end
-
-    subgraph "嵌入式物理执行中枢 (Single MCU / ESP32-S3R16N8)"
-        CORE0["Core 0 任务调度<br>• Wi-Fi 协议栈 & WebSocket 客户端<br>• I2S 双工音频编解码 & 小智语音前端"]
-        CORE1["Core 1 物理渲染引擎 (60FPS)<br>• 18 种模式状态机 & 命石世界线彩蛋<br>• 显存双缓冲队列 (Double Buffer)<br>• 贪吃蛇 / 方块自适应游戏机 (DDA)"]
-        RMT["ESP-IDF 原生 RMT 硬件外设控制器<br>(DMA 自动推流，0% CPU 占用)"]
-    end
-
-    subgraph "物理交互与虚拟孪生 (Multi-Domain Output)"
-        MATRIX["16x16 WS2812B RGB 全彩矩阵 (4x 8x8拼接, 256 LEDs)"]
-        TWIN["自研跨端 App & 3D WebGL 数字孪生 (Three.js 虚拟光影漫反射)"]
-    end
-
-    CAM --> MP & GAZE & EMO
-    MP & GAZE & EMO & LLM & MIR --> WS
-    WS --> CORE0
-    CORE0 --> CORE1
-    CORE1 --> RMT --> MATRIX
-    CORE1 -. "帧同步" .-> TWIN
+flowchart LR
+    Mic[INMP441 麦克风] -->|I2S| S3[ESP32-S3]
+    S3 -->|USB PCM| Voice[PC VAD 与 KWS 与 Whisper]
+    Voice --> Agent[本地 Ollama 与语义计划校验]
+    App[浏览器或 Android WebView] -->|HTTP| Host[PC aiohttp 服务]
+    Host --> Agent
+    Agent -->|Wi-Fi UDP 命令与 ACK| S3
+    Agent --> TTS[GPT-SoVITS 语音合成]
+    TTS -->|USB PCM| S3
+    S3 -->|I2S| Speaker[MAX98357A 与扬声器]
+    S3 -->|RMT DMA| Matrix[单块 16x16 WS2812B]
 ```
 
----
+**控制走 Wi-Fi UDP，板载语音音频仍走 USB。** WebSocket 用于 PC 与浏览器间的事件通知，不是板端音频通道。当前语音是单轮交互：唤醒后执行一条指令，再回到等待唤醒；没有边说边听的全双工对话。
 
-## 🧮 18项核心功能与技术实现 (Technical Implementation)
+## 已实现的核心模块
 
-系统严格按照技术规格书进行工程实现，分为四大模块：
+| 模块 | 具体实现 | 当前边界 |
+| :--- | :--- | :--- |
+| **统一灯板执行** | ESP-IDF `led_strip` 的 RMT 驱动启用 DMA；共享逐行蛇形映射；显示任务运行于 Core 1。 | 应用使用单个 RGB 缓冲区，普通模式含 33 ms 任务延时；不宣称双缓冲、零 CPU 或稳定 60 FPS。 |
+| **本地语音入口** | WebRTC VAD 分句，Sherpa ONNX KWS 声学门控，再由 faster-whisper `base` 确认与转写。 | 模型在 PC；唤醒词为“助手／红莉栖／克里斯／牧濑红莉栖”；10 s 等待指令窗口。 |
+| **语义控制** | Ollama `kurisu`（基于 `qwen2.5:7b`）生成结构化计划，校验效果名、参数和矛盾动作，再分发工具。 | 完整字面命令可走快速路径；普通聊天不从回复文字中自动执行动作。当前没有 Mem0 或向量记忆库。 |
+| **双语回复与播放** | GPT-SoVITS 外部角色权重、中文／日文合成、音频后处理及 32 kHz→16 kHz 重采样。 | 模型与参考音频需另行准备；不是本仓库自训练的语音模型，也不保证翻译或听感始终正确。 |
+| **灯效、桌宠与计时** | 经典显示预设、火焰、代码雨；四帧桌宠按播放状态开合嘴和随机眨眼；按经过时间减少点亮像素。 | 桌宠口型不是音素对齐；计时结束有约 1.5 s 提示动画，不是物理沙粒仿真。 |
+| **游戏与控制端** | 贪吃蛇、俄罗斯方块；Web 模式／亮度／音量／倒计时／游戏按钮；Android WebView 封装。 | 网页是 2D 独立模拟，非逐帧硬件镜像；游戏速度由分数／消行改变，没有基于表情的 DDA。 |
 
-### 一、 硬件驱动与系统底层革新
-1. **单板 S3 硬件全面归一化**：淘汰 WROOM-32，单板跑 FreeRTOS 双核异构，消灭跨板通信时延。
-2. **ESP-IDF 原生 RMT 硬件驱动**：硬件 DMA 自动推流，零中断屏蔽，彻底杜绝 Wi-Fi 丢包与音频卡顿。
-3. **显存双缓冲队列与 Gamma 校正**：前后帧交换消除 16×16 画面高频刷新撕裂，结合非线性人眼感光曲线校正。
-4. **中阶 14 种模式 1:1 像素级全量复刻**：完整保留 14 种经典光效、AI 表情与 4 块 8×8 级联闭式数学空间坐标解算器。
+视觉手势、人脸登记和 PC 音频输入频谱另有可启动程序；它们没有被默认 Web 服务统一调度。具体功能、依赖和未接入部分见[技术说明](docs/technical-notes.zh-CN.md#vision-audio)。
 
-### 二、 具身多模态大脑与角色 Agent
-5. **本地 RTX 4060 部署 Qwen2.5**：私有化运行 7B 级大语言模型，实现对话隐私保护与快速本地推理。
-6. **牧濑红莉栖专属人格与长期记忆**：定制角色语气风格，集成 Mem0 / 向量数据库，保存上下文与习惯。
-7. **小智客户端魔改与 MCP 双向调用**：基于 MCP 规范，大模型获得对 16×16 矩阵灯珠与模式的函数调用权。
-8. **自然语言物理沙漏倒计时**：“*红莉栖，帮我倒计时60秒*”语音触发，全屏点亮后按物理沙漏算法逐颗粒子熄灭，严格耗时 60 秒。
-9. **《命运石之门》世界线变动率彩蛋**：语音触发世界线切换，点阵呈现辉光管乱数滚动与电流音效，锁定在 1.048596% 命运石之门世界线。
+## 关键工程设计
 
-### 三、 空间具身感知与计算机视觉
-10. **MediaPipe 3D 手势空中物理沙盒**：追踪手部 21 个 3D 关节，实现空中抓取、拖拽、推手发射光球，碰撞边界反弹。
-11. **视线追踪 (Gaze) 与头部姿态估计**：估算瞳孔注视落点，灯板像素“瞳孔”对视跟随；人离开桌前自动进入微光节律。
-12. **面部微表情识别与情绪共鸣镜像**：疲劳皱眉时主动关怀并切入暖色光；微笑时全屏绽放烟花粒子。
-13. **红莉栖像素桌宠（虚拟生命模拟）**：模拟昼夜生物节律，随时间呈现眨眼、呼吸微光、打哈欠与日常陪伴。
+- **可确认的控制链路：** 每条 PC 请求带 `request_id`；板端返回模式、计时及音频统计。相同请求重试可复用缓存结果，避免倒计时重启或游戏动作重复。
+- **语义与执行分离：** 将效果目录、数值设置、普通聊天和待澄清意图区分，限制动作数量与参数范围；无效模型计划最多自修正一次，板端未确认就不播报成功。
+- **音频接收与输出解耦：** USB 二进制帧进入 32 KiB 环形缓冲，由独立播放任务写入 I2S。PC 对比接收／写入采样数、丢弃和错误计数，避免把发送成功当作播放成功。
+- **源图与实物配色分离：** 保存独立的 256 格图像基准、显示部位覆盖与 LED 驱动配方；以生成一致性检查保护用户修订，同时保留尚未通过目视验收的配色状态。
 
-### 四、 声学流体、游戏心流与全域控制
-14. **局域网实时无损音频推流**：PC / 手机本地音乐通过 Wi-Fi 实时无线推流至 S3 硬件解码播放。
-15. **高级 MIR 特征提取与声学流体引擎**：提取瞬态 Onset 检测、频域通量与节奏相位，结合重力加速度滤波与流体波纹扩散。
-16. **经典游戏视线/手势免接触体感控制**：贪吃蛇与俄罗斯方块支持眼神注视方向转向与手势隔空挥动控制。
-17. **自适应动态难度调节 (DDA)**：根据玩家反应时间与面部紧张度微调下落速度与转向容错，维持最佳游戏体验。
-18. **自研轻量控制 App + 3D WebGL 数字孪生**：在手机端实现调色涂鸦，并在网页端以 1:1 Three.js 仿真三维发光矩阵与桌面漫反射。
+[协议、公式与实现取舍](docs/technical-notes.zh-CN.md) · [历史音频修复](docs/VOICE_CONTROL_RECOVERY.md) · [单块面板验证](docs/MATRIX_16X16_VALIDATION.md)
 
----
+## 验证结果与范围
 
-## 📁 代码工程目录结构 (Directory Structure)
+| 依据 | 已有结果 | 适用范围 |
+| :--- | :--- | :--- |
+| 本轮离线检查 | 22 项交互回归、6 项语义计划检查、11 项配色检查及两个 C++ 编译期检查通过。 | 使用替身或静态数据，不代表完整服务或硬件实测。 |
+| 历史单块面板记录 | 构建／烧录、板端 ACK，以及四角、逐行、非对称图形和多模式的用户确认。 | 对应当时固件与样机；不是全面时序或功耗评测。 |
+| 历史语音与语义记录 | 固定 30 条本地模型用例通过；两条真实语音完成星空／波纹控制并获用户确认。 | 小样本记录，不是总体识别准确率或长期误唤醒率。 |
+| 当前桌宠配色记录 | 完整固件与回执可核对；深棕外框目标仍未达到，四相闪烁实验已弃用。 | 数字检查、写入成功与视觉验收是不同结果。 |
 
-```text
-Intelligent-Lighting-Control-System-Pro/
-├── docs/                       # 系统架构设计、MCP 协议规约与硬件时序文档
-│   └── HIGH_STAGE_SYSTEM_SPEC_18.md # 18 项终极升级规格说明书 (SRS)
-├── firmware-s3/                # 单板 ESP32-S3R16N8 原生固件 (ESP-IDF 5.4 C++)
-│   ├── main/                   # FreeRTOS 双核主调度、MCP 工具注入
-│   │   ├── LightController.cc  # 统一光影管理器 (接管所有模式与双缓冲)
-│   │   └── rmt_ws2812.cc       # 原生硬件 RMT DMA 驱动实现
-│   ├── components/             # 自研组件库 (color_math, audio_stream, mcp_client)
-│   └── CMakeLists.txt
-├── pc-agent-vision/            # PC 端 AI 感知与多模态 Agent (Python 3.10+ / CUDA)
-│   ├── vision_tracker/         # MediaPipe 3D 手势、Gaze 视线与人脸情绪中枢
-│   ├── agent_core/             # 本地 Qwen2.5 牧濑红莉栖调度引擎与 MCP 接口
-│   └── tests/                  # 视觉到硬件端到端低延迟通信测试脚本
-├── mobile-app/                 # 自研跨平台控制终端 & 3D WebGL 数字孪生
-│   ├── web_digital_twin/       # 基于 Three.js 的 1:1 三维虚拟矩阵漫反射模拟器
-│   └── app_controller/         # 局域网 WebSocket 实时调色涂鸦控制台
-├── .gitignore                  # Git 忽略配置
-├── README.md                   # 简体中文技术文档
-├── README_EN.md                # 英文技术文档 (English)
-└── README_JA.md                # 日文技术文档 (日本語)
-```
+本轮未重新烧录、启动完整语音服务或进行硬件声光测试。CPU 利用率、端到端延迟、TTFT、色度与供电容量均无受控基准，本页不提供此类性能成绩。[验证依据和未解决问题](docs/technical-notes.zh-CN.md#implementation-status)
 
----
+## 快速开始
 
-## 📊 硬件实测基准目标 (Benchmark Targets)
+1. 依[硬件表](docs/setup.zh-CN.md#hardware)核对单块 16×16 灯板、INMP441、MAX98357A 与 USB／电源连接。
+2. 复制 `firmware-s3/main/wifi_config.example.h` 为同目录忽略跟踪的 `wifi_config.private.h`，填写自己的网络参数。
+3. 用 ESP-IDF 构建完整应用，显式关闭面板／配色诊断入口。当前依赖宣告 IDF>=5.0，最近已有构建记录使用 **v5.5.4**。
+4. 准备 Python、Ollama、ASR／KWS／TTS 模型及依赖，按[部署指南](docs/setup.zh-CN.md#pc)启动 `pc-agent-vision/web_server.py`。启动会初始化设备并可能发出提示音。
+5. PC 浏览器打开 `http://localhost:8080`，手机使用启动日志中的 PC 局域网地址。先核对 `/api/status`，再测试实际功能。
 
-| 性能维度 | 大三中阶 (Mid-Stage) | 大四高阶目标基准 (Pro-Stage) | 技术改进说明 |
-| :--- | :---: | :---: | :--- |
-| **单片机灯控 CPU 占用率** | 85% (软件延时阻塞) | **< 2% (硬件 RMT DMA 发送)** | 算力完全释放给网络与音频 |
-| **灯板全屏渲染刷新帧率** | 30 FPS (存在抖动) | **稳定 60 FPS (硬件双缓冲)** | 杜绝画面撕裂与阶跃感 |
-| **视觉手势到硬件物理延迟** | ~120 ms (受限于串口中转) | **< 35 ms (局域网极速直连)** | 达到免接触交互的跟手阈值 |
-| **大模型首字响应延迟 (TTFT)** | ~1800 ms (公网云端传输) | **< 250 ms (RTX 4060 本地推理)** | 接近面对面对话节奏 |
-| **动态电源安全负载** | 5V / 1.2A 阈值截断 | **5V / 1.2A 软件限制 + Gamma 补偿** | 避免电源过载与异常复位 |
+## 实现范围、后续开发与归属
 
----
+[18 项规格书](docs/HIGH_STAGE_SYSTEM_SPEC_18.md)是历史设计目标。当前没有完成视线／头姿控制、疲劳情绪识别、3D 抓投沙盒、手势／视线游戏控制、长期记忆、无线全双工音频、MIR 流体或 Three.js 数字孪生。根目录指尖源码是**待集成资料**，模式 26 和 `track` 尚未接入正式固件。
 
-## 🚀 研发路线图 (Roadmap)
+后续优先统一过时的客户端参数与状态显示，验证模式切换和游戏边界，固定可复现环境，再推进连续对话与视觉整合。项目由 **刘超然 / Chaoran Liu** 维护；框架、预训练模型与第三方素材应按来源归属，不把集成工作写成独立训练或原创模型算法。
 
-- [ ] **Phase 1 (进行中)**：底座归一化与 1:1 驱动迁移（单板 S3 原生 RMT 驱动、双缓冲、中阶 14 种模式移植）
-- [ ] **Phase 2**：PC 端视觉中枢搭建（MediaPipe 3D 手势空中物理沙盒、Gaze 视线与头部姿态估计、面部微表情）
-- [ ] **Phase 3**：牧濑红莉栖本地具身 Agent 部署（RTX 4060 Qwen2.5、Mem0 长期记忆、MCP 函数调用、世界线彩蛋）
-- [ ] **Phase 4**：声学流体、自适应心流与自研控制端（局域网音频流推流、MIR 高级特征、自适应游戏难度 DDA、3D WebGL 数字孪生）
+[技术说明](docs/technical-notes.zh-CN.md) · [部署操作](docs/setup.zh-CN.md) · [开发流程](docs/DEVELOPMENT_WORKFLOW.md)
 
----
-
-## 📜 开源许可证 (License)
-
-本项目遵循 [MIT License](LICENSE) 开源协议。
+仓库目前没有独立的 `LICENSE` 文件，因此不沿用旧版 MIT 徽章作完整授权声明。ESP-IDF、`led_strip`、Qwen、Whisper、Sherpa ONNX、GPT-SoVITS、MediaPipe 等依赖，以及角色图像、语音和模型资源，分别以其来源的许可条件为准。
