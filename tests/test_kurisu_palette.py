@@ -51,7 +51,7 @@ class OriginalPaletteTests(unittest.TestCase):
         self.assertGreater(p['HR_D'][0], p['HR_D'][1])
         self.assertGreater(p['HR_D'][1], p['HR_D'][2])
         self.assertLess(p['HR_M'][0], p['HAIR'][0])
-        self.assertLess(p['HAIR'][0], p['HR_L'][0])
+        self.assertGreater(sum(p['HR_L']), sum(p['HR_M']))
         self.assertGreater(p['SKIN'][0], 2 * p['SKIN'][1])
         self.assertGreater(p['IRIS'][2], p['IRIS'][0])
         self.assertGreater(p['EYEL'][2], p['EYEL'][0])
@@ -68,6 +68,23 @@ class OriginalPaletteTests(unittest.TestCase):
         self.assertEqual(palette.grid_roles[14][6:10], ['PANTS'] * 4)
         self.assertEqual(palette.grid_roles[15][6:10], ['SOLE'] * 4)
         self.assertEqual(palette.grid_roles[5][15], 'HR_D')
+
+    def test_only_requested_four_cells_change_roles(self):
+        display = palette.get_display_roles()
+        changes = {(x, y) for y in range(16) for x in range(16)
+                   if display[y][x] != palette.grid_roles[y][x]}
+        self.assertEqual(changes, {(4, 8), (4, 9), (11, 8), (11, 9)})
+        for x, y in changes:
+            self.assertEqual(palette.grid_roles[y][x], 'EYEW')
+            self.assertEqual(display[y][x], 'SKIN')
+
+    def test_user_accepted_face_eyes_and_tie_are_preserved(self):
+        accepted = {'SKIN': (12, 5, 4), 'LASH': (2, 0, 3),
+                    'IRIS': (6, 2, 9), 'EYEL': (10, 5, 13), 'TIE': (20, 0, 0)}
+        for role, color in accepted.items():
+            self.assertEqual(palette.LED_REFERENCE_PWM[role], color, role)
+        self.assertEqual(palette.LED_REFERENCE_PWM['HAIR'][1:], (0, 0))
+        self.assertLess(palette.LED_REFERENCE_PWM['HAIR'][0], accepted['TIE'][0])
 
 
 if __name__ == '__main__':

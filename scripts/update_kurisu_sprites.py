@@ -26,10 +26,10 @@ BOOT = (136, 103, 84)       # #886754: Boots
 # These are a tuning starting point; the user judges the actual panel appearance.
 LED_REFERENCE_PWM = {
     'BG_OFF': (0, 0, 0),
-    'HR_D': (3, 2, 1),       # Dark brown outer hair, not a red outline
-    'HAIR': (9, 1, 1),       # Deep saturated red main hair
-    'HR_M': (4, 1, 0),       # Dark red-brown hair strands
-    'HR_L': (13, 3, 1),      # Brighter warm red strands, avoiding pale pink
+    'HR_D': (2, 1, 0),       # Darker brown border; remove the blue that looked pale
+    'HAIR': (7, 0, 0),       # Same pure red hue as the accepted tie, at lower output
+    'HR_M': (4, 2, 0),       # Muted brown accent, less red-orange than before
+    'HR_L': (6, 3, 1),       # Lighter brown accent, not pale pink/orange
     'LASH': (2, 0, 3),       # Very dark purple eyelid
     'IRIS': (6, 2, 9),       # Light purple upper iris
     'EYEL': (10, 5, 13),     # Lighter purple lower iris, distinct from skin
@@ -38,7 +38,7 @@ LED_REFERENCE_PWM = {
     'SHIRT_A': (9, 10, 12),
     'SHIRT_W': (9, 10, 12),
     'TIE': (20, 0, 0),       # Strongest red accent in the whole character
-    'COAT': (7, 4, 2),       # Coffee brown, distinct from red hair
+    'COAT': (5, 3, 1),       # Deeper coffee coat, retaining the accepted brown family
     'PANTS': (4, 2, 1),      # Darker coffee brown, penultimate row
     'DARK_BLK': (2, 1, 1),   # Dim seams, distinct from the unlit background
     'SOLE': (1, 1, 1),       # Near-black shoes stay faintly visible
@@ -91,6 +91,20 @@ grid_roles = [
 
 grid = [[SOURCE_PALETTE[role] for role in row] for row in grid_roles]
 
+# User coordinates are 1-based: columns 5/12, rows 9/10. Preserve the sampled
+# source image above and apply only these four intentional display changes.
+DISPLAY_ROLE_OVERRIDES = {
+    (4, 8): 'SKIN', (4, 9): 'SKIN',
+    (11, 8): 'SKIN', (11, 9): 'SKIN',
+}
+
+
+def get_display_roles():
+    roles = [row.copy() for row in grid_roles]
+    for (x, y), role in DISPLAY_ROLE_OVERRIDES.items():
+        roles[y][x] = role
+    return roles
+
 def format_frame(name, g):
     lines = [f'static const ColorRGB {name}[16][16] = {{']
     for row in g:
@@ -104,7 +118,7 @@ def generate_header():
     content += '#pragma once\n'
     content += '#include "display_types.h"\n\n'
     content += f'constexpr uint8_t KURISU_BRIGHTNESS_PERCENT = {DESK_PET_BRIGHTNESS_PERCENT};\n\n'
-    led_grid = [[LED_PALETTE[role] for role in row] for row in grid_roles]
+    led_grid = [[LED_PALETTE[role] for role in row] for row in get_display_roles()]
     for name in ('IDLE', 'BLINK', 'TALK1', 'TALK2'):
         content += format_frame(f'KURISU_FRAME_{name}', led_grid)
     return content
