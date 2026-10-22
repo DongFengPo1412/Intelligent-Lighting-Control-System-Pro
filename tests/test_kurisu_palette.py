@@ -58,15 +58,13 @@ class OriginalPaletteTests(unittest.TestCase):
         self.assertLess(sum(p['LASH']), sum(p['IRIS']))
         self.assertLess(sum(p['IRIS']), sum(p['EYEL']))
         self.assertGreater(p['COAT'][1] / p['COAT'][0], p['HAIR'][1] / p['HAIR'][0])
-        # The user is tuning only the coat now. Keep the previous pants color;
-        # RGB channel sums do not measure physical brightness across different hues.
-        self.assertEqual(p['PANTS'], (4, 2, 1))
+        self.assertEqual(p['PANTS'], p['COAT'])
         self.assertTrue(all(v > 0 for v in p['SOLE']))
         self.assertEqual(p['BG_OFF'], (0, 0, 0))
         self.assertEqual(p['TIE'][1:], (0, 0))
         self.assertGreater(p['TIE'][0], max(max(c) for role, c in p.items() if role != 'TIE'))
 
-    def test_penultimate_row_uses_darker_coffee_pants(self):
+    def test_penultimate_row_uses_pants_matching_coat(self):
         self.assertEqual(palette.grid_roles[14][6:10], ['PANTS'] * 4)
         self.assertEqual(palette.grid_roles[15][6:10], ['SOLE'] * 4)
         self.assertEqual(palette.grid_roles[5][15], 'HR_D')

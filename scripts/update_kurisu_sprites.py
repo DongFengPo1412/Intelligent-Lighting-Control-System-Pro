@@ -39,7 +39,7 @@ LED_REFERENCE_PWM = {
     'SHIRT_W': (9, 10, 12),
     'TIE': (20, 0, 0),       # Strongest red accent in the whole character
     'COAT': (5, 1, 0),       # Earlier orange-brown candidate, now requested for the coat
-    'PANTS': (4, 2, 1),      # Darker coffee brown, penultimate row
+    'PANTS': (5, 1, 0),      # Penultimate-row pants match the coat, per user request
     'DARK_BLK': (2, 1, 1),   # Dim seams, distinct from the unlit background
     'SOLE': (1, 1, 1),       # Near-black shoes stay faintly visible
 }
