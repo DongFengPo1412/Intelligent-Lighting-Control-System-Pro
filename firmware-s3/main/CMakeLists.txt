@@ -1,7 +1,14 @@
 option(PRO_MATRIX_DIAGNOSTIC "Build the opt-in 16x16 wiring test instead of the full application" OFF)
+option(PRO_HAIR_CALIBRATION "Build the opt-in hair color comparison instead of the full application" OFF)
+if(PRO_MATRIX_DIAGNOSTIC AND PRO_HAIR_CALIBRATION)
+    message(FATAL_ERROR "Select only one diagnostic application")
+endif()
 set(PRO_APP_MAIN "main.cc")
 if(PRO_MATRIX_DIAGNOSTIC)
     set(PRO_APP_MAIN "../diagnostics/matrix_layout_main.cc")
+endif()
+if(PRO_HAIR_CALIBRATION)
+    set(PRO_APP_MAIN "../diagnostics/hair_palette_main.cc")
 endif()
 
 idf_component_register(

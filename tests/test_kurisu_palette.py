@@ -86,6 +86,19 @@ class OriginalPaletteTests(unittest.TestCase):
         self.assertEqual(palette.LED_REFERENCE_PWM['HAIR'][1:], (0, 0))
         self.assertLess(palette.LED_REFERENCE_PWM['HAIR'][0], accepted['TIE'][0])
 
+    def test_hair_accents_are_three_ordered_red_levels(self):
+        p = palette.LED_REFERENCE_PWM
+        self.assertLess(p['HR_M'][0], p['HAIR'][0])
+        self.assertLess(p['HAIR'][0], p['HR_L'][0])
+        self.assertLess(p['HAIR'][0], 7)
+        for role in ('HAIR', 'HR_M', 'HR_L'):
+            self.assertEqual(p[role][1:], (0, 0), role)
+
+    def test_border_color_is_unique_for_calibration_mask(self):
+        matches = [role for role, color in palette.LED_PALETTE.items()
+                   if color == palette.LED_PALETTE['HR_D']]
+        self.assertEqual(matches, ['HR_D'])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

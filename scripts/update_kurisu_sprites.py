@@ -26,10 +26,10 @@ BOOT = (136, 103, 84)       # #886754: Boots
 # These are a tuning starting point; the user judges the actual panel appearance.
 LED_REFERENCE_PWM = {
     'BG_OFF': (0, 0, 0),
-    'HR_D': (2, 1, 0),       # Darker brown border; remove the blue that looked pale
-    'HAIR': (7, 0, 0),       # Same pure red hue as the accepted tie, at lower output
-    'HR_M': (4, 2, 0),       # Muted brown accent, less red-orange than before
-    'HR_L': (6, 3, 1),       # Lighter brown accent, not pale pink/orange
+    'HR_D': (2, 1, 0),       # Previous border; looked yellow, pending calibration selection
+    'HAIR': (3, 0, 0),       # Deeper red: less than half the previous red output
+    'HR_M': (1, 0, 0),       # Dark red hair accents
+    'HR_L': (5, 0, 0),       # Lighter red accents, same pure-red hue
     'LASH': (2, 0, 3),       # Very dark purple eyelid
     'IRIS': (6, 2, 9),       # Light purple upper iris
     'EYEL': (10, 5, 13),     # Lighter purple lower iris, distinct from skin
@@ -118,6 +118,8 @@ def generate_header():
     content += '#pragma once\n'
     content += '#include "display_types.h"\n\n'
     content += f'constexpr uint8_t KURISU_BRIGHTNESS_PERCENT = {DESK_PET_BRIGHTNESS_PERCENT};\n\n'
+    r, g, b = LED_PALETTE['HR_D']
+    content += f'constexpr ColorRGB KURISU_LED_HAIR_BORDER({r}, {g}, {b});\n\n'
     led_grid = [[LED_PALETTE[role] for role in row] for row in get_display_roles()]
     for name in ('IDLE', 'BLINK', 'TALK1', 'TALK2'):
         content += format_frame(f'KURISU_FRAME_{name}', led_grid)
