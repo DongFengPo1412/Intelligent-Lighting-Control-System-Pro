@@ -91,11 +91,13 @@ grid_roles = [
 
 grid = [[SOURCE_PALETTE[role] for role in row] for row in grid_roles]
 
-# User coordinates are 1-based: columns 5/12, rows 9/10. Preserve the sampled
-# source image above and apply only these four intentional display changes.
+# User coordinates are 1-based: columns 5/12, rows 9/10 retain skin;
+# row 14 (third from bottom), columns 5/12 must be unlit.
+# Preserve the sampled source image and apply these requested display changes.
 DISPLAY_ROLE_OVERRIDES = {
     (4, 8): 'SKIN', (4, 9): 'SKIN',
     (11, 8): 'SKIN', (11, 9): 'SKIN',
+    (4, 13): 'BG_OFF', (11, 13): 'BG_OFF',
 }
 
 

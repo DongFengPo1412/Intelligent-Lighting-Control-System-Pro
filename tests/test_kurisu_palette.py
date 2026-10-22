@@ -71,14 +71,19 @@ class OriginalPaletteTests(unittest.TestCase):
         self.assertEqual(palette.grid_roles[15][6:10], ['SOLE'] * 4)
         self.assertEqual(palette.grid_roles[5][15], 'HR_D')
 
-    def test_only_requested_four_cells_change_roles(self):
+    def test_only_requested_cells_change_roles(self):
         display = palette.get_display_roles()
         changes = {(x, y) for y in range(16) for x in range(16)
                    if display[y][x] != palette.grid_roles[y][x]}
-        self.assertEqual(changes, {(4, 8), (4, 9), (11, 8), (11, 9)})
-        for x, y in changes:
+        skin = {(4, 8), (4, 9), (11, 8), (11, 9)}
+        unlit = {(4, 13), (11, 13)}
+        self.assertEqual(changes, skin | unlit)
+        for x, y in skin:
             self.assertEqual(palette.grid_roles[y][x], 'EYEW')
             self.assertEqual(display[y][x], 'SKIN')
+        for x, y in unlit:
+            self.assertEqual(palette.grid_roles[y][x], 'SKIN')
+            self.assertEqual(display[y][x], 'BG_OFF')
 
     def test_user_accepted_face_eyes_and_tie_are_preserved(self):
         accepted = {'SKIN': (12, 5, 4), 'LASH': (2, 0, 3),
