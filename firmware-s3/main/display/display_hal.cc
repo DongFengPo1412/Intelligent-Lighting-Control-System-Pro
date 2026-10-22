@@ -124,15 +124,18 @@ void DisplayHAL::SetGlobalBrightness(uint8_t brightness)
     base_brightness_ = brightness;
 }
 
-esp_err_t DisplayHAL::Show()
+esp_err_t DisplayHAL::Show(uint8_t brightness_percent)
 {
     if (!led_strip_) return ESP_ERR_INVALID_STATE;
 
+    // Optional per-frame uniform dimming; retain original RGB values in buffer_.
+    if (brightness_percent > 100) brightness_percent = 100;
+    const uint16_t brightness = (base_brightness_ * brightness_percent) / 100;
     for (int i = 0; i < TOTAL_LEDS; i++) {
         // 1. 全局亮度缩放 (0 ~ 255)
-        uint16_t r = (buffer_[i].r * base_brightness_) / 255;
-        uint16_t g = (buffer_[i].g * base_brightness_) / 255;
-        uint16_t b = (buffer_[i].b * base_brightness_) / 255;
+        uint16_t r = (buffer_[i].r * brightness) / 255;
+        uint16_t g = (buffer_[i].g * brightness) / 255;
+        uint16_t b = (buffer_[i].b * brightness) / 255;
 
         led_strip_set_pixel(led_strip_, i, (uint32_t)r, (uint32_t)g, (uint32_t)b);
     }
