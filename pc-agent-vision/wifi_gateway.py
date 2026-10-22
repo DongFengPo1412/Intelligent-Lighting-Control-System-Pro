@@ -15,7 +15,8 @@ class WiFiGateway:
         self.port = port
         self.sock = None
         self.is_running = False
-        self._state_path = Path(__file__).with_name('.device_state.json')
+        from pro_paths import data_dir
+        self._state_path = data_dir() / 'device-state.json'
         self.board_sta_ip = os.environ.get('KURISU_BOARD_IP') or None
         if not self.board_sta_ip:
             try:
@@ -33,7 +34,7 @@ class WiFiGateway:
         self.last_result = {"status": "error", "error": "not_connected"}
         self._pending = {}
         self._pending_lock = threading.Lock()
-        self._send_lock = threading.Lock()
+        self._send_lock = threading.RLock()
         self._init_socket()
         if self.is_running:
             self._receiver = threading.Thread(target=self._receiver_loop, daemon=True)
@@ -140,6 +141,11 @@ class WiFiGateway:
 
     def broadcast_command(self, cmd_str: str) -> bool:
         return self.send_command(cmd_str)
+
+    def request(self, command):
+        with self._send_lock:
+            self.send_command(command)
+            return dict(self.last_result)
 
     def broadcast_json(self, payload: Dict[str, Any]) -> bool:
         return self.send_command(json.dumps(payload, separators=(",", ":")))

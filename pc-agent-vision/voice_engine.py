@@ -316,7 +316,8 @@ class VoiceEngine:
         if not cleaned:
             return None
 
-        cache_dir = Path(__file__).resolve().parent / '.voice_cache'
+        from pro_paths import cache_dir as runtime_cache_dir
+        cache_dir = runtime_cache_dir() / 'voice'
         cache_key = hashlib.sha256(f'original-v1:{self.current_volume}:{cleaned}'.encode('utf-8')).hexdigest()
         cache_file = cache_dir / (cache_key + '.wav')
         with self._lock:
@@ -372,10 +373,7 @@ class VoiceEngine:
                     w.writeframes(processed_32k.tobytes())
                 wav_32k_bytes = wav_io.getvalue()
                 cache_dir.mkdir(exist_ok=True)
-                cache_file.write_bytes(wav_32k_bytes)
-                cached = sorted(cache_dir.glob('*.wav'), key=lambda path: path.stat().st_mtime)
-                for old_file in cached[:-64]:
-                    old_file.unlink()
+                if len(list(cache_dir.glob('*.wav')))<64:cache_file.write_bytes(wav_32k_bytes)
 
                 # 生成 ESP32 板载专用的 16000Hz PCM 流
                 resampled_16k = scipy.signal.resample_poly(processed_32k.astype(np.float32), 1, 2)
@@ -414,10 +412,11 @@ class VoiceEngine:
 
         from light_controller import get_light_controller
         ctrl = get_light_controller()
-        if ctrl.is_connected:
+        board_ready = ctrl.audio_connected or (getattr(ctrl,'audio_transport','usb')=='wifi' and ctrl.connect_audio())
+        if board_ready:
             ctrl.set_board_led("speaking")
 
-        if to_board and ctrl.is_connected:
+        if to_board and board_ready:
             # One physical output avoids delayed PC/board copies sounding like echo.
             if not ctrl.play_audio_pcm(pcm_16k):
                 print('[VoiceEngine] 板载语音播放失败')

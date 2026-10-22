@@ -3,6 +3,7 @@
 #include <freertos/task.h>
 #include <esp_log.h>
 #include "display_manager.h"
+#include "network_audio.h"
 #include "board_led.h"
 #include "command_dispatcher.h"
 #include "audio_hal.h"
@@ -59,6 +60,7 @@ extern "C" void app_main(void)
     WifiManager& wifi = WifiManager::GetInstance();
     wifi.InitAndConnect(KURISU_WIFI_STA_SSID, KURISU_WIFI_STA_PASSWORD,
                         KURISU_WIFI_AP_SSID, KURISU_WIFI_AP_PASSWORD, 8888);
+    if(!NetworkAudio::GetInstance().Start())ESP_LOGE(TAG,"Wi-Fi PCM server failed to start");
 
     // 7. 初始默认展示：牧濑红莉栖桌宠伴侣 (同时保留模式 14 经典圆形变脸特效)
     display.SetMode(DisplayMode::KURISU_DESK_PET);

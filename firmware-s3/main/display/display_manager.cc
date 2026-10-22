@@ -1,8 +1,20 @@
 #include "display_manager.h"
 #include "board_led.h"
+#include "audio_hal.h"
 #include <esp_log.h>
 
 namespace {
+void SignalTask(void* argument) {
+    bool worldline=argument!=nullptr;
+    auto& audio=AudioHAL::GetInstance();
+    if(worldline) {
+        for(int i=0;i<5;i++)audio.PlayBeep(500+i*230,45);
+    } else audio.PlayBeep(1046,180);
+    vTaskDelete(nullptr);
+}
+void Signal(bool worldline) {
+    xTaskCreate(SignalTask,"display_signal",4096,worldline?(void*)1:nullptr,2,nullptr);
+}
 class DisplayLock {
     SemaphoreHandle_t mutex_;
 public:
@@ -64,6 +76,7 @@ esp_err_t DisplayManager::Init(gpio_num_t gpio_pin)
     game_engine_.InitSnake();
     game_engine_.InitTetris();
     spectrum_engine_.Reset();
+    interaction_engine_.Reset();
 
     ESP_LOGI(TAG, "DisplayManager initialized.");
     return ESP_OK;
@@ -120,12 +133,27 @@ void DisplayManager::DisplayTaskLoop()
                     game_engine_.InitTetris();
                 } else if (mode == DisplayMode::AUDIO_SPECTRUM) {
                     spectrum_engine_.Reset();
+                } else if (mode == DisplayMode::FINGERTIP_TRACKER) {
+                    fingertip_tracker_.Reset();
+                } else if ((int)mode >= 27) {
+                    interaction_engine_.Reset();
+                    if(mode==DisplayMode::WORLDLINE)Signal(true);
                 }
                 last_mode_ = mode;
             }
 
             // 根据模式路由到各个引擎
-            switch (mode) {
+            if(mode==DisplayMode::KURISU_DESK_PET && interaction_engine_.RenderCelebration()) {
+                delay_ms=16;
+            } else switch (mode) {
+                case DisplayMode::FINGERTIP_TRACKER:
+                    delay_ms = fingertip_tracker_.RenderFrame(); break;
+                case DisplayMode::LIGHT_SANDBOX:
+                case DisplayMode::WORLDLINE:
+                case DisplayMode::PIXEL_CANVAS:
+                case DisplayMode::MUSIC_FLUID:
+                case DisplayMode::AMBIENT:
+                    delay_ms = interaction_engine_.Render(mode); break;
                 case DisplayMode::SNAKE_GAME:
                     delay_ms = game_engine_.RunSnake();
                     if (game_engine_.IsSnakeGameOver()) {
@@ -168,7 +196,7 @@ void DisplayManager::DisplayTaskLoop()
             BoardLed::GetInstance().UpdateAnimation();
 
         } // Release before sleeping so network/input tasks can proceed.
-        vTaskDelay(pdMS_TO_TICKS(delay_ms > 5 ? delay_ms : 5));
+        vTaskDelay(pdMS_TO_TICKS(delay_ms) > 0 ? pdMS_TO_TICKS(delay_ms) : 1);
     }
 
     vTaskDelete(NULL);
@@ -183,7 +211,7 @@ void DisplayManager::SetMode(DisplayMode mode)
 {
     DisplayLock lock(mutex_);
     int number=static_cast<int>(mode);
-    if(number<0 || number>24 || number==18)return;
+    if(!IsDirectDisplayMode(number))return;
     if(mode!=DisplayMode::COUNTDOWN_TIMER) {
         countdown_active_=false;countdown_finished_anim_=false;
     }
@@ -235,6 +263,56 @@ void DisplayManager::SetBrightness(uint8_t brightness)
 {
     DisplayLock lock(mutex_);
     hal_.SetGlobalBrightness(brightness);
+}
+
+void DisplayManager::FeedFingertip(float x,float y,bool visible,float confidence) {
+    DisplayLock lock(mutex_);fingertip_tracker_.FeedTarget(x,y,visible,confidence);
+}
+void DisplayManager::ConfigureFingertip(float x0,float y0,float x1,float y1,bool invert_x,bool invert_y) {
+    DisplayLock lock(mutex_);
+    fingertip_tracker_.SetInputWindow(x0,y0,x1,y1);fingertip_tracker_.SetInvert(invert_x,invert_y);
+}
+void DisplayManager::FeedHand(float x,float y,float z,bool pinch,bool visible) {
+    DisplayLock lock(mutex_);interaction_engine_.FeedHand(x,y,z,pinch,visible);
+}
+void DisplayManager::FeedMusic(float energy,float flux,bool onset,float tempo,float phase) {
+    DisplayLock lock(mutex_);interaction_engine_.FeedMusic(energy,flux,onset,tempo,phase);
+}
+void DisplayManager::SetCanvasFrame(const ColorRGB* colors) {
+    DisplayLock lock(mutex_);
+    for(int i=0;i<256;i++)interaction_engine_.SetPixel(i%16,i/16,colors[i]);
+}
+void DisplayManager::Celebrate() {
+    DisplayLock lock(mutex_);
+    if(current_mode_==DisplayMode::KURISU_DESK_PET)interaction_engine_.Celebrate();
+}
+void DisplayManager::SetCanvasPixel(int x,int y,ColorRGB color) {
+    DisplayLock lock(mutex_);interaction_engine_.SetPixel(x,y,color);
+}
+void DisplayManager::ClearCanvas() {
+    DisplayLock lock(mutex_);interaction_engine_.ClearCanvas();
+}
+void DisplayManager::SetGamma(bool enabled) {
+    DisplayLock lock(mutex_);hal_.SetGammaEnabled(enabled);
+}
+uint32_t DisplayManager::SnapshotFrame(char* hex,size_t size) {
+    DisplayLock lock(mutex_);if(size<1537)return 0;
+    const char* digits="0123456789abcdef";
+    const ColorRGB* frame=hal_.GetFrontBuffer();
+    for(int y=0;y<16;y++)for(int x=0;x<16;x++) {
+        const auto& c=frame[DisplayHAL::GetPixelIndex(x,y)];uint8_t values[]={c.r,c.g,c.b};
+        for(int n=0;n<3;n++){int i=(y*16+x)*6+n*2;hex[i]=digits[values[n]>>4];hex[i+1]=digits[values[n]&15];}
+    }
+    hex[1536]=0;return hal_.GetFrameId();
+}
+void DisplayManager::FeedPet(int hour,float gaze,bool present,bool tired) {
+    DisplayLock lock(mutex_);effect_engine_.FeedPet(hour,gaze,present,tired);
+}
+void DisplayManager::ConfigureDifficulty(float level,bool adaptive) {
+    DisplayLock lock(mutex_);game_engine_.ConfigureDifficulty(level,adaptive);
+}
+void DisplayManager::FeedPerformance(float reaction_ms,float frustration,bool success) {
+    DisplayLock lock(mutex_);game_engine_.FeedPerformance(reaction_ms,frustration,success);
 }
 
 // =========================================================================
@@ -319,6 +397,7 @@ uint32_t DisplayManager::RenderCountdownTimer()
     if (elapsed_ms >= countdown_total_ms_) {
         countdown_finished_anim_ = true;
         countdown_finish_start_ms_ = now;
+        Signal(false);
         ESP_LOGI(TAG, ">>> [倒计时结束]: 耗时精准对齐，播放到时全屏脉冲提示！");
         return 33;
     }

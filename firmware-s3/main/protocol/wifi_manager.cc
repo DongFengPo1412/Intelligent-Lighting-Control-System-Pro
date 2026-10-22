@@ -210,7 +210,7 @@ void WifiManager::UdpServerTaskLoop()
     };
     static CachedReply recent[16] = {};
     size_t next_reply = 0;
-    char rx_buffer[1024];
+    static char rx_buffer[4096];
     struct sockaddr_in server_addr = {};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -341,6 +341,10 @@ void WifiManager::UdpServerTaskLoop()
             bool ok = valid_envelope && !conflict && CommandDispatcher::GetInstance().ProcessLine(command, false);
             auto& dm = DisplayManager::GetInstance();
             auto& dispatcher = CommandDispatcher::GetInstance();
+            cJSON* parsed_command=cJSON_Parse(command);
+            cJSON* parsed_name=parsed_command?cJSON_GetObjectItem(parsed_command,"cmd"):nullptr;
+            bool frame_query=cJSON_IsString(parsed_name)&&!strcmp(parsed_name->valuestring,"frame");
+            cJSON_Delete(parsed_command);
             char ack[512];
             snprintf(ack, sizeof(ack),
                      "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u}\n",
@@ -351,6 +355,17 @@ void WifiManager::UdpServerTaskLoop()
                      (unsigned)dispatcher.AudioReceived(), (unsigned)dispatcher.AudioPlayed(),
                      (unsigned)dispatcher.AudioDropped(), (unsigned)dispatcher.AudioErrors(),
                      (unsigned)dispatcher.AudioStackFree());
+            if(ok&&frame_query) {
+                static char hex[1537],frame_ack[2304];
+                uint32_t frame_id=dm.SnapshotFrame(hex,sizeof(hex));
+                cJSON* frame=cJSON_Parse(ack);
+                cJSON_AddStringToObject(frame,"pixels",hex);
+                cJSON_AddNumberToObject(frame,"frame_id",frame_id);
+                cJSON_AddStringToObject(frame,"frame_source","hardware_pwm");
+                if(cJSON_PrintPreallocated(frame,frame_ack,sizeof(frame_ack),false))
+                    sendto(sock,frame_ack,strlen(frame_ack),0,(struct sockaddr*)&source_addr,sizeof(source_addr));
+                cJSON_Delete(frame);cJSON_Delete(envelope);continue;
+            }
             if (wrapped && valid_envelope && !conflict) {
                 auto& entry = recent[next_reply++ % 16];
                 entry.sender = source_addr.sin_addr.s_addr;

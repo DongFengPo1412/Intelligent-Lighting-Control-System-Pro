@@ -17,8 +17,15 @@ public:
     // 绘制灵动微表情辅助函数 (1:笑脸, 2:哭脸, 3:平静, 具备自然眨眼与眼神游移)
     void DrawLivingFace(const ColorRGB& color, int type);
     void DrawFace(const ColorRGB& color, int type);
+    void FeedPet(int hour,float gaze,bool present,bool tired) {
+        pet_hour_=hour;pet_gaze_=gaze;pet_present_=present;pet_tired_=tired;pet_context_ms_=get_millis();
+    }
 
 private:
+    int pet_hour_=12;
+    float pet_gaze_=0;
+    bool pet_present_=true,pet_tired_=false;
+    uint32_t pet_context_ms_=0;
     uint8_t g_hue_;
     uint32_t last_hue_update_;
 

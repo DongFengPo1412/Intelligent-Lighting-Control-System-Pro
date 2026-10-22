@@ -134,9 +134,9 @@ esp_err_t DisplayHAL::Show(uint8_t brightness_percent, bool srgb_image)
     const uint16_t brightness = (base_brightness_ * brightness_percent) / 100;
     for (int i = 0; i < TOTAL_LEDS; i++) {
         // Decode image RGB before dimming; legacy effects retain their exact path.
-        uint16_t r = srgb_image ? DisplayColor::SrgbToPwm(buffer_[i].r, brightness) : (buffer_[i].r * brightness) / 255;
-        uint16_t g = srgb_image ? DisplayColor::SrgbToPwm(buffer_[i].g, brightness) : (buffer_[i].g * brightness) / 255;
-        uint16_t b = srgb_image ? DisplayColor::SrgbToPwm(buffer_[i].b, brightness) : (buffer_[i].b * brightness) / 255;
+        uint16_t r = (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(buffer_[i].r, brightness) : (buffer_[i].r * brightness) / 255;
+        uint16_t g = (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(buffer_[i].g, brightness) : (buffer_[i].g * brightness) / 255;
+        uint16_t b = (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(buffer_[i].b, brightness) : (buffer_[i].b * brightness) / 255;
 
         led_strip_set_pixel(led_strip_, i, (uint32_t)r, (uint32_t)g, (uint32_t)b);
     }
@@ -146,5 +146,16 @@ esp_err_t DisplayHAL::Show(uint8_t brightness_percent, bool srgb_image)
     led_strip_set_pixel(led_strip_, TOTAL_LEDS, 0, 0, 0);
     led_strip_set_pixel(led_strip_, TOTAL_LEDS + 1, 0, 0, 0);
 
-    return led_strip_refresh(led_strip_);
+    esp_err_t result = led_strip_refresh(led_strip_);
+    if (result == ESP_OK) {
+        for (int i = 0; i < TOTAL_LEDS; ++i) {
+            const auto c = buffer_[i];
+            front_buffer_[i] = ColorRGB(
+                (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(c.r, brightness) : c.r * brightness / 255,
+                (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(c.g, brightness) : c.g * brightness / 255,
+                (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(c.b, brightness) : c.b * brightness / 255);
+        }
+        ++frame_id_;
+    }
+    return result;
 }

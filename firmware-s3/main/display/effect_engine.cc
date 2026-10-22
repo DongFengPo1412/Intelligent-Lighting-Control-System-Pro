@@ -436,6 +436,8 @@ void EffectEngine::RenderKurisuDeskPet()
 
     // 3. 决定当前渲染帧
     const ColorRGB (*active_frame)[16] = KURISU_FRAME_IDLE;
+    bool context_fresh=pet_context_ms_ && now-pet_context_ms_<120000;
+    bool sleeping=context_fresh && (pet_hour_<7||pet_hour_>=23||!pet_present_||pet_tired_);
 
     if (is_speaking) {
         // 语音对嘴中：口型在小张嘴与大张嘴之间生动开合 (每 140ms 切换)
@@ -444,7 +446,7 @@ void EffectEngine::RenderKurisuDeskPet()
             kurisu_last_talk_ms_ = now;
         }
         active_frame = (kurisu_talk_phase_ == 0) ? KURISU_FRAME_TALK1 : KURISU_FRAME_TALK2;
-    } else if (kurisu_is_blinking_) {
+    } else if (kurisu_is_blinking_ || sleeping) {
         // 闭目眨眼帧
         active_frame = KURISU_FRAME_BLINK;
     } else {
@@ -458,6 +460,21 @@ void EffectEngine::RenderKurisuDeskPet()
             hal.SetPixel(x, y, active_frame[y][x]);
         }
     }
+    if(!is_speaking&&!sleeping&&context_fresh) {
+        if(pet_hour_>=20 && now%60000<1400) {
+            for(int y=8;y<=9;y++)for(int x=7;x<=8;x++)hal.SetPixel(x,y,KURISU_FRAME_TALK2[y][x]);
+        }
+        if(!kurisu_is_blinking_ && fabsf(pet_gaze_)>.35f) {
+            for(int side=0;side<2;side++)for(int y=8;y<=9;y++) {
+                int x=5+side*4;
+                int pupil=x+(pet_gaze_>0?1:0),other=x+(pet_gaze_>0?0:1);
+                hal.SetPixel(pupil,y,KURISU_FRAME_IDLE[y][x]);
+                hal.SetPixel(other,y,KURISU_FRAME_IDLE[y][7]);
+            }
+        }
+    }
+    // Life-state dimming is context driven; the approved daytime frame is unchanged.
+    if(sleeping)hal.FadeToBlackBy(120);
 }
 
 // =========================================================================

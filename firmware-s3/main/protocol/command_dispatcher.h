@@ -27,6 +27,8 @@ public:
     uint32_t AudioPlayed() const { return audio_played_.load(); }
     uint32_t AudioDropped() const { return audio_dropped_.load(); }
     uint32_t AudioErrors() const { return audio_errors_.load(); }
+    bool EnqueuePcm(const void* data,size_t bytes);
+    void AbortAudio();
     uint32_t AudioStackFree() const { return audio_play_task_handle_ ? uxTaskGetStackHighWaterMark(audio_play_task_handle_) : 0; }
 
 private:

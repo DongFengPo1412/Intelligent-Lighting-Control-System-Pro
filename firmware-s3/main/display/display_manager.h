@@ -5,6 +5,8 @@
 #include "effect_engine.h"
 #include "game_engine.h"
 #include "spectrum_engine.h"
+#include "fingertip_tracker.h"
+#include "interaction_engine.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
@@ -36,6 +38,19 @@ public:
 
     // 整板统一亮度
     void SetBrightness(uint8_t brightness);
+    void FeedFingertip(float x,float y,bool visible,float confidence);
+    void ConfigureFingertip(float x0,float y0,float x1,float y1,bool invert_x,bool invert_y);
+    void FeedHand(float x,float y,float z,bool pinch,bool visible);
+    void FeedMusic(float energy,float flux,bool onset,float tempo,float phase=0);
+    void Celebrate();
+    void SetCanvasPixel(int x,int y,ColorRGB color);
+    void SetCanvasFrame(const ColorRGB* colors);
+    void ClearCanvas();
+    uint32_t SnapshotFrame(char* hex, size_t size);
+    void SetGamma(bool enabled);
+    void FeedPet(int hour,float gaze,bool present,bool tired);
+    void ConfigureDifficulty(float level,bool adaptive);
+    void FeedPerformance(float reaction_ms,float frustration,bool success);
 
     // 智能倒计时系统 (按秒设置，256灯珠等比逐颗熄灭，精准对齐总耗时)
     void StartCountdown(uint32_t total_seconds);
@@ -64,6 +79,8 @@ private:
     EffectEngine effect_engine_;
     GameEngine game_engine_;
     SpectrumEngine spectrum_engine_;
+    FingertipTracker fingertip_tracker_;
+    InteractionEngine interaction_engine_;
 
     DisplayMode current_mode_;
     DisplayMode last_mode_;

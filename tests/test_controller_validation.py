@@ -24,9 +24,9 @@ class Tests(unittest.TestCase):
     def tearDown(self):self.output.__exit__(None,None,None)
 
     def test_direct_mode_set(self):
-        for mode in list(range(18))+list(range(19,25)):
+        for mode in list(range(18))+list(range(19,25))+list(range(26,32)):
             self.assertTrue(self.client.set_mode(mode))
-        self.assertEqual(len(self.commands),24)
+        self.assertEqual(len(self.commands),30)
 
     def test_countdown_requires_its_parameterized_command(self):
         with self.assertRaises(ValueError):self.client.set_mode(25)
@@ -35,7 +35,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(self.commands,[{'cmd':'countdown','seconds':60}])
 
     def test_invalid_modes_never_send(self):
-        for mode in (18,-1,26,True,1.5,'1'):
+        for mode in (18,-1,32,True,1.5,'1'):
             with self.assertRaises(ValueError):self.client.set_mode(mode)
         self.assertEqual(self.commands,[])
 

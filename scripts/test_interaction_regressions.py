@@ -7,6 +7,7 @@ import ast
 import asyncio
 import concurrent.futures
 import json
+import os
 from pathlib import Path
 import queue
 import socket
@@ -22,6 +23,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1] / 'pc-agent-vision'
 sys.path.insert(0, str(ROOT))
 from semantic_control import exact_plan, ARGUMENTS, describe_action
+from pro_control import ProControlMixin,DIRECT_MODES,integer
+from conversation_session import ConversationSession
 
 
 def load_nodes(filename, names, **scope):
@@ -29,6 +32,7 @@ def load_nodes(filename, names, **scope):
     selected = [node for node in source.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names]
     module = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0)] + selected, type_ignores=[])
     ns = dict(time=time, threading=threading, json=json, queue=queue, asyncio=asyncio, np=np)
+    ns.update(ProControlMixin=ProControlMixin,DIRECT_MODES=DIRECT_MODES,os=os,integer=integer)
     ns.update(scope)
     exec(compile(ast.fix_missing_locations(module), filename, 'exec'), ns)
     return ns
@@ -57,6 +61,7 @@ class VoiceRegressionTests(unittest.TestCase):
         obj = cls.__new__(cls)
         obj._work_lock = threading.Lock()
         obj._pending_prefix = ''
+        obj.session=ConversationSession()
         obj.is_awake = True
         obj.wake_detector = types.SimpleNamespace(detect=lambda pcm: "助手")
         obj.is_listening = True
@@ -126,6 +131,29 @@ class VoiceRegressionTests(unittest.TestCase):
         self.assertTrue(listener._expire_idle_wake())
         self.assertFalse(listener.is_awake)
 
+    def test_duplex_keyword_still_requires_exact_asr_confirmation(self):
+        listener=self.listener(iter(['住手']))
+        del listener.__dict__['_check_wake_word']
+        listener.duplex=True;listener.is_paused=True;listener._barge_audio=bytearray()
+        cancel=threading.Event()
+        listener.controller=types.SimpleNamespace(_network_audio=None,playback_cancel=cancel,
+            send_json=lambda command:listener.commands.append(command))
+        listener._check_barge(bytes(960))
+        self.assertFalse(cancel.is_set());self.assertEqual(listener.commands,[])
+
+    def test_duplex_interrupt_keeps_the_attached_command_for_next_turn(self):
+        listener=self.listener(iter(['助手，我想看蓝灯']))
+        del listener.__dict__['_check_wake_word']
+        listener.duplex=True;listener.is_paused=True;listener._barge_audio=bytearray()
+        listener._utterance_queue=queue.Queue();listener.session=ConversationSession(False)
+        cancel=threading.Event()
+        listener.controller=types.SimpleNamespace(_network_audio=None,playback_cancel=cancel,
+            send_json=lambda command:listener.commands.append(command))
+        pcm=bytes(960);listener._check_barge(pcm)
+        self.assertTrue(cancel.is_set());self.assertEqual(listener.commands,[{'cmd':'audio_abort'}])
+        listener._finish_turn('上一轮')
+        self.assertTrue(listener.is_awake);self.assertEqual(listener._utterance_queue.get_nowait(),pcm)
+
 
 class FakeSocket:
     def __init__(self, gateway, ack_on=1, status='ok'):
@@ -176,9 +204,9 @@ class TransportTests(unittest.TestCase):
         cls = load_nodes('light_controller.py', {'LightController'})['LightController']
         obj = cls.__new__(cls)
         calls = []
-        obj.set_theme = lambda theme: calls.append(theme) or False
+        obj.set_mode = lambda mode: calls.append(mode) or False
         self.assertFalse(obj.trigger_steins_gate())
-        self.assertEqual(calls, ['fire'])
+        self.assertEqual(calls, [28])
 
     def test_invalid_theme_and_mode_do_not_send(self):
         cls = load_nodes('light_controller.py', {'LightController'})['LightController']
@@ -197,6 +225,7 @@ class TransportTests(unittest.TestCase):
         for initially_enabled in (False, True):
             obj = cls.__new__(cls)
             obj._lock = threading.RLock()
+            obj.playback_cancel=threading.Event()
             obj.is_connected = True
             obj._mic_enabled = initially_enabled
             obj.ser = types.SimpleNamespace(write=lambda _: None, flush=lambda: None,
@@ -210,10 +239,11 @@ class TransportTests(unittest.TestCase):
             count = [0]
             gateway = types.SimpleNamespace(last_result={})
             def status(payload):
-                gateway.last_result = {'audio_rx': count[0], 'audio_played': count[0], 'audio_dropped': 0, 'audio_errors': 0}
+                gateway.last_result = {'status':'ok','audio_rx': count[0], 'audio_played': count[0], 'audio_dropped': 0, 'audio_errors': 0}
                 count[0] += 16
                 return True
             obj.send_json = status
+            gateway.request=lambda command:status(json.loads(command)) and dict(gateway.last_result)
             module = types.ModuleType('wifi_gateway')
             module.get_wifi_gateway = lambda: gateway
             sys.modules['wifi_gateway'] = module
@@ -258,6 +288,7 @@ class AgentRegressionTests(unittest.TestCase):
         obj._tool_results = {}
         obj._chat_lock = threading.Lock()
         obj.history = [{'role': 'system', 'content': 'persona'}]
+        obj.memory=types.SimpleNamespace(append_turn=lambda *a:None,search=lambda *a:[],remember=lambda *a,**k:None)
         obj.calls = calls
         obj.api_base = 'http://localhost:11434/v1'
         obj.api_key = 'test'

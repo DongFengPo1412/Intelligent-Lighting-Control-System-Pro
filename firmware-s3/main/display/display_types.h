@@ -37,8 +37,18 @@ enum class DisplayMode : int {
     TETRIS_SCORE = 22,          // 22: 俄罗斯方块结算看板
     CYBER_FIRE = 23,            // 23: 赛博壁炉物理火焰
     MATRIX_RAIN_PRO = 24,       // 24: 黑客帝国代码雨 Pro
-    COUNTDOWN_TIMER = 25        // 25: 智能高精度倒计时
+    COUNTDOWN_TIMER = 25,
+    FINGERTIP_TRACKER = 26,
+    LIGHT_SANDBOX = 27,
+    WORLDLINE = 28,
+    PIXEL_CANVAS = 29,
+    MUSIC_FLUID = 30,
+    AMBIENT = 31
 };
+
+constexpr bool IsDirectDisplayMode(int n) {
+    return n >= 0 && n <= 31 && n != 18 && n != 25;
+}
 
 struct ColorRGB {
     uint8_t r;

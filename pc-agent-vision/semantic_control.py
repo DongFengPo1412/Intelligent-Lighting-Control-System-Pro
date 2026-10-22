@@ -30,6 +30,12 @@ EFFECTS = {
     23: ('赛博烈焰', '炎', '壁炉、温暖的火、篝火、火焰'),
     24: ('代码雨Pro', 'コードレイン', '黑客帝国、绿色数字瀑布、代码流'),
     25: ('倒计时沙漏', '砂時計', '计时、番茄钟、沙漏倒计时；启动必须提供秒数'),
+    26: ('指尖追踪', '指先追跡', '指尖、食指位置跟随光点'),
+    27: ('光球沙盒', '光のサンドボックス', '抓取、投掷、碰撞光球'),
+    28: ('世界线仪表', '世界線メーター', '世界线变动率数字仪表'),
+    29: ('像素画布', 'ピクセルキャンバス', '手绘像素、像素涂鸦'),
+    30: ('音乐流体', '音楽の波', '音乐信息检索、节奏流体'),
+    31: ('环境微光', '環境光', '无人、离席、节能呼吸微光'),
 }
 
 WIRE_SCHEMA = {'type': 'object', 'properties': {
@@ -116,6 +122,10 @@ def validate_plan(plan):
             raise ValueError(f'Unsupported control: {tool}={value}')
         if action not in normalized:
             normalized.append(action)
+    # Mode 28 and the worldline tool refer to the same board operation.
+    equivalent={'tool':'set_light_mode','value':28}
+    if equivalent in normalized and {'tool':'trigger_steins_gate_worldline','value':0} in normalized:
+        normalized.remove(equivalent)
     # Multiple competing display requests need clarification instead of flashing modes.
     tools = {action['tool'] for action in normalized}
     if 'start_countdown' in tools and 'stop_countdown' in tools:

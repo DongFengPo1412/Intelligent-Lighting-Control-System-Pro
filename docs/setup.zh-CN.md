@@ -1,3 +1,5 @@
+> **历史基线 / Historical baseline / 過去の基準**：下文保留本轮扩展前的审计与操作记录。它不描述当前所有功能；当前实现、架构差异与安全的离线运行方式见 [PRO_FEATURES](PRO_FEATURES.md)。Prior audit/setup content is retained below; use the linked current guide for this revision.
+
 # Pro 部署与操作
 
 **简体中文** · [English](setup.en.md) · [日本語](setup.ja.md) · [项目首页](../README.md)

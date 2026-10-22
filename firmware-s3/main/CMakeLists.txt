@@ -18,9 +18,13 @@ idf_component_register(
         "display/effect_engine.cc"
         "display/game_engine.cc"
         "display/spectrum_engine.cc"
+        "display/fingertip_tracker.cc"
+        "display/interaction_engine.cc"
         "display/display_manager.cc"
         "display/board_led.cc"
         "protocol/command_dispatcher.cc"
+        "protocol/interaction_commands.cc"
+        "protocol/network_audio.cc"
         "protocol/wifi_manager.cc"
         "audio/audio_hal.cc"
     INCLUDE_DIRS

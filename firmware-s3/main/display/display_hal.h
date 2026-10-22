@@ -34,6 +34,10 @@ public:
     }
 
     ColorRGB* GetBuffer() { return buffer_; }
+    // Completed front frame, in actual PWM bytes. Call under DisplayManager lock.
+    const ColorRGB* GetFrontBuffer() const { return front_buffer_; }
+    uint32_t GetFrameId() const { return frame_id_; }
+    void SetGammaEnabled(bool enabled) { gamma_enabled_ = enabled; }
 
 private:
     DisplayHAL();
@@ -44,6 +48,9 @@ private:
 
     led_strip_handle_t led_strip_;
     ColorRGB buffer_[TOTAL_LEDS];
+    ColorRGB front_buffer_[TOTAL_LEDS] = {};
+    uint32_t frame_id_ = 0;
+    bool gamma_enabled_ = false;
     uint8_t base_brightness_;
     bool is_initialized_;
 };

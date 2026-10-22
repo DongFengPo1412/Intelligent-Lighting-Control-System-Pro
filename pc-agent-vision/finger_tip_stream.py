@@ -3,7 +3,7 @@ finger_tip_stream.py
 
 PC 端指尖追踪推流脚本：
   摄像头 -> MediaPipe Hands -> 食指指尖 (landmark 8) -> 归一化坐标
-  -> ESP32-S3 串口 JSON -> 16x16 WS2812 追踪光点
+  -> ESP32-S3 Wi-Fi ACK JSON -> 16x16 WS2812 追踪光点
 
 运行示例：
   python finger_tip_stream.py --camera 0 --rate 40
@@ -86,11 +86,13 @@ def main():
     send_interval = 1.0 / max(1.0, args.rate)
 
     controller = get_light_controller()
-    if controller.is_connected:
+    mode_selected=controller.wait_for_control(3.0)
+    if mode_selected:
         # 26 = FINGERTIP_TRACKER
-        controller.set_mode(26)
+        if not controller.set_mode(26):
+            raise ConnectionError("FingerTip mode was not acknowledged")
     else:
-        print("[FingerTip] 串口未连接，仅运行摄像头预览；请先连接 ESP32-S3。")
+        print("[FingerTip] Wi-Fi 控制未连接，仅运行摄像头预览。")
 
     mp_hands = mp.solutions.hands
     mp_draw = mp.solutions.drawing_utils
@@ -103,6 +105,9 @@ def main():
 
     cap = cv2.VideoCapture(args.camera)
     if not cap.isOpened():
+        cap.release()
+        hands.close()
+        controller.close()
         print(f"[FingerTip] 无法打开摄像头 {args.camera}")
         return 1
 
@@ -161,19 +166,24 @@ def main():
                     cv2.circle(frame, (px, py), 12, (0, 255, 255), 2)
                     cv2.circle(frame, (px, py), 3, (0, 255, 255), -1)
 
-            now = time.time()
+            now = time.monotonic()
             # 没有手时降低发送频率，避免无意义的串口流量。
             min_interval = send_interval if visible else max(send_interval, 0.10)
             if now - last_send >= min_interval:
                 last_send = now
-                if controller.is_connected:
-                    controller.send_json({
+                if controller.control_connected:
+                    if not mode_selected:
+                        if not controller.set_mode(26):raise ConnectionError('Fingertip mode was not acknowledged after reconnect')
+                        mode_selected=True
+                    acknowledged = controller.send_json({
                         "cmd": "track",
                         "x": round(nx, 4),
                         "y": round(ny, 4),
                         "visible": visible,
                         "conf": round(confidence, 3),
                     })
+                    if not acknowledged:raise ConnectionError('Fingertip input was not acknowledged')
+                else:mode_selected=False
                 if visible != last_visible:
                     state = "TRACKING" if visible else "NO HAND"
                     print(f"[FingerTip] {state}  x={nx:.3f}  y={ny:.3f}")
@@ -199,14 +209,15 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        if controller.is_connected:
-            controller.send_json({
+        if controller.control_connected:
+            acknowledged = controller.send_json({
                 "cmd": "track",
                 "x": 0.5,
                 "y": 0.5,
                 "visible": False,
                 "conf": 0.0,
             })
+        controller.close()
         cap.release()
         hands.close()
         cv2.destroyAllWindows()

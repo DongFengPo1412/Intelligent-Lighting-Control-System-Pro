@@ -31,8 +31,14 @@ public:
     void TetrisMove(int dx);
     void TetrisRotate();
     void TetrisDrop();
+    void ConfigureDifficulty(float level, bool adaptive);
+    void FeedPerformance(float reaction_ms, float frustration, bool success);
+    float GetDifficulty() const { return difficulty_; }
 
 private:
+    int EffectiveDelay(int base, int minimum) const;
+    float difficulty_ = .5f;
+    bool adaptive_ = true;
     bool PlaceSnakeFood();
     int pending_snake_direction_ = 0;
 

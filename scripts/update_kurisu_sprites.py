@@ -124,7 +124,17 @@ def generate_header():
     content += f'constexpr ColorRGB KURISU_LED_HAIR_BORDER({r}, {g}, {b});\n\n'
     led_grid = [[LED_PALETTE[role] for role in row] for row in get_display_roles()]
     for name in ('IDLE', 'BLINK', 'TALK1', 'TALK2'):
-        content += format_frame(f'KURISU_FRAME_{name}', led_grid)
+        frame = [row.copy() for row in led_grid]
+        if name == 'BLINK':
+            for x in (5, 6, 9, 10):
+                frame[8][x] = LED_PALETTE['LASH']
+                frame[9][x] = LED_PALETTE['SKIN']
+        elif name in ('TALK1', 'TALK2'):
+            for x in (7, 8):
+                frame[9][x] = LED_PALETTE['HR_M']
+                if name == 'TALK2':
+                    frame[8][x] = LED_PALETTE['HR_M']
+        content += format_frame(f'KURISU_FRAME_{name}', frame)
     return content
 
 

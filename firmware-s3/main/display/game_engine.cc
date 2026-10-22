@@ -1,4 +1,17 @@
 #include "game_engine.h"
+
+void GameEngine::ConfigureDifficulty(float level,bool adaptive) {
+    if(!isfinite(level))return;
+    difficulty_=fmaxf(0,fminf(1,level));adaptive_=adaptive;
+}
+void GameEngine::FeedPerformance(float reaction_ms,float frustration,bool success) {
+    if(!adaptive_||!isfinite(reaction_ms)||!isfinite(frustration))return;
+    float delta=(!success||frustration>.6f) ? -.04f : (reaction_ms>0&&reaction_ms<600 ? .02f : -.01f);
+    difficulty_=fmaxf(0,fminf(1,difficulty_+delta));
+}
+int GameEngine::EffectiveDelay(int base,int minimum) const {
+    int delay=(int)(base*(1.4f-.8f*difficulty_)+.5f);return delay<minimum?minimum:delay;
+}
 #include <string.h>
 
 // 7 种俄罗斯方块的 4 种旋转姿态定义 (7, 4, 4, 2)
@@ -107,7 +120,7 @@ uint32_t GameEngine::RunSnake()
     }
 
     uint32_t now = get_millis();
-    if (now - last_snake_tick_ >= (uint32_t)snake_speed_ms_) {
+    if (now - last_snake_tick_ >= (uint32_t)EffectiveDelay(snake_speed_ms_,80)) {
         last_snake_tick_ = now;
         int direction=pending_snake_direction_;pending_snake_direction_=0;
         if(direction==1 && snake_dx_!=-1){snake_dx_=1;snake_dy_=0;}
@@ -235,7 +248,7 @@ uint32_t GameEngine::RunTetris()
     }
 
     uint32_t now = get_millis();
-    if (now - last_tetris_tick_ >= (uint32_t)tetris_speed_ms_) {
+    if (now - last_tetris_tick_ >= (uint32_t)EffectiveDelay(tetris_speed_ms_,100)) {
         last_tetris_tick_ = now;
 
         if (!CheckTetrisCollision(piece_type_, piece_rot_, piece_x_, piece_y_ + 1)) {

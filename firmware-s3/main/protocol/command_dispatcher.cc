@@ -1,4 +1,6 @@
 #include "command_dispatcher.h"
+#include "interaction_commands.h"
+#include "network_audio.h"
 #include "display_manager.h"
 #include "board_led.h"
 #include "audio_hal.h"
@@ -61,6 +63,20 @@ void CommandDispatcher::SetMicStreaming(bool enabled)
     mic_streaming_ = enabled;
     AudioHAL::GetInstance().EnableMic(enabled);
     ESP_LOGI(TAG, "Mic streaming toggled: %s", enabled ? "ENABLED" : "DISABLED");
+}
+
+bool CommandDispatcher::EnqueuePcm(const void* data,size_t bytes) {
+    if(!audio_ring_buf_||!data||!bytes||bytes>2048||bytes%2)return false;
+    audio_received_.fetch_add(bytes/2);
+    if(xRingbufferSend(audio_ring_buf_,data,bytes,pdMS_TO_TICKS(100))!=pdTRUE){audio_dropped_.fetch_add(bytes/2);return false;}
+    return true;
+}
+void CommandDispatcher::AbortAudio(){
+    if(!audio_ring_buf_)return;
+    size_t bytes=0;void* block=nullptr;
+    while((block=xRingbufferReceive(audio_ring_buf_,&bytes,0))!=nullptr){
+        audio_dropped_.fetch_add(bytes/2);vRingbufferReturnItem(audio_ring_buf_,block);
+    }
 }
 
 esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t core_id)
@@ -157,7 +173,8 @@ void CommandDispatcher::MicTaskLoop()
             packet[2] = (payload_bytes >> 8) & 0xFF;
             packet[3] = payload_bytes & 0xFF;
             memcpy(&packet[4], mic_buf, payload_bytes);
-            usb_serial_jtag_write_bytes(packet, 4 + payload_bytes, pdMS_TO_TICKS(50));
+            if(NetworkAudio::GetInstance().Connected())NetworkAudio::GetInstance().SendMic(mic_buf,samples_read);
+            else usb_serial_jtag_write_bytes(packet, 4 + payload_bytes, pdMS_TO_TICKS(50));
         } else {
             vTaskDelay(pdMS_TO_TICKS(15));
         }
@@ -314,6 +331,7 @@ void CommandDispatcher::SerialTaskLoop()
 void CommandDispatcher::SendStatus()
 {
     DisplayManager& dm = DisplayManager::GetInstance();
+
     int mode = (int)dm.GetMode();
     bool cd_active = dm.IsCountdownActive();
     uint32_t cd_rem = dm.GetCountdownRemainingSeconds();
@@ -375,6 +393,9 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
 
     const char* cmd = cmd_item->valuestring;
     DisplayManager& dm = DisplayManager::GetInstance();
+    if(!strcmp(cmd,"audio_abort")){AbortAudio();cJSON_Delete(root);return true;}
+    int extended=HandleInteractionCommand(cmd,root,dm);
+    if(extended>=0){cJSON_Delete(root);return extended==1;}
 
     // {"cmd":"countdown", "seconds":60}
     if (strcasecmp(cmd, "countdown") == 0) {
@@ -394,7 +415,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     // {"cmd":"mode", "val":4}
     else if (strcasecmp(cmd, "mode") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
-        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 24 && val_item->valueint != 18) {
+        if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && IsDirectDisplayMode(val_item->valueint)) {
             dm.SetMode(val_item->valueint);
             cJSON_Delete(root);
             return true;
@@ -528,7 +549,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     // 2. 模式数字切换: "mode 23"
     int mode_num = -1;
     if (sscanf(text_str, "mode %d", &mode_num) == 1) {
-        if (mode_num < 0 || mode_num > 24 || mode_num == 18) return false;
+        if (!IsDirectDisplayMode(mode_num)) return false;
         dm.SetMode(mode_num);
         return true;
     }

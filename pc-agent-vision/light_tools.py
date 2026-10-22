@@ -16,12 +16,13 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "start_countdown",
-            "description": "启动 16x16 物理沙漏倒计时。当用户要求倒计时、定时、或者设定计时器时调用。256 颗灯珠会按秒等比逐颗熄灭，呈现流体粒子动态衰减与绿-黄-红警示渐变。",
+            "description": "启动16×16像素进度倒计时，灯珠按剩余时间比例熄灭并渐变；不是物理砂粒仿真。用户要求倒计时、定时或计时器时调用。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "seconds": {
                         "type": "integer",
+                        "minimum":1,"maximum":86400,
                         "description": "倒计时的总秒数 (例如: 60 表示一分钟, 30 表示半分钟, 10 表示十秒)"
                     }
                 },
@@ -101,7 +102,8 @@ LIGHT_TOOL_DEFINITIONS = [
                 "properties": {
                     "brightness": {
                         "type": "integer",
-                        "description": "亮度值 (范围 1 到 50，安全标准亮度为 20)"
+                        "minimum":0,"maximum":60,
+                        "description": "亮度值0到60，参考档位20；不是物理限流保证"
                     }
                 },
                 "required": ["brightness"]
@@ -112,7 +114,7 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "set_light_mode",
-            "description": "设置矩阵直接模式（0–24，18除外）；倒计时必须使用 start_countdown 并提供秒数:\n"
+            "description": "设置矩阵直接模式（0–31，18和25除外）；倒计时必须使用 start_countdown 并提供秒数:\n"
                            "0: 清屏关灯\n"
                            "1: 纯红模式, 2: 纯蓝模式, 3: 纯绿模式\n"
                            "4: 幻彩霓虹, 5: 呼吸极光, 6: 流星划过, 7: 繁星点点, 8: 全屏色彩, 9: 乱序雨滴, 10: 中心波纹\n"
@@ -121,14 +123,14 @@ LIGHT_TOOL_DEFINITIONS = [
                            "17: 牧濑红莉栖半身桌宠立绘 (自然眨眼 + 语音对嘴)\n"
                            "19: 贪吃蛇游戏, 20: 贪吃蛇结算看板\n"
                            "21: 俄罗斯方块游戏, 22: 俄罗斯方块结算看板\n"
-                           "23: 火焰, 24: 代码雨；倒计时另调用 start_countdown(seconds)",
+                           "23: 火焰, 24: 代码雨; 26: 指尖; 27: 光球; 28: 世界线仪表; 29: 画布; 30: 音乐流体; 31: 环境微光；倒计时另调用 start_countdown(seconds)",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "mode": {
                         "type": "integer",
                         "description": "直接模式编号，18和25不可直接选择",
-                        "enum": list(range(18)) + list(range(19, 25))
+                        "enum": list(range(18)) + list(range(19, 25)) + list(range(26,32))
                     }
                 },
                 "required": ["mode"]
@@ -212,7 +214,7 @@ def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, A
 
     try:
         if func_name == "start_countdown":
-            sec = int(arguments.get("seconds", 60))
+            sec = arguments.get("seconds", 60)
             ok = controller.countdown(sec)
             return {"status": "success" if ok else "error", "message": f"物理沙漏倒计时已设定为 {sec} 秒，256颗灯珠正在动态衰减"}
 
@@ -222,7 +224,7 @@ def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, A
 
         elif func_name == "trigger_steins_gate_worldline":
             ok = controller.trigger_steins_gate()
-            return {"status": "success" if ok else "error", "message": "世界线变动率已测量完毕：1.048596% (Steins Gate 线确认)，光场已进入生动观测状态"}
+            return {"status": "success" if ok else "error", "message": "世界线彩蛋启动请求已确认，将滚动后显示作品设定值1.048596%" if ok else "世界线彩蛋请求未获确认"}
 
         elif func_name == "set_matrix_theme":
             theme = arguments.get("theme", "rainbow")
@@ -230,12 +232,12 @@ def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, A
             return {"status": "success" if ok else "error", "message": f"光场特效已切换为: {theme}"}
 
         elif func_name == "set_light_mode":
-            mode = int(arguments.get("mode", 4))
+            mode = arguments.get("mode", 4)
             ok = controller.set_mode(mode)
             return {"status": "success" if ok else "error", "message": f"光场模式已切换为编号: {mode}"}
 
         elif func_name == "set_volume":
-            vol = int(arguments.get("volume", 80))
+            vol = arguments.get("volume", 70)
             if not 0 <= vol <= 100:
                 raise ValueError('Volume must be between 0 and 100')
             ok = controller.set_volume(vol)
@@ -247,7 +249,7 @@ def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, A
             return {"status": "success" if ok else "error", "message": f"红莉栖微表情已更新为: {emotion}"}
 
         elif func_name == "set_brightness":
-            val = int(arguments.get("brightness", 20))
+            val = arguments.get("brightness", 20)
             ok = controller.set_brightness(val)
             return {"status": "success" if ok else "error", "message": f"全局亮度已设为 {val}"}
 
@@ -267,15 +269,14 @@ def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, A
             return {"status": "success" if ok else "error", "message": "已切换回牧濑红莉栖半身桌宠立绘 (模式 17)"}
 
         elif func_name == "get_device_status":
-            from wifi_gateway import get_wifi_gateway
-            gateway = get_wifi_gateway()
-            confirmed = controller.send_json({"cmd": "status"})
+            reply = controller.command_result({"cmd":"status"})
+            confirmed = reply.get('status') == 'ok'
             return {
                 "status": "success" if confirmed else "error",
-                "connected": gateway.is_online(),
+                "connected": confirmed,
                 "audio_usb_connected": controller.is_connected,
                 "port": controller.port,
-                "current_mode": gateway.last_result.get("mode"),
+                "current_mode": reply.get("mode"),
                 "device": "ESP32-S3 16x16 Matrix + Board LED WS2812",
                 "persona": "Makise Kurisu (Amadeus)",
                 "tts_engine": "GPT-SoVITS (CV: Asami Imai)",

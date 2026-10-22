@@ -1,6 +1,6 @@
 """
-LightController: 16x16 LED 矩阵硬件驱动控制器 (ESP32-S3 COM9)
-基于 USB-Serial-JTAG 硬件直通协议，支持双协议 (纯文本 + 结构化 cJSON)
+LightController: acknowledged Wi-Fi control and USB/optional Wi-Fi PCM audio.
+Simulation substitutes the controller without opening any devices.
 """
 
 import os
@@ -8,11 +8,12 @@ import sys
 import time
 import json
 import threading
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 import serial
 import serial.tools.list_ports
+from pro_control import ProControlMixin, DIRECT_MODES, integer
 
-class LightController:
+class LightController(ProControlMixin):
     def __init__(self, port: Optional[str] = None, baudrate: int = 115200, timeout: float = 0.5):
         self.baudrate = baudrate
         self.timeout = timeout
@@ -25,9 +26,26 @@ class LightController:
         self.on_mic_data: Optional[Callable[[bytes], None]] = None
         self.on_status_data: Optional[Callable[[Dict[str, Any]], None]] = None
         self._chime_pcm: bytes = self._create_chime_pcm()
+        self.audio_transport = os.environ.get('KURISU_AUDIO_TRANSPORT', 'usb')
+        self._network_audio = None
+        self.playback_cancel = threading.Event()
 
-        self.connect()
-        self._start_reader()
+        if self.audio_transport == 'wifi':
+            self.is_connected = False
+        else:
+            self.connect()
+            self._start_reader()
+
+    @property
+    def audio_connected(self):
+        return self.is_connected or bool(self._network_audio and self._network_audio.connected)
+
+    def connect_audio(self):
+        if self.audio_transport != 'wifi':return self.is_connected
+        if self._network_audio is None:
+            from network_audio import WiFiPcmClient
+            self._network_audio = WiFiPcmClient(self)
+        return self._network_audio.connect()
 
     def _start_reader(self):
         """启动后台串口数据解复用接收线程 (区分麦克风二进制帧与普通文本/JSON)"""
@@ -169,6 +187,10 @@ class LightController:
         """发送标准 cJSON 指令包"""
         return self.send_raw(json.dumps(payload, separators=(',', ':')))
 
+    def command_result(self, payload):
+        from wifi_gateway import get_wifi_gateway
+        return get_wifi_gateway().request(json.dumps(payload, separators=(',', ':')))
+
     def play_audio_pcm(self, pcm_data: bytes, chunk_samples: int = 512) -> bool:
         """
         向板载 MAX98357A 扬声器下行直推 16kHz 16-bit 单声道 PCM 音频流
@@ -181,6 +203,12 @@ class LightController:
             return False
         if len(pcm_data) % 2:
             raise ValueError('PCM16 payload must contain complete samples')
+        if getattr(self, 'audio_transport', 'usb') == 'wifi':
+            if not self.connect_audio():return False
+            ok = self._network_audio.play(pcm_data, chunk_samples)
+            self.last_audio_error = self._network_audio.last_error if not ok else None
+            return ok
+        self.playback_cancel.clear()
         self.last_audio_error = None
             
         chunk_bytes = chunk_samples * 2 # 16-bit = 2 bytes/sample
@@ -212,17 +240,19 @@ class LightController:
                     return False
                 muted = True
                 time.sleep(0.04)
-                from wifi_gateway import get_wifi_gateway
-                gateway = get_wifi_gateway()
-                if not self.send_json({'cmd': 'status'}):
+                before_audio = self.command_result({'cmd': 'status'})
+                if before_audio.get('status')!='ok':
                     return False
-                before_audio = dict(gateway.last_result)
 
                 # 设定 120ms 的前置安全蓄水深度，无论多长音频均严控水位不溢出、不欠载
                 target_lead_sec = 0.120
                 start_clock = time.perf_counter()
 
                 while offset < total_len:
+                    if self.playback_cancel.is_set():
+                        self.send_json({'cmd':'audio_abort'})
+                        self.last_audio_error='playback_cancelled'
+                        return False
                     part = pcm_data[offset : offset + chunk_bytes]
                     part_len = len(part)
                     header = bytearray([0xAA, 0x55, (part_len >> 8) & 0xFF, part_len & 0xFF])
@@ -249,10 +279,10 @@ class LightController:
                 time.sleep(0.35)
 
                 # Sending bytes is not playback confirmation. Check board counters.
-                if not self.send_json({'cmd': 'status'}):
+                after_audio = self.command_result({'cmd': 'status'})
+                if after_audio.get('status')!='ok':
                     self.last_audio_error = 'audio_status_timeout'
                     return False
-                after_audio = dict(gateway.last_result)
                 expected = total_len // 2
                 delta = {key: (after_audio.get(key, 0) - before_audio.get(key, 0)) & 0xffffffff
                          for key in ('audio_rx', 'audio_played', 'audio_dropped', 'audio_errors')}
@@ -301,7 +331,7 @@ class LightController:
     def set_volume(self, volume: int) -> bool:
         """设置 ESP32-S3 板载扬声器音量 (0-100，默认 70，采用平方律动态调校)"""
         print(f"[LightController] 设置板载扬声器音量: {volume}%")
-        return self.send_json({"cmd": "volume", "val": int(volume)})
+        return self.send_json({"cmd": "volume", "val": integer(volume,0,100)})
 
     def set_board_led(self, mode: str = "green") -> bool:
         """
@@ -358,6 +388,7 @@ class LightController:
             raise ValueError("Countdown seconds must be an integer")
         if not 1 <= seconds <= 86400:
             raise ValueError("Countdown must be between 1 and 86400 seconds")
+        if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(25)
         return self.send_json({"cmd": "countdown", "seconds": seconds})
 
     def stop_countdown(self) -> bool:
@@ -368,26 +399,32 @@ class LightController:
     def enable_mic(self, enable: bool = True) -> bool:
         """开启或挂起 ESP32-S3 板载 INMP441 麦克风硬件音频采集回传"""
         print(f"[具身指令] 板载麦克风数据流: {'开启' if enable else '挂起'}")
+        if enable and getattr(self,'audio_transport','usb')=='wifi' and not self.connect_audio():return False
         ok = self.send_json({"cmd": "mic", "enable": bool(enable)})
         if ok:
             self._mic_enabled = bool(enable)
         return ok
 
     def set_mode(self, mode_num: int) -> bool:
-        """Select a direct mode (0..24 except 18); countdown requires seconds."""
+        """Select a direct mode (0..31 except 18/25); countdown requires seconds."""
         print(f"[具身指令] 设置模式编号: {mode_num}")
         if isinstance(mode_num, bool) or not isinstance(mode_num, int):
             raise ValueError("Mode must be an integer")
-        if mode_num not in set(range(25)) - {18}:
+        if mode_num not in DIRECT_MODES:
             raise ValueError("Invalid display mode")
+        if hasattr(self,'_arbiter'):self._arbiter.claim_user()
+        if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(mode_num)
         return self.send_json({"cmd": "mode", "val": mode_num})
 
     def snake_move(self, dx: int, dy: int) -> bool:
         """贪吃蛇方向输入 (dx: -1, 0, 1; dy: -1, 0, 1)"""
-        return self.send_json({"cmd": "game", "name": "snake", "dx": int(dx), "dy": int(dy)})
+        integer(dx,-1,1);integer(dy,-1,1)
+        if abs(dx)+abs(dy)!=1:raise ValueError('Snake direction must be one cardinal step')
+        return self.send_json({"cmd": "game", "name": "snake", "dx": dx, "dy": dy})
 
     def tetris_action(self, action: str) -> bool:
         """俄罗斯方块动作控制 (left, right, rot, drop)"""
+        if action not in ('left','right','rot','drop'):raise ValueError('Invalid Tetris action')
         return self.send_json({"cmd": "game", "name": "tetris", "action": action})
 
     def set_theme(self, theme: str) -> bool:
@@ -440,28 +477,26 @@ class LightController:
         if cmd is None:
             raise ValueError(f"Unknown theme: {theme}")
         print(f"[具身指令] 切换光场特效主题: {cmd}")
-        return self.send_raw(cmd)
+        aliases={'fire':23,'matrix':24,'rainbow':4,'aurora':5,'meteor':6,'stars':7,'ripple':10,
+                 'smile':11,'cry':12,'neutral':13,'dynamic':14,'kurisu':17,'off':0,'cycle':8,'rain':9}
+        return self.set_mode(int(cmd[5:]) if cmd.startswith('mode ') else aliases[cmd])
 
     def set_brightness(self, val: int) -> bool:
         """调整全局亮度 (1-255，推荐 10-30 以维持 3.3V 单端总线安全)"""
-        val = max(1, min(60, int(val)))
+        integer(val,0,60)
         print(f"[具身指令] 设置亮度: {val}")
         return self.send_json({"cmd": "brightness", "val": val})
 
     def trigger_steins_gate(self) -> bool:
         """
         触发《命运石之门》世界线变动率彩蛋:
-        乱数滚动震颤 -> 切换至绿光代码雨 -> 定格生命微表情，代表收敛至 1.048596% 命运石之门世界线
+        板端数字滚动后锁定 1.048596%；这是作品彩蛋，不是测量值。
         """
         print("[具身指令] ★★★ 触发世界线变动率 1.048596% (Steins;Gate) ★★★")
-        for theme, delay in (("fire", 0.35), ("meteor", 0.35), ("matrix", 1.2), ("dynamic", 0)):
-            if not self.set_theme(theme):
-                return False
-            if delay:
-                time.sleep(delay)
-        return True
+        return self.set_mode(28)
 
     def close(self):
+        if self._network_audio:self._network_audio.close()
         self._running = False
         with self._lock:
             if self.ser and self.ser.is_open:
@@ -475,5 +510,9 @@ _controller_instance: Optional[LightController] = None
 def get_light_controller() -> LightController:
     global _controller_instance
     if _controller_instance is None:
-        _controller_instance = LightController()
+        if os.environ.get('KURISU_SIMULATE') == '1':
+            from simulator import SimulatedController
+            _controller_instance = SimulatedController()
+        else:
+            _controller_instance = LightController()
     return _controller_instance

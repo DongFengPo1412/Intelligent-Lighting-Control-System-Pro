@@ -31,6 +31,10 @@ CASES = [
 
 
 class PlanningTests(unittest.TestCase):
+    def test_worldline_mode_and_tool_do_not_create_a_false_conflict(self):
+        wire=to_wire(actions=[{'tool':'set_light_mode','value':28},{'tool':'trigger_steins_gate_worldline','value':0}])
+        self.assertEqual(from_wire(wire),{'kind':'control','actions':[{'tool':'trigger_steins_gate_worldline','value':0}]})
+
     def test_explicit_numeric_clauses_exclude_negation_and_questions(self):
         self.assertEqual(explicit_parameters('倒计时五分钟，同时把灯光亮度降到一半'), {'brightness': 30})
         self.assertEqual(explicit_parameters('图案不用改，只把播报声音调到六十'), {'volume': 60})
@@ -57,7 +61,7 @@ class PlanningTests(unittest.TestCase):
             self.assertEqual(exact_plan('我想看' + name)['actions'][0]['value'], mode)
 
     def test_invalid_and_ambiguous_plans_never_execute(self):
-        for value in (18, 26, -1, True, '2'):
+        for value in (18, 32, -1, True, '2'):
             with self.assertRaises(ValueError):
                 validate_plan({'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': value}]})
         with self.assertRaises(ValueError):

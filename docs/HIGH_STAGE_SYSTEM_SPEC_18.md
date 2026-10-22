@@ -1,4 +1,5 @@
 > **历史设计目标 / Historical design targets / 過去の設計目標**
+> 2026-10-23新增实现与原需求的逐项差异见[当前18项映射与部署指南](PRO_FEATURES.md)。本文继续保留原始需求文字，不将代码完成等同于实机或研究指标达成。
 > 本文保留2026-09-14的18项需求，不是已完成功能清单；部分目标尚未实现，部分架构已被当前工程替换。当前实现与验证范围见[技术说明](technical-notes.zh-CN.md#implementation-status)和[项目首页](../README.md)。
 > These are historical requirements, not delivered features. See the [current implementation](technical-notes.en.md#implementation-status).
 > 過去の要求であり、完成機能ではありません。[現在の実装範囲](technical-notes.ja.md#implementation-status)を参照してください。

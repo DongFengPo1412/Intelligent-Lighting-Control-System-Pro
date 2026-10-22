@@ -6,7 +6,6 @@
 
 import sys
 import os
-import torch  # 必须置顶导入，杜绝 ctranslate2 与 CUDA/cuDNN DLL 冲突
 import json
 import asyncio
 import socket
@@ -21,16 +20,15 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 from kurisu_agent import KurisuAgent
 from light_controller import get_light_controller
-from voice_engine import get_voice_engine
-from voice_listener import get_voice_listener
 
 # ==========================================
 # 全局状态与实例初始化
 # ==========================================
 print("[WebServer] 正在载入牧濑红莉栖具身多模态大脑与硬件驱动...")
-agent = KurisuAgent()
-controller = agent.controller
-voice = agent.voice
+agent = None
+controller = None
+voice = None
+pro_api = None
 
 server_loop: Optional[asyncio.AbstractEventLoop] = None
 listener = None
@@ -49,7 +47,7 @@ def get_local_ip(board_ip: Optional[str] = None) -> str:
     except Exception:
         return "127.0.0.1"
 
-HOST_IP = get_local_ip()
+HOST_IP = '127.0.0.1'
 WEB_PORT = 8080
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_app")
 
@@ -78,6 +76,8 @@ chat_lock = asyncio.Lock()
 
 async def run_chat(message: str):
     async with chat_lock:
+        if pro_api:
+            if pro_api.music.running:await asyncio.to_thread(pro_api.music.stop)
         loop = asyncio.get_running_loop()
         owns_pause = listener is not None and not listener.is_paused
         if owns_pause:
@@ -148,7 +148,7 @@ async def handle_volume(request: web.Request):
     """调节音量 (0~100)"""
     try:
         data = await request.json()
-        vol = int(data.get("volume", 85))
+        vol = data.get("volume", 70)
         loop = asyncio.get_running_loop()
         if not 0 <= vol <= 100:
             raise ValueError('Volume must be between 0 and 100')
@@ -170,14 +170,14 @@ async def handle_cmd(request: web.Request):
         loop = asyncio.get_running_loop()
 
         if cmd == "countdown":
-            sec = int(data.get("seconds", 10))
+            sec = data.get("seconds", 10)
             await device_call(controller.countdown, sec)
             await broadcast_ws({"type": "countdown_started", "seconds": sec})
         elif cmd == "stop_countdown":
             await device_call(controller.stop_countdown)
             await broadcast_ws({"type": "countdown_stopped"})
-        elif cmd == "bright":
-            val = int(data.get("val", 20))
+        elif cmd in ("bright","brightness"):
+            val = data.get("val", 20)
             await device_call(controller.set_brightness, val)
         else:
             await device_call(controller.send_json, data)
@@ -198,8 +198,8 @@ async def handle_game(request: web.Request):
         loop = asyncio.get_running_loop()
 
         if game == "snake":
-            dx = int(data.get("dx", 0))
-            dy = int(data.get("dy", 0))
+            dx = data.get("dx", 0)
+            dy = data.get("dy", 0)
             await device_call(controller.snake_move, dx, dy)
         elif game == "tetris":
             action = str(data.get("action", "rot"))
@@ -217,6 +217,11 @@ async def handle_game(request: web.Request):
 
 async def handle_status(request: web.Request):
     """获取系统整体拓扑状态与全时 WiFi / 硬件双通道信息"""
+    if controller.port=='SIMULATION':
+        return web.json_response(dict(status='online',simulated=True,host_ip='127.0.0.1',
+             port='SIMULATION',is_connected=True,audio_usb_connected=False,wake_detector_ready=False,
+             wifi={'wifi_online':False,'simulated':True,'last_command':controller.status()},
+             model_error=agent.last_model_error,translation_error=agent.last_translation_error))
     from wifi_gateway import get_wifi_gateway
     gw = get_wifi_gateway()
     wifi_info = gw.get_status()
@@ -244,6 +249,8 @@ async def handle_ws(request: web.Request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
     active_websockets.add(ws)
+    from mcp_server import McpSession
+    mcp=McpSession(pro_api.mcp_definitions,pro_api.mcp_execute)
     print(f"[WebSocket] 手机客户端已接入: {request.remote}")
 
     # 发送初次上线欢迎状态
@@ -261,6 +268,9 @@ async def handle_ws(request: web.Request):
                     action = payload.get("action")
                     if action == "ping":
                         await ws.send_str(json.dumps({"type": "pong"}))
+                    elif payload.get('type')=='mcp':
+                        response=await asyncio.to_thread(mcp.dispatch,payload)
+                        if response:await ws.send_json(response)
                 except Exception:
                     pass
             elif msg.type == web.WSMsgType.ERROR:
@@ -328,19 +338,43 @@ async def process_voice_interaction(speech_text: str):
 # 主启动器
 # ==========================================
 async def on_startup(app: web.Application):
-    global server_loop, listener, HOST_IP
+    global server_loop, listener, HOST_IP, agent, controller, voice, pro_api
     server_loop = asyncio.get_running_loop()
+    if app['simulate']:
+        from simulator import SimulatedController,SilentVoice
+        import light_controller
+        controller=SimulatedController();light_controller._controller_instance=controller
+        voice=SilentVoice();agent=KurisuAgent(controller=controller,voice=voice)
+        from semantic_control import exact_plan
+        class OfflinePlanner:
+            def plan(self,text,history=()):return exact_plan(text) or {'kind':'clarify','actions':[]}
+        agent.semantic=OfflinePlanner()
+    else:
+        if not app['no_audio']:import torch
+        if app['no_audio']:
+            from simulator import SilentVoice
+            voice=SilentVoice()
+        agent=KurisuAgent(voice=voice)
+        controller=agent.controller;voice=agent.voice
+    from advanced_api import ProApi
+    pro_api=ProApi(controller,agent,voice)
+    pro_api.start()
+    if app['simulate']:return
 
     # 1. 触发上电与配对连接成功正向反馈仪式感
     loop = asyncio.get_running_loop()
     if await loop.run_in_executor(None, controller.wait_for_control, 8.0):
-        await loop.run_in_executor(None, controller.run_boot_ceremony, False)
+        if not app['no_audio']:await loop.run_in_executor(None, controller.run_boot_ceremony, False)
     else:
         print("[WebServer] 尚未收到板端 Wi-Fi 回执，未宣告配对成功。")
     from wifi_gateway import get_wifi_gateway
     HOST_IP = get_local_ip(get_wifi_gateway().board_sta_ip)
+    from service_discovery import ServiceAdvertisement
+    app['discovery']=ServiceAdvertisement()
+    await asyncio.to_thread(app['discovery'].start,HOST_IP,WEB_PORT)
     print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
 
+    if app['no_audio'] or app['xiaozhi_bridge']:return
     # Generate once; subsequent wake/color confirmations play the same Kurisu voice from cache.
     from semantic_control import describe_action
     for mode in (1, 2, 3, 7, 23):
@@ -348,6 +382,7 @@ async def on_startup(app: web.Application):
         await loop.run_in_executor(None, voice.synthesize_speech_bundle, '\n'.join(lines))
 
     # 2. 启动全自动麦克风免触拾音监听
+    from voice_listener import get_voice_listener
     listener = get_voice_listener(on_voice_detected)
     listener.start()
     print("[WebServer] 语音监听已启动；板载音频是否就绪请查看 /api/status。")
@@ -356,11 +391,22 @@ async def on_cleanup(app: web.Application):
     global listener
     if listener:
         listener.stop()
+    if pro_api:await pro_api.cleanup()
+    if controller:controller.close()
+    if app.get('discovery'):await asyncio.to_thread(app['discovery'].close)
 
-def create_app() -> web.Application:
-    app = web.Application()
+async def on_shutdown(app):
+    for ws in list(active_websockets):await ws.close(code=1001,message=b'Server shutdown')
+    connection=app.get('xiaozhi_connection')
+    if connection:
+        await connection.close();await connection.ws.close(code=1001,message=b'Server shutdown')
+
+def create_app(simulate=False,no_audio=False) -> web.Application:
+    app = web.Application(client_max_size=21*1024*1024)
+    app['simulate']=simulate;app['no_audio']=no_audio
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
+    app.on_shutdown.append(on_shutdown)
     app.router.add_get("/", handle_index)
     app.router.add_post("/api/chat", handle_chat)
     app.router.add_post("/api/ceremony", handle_ceremony)
@@ -370,16 +416,28 @@ def create_app() -> web.Application:
     app.router.add_post("/api/game", handle_game)
     app.router.add_get("/api/status", handle_status)
     app.router.add_get("/ws", handle_ws)
+    from advanced_api import register
+    register(app,lambda:pro_api)
+    from xiaozhi_bridge import register as register_xiaozhi
+    app['xiaozhi_bridge']=os.environ.get('KURISU_XIAOZHI_BRIDGE')=='1'
+    register_xiaozhi(app,lambda:pro_api,app['xiaozhi_bridge'],simulate)
     app.router.add_static("/", STATIC_DIR)
     return app
 
 if __name__ == "__main__":
-    app = create_app()
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--simulate',action='store_true',help='No serial/UDP/camera/microphone/model/speaker access')
+    parser.add_argument('--no-audio',action='store_true')
+    parser.add_argument('--port',type=int,default=8080)
+    args=parser.parse_args();WEB_PORT=args.port
+    if args.simulate:os.environ['KURISU_SIMULATE']='1'
+    app = create_app(args.simulate,args.no_audio)
     print("\n" + "="*60)
     print("  🚀 未来道具研究所 · 牧濑红莉栖具身中枢 (全时强制 WiFi 通信)")
     print("  ● 控制协议: 强制经由局域网 WiFi UDP 8888 直通传输 (不论 USB 是否插接)")
     print(f"  ● 电脑本机访问: http://localhost:{WEB_PORT}")
     print("  ● 手机控制地址将在板端连接后显示")
     print("="*60 + "\n")
-    web.run_app(app, host="0.0.0.0", port=WEB_PORT)
+    web.run_app(app, host="127.0.0.1" if args.simulate else "0.0.0.0", port=WEB_PORT)
 

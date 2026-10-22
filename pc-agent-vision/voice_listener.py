@@ -24,6 +24,7 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 from light_controller import get_light_controller
+from conversation_session import ConversationSession
 
 # 配置代理兜底
 if not os.environ.get("HTTP_PROXY") and not os.environ.get("http_proxy"):
@@ -51,11 +52,21 @@ class VoiceListener:
 
         # 唤醒状态机 (True 表示已唤醒，正在等待具体指令)
         self.is_awake = False
+        self.session = ConversationSession(os.environ.get('KURISU_CONTINUOUS', '1') != '0')
+        self.duplex = os.environ.get('KURISU_BARGE_IN') == '1' and os.environ.get('KURISU_AUDIO_TRANSPORT') == 'wifi'
+        self._barge_audio = bytearray()
+        self._barge_last = 0.
+        self._barge_thread = None
+        self._barge_pending = None
+        self._barge_woke = False
         self.last_awake_time = 0.0
         self.awake_timeout = 10.0 # 唤醒后等待具体指令的时间窗口 (10秒)
 
         # 硬件控制器引用
         self.controller = get_light_controller()
+        if self.duplex:
+            from echo_cancellation import EchoCanceller
+            self.controller.echo_canceller = EchoCanceller(delay_samples=int(os.environ.get('KURISU_ECHO_DELAY_MS','120'))*16)
         self.has_board_audio = False
         self._last_board_frame_time = 0.0
         self._resume_warmup_frames = 0
@@ -119,7 +130,18 @@ class VoiceListener:
 
     def _on_board_pcm(self, pcm_bytes: bytes):
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
-        if not self.is_listening or self.is_paused:
+        if not self.is_listening:
+            return
+        if self.duplex:
+            pcm_bytes=self.controller.echo_canceller.process(pcm_bytes)
+        if self.is_paused:
+            if self.duplex:
+                self._barge_audio.extend(pcm_bytes)
+                self._barge_audio=self._barge_audio[-64000:]
+                if len(self._barge_audio)>=32000 and time.monotonic()-self._barge_last>.7 and not(self._barge_thread and self._barge_thread.is_alive()):
+                    self._barge_last=time.monotonic()
+                    self._barge_thread=threading.Thread(target=self._check_barge,args=(bytes(self._barge_audio),),daemon=True)
+                    self._barge_thread.start()
             return
         self.has_board_audio = True
         self._last_board_frame_time = time.time()
@@ -133,7 +155,7 @@ class VoiceListener:
         self.is_paused = True
         self._speech_active = False
         try:
-            self.controller.enable_mic(False)
+            if not self.duplex:self.controller.enable_mic(False)
         except Exception:
             pass
         # 清空所有待处理音频缓冲与队列
@@ -244,7 +266,8 @@ class VoiceListener:
                         if self.is_awake and scores:
                             # Keep only the most recent command for local ASR diagnosis.
                             try:
-                                diagnostic_dir = os.path.join(os.path.dirname(__file__), '.voice_diagnostics')
+                                from pro_paths import cache_dir
+                                diagnostic_dir = str(cache_dir() / 'voice-diagnostics')
                                 os.makedirs(diagnostic_dir, exist_ok=True)
                                 with wave.open(os.path.join(diagnostic_dir, 'last_command.wav'), 'wb') as recording:
                                     recording.setnchannels(1)
@@ -315,9 +338,7 @@ class VoiceListener:
                             if self.callback:
                                 self.callback(stripped_cmd)
                         finally:
-                            self.is_awake = False
-                            self.resume()
-                            self._update_board_led("listening")
+                            self._finish_turn(stripped_cmd)
                         return
 
                     # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖")
@@ -374,14 +395,44 @@ class VoiceListener:
                         if self.callback:
                             self.callback(cmd_to_exec)
                     finally:
-                        self.is_awake = False
-                        self.resume()
-                        self._update_board_led("listening")
-                        print("[交互完毕]: 系统已自动退回微光暗红待命状态，再次呼唤唤醒词即可开启新对话。\n")
+                        self._finish_turn(cmd_to_exec)
 
             except Exception as e:
                 print(f"[VoiceListener 处理异常]: {e}")
                 self._update_board_led("listening")
+
+    def _check_barge(self, pcm):
+        # The experimental duplex path keeps the same two-stage wake gate.
+        if not self.is_paused or not self.duplex or self.wake_detector is None:return
+        if self.wake_detector.detect(pcm) and self.whisper_model is not None:
+            audio_np=np.frombuffer(pcm,dtype=np.int16).astype(np.float32)/32768
+            try:
+                segments,_=self.whisper_model.transcribe(audio_np,language='zh',beam_size=1,temperature=0.0,
+                    initial_prompt=None,condition_on_previous_text=False,without_timestamps=True)
+                text=''.join(s.text for s in segments).strip()
+                confirmed,command=self._check_wake_word(text)
+            except Exception:return
+            if not confirmed or not self.is_paused:return
+            self._barge_woke=True
+            self._barge_pending=pcm if len(command)>=2 else None
+            audio=getattr(self.controller,'_network_audio',None)
+            if audio:audio.cancelled.set()
+            self.controller.playback_cancel.set()
+            self.controller.send_json({'cmd':'audio_abort'})
+            self._barge_audio.clear()
+
+    def _finish_turn(self, text):
+        self.is_awake = self.session.after_reply() and not self.session.should_end(text)
+        if getattr(self,'_barge_woke',False):self.is_awake=True
+        pending=getattr(self,'_barge_pending',None)
+        self._barge_pending=None;self._barge_woke=False
+        self.last_awake_time = time.time()
+        self._pending_prefix = ''
+        self.resume()
+        if pending:
+            try:self._utterance_queue.put_nowait(pending)
+            except queue.Full:pass
+        self._update_board_led('active' if self.is_awake else 'listening')
 
     def _watchdog_loop(self):
         """后台看门狗：唤醒后若 10 秒内未收到具体指令，自动退回暗红待命状态"""
@@ -443,7 +494,7 @@ class VoiceListener:
                     speech_frames.clear()
                     preroll_frames.clear()
                     raw_stream_buffer.clear()
-                    if self.controller.is_connected:
+                    if self.controller.audio_connected:
                         self.controller.enable_mic(True)
                 continue
 
@@ -602,7 +653,7 @@ class VoiceListener:
         self._is_processing = False
 
         self.controller.on_mic_data = self._on_board_pcm
-        if self.controller.is_connected:
+        if self.controller.connect_audio():
             self.controller.enable_mic(True)
             self._update_board_led("listening")
 
@@ -616,7 +667,7 @@ class VoiceListener:
     def stop(self):
         self.is_listening = False
         self.pause()
-        if self.controller.is_connected:
+        if self.controller.audio_connected:
             self.controller.enable_mic(False)
             self._update_board_led("green")
 
