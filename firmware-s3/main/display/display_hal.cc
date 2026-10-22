@@ -1,5 +1,6 @@
 #include "display_hal.h"
 #include "font_5x3.h"
+#include "srgb_transfer.h"
 #include <esp_log.h>
 #include <string.h>
 
@@ -124,7 +125,7 @@ void DisplayHAL::SetGlobalBrightness(uint8_t brightness)
     base_brightness_ = brightness;
 }
 
-esp_err_t DisplayHAL::Show(uint8_t brightness_percent)
+esp_err_t DisplayHAL::Show(uint8_t brightness_percent, bool srgb_image)
 {
     if (!led_strip_) return ESP_ERR_INVALID_STATE;
 
@@ -132,10 +133,10 @@ esp_err_t DisplayHAL::Show(uint8_t brightness_percent)
     if (brightness_percent > 100) brightness_percent = 100;
     const uint16_t brightness = (base_brightness_ * brightness_percent) / 100;
     for (int i = 0; i < TOTAL_LEDS; i++) {
-        // 1. 全局亮度缩放 (0 ~ 255)
-        uint16_t r = (buffer_[i].r * brightness) / 255;
-        uint16_t g = (buffer_[i].g * brightness) / 255;
-        uint16_t b = (buffer_[i].b * brightness) / 255;
+        // Decode image RGB before dimming; legacy effects retain their exact path.
+        uint16_t r = srgb_image ? DisplayColor::SrgbToPwm(buffer_[i].r, brightness) : (buffer_[i].r * brightness) / 255;
+        uint16_t g = srgb_image ? DisplayColor::SrgbToPwm(buffer_[i].g, brightness) : (buffer_[i].g * brightness) / 255;
+        uint16_t b = srgb_image ? DisplayColor::SrgbToPwm(buffer_[i].b, brightness) : (buffer_[i].b * brightness) / 255;
 
         led_strip_set_pixel(led_strip_, i, (uint32_t)r, (uint32_t)g, (uint32_t)b);
     }

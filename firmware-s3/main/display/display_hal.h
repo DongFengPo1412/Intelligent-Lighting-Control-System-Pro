@@ -25,7 +25,8 @@ public:
     uint8_t GetGlobalBrightness() const { return base_brightness_; }
 
     // 将显存数据推送到物理矩阵屏
-    esp_err_t Show(uint8_t brightness_percent = 100);
+    // sRGB conversion is opt-in for image content; existing effects keep raw RGB.
+    esp_err_t Show(uint8_t brightness_percent = 100, bool srgb_image = false);
 
     // 左上角为原点，16x16 整板逐行蛇形走线。
     static constexpr int GetPixelIndex(int x, int y) {
