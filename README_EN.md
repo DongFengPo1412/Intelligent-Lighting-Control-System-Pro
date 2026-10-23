@@ -4,7 +4,7 @@ A local PC voice agent and one ESP32-S3 drive a 16×16 light matrix, a Kurisu pi
 
 [简体中文](README.md) · **English** · [日本語](README_JA.md)
 
-**2026-10-23: the expanded feature set is implemented in source and checked offline; it has not been flashed or accepted on hardware.** The [current implementation and deployment guide](docs/PRO_FEATURES.en.md) maps all 18 historical requirements to code and explicitly records differences.
+**2026-10-24: source and offline checks are supplemented by limited board records; full-system hardware acceptance remains incomplete.** The [current implementation and deployment guide](docs/PRO_FEATURES.en.md) maps all 18 historical requirements to code and explicitly records differences.
 
 ## Current implementation
 
@@ -47,7 +47,7 @@ python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 
 Open `http://127.0.0.1:8086/pro.html`. This path does not discover hardware, load models, capture sensors or play sound. Full animated simulation requires building the WASM engine and setting `KURISU_RENDERER_WASM`; otherwise only limited static fixtures are provided.
 
-Offline validation covers a complete ESP-IDF build, Python runtime/protocol and voice regressions, real C++ engine tests, real Opus encode/decode, browser simulation checks and Android compilation/signature verification. **No flashing, camera capture, recording, playback or Android installation was performed.** Generated binaries, APKs, logs and models are excluded from commits.
+Offline validation covers a complete ESP-IDF build, Python runtime/protocol and voice regressions, real C++ engine tests, real Opus encode/decode, browser simulation checks and Android compilation/signature verification. **Those offline checks involved no device operation. Later board receipts and audio-sample checks are documented separately and do not establish full-system acceptance.** Generated binaries, APKs, logs and models are excluded from commits.
 
 ## Design differences and attribution
 
@@ -56,3 +56,5 @@ The original SRS is not implemented verbatim: Pro still uses PC wake detection r
 Maintained by **Chaoran Liu / 刘超然**. The teammate-provided fingertip module is now integrated. Third-party frameworks, pretrained models and character assets retain their original ownership/licensing; integration is not original model training. There is no repository-wide LICENSE file.
 
 [Current guide](docs/PRO_FEATURES.en.md) · [Fingertip integration](INTEGRATION.md) · [Historical audio baseline](docs/VOICE_CONTROL_RECOVERY.md) · [Historical panel acceptance](docs/MATRIX_16X16_VALIDATION.md)
+
+2026-10-24 delivery enables IPv4 reassembly for full-canvas commands and PCM TCP_NODELAY, warms the model before automatic listening, and stores generated wake keywords in the task cache. See [limited board records](docs/hardware-checks-20261023.en.md) and [current deployment requirements](docs/PRO_FEATURES.en.md); full-system acceptance remains incomplete.

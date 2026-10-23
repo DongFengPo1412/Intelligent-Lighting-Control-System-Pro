@@ -11,7 +11,10 @@ class WakeDetector:
         sys.path.insert(0, str(root / 'pc-agent-vision' / '.runtime_deps'))
         import sherpa_onnx
         model = root / 'models' / 'wake_kws'
-        keywords = model / 'kurisu_keywords.txt'
+        from pro_paths import cache_dir
+        keyword_dir = cache_dir() / 'wake'
+        keyword_dir.mkdir(parents=True, exist_ok=True)
+        keywords = keyword_dir / 'kurisu_keywords.txt'
         keywords.write_text(
             'zh ù sh ǒu @助手\n'
             'h óng l ì q ī @红莉栖\n'

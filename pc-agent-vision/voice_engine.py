@@ -148,7 +148,7 @@ class VoiceEngine:
             import urllib.request
             import json
             payload = {
-                "model": "qwen2.5:7b",
+                "model": "kurisu",
                 "messages": [
                     {
                         "role": "system",
@@ -167,7 +167,8 @@ class VoiceEngine:
                     }
                 ],
                 "stream": False,
-                "temperature": 0.2
+                "keep_alive": "30m",
+                "options": {"temperature": 0.2, "num_predict": 180, "num_ctx": 4096}
             }
             req = urllib.request.Request(
                 "http://127.0.0.1:11434/api/chat",

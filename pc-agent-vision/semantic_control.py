@@ -191,7 +191,28 @@ class SemanticControl:
         self.model = model
         self.api_base = api_base
 
-    def plan(self, text, history=()):
+    def warmup(self):
+        """Load the same context used by parsing/chat before accepting speech.
+
+        A cold model load may exceed the normal per-command deadline. Keep it
+        outside that deadline instead of repeatedly cancelling the model loader.
+        """
+        endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/generate'
+        payload = {'model': self.model, 'prompt': '', 'stream': False,
+                   'keep_alive': '30m', 'options': {'num_ctx': 4096}}
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(),
+                                         headers={'Content-Type': 'application/json'})
+        with opener.open(request, timeout=120) as response:
+            result = json.loads(response.read())
+        if not result.get('done'):
+            raise RuntimeError('Local model did not finish loading')
+        # Also populate the stable parsing prompt prefix while still offline
+        # from the microphone. Merely loading weights leaves a slow first turn.
+        self.plan('你好，很高兴见到你', timeout=120)
+        return result
+
+    def plan(self, text, history=(), timeout=30):
         direct = exact_plan(text)
         if direct:
             return direct
@@ -235,14 +256,15 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                 to_wire('control' if actions else 'chat', actions), ensure_ascii=False)}]
         payload = {'model': self.model, 'messages': [{'role': 'system', 'content': prompt}] + few_shot + context +
                    [{'role': 'user', 'content': text}], 'stream': False,
-                   'format': WIRE_SCHEMA, 'options': {'temperature': 0, 'num_predict': 250, 'num_ctx': 8192}}
+                   'format': WIRE_SCHEMA, 'keep_alive': '30m',
+                   'options': {'temperature': 0, 'num_predict': 250, 'num_ctx': 4096}}
         if '11434' not in self.api_base:
             raise ConnectionError('Semantic planning requires the configured local Ollama endpoint')
         endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/chat'
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         for attempt in range(2):
             request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
-            with opener.open(request, timeout=30) as response:
+            with opener.open(request, timeout=timeout) as response:
                 result = json.loads(response.read())
             self.last_model_stats = {key: result.get(key) for key in ('prompt_eval_count', 'eval_count', 'total_duration')}
             raw = result['message']['content']

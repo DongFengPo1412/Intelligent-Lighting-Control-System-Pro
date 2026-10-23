@@ -3,3 +3,6 @@ CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 CONFIG_ESP32S3_SPIRAM_SUPPORT=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# Full 256-pixel canvas commands exceed a 1500-byte Ethernet MTU once wrapped
+# for acknowledged UDP delivery. Accept their IPv4 fragments before parsing.
+CONFIG_LWIP_IP4_REASSEMBLY=y

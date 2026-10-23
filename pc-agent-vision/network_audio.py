@@ -67,6 +67,7 @@ class WiFiPcmClient:
             sock = socket.create_connection(
                 (gateway.board_sta_ip or gateway.board_ap_ip, 8889), timeout=3
             )
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(3)
             sock.sendall(packet(4, HELLO))
             if receive(sock) != (4, HELLO):

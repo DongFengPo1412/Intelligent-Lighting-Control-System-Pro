@@ -2,7 +2,7 @@
 
 [简体中文](PRO_FEATURES.md) · [English](PRO_FEATURES.en.md) · **日本語** · [概要](../README_JA.md)
 
-2026-10-23 の拡張版はソース統合・オフライン検査・ビルドまでを実施しました。**書込み、撮影、録音、再生、実機受入試験は行っていません。** 過去の受入記録は記録時の版にのみ適用します。今回の顔登録修正には6件のオフライン回帰検査を追加しました。
+2026-10-24配布版はソース統合・オフライン検査・ビルドに加え、限定的な板側通信・音声サンプル記録があります。**全機能の実機受入は未完了です。** 各試験は記録した版と条件にのみ適用し、今回の整理では機器を操作しません。
 
 ## 過去の18要件との対応
 
@@ -143,3 +143,10 @@ python -B android-app/build_apk.py --work-dir "$task\android-build-new" --output
 無線音声の断線・音質、AEC・誤割込み、連続音声、視覚閾値・独立視線誤差、明るさ・Gamma・通知音、FPS・CPU・スタック、Android導入・探索、長期動作は今後の実測項目です。ソースと模擬結果はこれらを代替しません。
 
 参照：[小智WebSocket](https://xiaozhi.dev/docs/development/websocket/)、[小智MCP](https://xiaozhi.dev/docs/development/mcp/protocol/)、[Ollama embeddings](https://docs.ollama.com/api/embed)、[Android apksigner](https://developer.android.com/tools/apksigner)。本機の小智2.2.4 WebSocket v1実装も参照しています。
+
+## 2026-10-24 配布修正と限定的な実機記録
+
+- 256画素の画布はACK用の外包後に1631バイトのUDP負荷となり、一般的なMTU 1500の経路ではIPv4断片の再構成が必要です。`firmware-s3/sdkconfig.defaults` に `CONFIG_LWIP_IP4_REASSEMBLY=y` を追加しました。既存 `sdkconfig` はdefaultsだけでは更新されません。`idf.py menuconfig` でIPv4断片再構成を有効にし、実際の生成設定を確認して再ビルドしてください。
+- PC・板側PCM socketでTCP_NODELAYを有効化しました。自動聴取前に意味解析モデルを予熱し、文脈4096・30分常駐を使います。予熱失敗時は自動聴取を開始しません。生成する起動語ファイルはモデルディレクトリではなく `KURISU_CACHE_DIR` に保存します。
+- [2026-10-23の限定的な実機記録](hardware-checks-20261023.ja.md)に155項目の制御確認とUSB/Wi-Fi音声サンプル確認の範囲を示します。今回の配布ではビルドとオフライン回帰のみを行い、書込み・録音・再生はしません。
+- `tests/test_delivery_regressions.py` は偽socket・モデルで画布設定、予熱失敗、起動語キャッシュを検査します。実機用 `scripts/test_pro_board.py` と `scripts/test_pro_audio.py` は適切な機器で明示的に実行する入口で、既定のオフラインテストではありません。

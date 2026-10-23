@@ -97,6 +97,7 @@ class KurisuAgent:
             print(f'[语义控制计划]: {json.dumps(plan, ensure_ascii=False)}')
         except Exception as error:
             self.last_model_error = str(error)
+            print(f'[语义规划错误]: {type(error).__name__}: {error}')
             return self._finish_reply('控制意图暂时无法确认，请稍后重试。\n操作の意図を確認できなかったわ。少し待ってからもう一度お願い。')
         if plan['kind'] == 'clarify':
             return self._finish_reply('请说清想要哪一种灯效；如果是倒计时，也请告诉我时长。\nどの光の効果にするか教えて。カウントダウンなら時間も教えてね。')
@@ -148,6 +149,7 @@ class KurisuAgent:
         payload = {'model': self.model, 'messages': messages, 'stream': False}
         if is_ollama:
             payload['options'] = {'temperature': .7, 'num_predict': 180, 'num_ctx': 4096}
+            payload['keep_alive'] = '30m'
         request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(),
                     headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'})
         try:

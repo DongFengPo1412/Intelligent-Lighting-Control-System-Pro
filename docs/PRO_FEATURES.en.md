@@ -2,7 +2,7 @@
 
 [简体中文](PRO_FEATURES.md) · **English** · [日本語](PRO_FEATURES.ja.md) · [Overview](../README_EN.md)
 
-The 2026-10-23 expanded implementation has source integration, offline checks and build evidence. **It has not received flashing, camera, recording, playback or physical acceptance tests.** Historical acceptance applies to its recorded version only. The enrollment maintenance below adds six offline regressions without changing that boundary.
+The 2026-10-24 delivery has source integration, offline checks and build evidence, supplemented by limited board communication and audio-sample records. **Full-system hardware acceptance remains incomplete.** Each test applies only to its recorded version and conditions; this delivery does not operate devices.
 
 ## Mapping the 18 historical requirements
 
@@ -143,3 +143,10 @@ Test entries: `tests/test_pro_runtime.py`, `tests/test_controller_validation.py`
 Remaining measurements include wireless audio interruption/quality, AEC/false barge-in, continuous voice, visual thresholds/independent gaze error, brightness/gamma/cues, FPS/CPU/stack, Android installation/discovery and endurance. Source and simulation do not replace those results.
 
 References: [XiaoZhi WebSocket](https://xiaozhi.dev/docs/development/websocket/), [XiaoZhi MCP](https://xiaozhi.dev/docs/development/mcp/protocol/), [Ollama embeddings](https://docs.ollama.com/api/embed), [Android apksigner](https://developer.android.com/tools/apksigner). The locally available XiaoZhi 2.2.4 WebSocket v1 implementation was also consulted.
+
+## 2026-10-24 delivery fixes and limited board records
+
+- A 256-pixel canvas produces a 1631-byte UDP payload after ACK wrapping and needs IPv4 fragment reassembly on a typical 1500-MTU link. `firmware-s3/sdkconfig.defaults` now enables `CONFIG_LWIP_IP4_REASSEMBLY=y`. Defaults do not override an existing `sdkconfig`: enable IPv4 reassembly through `idf.py menuconfig`, confirm the generated build configuration contains this value, then rebuild.
+- PC and board PCM sockets enable TCP_NODELAY. The semantic model is warmed before automatic listening, using a 4096-token context and 30-minute keep-alive; failed warmup leaves automatic listening stopped. Generated wake keywords go to `KURISU_CACHE_DIR` instead of the model directory.
+- [Limited board records from 2026-10-23](hardware-checks-20261023.en.md) describe the 155 control checks and USB/Wi-Fi audio-sample checks with their limits. This delivery performs only builds and offline regressions, without flashing, recording or playback.
+- `tests/test_delivery_regressions.py` uses fake sockets/models for canvas configuration, warmup failure and keyword-cache checks. Physical entries `scripts/test_pro_board.py` and `scripts/test_pro_audio.py` require explicit execution with suitable devices and are not default offline tests.

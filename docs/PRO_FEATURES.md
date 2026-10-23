@@ -2,7 +2,7 @@
 
 **简体中文** · [English](PRO_FEATURES.en.md) · [日本語](PRO_FEATURES.ja.md) · [项目首页](../README.md)
 
-2026-10-23 代码版本。新增功能完成源码接入、离线检查与构建；**没有烧录、开摄像头、录音、发声或进行实机验收**。历史验收只适用于当时版本。
+2026-10-24 交付版本。新增功能完成源码接入、离线检查与构建，已有部分板卡通信和音频样本记录；**全功能实机验收尚未完成**。各项测试只适用于所记录的版本与条件，本次整理未操作设备。
 
 ## 18 项需求对应关系
 
@@ -146,3 +146,10 @@ ESP32 构建继续使用 ESP-IDF 5.5.4。正式入口关闭 `PRO_MATRIX_DIAGNOST
 需要以后实测的内容包括：无线音频断线／丢包与音质，AEC／误打断，连续语音，视觉阈值和校准独立误差，灯光亮度与 Gamma，提示音，刷新率／CPU／栈余量，Android 安装／服务发现与长时间运行。源代码和模拟器提供实现依据，不替代这些结果。
 
 协议参考：[小智 WebSocket](https://xiaozhi.dev/docs/development/websocket/)、[小智 MCP](https://xiaozhi.dev/docs/development/mcp/protocol/)、[Ollama embeddings](https://docs.ollama.com/api/embed)、[Android apksigner](https://developer.android.com/tools/apksigner)。同时参考了本机小智 2.2.4 的 WebSocket v1 实现。
+
+## 2026-10-24 交付修复与部分实机记录
+
+- 256像素画布经ACK封装后为1631字节UDP负载，常见1500 MTU链路需要IPv4分片重组；`firmware-s3/sdkconfig.defaults`现启用 `CONFIG_LWIP_IP4_REASSEMBLY=y`。已有 `sdkconfig` 不会因defaults改变而自动覆盖，升级时用 `idf.py menuconfig` 启用IPv4分片重组，并在实际构建的 `sdkconfig` 中核对该值后重新构建；不要只检查defaults。
+- PC与板端PCM socket启用TCP_NODELAY。语义模型在自动监听前预热，使用4096上下文和30分钟常驻；预热失败不启动自动监听。唤醒词生成文件移入 `KURISU_CACHE_DIR`，不再写入模型目录。
+- [2026-10-23 部分实机记录](hardware-checks-20261023.zh-CN.md)保留155项控制检查及USB/Wi-Fi采放样本的范围与限制。本次交付只重建和离线回归，不烧录、不录音、不播放。
+- `tests/test_delivery_regressions.py`用假socket／假模型检查画布传输配置、预热失败路径和唤醒词缓存；物理入口 `scripts/test_pro_board.py`、`scripts/test_pro_audio.py`须另行在合适设备上主动执行，不能当成默认离线测试。

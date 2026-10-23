@@ -384,6 +384,13 @@ async def on_startup(app: web.Application):
     # 2. 启动全自动麦克风免触拾音监听
     from voice_listener import get_voice_listener
     listener = get_voice_listener(on_voice_detected)
+    try:
+        print('[WebServer] 正在预热本地语义模型；完成前不接收语音指令。')
+        await loop.run_in_executor(None, agent.semantic.warmup)
+    except Exception as error:
+        agent.last_model_error = str(error)
+        print(f'[WebServer] 模型预热失败，暂不启动自动语音监听：{error}')
+        return
     listener.start()
     print("[WebServer] 语音监听已启动；板载音频是否就绪请查看 /api/status。")
 

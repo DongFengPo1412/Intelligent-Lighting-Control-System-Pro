@@ -3,6 +3,7 @@
 #include <freertos/task.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
 #include <string.h>
 
@@ -38,6 +39,9 @@ void NetworkAudio::Run(){
     if(bind(server,(sockaddr*)&address,sizeof(address))<0||listen(server,1)<0){close(server);return;}
     for(;;){
         int fd=accept(server,nullptr,nullptr);if(fd<0){vTaskDelay(pdMS_TO_TICKS(100));continue;}
+        // PCM chunks are 15-32 ms long. Do not hold a small header/payload
+        // behind Nagle while waiting for the peer's delayed acknowledgement.
+        int no_delay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&no_delay,sizeof(no_delay));
         timeval timeout={2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
         timeout={0,200000};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
         xSemaphoreTake(tx_,portMAX_DELAY);client_=fd;xSemaphoreGive(tx_);
