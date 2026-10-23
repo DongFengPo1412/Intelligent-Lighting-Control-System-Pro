@@ -47,6 +47,8 @@ class MultimodalHub:
         self.pending_direction = None
         self.direction_since = 0
         self.last_face = None
+        self.face_sample_at = None
+        self.face_lock = threading.RLock()
         self.identity = None
         self.smile_since = None
         self.strain_since = None
@@ -71,6 +73,7 @@ class MultimodalHub:
         self.mode = mode
         self.camera = camera
         self.error = None
+        self._record_face(None)
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._capture, daemon=True)
         self.thread.start()
@@ -93,6 +96,13 @@ class MultimodalHub:
         if self.thread and self.thread.is_alive():
             raise RuntimeError("Camera has not released yet")
         self.started = False
+        self._record_face(None)
+
+    def _record_face(self, image):
+        """Publish a detached sample; a missing/invalid crop invalidates enrollment."""
+        with self.face_lock:
+            self.last_face = image.copy() if image is not None else None
+            self.face_sample_at = time.monotonic() if image is not None else None
 
     def _capture(self):
         import cv2
@@ -139,10 +149,11 @@ class MultimodalHub:
                             int(lo[1] * side) : int(hi[1] * side),
                             int(lo[0] * side) : int(hi[0] * side),
                         ]
-                        if crop.size:
-                            self.last_face = cv2.resize(
-                                cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (100, 100)
-                            )
+                        image_sample = (
+                            cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (100, 100))
+                            if crop.size else None
+                        )
+                        self._record_face(image_sample)
                         if self.mode == "identity" and self.identity is None:
                             from identity_store import IdentityStore
 
@@ -151,6 +162,8 @@ class MultimodalHub:
                             label, confidence = self.identity.predict(self.last_face)
                             observation["identity"] = label
                             observation["identity_distance"] = confidence
+                    else:
+                        self._record_face(None)
                     self.process(observation)
                     self.stop_event.wait(0.04)
         except Exception as exc:
@@ -159,6 +172,7 @@ class MultimodalHub:
             if cap:
                 cap.release()
             self.started = False
+            self._record_face(None)
 
     def process(self, observation, now=None):
         self.observed_at = time.time()
@@ -277,13 +291,21 @@ class MultimodalHub:
                 )
 
     def enroll(self, name):
-        if not self.started or self.last_face is None:
-            raise ValueError("No current face to enroll")
-        if self.identity is None:
-            from identity_store import IdentityStore
+        with self.face_lock:
+            age = (
+                time.monotonic() - self.face_sample_at
+                if self.face_sample_at is not None else None
+            )
+            if (
+                not self.started or not self.last_observation.get("present", False)
+                or self.last_face is None or age is None or not 0 <= age <= 1.0
+            ):
+                raise ValueError("No current face to enroll; a sample within 1 second is required")
+            if self.identity is None:
+                from identity_store import IdentityStore
 
-            self.identity = IdentityStore()
-        return self.identity.enroll(name, self.last_face)
+                self.identity = IdentityStore()
+            return self.identity.enroll(name, self.last_face.copy())
 
     def status(self):
         age = time.time() - self.observed_at if self.observed_at else None

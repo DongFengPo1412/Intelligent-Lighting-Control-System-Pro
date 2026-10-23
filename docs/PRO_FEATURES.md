@@ -1,5 +1,7 @@
 # 高阶功能实现与运行接口
 
+**简体中文** · [English](PRO_FEATURES.en.md) · [日本語](PRO_FEATURES.ja.md) · [项目首页](../README.md)
+
 2026-10-23 代码版本。新增功能完成源码接入、离线检查与构建；**没有烧录、开摄像头、录音、发声或进行实机验收**。历史验收只适用于当时版本。
 
 ## 18 项需求对应关系
@@ -80,7 +82,7 @@ python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 - 直接模式为 **0–31，排除 18、25**；25 必须通过倒计时命令传入时长。新增 26 指尖、27 光球、28 世界线、29 画布、30 MIR 流体、31 环境微光。
 - 指尖组员源码已加入正式 CMake、枚举、命令解析、显示锁与模式调度。独立入口见 [接入说明](../INTEGRATION.md)；日常推荐使用统一 Web 视觉入口，避免多个程序争用摄像头。
 - 在页面启用视觉才打开摄像头；默认不启用。先选择游戏 19／21，再选择手势／视线游戏；视线游戏需要九点校准，注视橙色点后按空格采样。改变摄像头索引前先停止。
-- 用户选择其他显示模式／倒计时后，自动视觉切模暂停；重新启用相应视觉功能恢复。人脸登记是本地 LBPH 问候，不是身份安全认证。
+- 用户选择其他显示模式／倒计时后，自动视觉切模暂停；重新启用相应视觉功能恢复。人脸登记是本地 LBPH 问候，不是身份安全认证。 登记要求摄像头运行、当前检测到人脸且样本年龄不超过 1 秒；无人／空裁剪／停止／采集失败会失效缓存，并在锁内使用图像副本。6 项离线回归通过，不代表识别精度验证。
 - 上传音频或提供能直接返回音频的 HTTP(S) 地址；最大 20 MiB、最长 30 分钟。并非接入所有需要账户、DRM 或跳转解析的音乐平台。播放和特征发送失败会在状态中显示；停止音乐会中断推送。
 - DDA 的操作间隔、面部几何只是调节提示；可关闭自适应并手动设置。原有游戏规则和结算保留。
 
@@ -139,7 +141,7 @@ ESP32 构建继续使用 ESP-IDF 5.5.4。正式入口关闭 `PRO_MATRIX_DIAGNOST
 
 ## 离线验证与后续实机项目
 
-测试入口 `tests/test_pro_runtime.py`、`tests/test_controller_validation.py`、`scripts/test_interaction_regressions.py`、`scripts/test_semantic_control.py`、`tests/test_kurisu_palette.py`、`tests/test_display_engines.py` 和离线渲染器 `--test`。测试时设置 `KURISU_TEST_TMP` 为独立任务缓存；可用 `KURISU_TEST_RENDERER_WASM` 启用真实 C++ 渲染联通检查。不要运行名称相似的历史上板测试脚本。
+测试入口 `tests/test_pro_runtime.py`、`tests/test_controller_validation.py`、`tests/test_face_enrollment.py`、`scripts/test_interaction_regressions.py`、`scripts/test_semantic_control.py`、`tests/test_kurisu_palette.py`、`tests/test_display_engines.py` 和离线渲染器 `--test`。测试时设置 `KURISU_TEST_TMP` 为独立任务缓存；可用 `KURISU_TEST_RENDERER_WASM` 启用真实 C++ 渲染联通检查。不要运行名称相似的历史上板测试脚本。
 
 需要以后实测的内容包括：无线音频断线／丢包与音质，AEC／误打断，连续语音，视觉阈值和校准独立误差，灯光亮度与 Gamma，提示音，刷新率／CPU／栈余量，Android 安装／服务发现与长时间运行。源代码和模拟器提供实现依据，不替代这些结果。
 

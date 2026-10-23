@@ -1,10 +1,12 @@
 # Intelligent Lighting Control System — Pro
 
-PCのローカル音声エージェントと1台のESP32-S3による、16×16 LED、紅莉栖のピクセルペット、点阵ゲームの開発プロジェクトです。
+PCのローカル音声エージェントと1台のESP32-S3による、16×16 LED、紅莉栖のピクセルペット、ドットマトリクスゲームの開発プロジェクトです。
 
 [简体中文](README.md) · [English](README_EN.md) · **日本語**
 
-**2026-10-23：拡張機能のコード実装とオフライン検証を行いました。書込み・実機受入試験は行っていません。** [現在の実装・導入ガイド](docs/PRO_FEATURES.md)に、過去の18項目とコードの対応、設計上の相違を記載しています。
+**2026-10-23：拡張機能のコード実装とオフライン検証を行いました。書込み・実機受入試験は行っていません。** [現在の実装・導入ガイド](docs/PRO_FEATURES.ja.md)に、過去の18項目とコードの対応、設計上の相違を記載しています。
+
+## 現在の実装
 
 | 機能 | 実装 |
 | --- | --- |
@@ -16,7 +18,26 @@ PCのローカル音声エージェントと1台のESP32-S3による、16×16 LE
 | 通信・UI | UDP ACK、既存USB音声と任意の双方向Wi-Fi PCM、MCP HTTP/WS、独立した小智v1 Opusアダプター、WebGL、設定可能なAndroid接続先とDNS-SD。 |
 | 実機なしの表示 | 正式C++エンジンをWASM化して動かせる、明示的なシミュレーション環境。 |
 
+```mermaid
+flowchart LR
+    Input[Board microphone] -->|USB or optional Wi-Fi PCM| Voice[PC KWS / Whisper]
+    Voice --> Agent[Validated plans / persona / persistent memory]
+    Camera[Opt-in PC camera] --> Vision[Shared visual input and arbitration]
+    Web[Web / Android / MCP] --> Agent
+    Agent -->|UDP command and ACK| S3[One ESP32-S3]
+    Vision -->|UDP command and ACK| S3
+    Agent --> TTS[Character speech synthesis]
+    TTS -->|USB or optional Wi-Fi PCM| S3
+    Music[Audio file or direct URL] --> MIR[PC decoding and MIR]
+    MIR --> S3
+    S3 --> Matrix[16x16 WS2812B / games / pet]
+    S3 --> Speaker[I2S speaker]
+    S3 -->|Completed frame| Preview[WebGL preview]
+```
+
 直接選べるモードは0〜31（18と25を除く）です。25のタイマーには時間指定が必要です。26〜31は指先、サンドボックス、世界線、キャンバス、音楽流体、環境光です。待機ペットの既存配色とユーザー指定画素を維持しています。
+
+## 実行と検証
 
 `pc-agent-vision/requirements-pro.txt`を使用し、音声・モデル資源は別途準備します。ガイドに従ってリポジトリ外のタスク専用キャッシュ／データパスを設定し、次のコマンドで実機なしのプレビューを起動できます。
 
@@ -28,8 +49,10 @@ python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 
 検証はESP-IDF全体ビルド、Pythonの実行時・通信・音声回帰、実際のC++エンジン、Opus符号化／復号、ブラウザー上の模擬操作、Androidコンパイルと署名確認です。**書込み、撮影、録音、再生、Androidへのインストールは行っていません。** 生成物・モデル・キャッシュはコミットしません。
 
+## 設計上の相違と帰属
+
 過去SRSをそのまま全項目達成したわけではありません。Proの起動語判定はPC側で、板上WakeNetではありません。タイマーは粒子物理ではなく画素進捗、音楽は16kHzモノラルに変換、WebGLは測光校正済みのデジタルツインではなく可視化です。双方向音声／AEC、視線・表情の手法、DDA、サービス探索は後日の実機評価が必要です。CPUゼロ、安定60FPS、遅延、認識精度の新たな測定結果は主張しません。
 
 保守：**刘超然 / Chaoran Liu**。チームメンバーの指先モジュールを正式統合しました。外部フレームワーク・事前学習モデル・キャラクター素材の権利とライセンスは各提供元に帰属します。統合作業は独自モデル学習ではありません。独立したリポジトリ全体のLICENSEはありません。
 
-[現在のガイド](docs/PRO_FEATURES.md) · [指先の統合](INTEGRATION.md) · [過去の音声基準](docs/VOICE_CONTROL_RECOVERY.md) · [過去のパネル試験](docs/MATRIX_16X16_VALIDATION.md)
+[現在のガイド](docs/PRO_FEATURES.ja.md) · [指先の統合](INTEGRATION.md) · [過去の音声基準](docs/VOICE_CONTROL_RECOVERY.md) · [過去のパネル試験](docs/MATRIX_16X16_VALIDATION.md)

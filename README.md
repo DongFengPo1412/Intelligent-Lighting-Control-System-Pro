@@ -20,19 +20,19 @@ PC 本地语音智能体与单颗 ESP32-S3 协同的灯板、红莉栖桌宠和�
 
 ```mermaid
 flowchart LR
-    Input[板载麦克风] -->|USB或可选Wi-Fi PCM| Voice[PC KWS / Whisper]
-    Voice --> Agent[语义计划 / 角色对话 / 持久记忆]
-    Camera[按需启用的PC摄像头] --> Vision[统一视觉与控制仲裁]
+    Input[Board microphone] -->|USB or optional Wi-Fi PCM| Voice[PC KWS / Whisper]
+    Voice --> Agent[Validated plans / persona / persistent memory]
+    Camera[Opt-in PC camera] --> Vision[Shared visual input and arbitration]
     Web[Web / Android / MCP] --> Agent
-    Agent -->|UDP命令与ACK| S3[单颗ESP32-S3]
-    Vision -->|UDP命令与ACK| S3
-    Agent --> TTS[角色语音合成]
-    TTS -->|USB或可选Wi-Fi PCM| S3
-    Music[音频文件或直链] --> MIR[PC解码与MIR]
+    Agent -->|UDP command and ACK| S3[One ESP32-S3]
+    Vision -->|UDP command and ACK| S3
+    Agent --> TTS[Character speech synthesis]
+    TTS -->|USB or optional Wi-Fi PCM| S3
+    Music[Audio file or direct URL] --> MIR[PC decoding and MIR]
     MIR --> S3
-    S3 --> Matrix[16×16 WS2812B / 游戏 / 桌宠]
-    S3 --> Speaker[I2S扬声器]
-    S3 -->|完成帧回读| Preview[WebGL预览]
+    S3 --> Matrix[16x16 WS2812B / games / pet]
+    S3 --> Speaker[I2S speaker]
+    S3 -->|Completed frame| Preview[WebGL preview]
 ```
 
 直接模式为0–31、排除18和25；25必须传倒计时时长。26–31分别为指尖、光球、世界线、画布、音乐流体和环境微光。桌宠原待机配色及用户指定局部覆盖保留。
