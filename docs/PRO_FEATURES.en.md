@@ -58,7 +58,7 @@ Personal memory, documents, face samples and calibration stay local. Retrieved m
 This path binds to `127.0.0.1` without serial discovery, UDP, model loading, camera/microphone capture or sound.
 
 ```powershell
-$task = Join-Path $env:USERPROFILE '.codex\cache\tasks\pro-preview-<unique-id>'
+$task = Join-Path $env:USERPROFILE ('.codex\cache\tasks\pro-preview-' + [guid]::NewGuid().ToString('N'))
 $env:KURISU_DATA_DIR = Join-Path $task 'data'
 $env:KURISU_CACHE_DIR = Join-Path $task 'cache'
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086

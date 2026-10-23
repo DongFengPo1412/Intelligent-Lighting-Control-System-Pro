@@ -58,7 +58,7 @@ PC 3.10 环境安装 `pc-agent-vision/requirements-pro.txt`。它覆盖控制、
 下列命令只启动模拟服务。不会扫描串口、发送 UDP、加载模型、开摄像头、录音或播放声音。服务仅绑定 `127.0.0.1`。
 
 ```powershell
-$task = Join-Path $env:USERPROFILE '.codex\cache\tasks\pro-preview-<unique-id>'
+$task = Join-Path $env:USERPROFILE ('.codex\cache\tasks\pro-preview-' + [guid]::NewGuid().ToString('N'))
 $env:KURISU_DATA_DIR = Join-Path $task 'data'
 $env:KURISU_CACHE_DIR = Join-Path $task 'cache'
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086

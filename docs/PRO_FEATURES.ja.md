@@ -58,7 +58,7 @@ Python 3.10 と `pc-agent-vision/requirements-pro.txt` を使います。制御�
 次の経路は `127.0.0.1` のみにバインドし、シリアル探索、UDP、モデル読込、カメラ・マイク取得、再生を行いません。
 
 ```powershell
-$task = Join-Path $env:USERPROFILE '.codex\cache\tasks\pro-preview-<unique-id>'
+$task = Join-Path $env:USERPROFILE ('.codex\cache\tasks\pro-preview-' + [guid]::NewGuid().ToString('N'))
 $env:KURISU_DATA_DIR = Join-Path $task 'data'
 $env:KURISU_CACHE_DIR = Join-Path $task 'cache'
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
