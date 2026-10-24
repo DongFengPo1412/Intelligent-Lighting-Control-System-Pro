@@ -10,7 +10,7 @@ A local PC voice agent and one ESP32-S3 drive a 16×16 light matrix, a Kurisu pi
 
 | Area | Implementation |
 | --- | --- |
-| Firmware | Native RMT DMA, single-panel serpentine addressing, shared display lock, completed PWM frame snapshots and optional gamma. |
+| Firmware | Native RMT DMA, single 16×16 panel addressing (straight rows on the currently measured panel; serpentine optional), shared display lock, completed PWM frame snapshots and optional gamma. |
 | Voice and agent | PC acoustic KWS plus Whisper confirmation, validated semantic plans for the mode catalog, local Ollama persona and bilingual GPT-SoVITS replies. Continuous turns end on idle timeout or an explicit closing phrase. |
 | Memory | Persistent SQLite facts, preferences, conversation and chunked reference documents; deletable RAG with lexical vectors or a configured local embedding model. |
 | Vision | One camera owner, fingertip tracking, pinch/throw physics, calibrated gaze, approximate head pose, presence/fatigue/smile cues and pet life states. |

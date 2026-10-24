@@ -13,7 +13,7 @@
 | 1 单 S3 | `firmware-s3/main/main.cc`，显示 Core 1，网络／音频 Core 0 | 单 S3 执行；大模型与视觉仍在 PC，不能称所有推理都在板端。 |
 | 2 RMT DMA | `display/display_hal.cc`，矩阵启用 DMA | 沿用原生驱动；没有 CPU 零占用的测量结果。 |
 | 3 缓冲与 Gamma | 绘图缓冲＋完成帧 PWM 快照；统一显示锁；`gamma` 可选 | 不是异步交换队列。Gamma 默认关闭以保护既有配色；没有稳定 60 FPS 的实测。 |
-| 4 经典灯效 | 原 0–25（18 空缺），单块 16×16 逐行蛇形映射 | 保留现有高阶算法与坐标，不声称和 Mid 每帧相同。 |
+| 4 经典灯效 | 原 0–25（18 空缺），单块 16×16 可配置走线映射 | 保留现有高阶算法与坐标，不声称和 Mid 每帧相同。 |
 | 5 本地 LLM | `Modelfile.kurisu`、`semantic_control.py`、Ollama | 角色配置基于 Qwen2.5；没有新训练模型或重新评测模型性能。 |
 | 6 人格／长期记忆 | `memory_store.py`、`kurisu_agent.py`；SQLite、偏好记忆、资料分块、RAG | 默认为本地词汇哈希检索；配置 embedding 模型后可用本地语义向量。不是 Mem0 集成。 |
 | 7 对话／MCP／小智 | 连续轮次；MCP HTTP/WS；独立小智 v1 Opus 适配；可选 Wi-Fi 双工／回声参考／打断 | 当前 Pro 固件仍是 **PC 声学唤醒**，没有移植板端 WakeNet。小智原生客户端可连接适配入口；不等于把 Pro 固件换成原生小智。双工路径尚未声学验收。 |
@@ -32,6 +32,8 @@
 以上是功能层的实现映射。原生板端 WakeNet、物理沙粒、原音乐规格无损和物理光照仿真仍与原 SRS 有差异；不能将这些条款标为原样全部实现。性能与主观体验也不由编译结果推定。
 
 ## 服务、模型与数据
+
+2026-10-24 用固定方块、首行色点和全部 16 行起始灯珠实测，当前灯板每行都从左向右排列。正式构建默认 `-DPRO_MATRIX_SERPENTINE=OFF`；实际逐行蛇形的灯板使用 `-DPRO_MATRIX_SERPENTINE=ON`。此选项统一作用于所有引擎的坐标映射及帧回读，RGB 调色不受影响。
 
 PC 3.10 环境安装 `pc-agent-vision/requirements-pro.txt`。它覆盖控制、Web、视觉、MIR、MCP 和 Opus 适配；现有 Whisper／KWS／Torch／GPT-SoVITS 的环境、模型和参考音频仍按 [语音恢复记录](VOICE_CONTROL_RECOVERY.md) 准备，不会由模拟模式自动下载。
 

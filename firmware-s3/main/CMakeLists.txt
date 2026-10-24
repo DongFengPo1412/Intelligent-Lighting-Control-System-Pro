@@ -1,5 +1,6 @@
 option(PRO_MATRIX_DIAGNOSTIC "Build the opt-in 16x16 wiring test instead of the full application" OFF)
 option(PRO_HAIR_CALIBRATION "Build the opt-in hair color comparison instead of the full application" OFF)
+option(PRO_MATRIX_SERPENTINE "Reverse odd rows for serpentine panels (current tested panel uses straight rows)" OFF)
 if(PRO_MATRIX_DIAGNOSTIC AND PRO_HAIR_CALIBRATION)
     message(FATAL_ERROR "Select only one diagnostic application")
 endif()
@@ -46,3 +47,7 @@ idf_component_register(
         nvs_flash
         lwip
     )
+
+target_compile_definitions(${COMPONENT_LIB} PUBLIC
+    PRO_MATRIX_SERPENTINE=$<BOOL:${PRO_MATRIX_SERPENTINE}>
+)

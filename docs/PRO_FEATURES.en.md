@@ -13,7 +13,7 @@ The [historical SRS](HIGH_STAGE_SYSTEM_SPEC_18.md) is a design reference, not a 
 | 1 One S3 | `main.cc`: display on Core 1, network/audio on Core 0 | LLM and vision still run on the PC. |
 | 2 RMT DMA | Matrix output through `display_hal.cc` | No measured zero-CPU result. |
 | 3 Buffers/gamma | Drawing buffer, completed PWM snapshot, display mutex; optional gamma | Not an asynchronous swap queue; gamma defaults off. No verified stable 60 FPS. |
-| 4 Effects | Existing modes 0–25, with 18 unused; one serpentine 16×16 panel | Not a claim of frame-by-frame identity with Mid. |
+| 4 Effects | Existing modes 0–25, with 18 unused; configurable wiring for one 16×16 panel | Not a claim of frame-by-frame identity with Mid. |
 | 5 Local LLM | Ollama, `Modelfile.kurisu`, validated semantic plans | Qwen2.5-based configuration, not newly trained model research. |
 | 6 Memory | SQLite facts/preferences/conversation, document chunks, deletable RAG | Default lexical hash vectors; optional local embeddings. Not Mem0. |
 | 7 Conversation/MCP/XiaoZhi | Continuous turns, HTTP/WS MCP, separate v1 Opus adapter; optional Wi-Fi duplex/reference echo processing/interruption | Wake detection stays on the PC, not board WakeNet. Duplex has no acoustic acceptance. |
@@ -32,6 +32,8 @@ The [historical SRS](HIGH_STAGE_SYSTEM_SPEC_18.md) is a design reference, not a 
 Native WakeNet, physical sand, original-format lossless music and physical-light simulation differ from the SRS. Source coverage does not establish performance or subjective quality.
 
 ## Services, models and data
+
+On 2026-10-24, fixed squares, endpoint markers and all 16 row starts identified the current panel as left-to-right on every row. Production builds default to `-DPRO_MATRIX_SERPENTINE=OFF`; use `ON` for a physically serpentine panel. This option changes the shared coordinate mapping and frame readback without changing RGB values.
 
 Use Python 3.10 and `pc-agent-vision/requirements-pro.txt` for control/Web/vision/MIR/MCP/Opus. Whisper, KWS, Torch, GPT-SoVITS, model weights and reference audio need their separate [voice-baseline setup](VOICE_CONTROL_RECOVERY.md). Simulation downloads none of them.
 

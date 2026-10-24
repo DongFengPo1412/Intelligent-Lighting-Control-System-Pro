@@ -28,7 +28,7 @@ public:
     // sRGB conversion is opt-in for image content; existing effects keep raw RGB.
     esp_err_t Show(uint8_t brightness_percent = 100, bool srgb_image = false);
 
-    // 左上角为原点，16x16 整板逐行蛇形走线。
+    // 左上角为原点；当前实物每行同向，蛇形板可通过编译选项选择。
     static constexpr int GetPixelIndex(int x, int y) {
         return MatrixLayout::PixelIndex(x, y);
     }

@@ -17,3 +17,12 @@ After newline normalization, 37 comparable firmware source/header/build files ma
 These records do not establish endurance, subjective audio acceptance, AEC/false wakes, all visual modes, gaze accuracy, DDA effectiveness, Android installation or discovery. A control ACK confirms command handling, not optical output from every LED.
 
 Physical entry: `scripts/test_pro_board.py --output-dir <task-cache>`; the audio script requires either `--playback` or `--microphone`. These entries change device state. Announce playback/sampling first and stop conflicting services; direct outputs to a new task cache outside the repository.
+
+## 2026-10-24 follow-up: startup and wiring
+
+- Ollama started from a stopped state; model and parsing-prompt warmup completed before listening. The first metaphorical planning request correctly selected aurora in about 3.55 seconds externally, without executing a display or speaking.
+- A local DNS-SD client found `192.168.178.90:8080`; this is not Android discovery acceptance.
+- Camera index 0 returned a nearly black image; index 1 produced real hand observations and mode-26 board ACKs. No photos or videos were saved. The user reported a split cursor; a stationary square also split, so fingertip appearance has not passed acceptance.
+- The board application descriptor matched the last image flashed on 10-23. Human observations of RGB endpoints and all 16 row starts established that the current physical panel runs left-to-right on every row, unlike the previous serpentine output.
+- Added `PRO_MATRIX_SERPENTINE`, default `OFF` for this panel, with `ON` retaining serpentine support. Full addressing compile checks passed for both settings. The 889152-byte production image was flashed and verified; 155 silent physical checks passed again.
+- The corrected 2×2 square is displayed; its optical confirmation and corrected fingertip direction/fluency remain pending. Hand detection alone is not final tracking acceptance.
