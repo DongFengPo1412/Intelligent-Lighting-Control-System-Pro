@@ -62,12 +62,13 @@ static SpectrumEngine spectrum;
 static InteractionEngine interaction;
 static FingertipTracker finger;
 static int last_mode=-1;
+static float music_bands[16]={};static bool pending_music_bands=false;
 extern "C" void set_clock(int n){now_ms=(uint32_t)n;}
 extern "C" void input(int kind,float a,float b,float c,float d,float e){
     switch(kind){
     case 1:finger.FeedTarget(a,b,c!=0,d);break;
     case 2:interaction.FeedHand(a,b,c,d!=0,e!=0);break;
-    case 3:interaction.FeedMusic(a,b,c!=0,d,e);break;
+    case 3:interaction.FeedMusic(a,b,c!=0,d,e,pending_music_bands?music_bands:nullptr);pending_music_bands=false;break;
     case 4:interaction.SetPixel((int)a%16,(int)a/16,ColorRGB(b,c,d));break;
     case 5:game.SnakeSetDirection(a,b);break;
     case 6:if(a==0)game.TetrisMove(-1);else if(a==1)game.TetrisMove(1);else if(a==2)game.TetrisRotate();else game.TetrisDrop();break;
@@ -77,6 +78,7 @@ extern "C" void input(int kind,float a,float b,float c,float d,float e){
     case 10:interaction.Celebrate();break;
     case 11:finger.SetInputWindow(a,b,c,d);break;
     case 12:finger.SetInvert(a!=0,b!=0);break;
+    case 13:if(a>=0&&a<16){music_bands[(int)a]=b/15.f;pending_music_bands=true;}break;
     }
 }
 extern "C" int render(int mode,int time){

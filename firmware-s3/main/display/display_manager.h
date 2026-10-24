@@ -41,7 +41,7 @@ public:
     void FeedFingertip(float x,float y,bool visible,float confidence);
     void ConfigureFingertip(float x0,float y0,float x1,float y1,bool invert_x,bool invert_y);
     void FeedHand(float x,float y,float z,bool pinch,bool visible);
-    void FeedMusic(float energy,float flux,bool onset,float tempo,float phase=0);
+    void FeedMusic(float energy,float flux,bool onset,float tempo,float phase=0,const float* bands=nullptr);
     void Celebrate();
     void SetCanvasPixel(int x,int y,ColorRGB color);
     void SetCanvasFrame(const ColorRGB* colors);

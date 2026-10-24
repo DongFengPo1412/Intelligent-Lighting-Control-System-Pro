@@ -29,7 +29,11 @@ class MusicFeatures:
         self.previous = norm
         rms = float(np.sqrt(np.mean(data * data)))
         baseline = float(np.median(self.flux_history)) if self.flux_history else 0
-        onset = rms > 0.01 and flux > max(0.2, baseline * 1.5) and now - self.last_onset > 0.15
+        onset = (
+            rms > 0.01
+            and flux > max(0.2, baseline * 1.5)
+            and now - self.last_onset > 0.15
+        )
         self.flux_history.append(flux)
         if onset:
             self.last_onset = now
@@ -42,7 +46,9 @@ class MusicFeatures:
         bands = np.array(
             [
                 (
-                    spectrum[(frequencies >= edges[i]) & (frequencies < edges[i + 1])].mean()
+                    spectrum[
+                        (frequencies >= edges[i]) & (frequencies < edges[i + 1])
+                    ].mean()
                     if np.any((frequencies >= edges[i]) & (frequencies < edges[i + 1]))
                     else 0
                 )
@@ -83,20 +89,41 @@ class MusicPlayer:
         self.thread = None
         self.error = None
         self.features = {}
+        self.analysis_stats = {}
         self.running = False
+        self.visual_fluid = True
+        self.controller._music_player = self
 
     def play(self, raw, fluid=True):
+        if type(fluid) is not bool:
+            raise ValueError("Music visual must be fluid or spectrum")
         pcm = decode_audio(raw)
         self.stop()
         self.cancel.clear()
         self.error = None
+        self.features = {}
+        self.analysis_stats = dict(frames=0, skipped_frames=0, max_dispatch_lag_ms=0)
+        self.visual_fluid = fluid
         if not self.controller.set_mode(30 if fluid else 15):
             raise ConnectionError("Board rejected music mode")
         self.running = True
-        self.thread = threading.Thread(target=self._run, args=(pcm,), daemon=True)
-        self.thread.start()
+        listener = getattr(self.controller, "_voice_listener", None)
+        resume_listener = None
+        if listener and listener.is_listening and not listener.is_paused:
+            listener.pause()
+            resume_listener = listener
+        self.thread = threading.Thread(
+            target=self._run, args=(pcm, resume_listener), daemon=True
+        )
+        try:
+            self.thread.start()
+        except Exception:
+            self.running = False
+            if resume_listener and resume_listener.is_listening:
+                resume_listener.resume()
+            raise
 
-    def play_url(self, url):
+    def play_url(self, url, fluid=True):
         if not isinstance(url, str):
             raise ValueError("Audio URL must be a string")
         parsed = urlsplit(url)
@@ -111,44 +138,103 @@ class MusicPlayer:
             raw = response.read(20 * 1024 * 1024 + 1)
         if len(raw) > 20 * 1024 * 1024:
             raise ValueError("Music file exceeds 20 MiB")
-        self.play(raw)
+        self.play(raw, fluid)
 
-    def _run(self, pcm):
+    def _run(self, pcm, resume_listener):
         self.running = True
         analysis_stop = threading.Event()
+        has_clock = hasattr(self.controller, "playback_started_at")
+        if has_clock:
+            self.controller.playback_started_at = None
+
+        def transmit(f):
+            if self.visual_fluid:
+                return self.controller.music_features(
+                    f["energy"],
+                    f["flux"],
+                    f["onset"],
+                    f["tempo"],
+                    f["beat_phase"],
+                    bands=f["bands"],
+                )
+            return self.controller.send_raw(
+                "f," + str(int(f["onset"])) + "," + ",".join(map(str, f["bands"]))
+            )
 
         def analyze():
-            engine = MusicFeatures()
-            samples = np.frombuffer(pcm, dtype="<i2").astype(float) / 32768
-            start = time.monotonic()
-            for offset in range(0, len(samples) - engine.size + 1, 512):
-                if self.cancel.is_set() or analysis_stop.is_set():
-                    break
-                wait = start + offset / 16000 - time.monotonic()
-                if wait > 0 and self.cancel.wait(wait):
-                    break
-                f = engine.analyze(samples[offset : offset + engine.size], offset / 16000)
-                self.features = f
-                if not self.controller.music_features(
-                    f["energy"], f["flux"], f["onset"], f["tempo"], f["beat_phase"]
-                ):
-                    self.error = "MIR command not acknowledged"
-                    break
-                self.controller.send_raw(
-                    "f," + str(int(f["onset"])) + "," + ",".join(map(str, f["bands"]))
-                )
+            try:
+                engine = MusicFeatures()
+                samples = np.frombuffer(pcm, dtype="<i2").astype(float) / 32768
+                start = time.monotonic()
+                if has_clock:
+                    while self.controller.playback_started_at is None:
+                        if self.cancel.wait(0.005) or analysis_stop.is_set():
+                            return
+                    start = self.controller.playback_started_at
+                next_offset = 0
+                while not (self.cancel.is_set() or analysis_stop.is_set()):
+                    wait = start + next_offset / 16000 - time.monotonic()
+                    if wait > 0 and self.cancel.wait(wait):
+                        break
+                    # Use the current audio window instead of replaying stale
+                    # FFT frames when ACKs or the UI temporarily take longer.
+                    offset = max(
+                        next_offset,
+                        int(max(0, time.monotonic() - start) * 16000) // 512 * 512,
+                    )
+                    if offset + engine.size > len(samples):
+                        break
+                    self.analysis_stats["skipped_frames"] += (
+                        offset - next_offset
+                    ) // 512
+                    f = engine.analyze(
+                        samples[offset : offset + engine.size], offset / 16000
+                    )
+                    f["audio_time"] = offset / 16000
+                    if not transmit(f):
+                        self.error = "Music visual command not acknowledged"
+                        break
+                    lag = max(0, (time.monotonic() - start - offset / 16000) * 1000)
+                    self.analysis_stats["frames"] += 1
+                    self.analysis_stats["max_dispatch_lag_ms"] = max(
+                        self.analysis_stats["max_dispatch_lag_ms"], lag
+                    )
+                    self.features = f
+                    next_offset = offset + 512
+            except Exception as exc:
+                self.error = str(exc)
 
         worker = threading.Thread(target=analyze, daemon=True)
         worker.start()
         try:
-            if not self.controller.play_audio_pcm(pcm):
+            if not self.controller.play_audio_pcm(pcm) and not self.cancel.is_set():
                 self.error = "PCM playback not confirmed or cancelled"
+            if getattr(self.controller, "port", None) == "SIMULATION":
+                self.cancel.wait(len(pcm) / 32000)
         except Exception as exc:
             self.error = str(exc)
         finally:
             analysis_stop.set()
             worker.join(timeout=3)
+            quiet = dict(
+                energy=0,
+                flux=0,
+                onset=False,
+                tempo=self.features.get("tempo", 120),
+                beat_phase=0,
+                bands=[0] * 16,
+                audio_time=len(pcm) / 32000,
+            )
+            try:
+                if not transmit(quiet) and not self.cancel.is_set():
+                    self.error = "Music visual stop not acknowledged"
+            except Exception as exc:
+                if not self.cancel.is_set():
+                    self.error = str(exc)
+            self.features = quiet
             self.running = False
+            if resume_listener and resume_listener.is_listening:
+                resume_listener.resume()
 
     def stop(self):
         self.cancel.set()

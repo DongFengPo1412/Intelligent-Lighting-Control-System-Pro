@@ -351,7 +351,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
     while (*line == ' ' || *line == '\t') line++;
     if (*line == '\0') return false;
 
-    ESP_LOGI(TAG, ">>> [收到外部指令]: %s", line);
+    ESP_LOGD(TAG, ">>> [收到外部指令]: %s", line);
 
     // 1. 旧版音乐频谱流 (兼容中阶 "f,beat,b0,b1...")
     if (strncmp(line, "f,", 2) == 0) {
@@ -392,6 +392,10 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     }
 
     const char* cmd = cmd_item->valuestring;
+    // Avoid USB-console backpressure on continuous Wi-Fi control streams.
+    if(strcmp(cmd,"mir")&&strcmp(cmd,"track")&&strcmp(cmd,"hand")&&
+       strcmp(cmd,"frame")&&strcmp(cmd,"pet_context"))
+        ESP_LOGI(TAG, ">>> [收到外部指令]: %s", json_str);
     DisplayManager& dm = DisplayManager::GetInstance();
     if(!strcmp(cmd,"audio_abort")){AbortAudio();cJSON_Delete(root);return true;}
     int extended=HandleInteractionCommand(cmd,root,dm);

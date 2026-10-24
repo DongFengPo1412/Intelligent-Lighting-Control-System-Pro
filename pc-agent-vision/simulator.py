@@ -8,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 from light_controller import LightController
-from pro_control import DIRECT_MODES
+from pro_control import DIRECT_MODES, real, boolean, integer
 
 
 class SimulatedController(LightController):
@@ -132,6 +132,14 @@ class SimulatedController(LightController):
                     ok = bool(re.fullmatch("[0-9a-fA-F]{1536}", value))
                     if ok:
                         self._pixels = value.lower()
+                elif name == "mir":
+                    real(cmd["energy"],0,1);real(cmd["flux"],0,1)
+                    real(cmd["tempo"],30,240);real(cmd.get("phase",0),0,1)
+                    boolean(cmd["onset"])
+                    if "bands" in cmd:
+                        if not isinstance(cmd["bands"],list) or len(cmd["bands"])!=16:
+                            raise ValueError("Expected 16 FFT levels")
+                        for value in cmd["bands"]:integer(value,0,15)
                 elif name not in (
                     "status",
                     "frame",
@@ -162,7 +170,7 @@ class SimulatedController(LightController):
                 if name == "frame" and ok:
                     self.last_result.update(self._frame())
                 return ok
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, KeyError):
             self.last_result = {"status": "error", "error": "invalid_command", "simulated": True}
             return False
 
@@ -222,6 +230,7 @@ class SimulatedController(LightController):
         )
 
     def play_audio_pcm(self, pcm_data, chunk_samples=512):
+        self.playback_started_at = time.monotonic()
         self.stats["audio_rx"] += len(pcm_data) // 2
         self.stats["audio_played"] += len(pcm_data) // 2
         return True  # Simulated counters, not hardware/acoustic evidence.

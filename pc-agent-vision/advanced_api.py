@@ -50,7 +50,9 @@ class ProApi:
             simulated=self.controller.port == "SIMULATION",
             vision=self.vision.status(),
             music=dict(
-                running=self.music.running, features=self.music.features, error=self.music.error
+                running=self.music.running,
+                features=self.music.features,
+                error=self.music.error,
             ),
         )
 
@@ -75,7 +77,9 @@ class ProApi:
         try:
             if action == "frame" and request.method == "GET":
                 frame = await asyncio.to_thread(self.controller.frame)
-                return web.json_response(frame, status=200 if frame.get("status") == "ok" else 503)
+                return web.json_response(
+                    frame, status=200 if frame.get("status") == "ok" else 503
+                )
             if action == "status":
                 connection = request.app.get("xiaozhi_connection")
                 return web.json_response(
@@ -86,6 +90,7 @@ class ProApi:
                             running=self.music.running,
                             error=self.music.error,
                             features=self.music.features,
+                            analysis=self.music.analysis_stats,
                         ),
                         xiaozhi=dict(
                             connected=connection is not None,
@@ -156,7 +161,12 @@ class ProApi:
                 if connection is None:
                     raise ConnectionError("No native XiaoZhi client connected")
                 tool = next(
-                    (t for t in connection.remote_tools if t.get("name") == data["name"]), None
+                    (
+                        t
+                        for t in connection.remote_tools
+                        if t.get("name") == data["name"]
+                    ),
+                    None,
                 )
                 if tool is None:
                     raise ValueError("Tool was not advertised by the device")
@@ -164,16 +174,21 @@ class ProApi:
 
                 validate_arguments(data.get("arguments", {}), tool["inputSchema"])
                 result = await connection.request_device(
-                    "tools/call", {"name": data["name"], "arguments": data.get("arguments", {})}
+                    "tools/call",
+                    {"name": data["name"], "arguments": data.get("arguments", {})},
                 )
             elif action == "vision":
                 if type(data.get("enabled")) is not bool:
                     raise ValueError("enabled must be a boolean")
                 if self.controller.port == "SIMULATION" and data.get("enabled"):
-                    raise ValueError("Simulation does not open a camera; use observations")
+                    raise ValueError(
+                        "Simulation does not open a camera; use observations"
+                    )
                 if data.get("enabled"):
                     await asyncio.to_thread(
-                        self.vision.start, data.get("mode", "pet"), data.get("camera", 0)
+                        self.vision.start,
+                        data.get("mode", "pet"),
+                        data.get("camera", 0),
                     )
                 else:
                     await asyncio.to_thread(self.vision.stop)
@@ -191,16 +206,25 @@ class ProApi:
             elif action == "calibrate":
                 error = self.vision.features.gaze.fit(data["samples"])
                 (data_dir() / "gaze-calibration.json").write_text(
-                    json.dumps(self.vision.features.gaze.coefficients.tolist()), encoding="utf-8"
+                    json.dumps(self.vision.features.gaze.coefficients.tolist()),
+                    encoding="utf-8",
                 )
-                result = {"rms_training_error": error, "independent_accuracy_measured": False}
+                result = {
+                    "rms_training_error": error,
+                    "independent_accuracy_measured": False,
+                }
             elif action == "enroll":
                 result = await asyncio.to_thread(self.vision.enroll, data["name"])
             elif action == "music":
                 if data.get("stop"):
                     await asyncio.to_thread(self.music.stop)
                 elif "url" in data:
-                    await asyncio.to_thread(self.music.play_url, data["url"])
+                    visual = data.get("visual", "fluid")
+                    if visual not in ("fluid", "spectrum"):
+                        raise ValueError("Music visual must be fluid or spectrum")
+                    await asyncio.to_thread(
+                        self.music.play_url, data["url"], visual == "fluid"
+                    )
                 else:
                     raise ValueError(
                         "Specify stop or a direct audio URL; upload files via /api/pro/music-upload"
@@ -221,7 +245,10 @@ class ProApi:
             raw = await request.read()
             if not raw or len(raw) > 20 * 1024 * 1024:
                 raise ValueError("Music size must be <=20 MiB")
-            await asyncio.to_thread(self.music.play, raw)
+            visual = request.query.get("visual", "fluid")
+            if visual not in ("fluid", "spectrum"):
+                raise ValueError("Music visual must be fluid or spectrum")
+            await asyncio.to_thread(self.music.play, raw, visual == "fluid")
             return web.json_response(
                 {"started": True, "simulated": self.controller.port == "SIMULATION"}
             )
@@ -247,7 +274,11 @@ class ProApi:
             message = await request.json()
         except Exception:
             return web.json_response(
-                dict(jsonrpc="2.0", id=None, error=dict(code=-32700, message="Parse error")),
+                dict(
+                    jsonrpc="2.0",
+                    id=None,
+                    error=dict(code=-32700, message="Parse error"),
+                ),
                 status=400,
             )
         if sid and sid not in self.sessions:
@@ -267,13 +298,17 @@ class ProApi:
         ):
             sid = uuid.uuid4().hex
             now = time.monotonic()
-            self.sessions = {k: v for k, v in self.sessions.items() if now - v[1] < 3600}
+            self.sessions = {
+                k: v for k, v in self.sessions.items() if now - v[1] < 3600
+            }
             if len(self.sessions) >= 64:
                 self.sessions.pop(next(iter(self.sessions)))
             self.sessions[sid] = (session, now)
         if response is None:
             return web.Response(status=202)
-        return web.json_response(response, headers={"Mcp-Session-Id": sid} if sid else {})
+        return web.json_response(
+            response, headers={"Mcp-Session-Id": sid} if sid else {}
+        )
 
     async def cleanup(self):
         if self.life_task:

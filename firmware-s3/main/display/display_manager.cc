@@ -275,8 +275,8 @@ void DisplayManager::ConfigureFingertip(float x0,float y0,float x1,float y1,bool
 void DisplayManager::FeedHand(float x,float y,float z,bool pinch,bool visible) {
     DisplayLock lock(mutex_);interaction_engine_.FeedHand(x,y,z,pinch,visible);
 }
-void DisplayManager::FeedMusic(float energy,float flux,bool onset,float tempo,float phase) {
-    DisplayLock lock(mutex_);interaction_engine_.FeedMusic(energy,flux,onset,tempo,phase);
+void DisplayManager::FeedMusic(float energy,float flux,bool onset,float tempo,float phase,const float* bands) {
+    DisplayLock lock(mutex_);interaction_engine_.FeedMusic(energy,flux,onset,tempo,phase,bands);
 }
 void DisplayManager::SetCanvasFrame(const ColorRGB* colors) {
     DisplayLock lock(mutex_);

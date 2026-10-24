@@ -43,7 +43,19 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         if(!number(root,"energy",0,1,a)||!number(root,"flux",0,1,b)||!number(root,"tempo",30,240,c)||!boolean(root,"onset",first))return 0;
         double phase=0;
         if(cJSON_GetObjectItemCaseSensitive(root,"phase")&&!number(root,"phase",0,1,phase))return 0;
-        dm.FeedMusic(a,b,first,c,phase);return 1;
+        float bands[16];const float* spectrum=nullptr;
+        auto* item=cJSON_GetObjectItemCaseSensitive(root,"bands");
+        if(item) {
+            if(!cJSON_IsArray(item)||cJSON_GetArraySize(item)!=16)return 0;
+            for(int i=0;i<16;i++) {
+                auto* value=cJSON_GetArrayItem(item,i);
+                if(!cJSON_IsNumber(value)||!isfinite(value->valuedouble)||value->valuedouble<0||
+                   value->valuedouble>15||floor(value->valuedouble)!=value->valuedouble)return 0;
+                bands[i]=value->valuedouble/15.f;
+            }
+            spectrum=bands;
+        }
+        dm.FeedMusic(a,b,first,c,phase,spectrum);return 1;
     }
     if(!strcmp(cmd,"pixel")) {
         if(!number(root,"x",0,15,x,true)||!number(root,"y",0,15,y,true)||!number(root,"r",0,255,a,true)||

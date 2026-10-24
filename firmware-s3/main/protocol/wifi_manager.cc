@@ -300,7 +300,7 @@ void WifiManager::UdpServerTaskLoop()
         if (len > 0) {
             char sender_ip[16];
             inet_ntoa_r(source_addr.sin_addr, sender_ip, sizeof(sender_ip));
-            ESP_LOGI(TAG, "[WiFi UDP 来自 %s]: %s", sender_ip, rx_buffer);
+            ESP_LOGD(TAG, "[WiFi UDP 来自 %s]: %s", sender_ip, rx_buffer);
 
             cJSON* envelope = cJSON_Parse(rx_buffer);
             if (envelope && cJSON_GetObjectItem(envelope, "event")) {

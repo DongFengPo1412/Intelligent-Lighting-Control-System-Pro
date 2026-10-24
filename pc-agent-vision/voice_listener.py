@@ -647,6 +647,7 @@ class VoiceListener:
         if self.is_listening:
             return
         self.is_listening = True
+        self.controller._voice_listener = self
         self.is_paused = False
         self.is_awake = False
         self._pending_prefix = ""

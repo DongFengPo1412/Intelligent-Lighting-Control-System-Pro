@@ -333,6 +333,24 @@ class XiaoZhiContracts(unittest.IsolatedAsyncioTestCase):
 
 
 class WebContracts(unittest.IsolatedAsyncioTestCase):
+    async def test_music_visual_selection_reaches_player(self):
+        import web_server
+        with patch.object(web_server.pro_api.music,'play') as play:
+            response=await self.client.post('/api/pro/music-upload?visual=spectrum',data=b'fixture')
+            self.assertEqual(response.status,200)
+            play.assert_called_once_with(b'fixture',False)
+        with patch.object(web_server.pro_api.music,'play') as play:
+            response=await self.client.post('/api/pro/music-upload',data=b'fixture')
+            self.assertEqual(response.status,200)
+            play.assert_called_once_with(b'fixture',True)
+
+    async def test_bad_visual_is_rejected_before_decoding_or_downloading(self):
+        response=await self.client.post('/api/pro/music-upload?visual=bad',data=b'fixture')
+        self.assertEqual(response.status,400)
+        self.assertIn('visual',(await response.json())['error'])
+        response=await self.client.post('/api/pro/music',json=dict(url='http://invalid.invalid/song.wav',visual='bad'))
+        self.assertEqual(response.status,400)
+
     async def asyncSetUp(self):
         self.tmp = tempfile.mkdtemp(dir=os.environ["KURISU_TEST_TMP"])
         self.env = patch.dict(os.environ, {"KURISU_DATA_DIR": self.tmp, "KURISU_SIMULATE": "1"})

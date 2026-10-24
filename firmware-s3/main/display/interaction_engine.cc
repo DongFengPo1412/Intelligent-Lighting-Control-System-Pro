@@ -10,6 +10,8 @@ float bounded(float x, float lo, float hi) { return std::isfinite(x) ? std::max(
 void InteractionEngine::Reset() {
     celebrating_=false;
     has_onset_=false;energy_=flux_=0;
+    smooth_energy_=smooth_flux_=0;music_ms_=onset_ms_=0;
+    memset(music_bands_,0,sizeof(music_bands_));memset(smooth_bands_,0,sizeof(smooth_bands_));
     memset(wave_, 0, sizeof(wave_)); memset(previous_, 0, sizeof(previous_));
     x_=y_=7.5f; vx_=vy_=0; grabbed_=had_hand_=false;
     start_ms_=step_ms_=get_millis();
@@ -31,10 +33,11 @@ void InteractionEngine::FeedHand(float x, float y, float z, bool pinch, bool vis
 void InteractionEngine::Ripple(int x,int y,float strength) {
     if(x>0&&x<15&&y>0&&y<15)wave_[y][x]+=bounded(strength,-2,2);
 }
-void InteractionEngine::FeedMusic(float energy,float flux,bool onset,float tempo,float phase) {
+void InteractionEngine::FeedMusic(float energy,float flux,bool onset,float tempo,float phase,const float* bands) {
     music_ms_=get_millis();music_phase_=bounded(phase,0,1);
     energy_=bounded(energy,0,1); flux_=bounded(flux,0,1); tempo_=bounded(tempo,30,240);
-    if(onset){onset_ms_=music_ms_;has_onset_=true;Ripple(1+esp_random()%14,1+esp_random()%14,.5f+energy_);}
+    for(int i=0;i<16;i++)music_bands_[i]=bands?bounded(bands[i],0,1):energy_;
+    if(onset){onset_ms_=music_ms_;has_onset_=true;}
 }
 void InteractionEngine::SetPixel(int x,int y,ColorRGB color) { if(x>=0&&x<16&&y>=0&&y<16)canvas_[y*16+x]=color; }
 void InteractionEngine::ClearCanvas() { memset(canvas_,0,sizeof(canvas_)); }
@@ -61,7 +64,10 @@ bool InteractionEngine::RenderCelebration() {
 uint32_t InteractionEngine::Render(DisplayMode mode) {
     auto& hal=DisplayHAL::GetInstance(); uint32_t now=get_millis();
     float dt=bounded((now-step_ms_)/1000.f,.001f,.05f); step_ms_=now;
-    if(now-music_ms_>500){energy_*=.9f;flux_*=.9f;}
+    if(now-music_ms_>300){
+        const float decay=expf(-dt*8);energy_*=decay;flux_*=decay;
+        for(float& band:music_bands_)band*=decay;
+    }
     if(had_hand_ && now-hand_ms_>500){grabbed_=had_hand_=false;}
     hal.Clear();
     if(mode==DisplayMode::PIXEL_CANVAS) {
@@ -79,6 +85,32 @@ uint32_t InteractionEngine::Render(DisplayMode mode) {
     } else if(mode==DisplayMode::AMBIENT) {
         uint8_t v=beatsin8(6,8,45);
         hal.FillSolid(ColorRGB(v,v/3,0));
+    } else if(mode==DisplayMode::MUSIC_FLUID) {
+        // One coherent, deterministic light field: spectrum selects radius,
+        // musical phase moves the field, and detected attacks launch a ring.
+        const float attack=1-expf(-dt/.025f),release=1-expf(-dt/.16f);
+        smooth_energy_+=(energy_-smooth_energy_)*(energy_>smooth_energy_?attack:release);
+        smooth_flux_+=(flux_-smooth_flux_)*release;
+        for(int i=0;i<16;i++)smooth_bands_[i]+=(music_bands_[i]-smooth_bands_[i])*
+            (music_bands_[i]>smooth_bands_[i]?attack:release);
+        const float level=sqrtf(bounded(smooth_energy_,0,1));
+        const float phase=music_phase_+(now-music_ms_)*tempo_/60000.f;
+        const float age=has_onset_?(now-onset_ms_)/1000.f:1000.f;
+        const float hit=age<.75f?(1-age/.75f)*bounded(level*1.8f+smooth_flux_*.15f,0,1):0;
+        for(int y=0;y<16;y++)for(int x=0;x<16;x++) {
+            const float radius=std::max(fabsf(x-7.5f),fabsf(y-7.5f));
+            const int band=std::min(14,(int)((radius-.5f)*2));
+            const float spectrum=std::max(smooth_bands_[band],smooth_bands_[band+1]);
+            const float flow=.5f+.5f*cosf(radius*1.25f-phase*6.283185f);
+            const float distance=radius-(.25f+age*12);
+            const float pulse=hit*expf(-distance*distance/1.1f);
+            float value=.10f*smooth_energy_+spectrum*level*.85f*(.18f+.82f*flow);
+            value=std::max(value,pulse*.95f);
+            if(smooth_energy_<.002f && age>.75f)value=0;
+            const uint8_t hue=(uint8_t)(220-radius/7.5f*100+smooth_flux_*18);
+            hal.SetPixel(x,y,hsv2rgb_fast(ColorHSV(hue,(uint8_t)(235-pulse*30),
+                (uint8_t)(bounded(value,0,1)*255))));
+        }
     } else {
         if(mode==DisplayMode::LIGHT_SANDBOX && !grabbed_) {
             vy_+=4*dt; x_+=vx_*dt; y_+=vy_*dt;
@@ -92,8 +124,6 @@ uint32_t InteractionEngine::Render(DisplayMode mode) {
         memcpy(previous_,wave_,sizeof(wave_));memcpy(wave_,next,sizeof(wave_));
         for(int y=0;y<16;y++)for(int x=0;x<16;x++) {
             float v=bounded(fabsf(wave_[y][x]),0,1);
-            if(mode==DisplayMode::MUSIC_FLUID) v=bounded(v+energy_*.15f*(1+sinf(x*.6f+y*.3f+(music_phase_+(now-music_ms_)*tempo_/60000.f)*6.283f)),0,1);
-            if(mode==DisplayMode::MUSIC_FLUID&&has_onset_&&now-onset_ms_<80)v=std::max(v,energy_*(1-(now-onset_ms_)/80.f));
             hal.SetPixel(x,y,hsv2rgb_fast(ColorHSV((uint8_t)(150+x*3+flux_*70),220,(uint8_t)(v*255))));
         }
         if(mode==DisplayMode::LIGHT_SANDBOX) {

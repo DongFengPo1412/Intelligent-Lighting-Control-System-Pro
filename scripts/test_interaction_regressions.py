@@ -219,7 +219,7 @@ class TransportTests(unittest.TestCase):
             obj.set_mode(18)
 
     def test_playback_preserves_listener_mute_ownership(self):
-        clock = types.SimpleNamespace(perf_counter=lambda: 0, sleep=lambda _: None)
+        clock = types.SimpleNamespace(perf_counter=lambda: 0, monotonic=lambda: 0, sleep=lambda _: None)
         cls = load_nodes('light_controller.py', {'LightController'}, time=clock,
                          sys=types.SimpleNamespace(platform='test'))['LightController']
         for initially_enabled in (False, True):

@@ -97,6 +97,9 @@ def run(output):
             dict(cmd="mir", energy=2, flux=0.5, tempo=120, onset=True),
         ):
             command(payload, False)
+        command(dict(cmd="mir",energy=.5,flux=.2,tempo=120,onset=False,bands=list(range(16))))
+        for bands in ([0]*15,[0]*17,[True]*16,[16]*16,[-1]*16,[.5]*16):
+            command(dict(cmd="mir",energy=.5,flux=.2,tempo=120,onset=False,bands=bands),False)
         request_id = uuid.uuid4().hex
         command(dict(cmd="countdown", seconds=4), request_id=request_id)
         time.sleep(2.1)

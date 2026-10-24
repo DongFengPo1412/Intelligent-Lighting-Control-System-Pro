@@ -2,7 +2,7 @@
 
 [简体中文](PRO_FEATURES.md) · **English** · [日本語](PRO_FEATURES.ja.md) · [Overview](../README_EN.md)
 
-The 2026-10-24 delivery has source integration, offline checks and build evidence, supplemented by limited board communication and audio-sample records. **Full-system hardware acceptance remains incomplete.** Each test applies only to its recorded version and conditions; this delivery does not operate devices.
+Implementation status as of 2026-10-25: source integration, offline checks and build evidence, with limited board communication, audio, gesture and music-following acceptance. **Full-system hardware acceptance remains incomplete.** Each test applies only to its recorded version and conditions; see the [board records](hardware-checks-20261023.en.md).
 
 ## Mapping the 18 historical requirements
 
@@ -24,7 +24,7 @@ The [historical SRS](HIGH_STAGE_SYSTEM_SPEC_18.md) is a design reference, not a 
 | 12 Expression cues | EAR/PERCLOS, mouth/brow geometry, fatigue/frown hints, smile celebration | Heuristic interaction cues, not psychological or medical classifiers. |
 | 13 Pet lifecycle | Idle/closed-eye/mouth frames, night/rest/presence/fatigue context | Existing user palette overrides retained; mouth animation is not phoneme synchronization. |
 | 14 Wireless music | Bidirectional TCP 8889 PCM, file upload/direct HTTP(S) audio, receive/play counters | Converted to 16 kHz mono PCM16; transport is not a claim of original-source losslessness. |
-| 15 MIR field | Energy, positive spectral flux, onset, tempo/phase, spectrum and damped wave field | Heuristic rhythm estimation, stale-energy decay; no library-wide accuracy or audiovisual latency result. |
+| 15 MIR music halo | 1024-point FFT, 16 logarithmic bands, RMS, spectral flux, onset and beat phase drive concentric square rings; optional 16-column spectrum | Stale-input decay and heuristic rhythm estimation. Band distribution is not separate fundamental-frequency extraction from polyphonic songs; no song-library accuracy or objective audiovisual latency result. |
 | 16 Motion games | Dwell/debounce hand or calibrated-gaze controls for Snake/Tetris | One camera owner; manual incompatible mode changes pause automatic control. |
 | 17 DDA | Manual 0–1 difficulty and bounded adaptive hints from input intervals/expression cues | Speed floors remain; no demonstrated psychological flow-state result. |
 | 18 Clients/preview | Pixel editor, completed-frame readback, WebGL, configurable Android host/DNS-SD | Optional real C++ WASM preview. Not a calibrated optical twin; Android not installed/tested. |
@@ -79,12 +79,13 @@ The build uses production Effect/Game/Spectrum/Interaction/Fingertip sources wit
 
 ## Display, vision, music and games
 
-- Direct modes: **0–31 excluding 18 and 25**. Mode 25 requires a countdown duration. Modes 26–31 are fingertip, sandbox, worldline, canvas, music fluid and ambient.
+- Direct modes: **0–31 excluding 18 and 25**. Mode 25 requires a countdown duration. Modes 26–31 are fingertip, sandbox, worldline, canvas, music halo and ambient.
 - The teammate fingertip source is registered in CMake, modes, commands and locked display dispatch. See [integration](../INTEGRATION.md); prefer the shared Web camera path to competing standalone programs.
 - Vision is off until enabled. Choose 19/21 before gesture/gaze gaming. Gaze gaming requires nine-point calibration; look at each orange point and press Space. Stop capture before changing its index.
 - Selecting an incompatible mode/countdown pauses automatic switching; re-enable the visual mode to resume. Local LBPH greetings are not secure identity authentication.
 - Face enrollment requires a running camera, a currently detected face and a sample no older than **1 second**. Missing/empty crops and stopped/failed capture invalidate the cache; enrollment uses a detached image under the sample lock. This is an offline-tested freshness guard, not a recognition-accuracy claim.
 - Audio upload/direct links are limited to 20 MiB and 30 minutes. Account/DRM/redirect-dependent music services are not universally supported. Failures appear in status; stopping interrupts playback/feature output.
+- The halo maps low-to-high bands from inner to outer rings, RMS to overall intensity, attacks to expanding pulses, and beat phase to motion. Analysis follows the actual PCM send-start clock and skips stale windows under slow ACKs. `music.analysis` reports command dispatch statistics, not speaker-to-panel optical latency. Playback pauses an active voice listener and restores only the pause it owns.
 - DDA input intervals and facial geometry are hints. Adaptive control can be disabled and difficulty set manually; existing game rules/results remain.
 
 ## Protocols
@@ -105,8 +106,8 @@ Existing `/api/chat`, `mode`, `volume`, `cmd`, `game`, `status`, `ceremony` and 
 | `POST /api/pro/enroll` | `{"name":"..."}`; requires the fresh current face described above. |
 | `POST /api/pro/track-calibrate` | x0/y0/x1/y1 and invert_x/invert_y. |
 | `POST /api/pro/difficulty` | `{"level":0.5,"adaptive":true}`. |
-| `POST /api/pro/music-upload` | Raw audio bytes, not multipart. |
-| `POST /api/pro/music` | `{"url":"..."}` or `{"stop":true}`. |
+| `POST /api/pro/music-upload?visual=fluid` | Raw audio bytes, not multipart; `visual=fluid` (default, halo) or `spectrum` (16 columns). |
+| `POST /api/pro/music` | `{"url":"...","visual":"fluid"}` or `{"stop":true}`; `visual` also accepts `spectrum`. |
 | `POST /api/pro/observations` | Synthetic observations, simulation only. |
 | `POST /api/pro/device-tool` | Call a connected native XiaoZhi device's advertised MCP tool; validate name/arguments against its schema. |
 

@@ -29,6 +29,7 @@ class LightController(ProControlMixin):
         self.audio_transport = os.environ.get('KURISU_AUDIO_TRANSPORT', 'usb')
         self._network_audio = None
         self.playback_cancel = threading.Event()
+        self.playback_started_at = None
 
         if self.audio_transport == 'wifi':
             self.is_connected = False
@@ -247,6 +248,7 @@ class LightController(ProControlMixin):
                 # 设定 120ms 的前置安全蓄水深度，无论多长音频均严控水位不溢出、不欠载
                 target_lead_sec = 0.120
                 start_clock = time.perf_counter()
+                self.playback_started_at = time.monotonic()
 
                 while offset < total_len:
                     if self.playback_cancel.is_set():
@@ -414,7 +416,11 @@ class LightController(ProControlMixin):
             raise ValueError("Invalid display mode")
         if hasattr(self,'_arbiter'):self._arbiter.claim_user()
         if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(mode_num)
-        return self.send_json({"cmd": "mode", "val": mode_num})
+        ok = self.send_json({"cmd": "mode", "val": mode_num})
+        music = getattr(self, '_music_player', None)
+        if ok and music and music.running and mode_num in (15, 30):
+            music.visual_fluid = mode_num == 30
+        return ok
 
     def snake_move(self, dx: int, dy: int) -> bool:
         """贪吃蛇方向输入 (dx: -1, 0, 1; dy: -1, 0, 1)"""

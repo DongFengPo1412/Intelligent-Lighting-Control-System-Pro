@@ -123,6 +123,7 @@ class WiFiPcmClient:
                     return False
                 before = self.controller.command_result({"cmd": "status"})
                 start = time.monotonic()
+                self.controller.playback_started_at = start
                 for offset in range(0, len(pcm), chunk_samples * 2):
                     if self.cancelled.is_set():
                         return False

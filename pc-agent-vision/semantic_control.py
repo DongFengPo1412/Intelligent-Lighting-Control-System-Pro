@@ -34,7 +34,7 @@ EFFECTS = {
     27: ('光球沙盒', '光のサンドボックス', '抓取、投掷、碰撞光球'),
     28: ('世界线仪表', '世界線メーター', '世界线变动率数字仪表'),
     29: ('像素画布', 'ピクセルキャンバス', '手绘像素、像素涂鸦'),
-    30: ('音乐流体', '音楽の波', '音乐信息检索、节奏流体'),
+    30: ('音乐光环', '音楽の光輪', '音乐流体、音乐信息检索、音乐随动、频谱光环'),
     31: ('环境微光', '環境光', '无人、离席、节能呼吸微光'),
 }
 
@@ -139,6 +139,7 @@ def validate_plan(plan):
 def exact_plan(text):
     """Fast path for an entire literal command; everything else uses semantic planning."""
     compact = re.sub(r'[，,。.!！\s]', '', text)
+    compact = compact.replace('音乐流体','音乐光环')
     color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)
     if color:
         return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}

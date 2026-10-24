@@ -19,7 +19,7 @@ async function main(){
    if(c.cmd==='track')v(1,c.x,c.y,+c.visible,c.conf===undefined?1:c.conf);
    if(c.cmd==='track_cal'){v(11,c.x0||0,c.y0||0,c.x1===undefined?1:c.x1,c.y1===undefined?1:c.y1);v(12,+c.invert_x,+c.invert_y);}
    if(c.cmd==='hand')v(2,c.x,c.y,c.z,+c.pinch,+c.visible);
-   if(c.cmd==='mir')v(3,c.energy,c.flux,+c.onset,c.tempo,c.phase||0);
+   if(c.cmd==='mir'){if(c.bands)for(let i=0;i<16;i++)v(13,i,c.bands[i]);v(3,c.energy,c.flux,+c.onset,c.tempo,c.phase||0);}
    if(c.cmd==='canvas')for(let i=0;i<256;i++)v(4,i,...[0,2,4].map(k=>parseInt(c.hex.slice(i*6+k,i*6+k+2),16)));
    if(c.cmd==='pet_context')v(7,c.hour,c.gaze,+c.present,+c.tired);
    if(c.cmd==='difficulty')v(8,c.level,+c.adaptive);

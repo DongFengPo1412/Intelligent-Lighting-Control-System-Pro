@@ -100,20 +100,25 @@ class ProControlMixin:
             )
         )
 
-    def music_features(self, energy, flux, onset, tempo, phase=0):
-        return self.send_json(
-            dict(
-                cmd="mir",
-                energy=real(energy, 0, 1),
-                flux=real(flux, 0, 1),
-                onset=boolean(onset),
-                tempo=real(tempo, 30, 240),
-                phase=real(phase, 0, 1),
-            )
+    def music_features(self, energy, flux, onset, tempo, phase=0, bands=None):
+        payload = dict(
+            cmd="mir",
+            energy=real(energy, 0, 1),
+            flux=real(flux, 0, 1),
+            onset=boolean(onset),
+            tempo=real(tempo, 30, 240),
+            phase=real(phase, 0, 1),
         )
+        if bands is not None:
+            if not isinstance(bands, (list, tuple)) or len(bands) != 16:
+                raise ValueError("Expected 16 FFT band levels")
+            payload["bands"] = [integer(value, 0, 15) for value in bands]
+        return self.send_json(payload)
 
     def canvas(self, pixels):
-        if not isinstance(pixels, str) or not re.fullmatch(r"[0-9a-fA-F]{1536}", pixels):
+        if not isinstance(pixels, str) or not re.fullmatch(
+            r"[0-9a-fA-F]{1536}", pixels
+        ):
             raise ValueError("Canvas requires exactly 256 RGB hex pixels")
         return self.send_json(dict(cmd="canvas", hex=pixels.lower()))
 
