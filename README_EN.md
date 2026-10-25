@@ -14,6 +14,7 @@ A local PC voice agent and one ESP32-S3 drive a 16×16 light matrix, a Kurisu pi
 | Voice and agent | PC acoustic KWS plus Whisper confirmation, validated semantic plans for the mode catalog, local Ollama persona and bilingual GPT-SoVITS replies. Continuous turns end on idle timeout or an explicit closing phrase. |
 | Memory | Persistent SQLite facts, preferences, conversation and chunked reference documents; deletable RAG with lexical vectors or a configured local embedding model. |
 | Vision | One camera owner, fingertip tracking, pinch/throw physics, calibrated gaze, approximate head pose, presence/fatigue/smile cues and pet life states. |
+| Local music | Search the PC library and request songs by web/voice, with previous/next, shuffle/repeat, board speaker playback and the music halo. No SD card required. [Guide](docs/LOCAL_MUSIC.en.md). |
 | Interaction | Existing effects and games, worldline digits, countdown completion signal, pixel canvas, MIR wave field, ambient mode, gesture/gaze games and bounded manual/adaptive difficulty. |
 | Protocols and UI | UDP ACK control; existing USB audio and optional bidirectional Wi-Fi PCM; MCP HTTP/WS and a separate XiaoZhi v1 Opus adapter; pixel editor, PWM-driven WebGL preview and configurable Android host/DNS-SD discovery. |
 | Offline preview | A clearly labelled simulation service can execute the real C++ engines compiled to WASM. |

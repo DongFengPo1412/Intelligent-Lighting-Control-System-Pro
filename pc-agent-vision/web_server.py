@@ -77,7 +77,7 @@ chat_lock = asyncio.Lock()
 async def run_chat(message: str):
     async with chat_lock:
         if pro_api:
-            if pro_api.music.running:await asyncio.to_thread(pro_api.music.stop)
+            if pro_api.music.running:await asyncio.to_thread(pro_api.playback.stop, False)
         loop = asyncio.get_running_loop()
         owns_pause = listener is not None and not listener.is_paused
         if owns_pause:

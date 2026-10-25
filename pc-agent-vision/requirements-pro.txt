@@ -8,4 +8,5 @@ soundfile>=0.12,<1
 opencv-contrib-python>=4.8,<5
 mediapipe==0.10.21
 av>=14,<18
+pypinyin>=0.50,<1
 # Voice/KWS/GPT-SoVITS retain their documented separate model/runtime setup.

@@ -117,7 +117,8 @@ class WiFiPcmClient:
                 return False
             self.cancelled.clear()
             restore = self.controller._mic_enabled
-            duplex = __import__("os").environ.get("KURISU_BARGE_IN") == "1"
+            duplex = (__import__("os").environ.get("KURISU_BARGE_IN") == "1"
+                      or bool(getattr(self.controller, "_music_wake_active", False)))
             try:
                 if not duplex and not self.controller.enable_mic(False):
                     return False

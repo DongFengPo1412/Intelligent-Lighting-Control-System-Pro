@@ -23,7 +23,7 @@ The [historical SRS](HIGH_STAGE_SYSTEM_SPEC_18.md) is a design reference, not a 
 | 11 Gaze/head pose | Iris ratios, nine-point affine calibration, approximate solvePnP | Calibration fit error is not independent gaze accuracy; approximate intrinsics. |
 | 12 Expression cues | EAR/PERCLOS, mouth/brow geometry, fatigue/frown hints, smile celebration | Heuristic interaction cues, not psychological or medical classifiers. |
 | 13 Pet lifecycle | Idle/closed-eye/mouth frames, night/rest/presence/fatigue context | Existing user palette overrides retained; mouth animation is not phoneme synchronization. |
-| 14 Wireless music | Bidirectional TCP 8889 PCM, file upload/direct HTTP(S) audio, receive/play counters | Converted to 16 kHz mono PCM16; transport is not a claim of original-source losslessness. |
+| 14 Wireless music | TCP PCM, local catalog/search, web/voice requests, previous/next, shuffle/repeat, uploads/direct URLs | 16 kHz mono PCM16, separate music gain 0.25; original-source losslessness is not claimed. See the [library guide](LOCAL_MUSIC.en.md). |
 | 15 MIR music halo | 1024-point FFT, 16 logarithmic bands, RMS, spectral flux, onset and beat phase drive concentric square rings; optional 16-column spectrum | Stale-input decay and heuristic rhythm estimation. Band distribution is not separate fundamental-frequency extraction from polyphonic songs; no song-library accuracy or objective audiovisual latency result. |
 | 16 Motion games | Dwell/debounce hand or calibrated-gaze controls for Snake/Tetris | One camera owner; manual incompatible mode changes pause automatic control. |
 | 17 DDA | Manual 0–1 difficulty and bounded adaptive hints from input intervals/expression cues | Speed floors remain; no demonstrated psychological flow-state result. |
@@ -108,6 +108,7 @@ Existing `/api/chat`, `mode`, `volume`, `cmd`, `game`, `status`, `ceremony` and 
 | `POST /api/pro/difficulty` | `{"level":0.5,"adaptive":true}`. |
 | `POST /api/pro/music-upload?visual=fluid` | Raw audio bytes, not multipart; `visual=fluid` (default, halo) or `spectrum` (16 columns). |
 | `POST /api/pro/music` | `{"url":"...","visual":"fluid"}` or `{"stop":true}`; `visual` also accepts `spectrum`. |
+| `GET/POST /api/pro/library`, `POST /api/pro/music` | Catalog configuration/scan/search and ID/query playback, queue and repeat options; see the [library API](LOCAL_MUSIC.en.md). |
 | `POST /api/pro/observations` | Synthetic observations, simulation only. |
 | `POST /api/pro/device-tool` | Call a connected native XiaoZhi device's advertised MCP tool; validate name/arguments against its schema. |
 

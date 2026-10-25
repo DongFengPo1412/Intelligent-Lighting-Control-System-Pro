@@ -2,8 +2,10 @@
 
 import io
 import math
+import os
 import threading
 import time
+from pathlib import Path
 from collections import deque
 from urllib.parse import urlsplit
 from urllib.request import urlopen
@@ -72,14 +74,47 @@ def decode_audio(raw):
     import soundfile as sf
     from scipy.signal import resample_poly
 
-    data, rate = sf.read(io.BytesIO(raw), dtype="float32", always_2d=True)
-    if not 1 <= len(data) <= rate * 1800 or rate < 8000 or rate > 192000:
-        raise ValueError("Music duration/rate outside limits")
+    source = str(raw) if isinstance(raw, Path) else io.BytesIO(raw)
+    try:
+        with sf.SoundFile(source) as audio:
+            rate = audio.samplerate
+            if not 1 <= audio.frames <= rate * 1800 or not 8000 <= rate <= 192000:
+                raise ValueError("Music duration/rate outside limits")
+            data = audio.read(dtype="float32", always_2d=True)
+    except RuntimeError:
+        return decode_av(raw)
     mono = data.mean(axis=1)
     if rate != 16000:
         divisor = math.gcd(rate, 16000)
         mono = resample_poly(mono, 16000 // divisor, rate // divisor)
     return (np.clip(mono, -1, 1) * 32767).astype("<i2").tobytes()
+
+
+def decode_av(raw):
+    """Fallback for AAC/M4A and formats unavailable in installed libsndfile."""
+    import av
+
+    source = str(raw) if isinstance(raw, Path) else io.BytesIO(raw)
+    chunks, count = [], 0
+    try:
+        with av.open(source) as container:
+            if not container.streams.audio:
+                raise ValueError("文件中没有音轨。")
+            resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
+            for frame in container.decode(container.streams.audio[0]):
+                for output in resampler.resample(frame):
+                    count += output.samples
+                    if count > 16000 * 1800:
+                        raise ValueError("歌曲不能超过 30 分钟。")
+                    chunks.append(output.to_ndarray().astype("<i2").tobytes())
+            for output in resampler.resample(None):
+                count += output.samples
+                chunks.append(output.to_ndarray().astype("<i2").tobytes())
+    except (OSError, EOFError) as exc:
+        raise ValueError("音频无法解码，请换一首歌或检查文件。") from exc
+    if not 0 < count <= 16000 * 1800:
+        raise ValueError("Music duration outside limits")
+    return b"".join(chunks)
 
 
 class MusicPlayer:
@@ -92,9 +127,31 @@ class MusicPlayer:
         self.analysis_stats = {}
         self.running = False
         self.visual_fluid = True
+        self.gain = float(os.environ.get("KURISU_MUSIC_GAIN", "0.25"))
+        if not math.isfinite(self.gain) or not 0 < self.gain <= 1:
+            raise ValueError("KURISU_MUSIC_GAIN must be in (0, 1]")
+        self.duration = 0.0
+        self._position = 0.0
+        self.operations = threading.RLock()
         self.controller._music_player = self
 
     def play(self, raw, fluid=True):
+        with self.operations:
+            return self._play(raw, fluid)
+
+    def play_file(self, path, fluid=True):
+        return self.play(Path(path), fluid)
+
+    @property
+    def position(self):
+        clock = getattr(self.controller, "playback_started_at", None)
+        return (
+            min(self.duration, max(0.0, time.monotonic() - clock))
+            if self.running and clock
+            else self._position
+        )
+
+    def _play(self, raw, fluid=True):
         if type(fluid) is not bool:
             raise ValueError("Music visual must be fluid or spectrum")
         pcm = decode_audio(raw)
@@ -102,12 +159,17 @@ class MusicPlayer:
         self.cancel.clear()
         self.error = None
         self.features = {}
+        self.duration, self._position = len(pcm) / 32000, 0.0
+        if hasattr(self.controller, "playback_started_at"):
+            self.controller.playback_started_at = None
         self.analysis_stats = dict(frames=0, skipped_frames=0, max_dispatch_lag_ms=0)
         self.visual_fluid = fluid
         if not self.controller.set_mode(30 if fluid else 15):
             raise ConnectionError("Board rejected music mode")
         self.running = True
         listener = getattr(self.controller, "_voice_listener", None)
+        if listener and listener.is_listening and hasattr(listener, "prepare_music"):
+            listener.prepare_music()
         resume_listener = None
         if listener and listener.is_listening and not listener.is_paused:
             listener.pause()
@@ -117,6 +179,8 @@ class MusicPlayer:
         )
         try:
             self.thread.start()
+            if resume_listener and getattr(listener, "music_wake_ready", False):
+                listener.resume()
         except Exception:
             self.running = False
             if resume_listener and resume_listener.is_listening:
@@ -207,7 +271,17 @@ class MusicPlayer:
         worker = threading.Thread(target=analyze, daemon=True)
         worker.start()
         try:
-            if not self.controller.play_audio_pcm(pcm) and not self.cancel.is_set():
+            # Music masters are much louder than the accepted speech/chime
+            # baseline. Keep speaker headroom without weakening MIR features.
+            speaker_pcm = (
+                (np.frombuffer(pcm, dtype="<i2").astype(np.float32) * self.gain)
+                .astype("<i2")
+                .tobytes()
+            )
+            if (
+                not self.controller.play_audio_pcm(speaker_pcm)
+                and not self.cancel.is_set()
+            ):
                 self.error = "PCM playback not confirmed or cancelled"
             if getattr(self.controller, "port", None) == "SIMULATION":
                 self.cancel.wait(len(pcm) / 32000)
@@ -231,21 +305,33 @@ class MusicPlayer:
             except Exception as exc:
                 if not self.cancel.is_set():
                     self.error = str(exc)
+            self._position = self.position if self.cancel.is_set() else self.duration
             self.features = quiet
             self.running = False
-            if resume_listener and resume_listener.is_listening:
+            self.controller._music_wake_active = False
+            listener = getattr(self.controller, "_voice_listener", None)
+            if listener and getattr(listener, "_music_suspended", False):
+                listener.finish_music()
+            elif resume_listener and resume_listener.is_listening:
                 resume_listener.resume()
 
     def stop(self):
+        with self.operations:
+            self._stop()
+
+    def _stop(self):
+        active = self.running
         self.cancel.set()
         client = getattr(self.controller, "_network_audio", None)
-        if client:
+        if active and client:
             client.cancelled.set()
         cancel = getattr(self.controller, "playback_cancel", None)
-        if cancel:
+        if active and cancel:
             cancel.set()
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=4)
         if self.thread and self.thread.is_alive():
             raise RuntimeError("Previous music playback has not stopped")
         self.running = False
+        if active and hasattr(self.controller, "send_json"):
+            self.controller.send_json({"cmd": "audio_abort"})

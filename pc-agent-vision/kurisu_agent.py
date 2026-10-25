@@ -92,6 +92,12 @@ class KurisuAgent:
             return self._finish_reply('已清空保存的记忆和对话记录。\n保存した記憶と会話履歴を消去したわ。')
         if os.environ.get('KURISU_AUTO_MEMORY','1')=='1' and re.fullmatch(r'(?:以后请?叫我|我的名字是|我最?喜欢|我不喜欢|我习惯|我每天)[^？?]{1,100}[。！!]?',user_message.strip()):
             self.memory.remember(user_message,kind='preference')
+        music_commands = getattr(self, 'music_commands', None)
+        if music_commands:
+            music_result = music_commands.handle(user_message)
+            if music_result is not None:
+                return self._finish_reply(music_result['reply'], speak=music_result['speak'],
+                                          speech_text=music_result.get('spoken_reply'))
         try:
             plan = self.semantic.plan(user_message, context)
             print(f'[语义控制计划]: {json.dumps(plan, ensure_ascii=False)}')
@@ -120,13 +126,13 @@ class KurisuAgent:
             return self._finish_reply(''.join(zh) + '\n' + ''.join(ja))
         return self._converse()
 
-    def _finish_reply(self, reply, speak=True):
+    def _finish_reply(self, reply, speak=True, speech_text=None):
         cancel=getattr(self,'_cancel_turn',None)
         if cancel and cancel.is_set():return ''
         self.history.append({'role': 'assistant', 'content': reply})
         self.memory.append_turn('assistant', reply)
         if speak and getattr(self,'_speak_turn',True):
-            self.voice.speak(reply, block=True)
+            self.voice.speak(speech_text or reply, block=True)
         return reply
 
     def _converse(self):

@@ -23,7 +23,7 @@
 | 11 視線・頭部姿勢 | 虹彩比率、9点アフィン校正、近似solvePnP | 内部パラメーターは近似。校正点の適合誤差は独立視線精度ではありません。 |
 | 12 表情手がかり | EAR/PERCLOS、口・眉の幾何、疲労・しかめ面のヒント、微笑の演出 | 対話用ヒューリスティックで、心理・医療分類器ではありません。 |
 | 13 ペット生活状態 | 待機・閉眼・口形、時刻・不在・疲労による状態 | 指定済み配色を保持。口形は音素同期ではありません。 |
-| 14 無線音楽 | TCP 8889双方向PCM、ファイル・直接HTTP(S)音源、受信・再生カウンター | 16 kHz/PCM16/モノラルへ変換。原音形式の完全無損失を意味しません。 |
+| 14 無線音楽 | TCP PCM、ローカル検索・Web／音声選曲・キュー切替・リピート、アップロード・直接URL | 16 kHzモノラルPCM16、音楽専用ゲイン0.25。原音の完全無損失は意味しません。[曲庫ガイド](LOCAL_MUSIC.ja.md)参照。 |
 | 15 MIR音楽光環 | 1024点FFT、16対数帯域、RMS、フラックス、onset、拍位相で同心の四角い光環を駆動。16列スペクトルも選択可能 | 入力停止で減衰。拍推定は経験則。帯域分布は多声音楽の個別基音抽出ではなく、曲群精度・客観的な音画遅延は未測定です。 |
 | 16 体感ゲーム | 停留・デバウンス付き手／校正視線でSnake・Tetrisを操作 | カメラ所有者は一つ。非互換モードの手動選択で自動制御を停止します。 |
 | 17 DDA | 手動0–1難度、入力間隔・表情ヒントによる有界調整 | 速度下限を維持し、心理的フローを実証したものではありません。 |
@@ -108,6 +108,7 @@ python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 | `POST /api/pro/difficulty` | `{"level":0.5,"adaptive":true}`。 |
 | `POST /api/pro/music-upload?visual=fluid` | multipartではなく音声の生バイト。`visual=fluid`（既定の光環）または `spectrum`（16列）。 |
 | `POST /api/pro/music` | `{"url":"...","visual":"fluid"}` または `{"stop":true}`。`visual`には`spectrum`も指定できます。 |
+| `GET/POST /api/pro/library`、`POST /api/pro/music` | 設定・走査・ページ検索、ID／検索での選曲、キュー・繰り返し。[詳細](LOCAL_MUSIC.ja.md)。 |
 | `POST /api/pro/observations` | 模擬環境だけの合成観測。 |
 | `POST /api/pro/device-tool` | 接続中の原生小智が公開したMCPツールを、対応schemaで検査して呼び出す。 |
 

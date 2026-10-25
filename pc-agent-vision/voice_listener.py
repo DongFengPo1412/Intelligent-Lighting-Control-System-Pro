@@ -59,6 +59,9 @@ class VoiceListener:
         self._barge_thread = None
         self._barge_pending = None
         self._barge_woke = False
+        self._music_monitor = False
+        self._music_suspended = False
+        self.music_wake_ready = False
         self.last_awake_time = 0.0
         self.awake_timeout = 10.0 # 唤醒后等待具体指令的时间窗口 (10秒)
 
@@ -132,10 +135,10 @@ class VoiceListener:
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
         if not self.is_listening:
             return
-        if self.duplex:
+        if self.duplex or getattr(self, '_music_monitor', False):
             pcm_bytes=self.controller.echo_canceller.process(pcm_bytes)
         if self.is_paused:
-            if self.duplex:
+            if self.duplex or getattr(self, '_music_monitor', False):
                 self._barge_audio.extend(pcm_bytes)
                 self._barge_audio=self._barge_audio[-64000:]
                 if len(self._barge_audio)>=32000 and time.monotonic()-self._barge_last>.7 and not(self._barge_thread and self._barge_thread.is_alive()):
@@ -174,6 +177,14 @@ class VoiceListener:
         """恢复收音 (播报完毕后重新开启麦克风监听)"""
         if not self.is_listening:
             return
+        music = getattr(self.controller, '_music_player', None)
+        if music and music.running:
+            self._music_suspended = True
+            self.is_paused = True
+            self.is_awake = False
+            self._music_monitor = self.music_wake_ready
+            self.controller.enable_mic(self._music_monitor)
+            return
         time.sleep(0.25) # 等待房间声学混响自然衰减
         while not self._pcm_queue.empty():
             try:
@@ -191,6 +202,31 @@ class VoiceListener:
         except Exception:
             pass
         self.is_paused = False
+
+    def prepare_music(self):
+        self.music_wake_ready = (os.environ.get('KURISU_MUSIC_WAKE', '1') != '0'
+            and self.controller.audio_transport == 'wifi'
+            and self.wake_detector is not None and self.whisper_model is not None)
+        self.controller._music_wake_active = self.music_wake_ready
+        self._barge_audio.clear()
+        if self.music_wake_ready:
+            from echo_cancellation import EchoCanceller
+            self.controller.echo_canceller = EchoCanceller(
+                delay_samples=int(os.environ.get('KURISU_ECHO_DELAY_MS', '120')) * 16)
+
+    def finish_music(self):
+        self._music_monitor = self._music_suspended = False
+        woke, pending = self._barge_woke, self._barge_pending
+        self._barge_woke = False
+        self._barge_pending = None
+        self._barge_audio.clear()
+        self.is_awake = woke
+        self.last_awake_time = time.time()
+        self.resume()
+        if pending:
+            try:self._utterance_queue.put_nowait(pending)
+            except queue.Full:pass
+        self._update_board_led('active' if woke else 'listening')
 
     def _worker_loop(self):
         """专属单任务 ASR 消费线程：保证先进先出且不堆积，杜绝延迟积压"""
@@ -234,7 +270,10 @@ class VoiceListener:
 
                         t_asr_start = time.perf_counter()
                         # 注入唤醒词与基础意图先验，杜绝 Whisper 对短音节猜想出 '呵呵'
-                        prompt = "助手，克里斯，红莉栖，牧濑红莉栖，你好小智，开灯，关灯，调亮，调暗。我想看蓝灯，我想看红灯，我想看绿灯，换成蓝色，切换成红色。"
+                        prompt = "助手，克里斯，红莉栖，牧濑红莉栖，你好小智，开灯，关灯，调亮，调暗。我想看蓝灯，我想看红灯，我想看绿灯，换成蓝色，切换成红色。播放歌曲，下一首，上一首，停止音乐，单曲循环。"
+                        library = getattr(getattr(self, 'controller', None), '_music_library', None)
+                        if self.is_awake and library:
+                            prompt += '歌手名字：' + library.speech_hints() + '。'
                         segments, info = self.whisper_model.transcribe(
                             audio_np,
                             language="zh",
@@ -403,21 +442,34 @@ class VoiceListener:
 
     def _check_barge(self, pcm):
         # The experimental duplex path keeps the same two-stage wake gate.
-        if not self.is_paused or not self.duplex or self.wake_detector is None:return
-        if self.wake_detector.detect(pcm) and self.whisper_model is not None:
+        if not self.is_paused or not (self.duplex or getattr(self, '_music_monitor', False)) or self.wake_detector is None:return
+        if not self._work_lock.acquire(blocking=False):return
+        try:
+            self._check_barge_locked(pcm)
+        finally:
+            self._work_lock.release()
+
+    def _check_barge_locked(self, pcm):
+        keyword = self.wake_detector.detect(pcm)
+        if keyword and self.whisper_model is not None:
             audio_np=np.frombuffer(pcm,dtype=np.int16).astype(np.float32)/32768
             try:
                 segments,_=self.whisper_model.transcribe(audio_np,language='zh',beam_size=1,temperature=0.0,
                     initial_prompt=None,condition_on_previous_text=False,without_timestamps=True)
                 text=''.join(s.text for s in segments).strip()
+                if getattr(self, '_music_monitor', False) and keyword == '助手':
+                    # Same acoustically gated homophone correction as standby.
+                    text=re.sub(r'^(你好[，, ]*)?住手', lambda m:(m.group(1) or '')+'助手', text, count=1)
                 confirmed,command=self._check_wake_word(text)
             except Exception:return
-            if not confirmed or not self.is_paused:return
+            if not confirmed or keyword not in text or not self.is_paused:return
             self._barge_woke=True
             self._barge_pending=pcm if len(command)>=2 else None
             audio=getattr(self.controller,'_network_audio',None)
             if audio:audio.cancelled.set()
             self.controller.playback_cancel.set()
+            music = getattr(self.controller, '_music_player', None)
+            if music and music.running:music.cancel.set()
             self.controller.send_json({'cmd':'audio_abort'})
             self._barge_audio.clear()
 

@@ -23,7 +23,7 @@
 | 11 视线／头姿 | 虹膜比值＋九点仿射校准、solvePnP 头姿、瞳孔偏移、离席环境微光 | 头姿内参为近似；训练点拟合误差不是独立视线准确率。 |
 | 12 表情提示 | EAR、PERCLOS、嘴部／眉部几何；疲劳／皱眉提示、暖光关怀、持续微笑烟花 | 启发式互动信号，不是已验证的心理／医疗分类器。 |
 | 13 桌宠生命周期 | 不同的待机／闭眼／口型帧，夜间闭眼、晚间哈欠、缺席与疲劳变暗、时钟上下文 | 原待机配色及用户四格肤色、两格熄灭、裤子同外套的覆盖保留。口型仍非音素同步。 |
-| 14 无线音乐 | TCP 8889 双向 PCM；本地上传与 HTTP(S) 音频直链；接收／播放计数检查 | 统一 16 kHz/PCM16/单声道，传输未再有损压缩，但音乐预处理不等于原素材无损。 |
+| 14 无线音乐 | TCP 8889 双向 PCM；本地曲库搜索／网页与语音点歌／队列切歌和循环；上传与音频直链 | 统一 16 kHz/PCM16/单声道；歌曲独立电平默认 0.25，原音乐并非无损保留。见[本地曲库指南](LOCAL_MUSIC.md)。 |
 | 15 MIR 音乐光环 | 1024 点 FFT、16 个对数频带、RMS、频谱通量、onset、节拍相位共同驱动同心方形光环；可切换 16 列频谱 | 断流衰减；节奏估计是启发式。频带分布不是复调歌曲的独立基频提取，没有曲库准确率或客观音画延迟测量。 |
 | 16 体感游戏 | 手势／校准视线经停留防抖控制蛇与方块 | 同一摄像头所有者；手动选别的模式会暂停自动接管，重新启用视觉恢复。 |
 | 17 DDA | 手动 0–1 难度、启用／关闭自适应、依据操作间隔和表情提示有界微调 | 蛇／方块速度有下限；不是已证明维持“心流”的研究结果。 |
@@ -45,6 +45,9 @@ PC 3.10 环境安装 `pc-agent-vision/requirements-pro.txt`。它覆盖控制、
 | `KURISU_CACHE_DIR` | `~/.codex/cache/tasks/kurisu-runtime-<pid>`；语音缓存和诊断。测试时显式使用本次任务缓存。 |
 | `KURISU_CONTINUOUS` | `1`；回复后继续等下一句，空闲 10 秒或明确结束语退出。设 `0` 使用单轮。 |
 | `KURISU_AUDIO_TRANSPORT` | `usb`；设为 `wifi` 才使用新增 TCP PCM。保留已验收 USB 音频转换、70% 板端音量与原处理基线。 |
+| `KURISU_MUSIC_DIR` | 可选本地曲库路径，覆盖已保存目录，详见[指南](LOCAL_MUSIC.md)。 |
+| `KURISU_MUSIC_GAIN` | 默认 `0.25`，仅衰减歌曲扬声器输出，MIR 与助手音量不变。 |
+| `KURISU_MUSIC_WAKE` | 默认 `1`，仅完整语音服务的 Wi-Fi 音乐中保留唤醒监测。 |
 | `KURISU_BARGE_IN` | 默认关闭；`1` 且 Wi-Fi 音频时启用实验性参考回声处理和唤醒打断。KWS 后仍需无提示 ASR 确认。 |
 | `KURISU_ECHO_DELAY_MS` | `120`；只用于实验性软件回声参考对齐，不代表已标定声学延迟。 |
 | `KURISU_AUTO_MEMORY` | `1`；明确的第一人称称呼／喜好／习惯句可保存为偏好。`记住：…` 手动保存；页面可查看、删单条或清空。设 `0` 关闭自动偏好抽取。 |
@@ -109,6 +112,7 @@ python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 | `POST /api/pro/difficulty` | `{"level":0.5,"adaptive":true}`。 |
 | `POST /api/pro/music-upload?visual=fluid` | 请求体为音频文件字节，不是 multipart；`visual=fluid`（默认，音乐光环）或 `spectrum`（16 列）。 |
 | `POST /api/pro/music` | `{"url":"...","visual":"fluid"}` 或 `{"stop":true}`；`visual` 也可为 `spectrum`。 |
+| `GET/POST /api/pro/library`、`POST /api/pro/music` | 曲库配置／扫描／分页搜索，按目录 ID 或查询点歌、上一首／下一首、顺序／随机与循环，见[完整接口](LOCAL_MUSIC.md#配置与接口)。 |
 | `POST /api/pro/observations` | 仅模拟环境：合成观察输入，用于离线流程测试。 |
 | `POST /api/pro/device-tool` | 调用已连接原生小智设备实际广播的 MCP 工具；name/arguments 按该设备 schema 校验。 |
 

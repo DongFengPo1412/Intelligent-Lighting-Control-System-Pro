@@ -154,6 +154,57 @@ class VoiceRegressionTests(unittest.TestCase):
         listener._finish_turn('上一轮')
         self.assertTrue(listener.is_awake);self.assertEqual(listener._utterance_queue.get_nowait(),pcm)
 
+    def test_music_resume_keeps_normal_asr_paused_and_only_arms_wake_monitor(self):
+        listener=self.listener(iter([]))
+        del listener.__dict__['resume']
+        calls=[]
+        listener.music_wake_ready=True
+        listener.controller=types.SimpleNamespace(_music_player=types.SimpleNamespace(running=True),
+            enable_mic=calls.append)
+        listener.resume()
+        self.assertTrue(listener.is_paused)
+        self.assertTrue(listener._music_monitor)
+        self.assertFalse(listener.is_awake)
+        self.assertEqual(calls,[True])
+
+    def test_music_wake_requires_acoustic_and_exact_asr_then_cancels_song(self):
+        listener=self.listener(iter(['助手，下一首']))
+        del listener.__dict__['_check_wake_word']
+        listener.duplex=False;listener.is_paused=True;listener._music_monitor=True
+        listener._music_suspended=True;listener._barge_audio=bytearray()
+        listener._utterance_queue=queue.Queue()
+        music=types.SimpleNamespace(running=True,cancel=threading.Event())
+        listener.controller=types.SimpleNamespace(_music_player=music,_network_audio=None,
+            playback_cancel=threading.Event(),send_json=listener.commands.append)
+        pcm=bytes(960)
+        listener._check_barge(pcm)
+        self.assertTrue(music.cancel.is_set())
+        self.assertEqual(listener.commands,[{'cmd':'audio_abort'}])
+        listener.finish_music()
+        self.assertTrue(listener.is_awake)
+        self.assertFalse(listener._music_monitor)
+        self.assertEqual(listener._utterance_queue.get_nowait(),pcm)
+
+    def test_music_without_acoustic_wake_never_transcribes_lyrics(self):
+        listener=self.listener(iter([]))
+        listener.duplex=False;listener.is_paused=True;listener._music_monitor=True
+        listener.wake_detector=types.SimpleNamespace(detect=lambda pcm:'')
+        listener.whisper_model.transcribe=lambda *a,**kw:self.fail('Lyrics must not enter ASR')
+        listener._check_barge(bytes(960))
+        self.assertEqual(listener.commands,[])
+
+    def test_music_wake_repairs_identical_pronunciation_only_after_acoustic_gate(self):
+        listener=self.listener(iter(['住手']))
+        del listener.__dict__['_check_wake_word']
+        listener.duplex=False;listener.is_paused=True;listener._music_monitor=True
+        listener._barge_audio=bytearray()
+        music=types.SimpleNamespace(running=True,cancel=threading.Event())
+        listener.controller=types.SimpleNamespace(_music_player=music,_network_audio=None,
+            playback_cancel=threading.Event(),send_json=listener.commands.append)
+        listener._check_barge(bytes(960))
+        self.assertTrue(music.cancel.is_set())
+        self.assertTrue(listener._barge_woke)
+
 
 class FakeSocket:
     def __init__(self, gateway, ack_on=1, status='ok'):

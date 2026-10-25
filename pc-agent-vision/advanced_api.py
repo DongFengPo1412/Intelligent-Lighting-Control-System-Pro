@@ -10,7 +10,9 @@ from aiohttp import web
 from mcp_server import McpSession
 from multimodal_hub import MultimodalHub
 from music_engine import MusicPlayer
-from pro_paths import data_dir
+from music_library import MusicLibrary, LibraryPlayback
+from music_commands import MusicCommands
+from pro_paths import data_dir, cache_dir
 
 
 class ProApi:
@@ -20,6 +22,14 @@ class ProApi:
         self.voice = voice
         self.vision = MultimodalHub(controller, voice)
         self.music = MusicPlayer(controller)
+        self.library = MusicLibrary(
+            data_dir() / "music-library.json", cache_dir() / "music-library-tags.json"
+        )
+        self.controller._music_library = self.library
+        self.playback = LibraryPlayback(self.library, self.music)
+        self.music_commands = MusicCommands(self.library, self.playback)
+        self.agent.music_commands = self.music_commands
+        self.scan_task = None
         self.sessions = {}
         self.life_task = None
         self.agent.sensor_context = self.sensor_context
@@ -58,6 +68,21 @@ class ProApi:
 
     def start(self):
         self.life_task = asyncio.create_task(self._life_clock())
+        if self.library.root and self.controller.port != "SIMULATION":
+            self.scan_task = asyncio.create_task(asyncio.to_thread(self.library.scan))
+
+    def music_status(self):
+        result = self.playback.status()
+        result.update(
+            running=self.music.running,
+            error=self.music.error or result["error"],
+            features=self.music.features,
+            analysis=self.music.analysis_stats,
+            library=self.library.status(),
+            gain=self.music.gain,
+            voice_wake=bool(getattr(self.controller, "_music_wake_active", False)),
+        )
+        return result
 
     async def _life_clock(self):
         from datetime import datetime
@@ -86,12 +111,7 @@ class ProApi:
                     dict(
                         simulated=self.controller.port == "SIMULATION",
                         vision=self.vision.status(),
-                        music=dict(
-                            running=self.music.running,
-                            error=self.music.error,
-                            features=self.music.features,
-                            analysis=self.music.analysis_stats,
-                        ),
+                        music=self.music_status(),
                         xiaozhi=dict(
                             connected=connection is not None,
                             tools=connection.remote_tools if connection else [],
@@ -102,10 +122,30 @@ class ProApi:
                 )
             if action == "memory" and request.method == "GET":
                 return web.json_response(self.agent.memory.list())
+            if action == "library" and request.method == "GET":
+                result = self.library.search(
+                    request.query.get("q", ""),
+                    int(request.query.get("offset", 0)),
+                    int(request.query.get("limit", 30)),
+                )
+                return web.json_response(dict(**self.library.status(), **result))
             data = await request.json()
             if not isinstance(data, dict):
                 raise ValueError("JSON object required")
-            if action == "memory":
+            if action == "library":
+                operation = data.get("action", "scan")
+                if operation not in ("configure", "scan"):
+                    raise ValueError("Unknown library operation")
+                await asyncio.to_thread(self.playback.stop)
+                if operation == "configure":
+                    result = await asyncio.to_thread(
+                        self.library.configure, data["root"]
+                    )
+                elif operation == "scan":
+                    result = await asyncio.to_thread(self.library.scan)
+                else:
+                    raise ValueError("Unknown library operation")
+            elif action == "memory":
                 if request.method == "DELETE":
                     result = {"removed": self.agent.memory.forget(data["id"])}
                 elif data.get("clear") is True:
@@ -216,12 +256,35 @@ class ProApi:
             elif action == "enroll":
                 result = await asyncio.to_thread(self.vision.enroll, data["name"])
             elif action == "music":
-                if data.get("stop"):
-                    await asyncio.to_thread(self.music.stop)
+                operation = data.get("action")
+                if data.get("stop") or operation == "stop":
+                    await asyncio.to_thread(self.playback.stop)
+                elif operation in ("next", "previous"):
+                    await asyncio.to_thread(
+                        self.playback.step, 1 if operation == "next" else -1
+                    )
+                elif operation == "options":
+                    await asyncio.to_thread(
+                        self.playback.set_options, data.get("repeat"), data.get("order")
+                    )
+                elif "track_id" in data:
+                    await asyncio.to_thread(
+                        self.playback.play,
+                        data["track_id"],
+                        data.get("visual", "fluid"),
+                        data.get("scope", ""),
+                        data.get("single", False),
+                    )
+                elif "query" in data:
+                    result = await asyncio.to_thread(
+                        self.music_commands.select, data["query"]
+                    )
+                    return web.json_response(result)
                 elif "url" in data:
                     visual = data.get("visual", "fluid")
                     if visual not in ("fluid", "spectrum"):
                         raise ValueError("Music visual must be fluid or spectrum")
+                    await asyncio.to_thread(self.playback.detach)
                     await asyncio.to_thread(
                         self.music.play_url, data["url"], visual == "fluid"
                     )
@@ -229,7 +292,7 @@ class ProApi:
                     raise ValueError(
                         "Specify stop or a direct audio URL; upload files via /api/pro/music-upload"
                     )
-                result = {"running": self.music.running, "error": self.music.error}
+                result = self.music_status()
             else:
                 raise ValueError("Unknown operation")
             return web.json_response(result)
@@ -248,6 +311,7 @@ class ProApi:
             visual = request.query.get("visual", "fluid")
             if visual not in ("fluid", "spectrum"):
                 raise ValueError("Music visual must be fluid or spectrum")
+            await asyncio.to_thread(self.playback.detach)
             await asyncio.to_thread(self.music.play, raw, visual == "fluid")
             return web.json_response(
                 {"started": True, "simulated": self.controller.port == "SIMULATION"}
@@ -315,7 +379,9 @@ class ProApi:
             self.life_task.cancel()
             await asyncio.gather(self.life_task, return_exceptions=True)
         await asyncio.to_thread(self.vision.stop)
-        await asyncio.to_thread(self.music.stop)
+        await asyncio.to_thread(self.playback.stop, False)
+        if self.scan_task:
+            await asyncio.gather(self.scan_task, return_exceptions=True)
         self.agent.memory.close()
 
 
