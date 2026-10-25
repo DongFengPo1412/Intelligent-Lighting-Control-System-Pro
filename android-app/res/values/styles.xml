@@ -1,8 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="android:Theme.Material.NoActionBar.Fullscreen">
-        <item name="android:windowBackground">#060a0f</item>
-        <item name="android:statusBarColor">#060a0f</item>
-        <item name="android:navigationBarColor">#060a0f</item>
-    </style>
-</resources>
+<resources><style name="AppTheme" parent="android:Theme.Material.NoActionBar"><item name="android:windowBackground">#111316</item><item name="android:statusBarColor">#111316</item><item name="android:navigationBarColor">#191c22</item><item name="android:windowLightStatusBar">false</item><item name="android:windowActionModeOverlay">true</item></style></resources>

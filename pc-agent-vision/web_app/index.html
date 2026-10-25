@@ -1,350 +1,959 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#ff3b30">
-    <title>未来道具研究所 · 牧濑红莉栖具身交互中枢</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" type="image/png" href="assets/icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-</head>
-<body>
-    <div class="crt-overlay"></div>
-    <div class="app-container">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#111316" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Amadeus · 红莉栖的光影实验室</title>
+    <link rel="icon" href="assets/icon.png" type="image/png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="style.css?v=20261025u" />
+  </head>
+  <body>
+    <svg class="svg-defs" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="i-home" viewBox="0 0 24 24">
+          <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />
+        </symbol>
+        <symbol id="i-light" viewBox="0 0 24 24">
+          <path d="M9 18h6m-5 3h4M8.5 14.5a6 6 0 1 1 7 0L15 17H9Z" />
+          <path d="M12 1v1M2 11H1m22 0h-1M4 3l1 1m14 0 1-1" />
+        </symbol>
+        <symbol id="i-music" viewBox="0 0 24 24">
+          <path d="M9 18V5l12-2v13M9 8l12-2" />
+          <ellipse cx="5.5" cy="18.5" rx="3.5" ry="2.5" />
+          <ellipse cx="17.5" cy="16.5" rx="3.5" ry="2.5" />
+        </symbol>
+        <symbol id="i-interact" viewBox="0 0 24 24">
+          <path
+            d="M7 7h10c3 0 4 3 4 6l1 4c0 3-3 4-5 2l-2-2H9l-2 2c-2 2-5 1-5-2l1-4c0-3 1-6 4-6Z"
+          />
+          <path d="M7 10v5m-2.5-2.5h5M16 11h.1M19 14h.1" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path
+            d="m9 3 1-1h4l1 3 3 1 3-1 2 4-2 2v3l2 2-2 4-3-1-3 1-1 3h-4l-1-3-3-1-3 1-2-4 2-2v-3L1 9l2-4 3 1 3-1Z"
+            transform="translate(0 -1) scale(.95)"
+          />
+          <circle cx="12" cy="11" r="3" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M5 12h14m-6-6 6 6-6 6" />
+        </symbol>
+        <symbol id="i-play" viewBox="0 0 24 24">
+          <path d="m8 5 11 7-11 7Z" />
+        </symbol>
+        <symbol id="i-stop" viewBox="0 0 24 24">
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </symbol>
+        <symbol id="i-prev" viewBox="0 0 24 24">
+          <path d="M5 5v14m14-14L8 12l11 7Z" />
+        </symbol>
+        <symbol id="i-next" viewBox="0 0 24 24">
+          <path d="M19 5v14M5 5l11 7-11 7Z" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10" cy="10" r="6" />
+          <path d="m15 15 6 6" />
+        </symbol>
+        <symbol id="i-send" viewBox="0 0 24 24">
+          <path d="m3 3 19 9-19 9 3-9Zm3 9h16" />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 24 24">
+          <path
+            d="m10 8 3-3a4 4 0 0 1 6 6l-3 3m-2 2-3 3a4 4 0 0 1-6-6l3-3m0 4 8-8"
+          />
+        </symbol>
+      </defs>
+    </svg>
 
-        <!-- 顶部世界线变动仪与中枢状态 -->
-        <header class="header-bar">
-            <div class="labmem-tag">
-                <span class="labmem-num">FG-Lab No.004</span>
-                <span class="labmem-title">MAKISE KURISU</span>
-            </div>
-            
-            <!-- 辉光管世界线变动率测量仪 -->
-            <div class="nixie-container" id="nixieMeter" title="点击重新测定世界线变动率">
-                <div class="nixie-tube" id="tube0">1</div>
-                <div class="nixie-dot">.</div>
-                <div class="nixie-tube" id="tube1">0</div>
-                <div class="nixie-tube" id="tube2">4</div>
-                <div class="nixie-tube" id="tube3">8</div>
-                <div class="nixie-tube" id="tube4">5</div>
-                <div class="nixie-tube" id="tube5">9</div>
-                <div class="nixie-tube" id="tube6">6</div>
-                <div class="nixie-unit">%</div>
-            </div>
-
-            <!-- 连接状态胶囊 -->
-            <div class="connection-badge" id="connBadge">
-                <span class="status-pulse"></span>
-                <span id="connText">WiFi 在线</span>
-            </div>
-            <a href="/pro.html" style="color:inherit">打开高阶控制台：像素 / 3D / 视觉 / 记忆 / 音乐</a>
-        </header>
-
-        <!-- 助手 Amadeus 状态卡片 -->
-        <div class="amadeus-card">
-            <div class="avatar-box">
-                <div class="avatar-glow"></div>
-                <div class="avatar-inner" id="kurisuAvatar">
-                    <img src="assets/kurisu.png" alt="Makise Kurisu" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
-                </div>
-            </div>
-            <div class="amadeus-meta">
-                <div class="amadeus-title-row">
-                    <span class="amadeus-name">AMADEUS // 牧濑红莉栖</span>
-                    <span class="emotion-tag" id="emotionTag">傲娇警戒中</span>
-                </div>
-                <div class="amadeus-bio" id="amadeusQuote">
-                    “都说了我不是助手！另外，不要在后面擅自加上‘蒂娜’两个字！”
-                </div>
-            </div>
+    <aside class="sidebar" aria-label="主导航">
+      <a class="brand" href="#overview" aria-label="Amadeus 概览"
+        ><span class="brand-mark">A<span>·</span></span
+        ><span>AMADEUS<small>红莉栖的光影实验室</small></span></a
+      >
+      <div class="nav-caption">你的桌面，另一种可能</div>
+      <nav class="main-nav" aria-label="功能导航">
+        <button
+          class="nav-item active"
+          data-page="overview"
+          aria-current="page"
+        >
+          <svg><use href="#i-home" /></svg><span>概览</span><small>01</small>
+        </button>
+        <button class="nav-item" data-page="lights">
+          <svg><use href="#i-light" /></svg><span>灯光</span><small>02</small>
+        </button>
+        <button class="nav-item" data-page="music">
+          <svg><use href="#i-music" /></svg><span>音乐</span><small>03</small>
+        </button>
+        <button class="nav-item" data-page="interaction">
+          <svg><use href="#i-interact" /></svg><span>互动</span
+          ><small>04</small>
+        </button>
+        <button class="nav-item" data-page="settings">
+          <svg><use href="#i-settings" /></svg><span>设置</span
+          ><small>05</small>
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="worldline-label">WORLD LINE <span>世界线彩蛋</span></div>
+        <div class="worldline">1.048596<span>%</span></div>
+        <p>未来道具研究所 · LabMem 004</p>
+        <div class="sidebar-status">
+          <i class="status-dot"></i><span data-connection>正在连接服务</span>
         </div>
+      </div>
+    </aside>
 
-        <!-- 核心四大导航 TAB -->
-        <nav class="tab-nav">
-            <button class="tab-btn active" id="tabBtnComm" onclick="switchTab('comm')">
-                <span class="tab-icon">🎙️</span>
-                <span class="tab-label">对白中枢</span>
-            </button>
-            <button class="tab-btn" id="tabBtnMatrix" onclick="switchTab('matrix')">
-                <span class="tab-icon">💡</span>
-                <span class="tab-label">光场画布</span>
-            </button>
-            <button class="tab-btn" id="tabBtnArcade" onclick="switchTab('arcade')">
-                <span class="tab-icon">🎮</span>
-                <span class="tab-label">掌上街机</span>
-            </button>
-            <button class="tab-btn" id="tabBtnSystem" onclick="switchTab('system')">
-                <span class="tab-icon">⚙️</span>
-                <span class="tab-label">系统状态</span>
-            </button>
-        </nav>
-
-        <!-- ============================================== -->
-        <!-- TAB 1: 语音与对白中枢 (COMM) -->
-        <!-- ============================================== -->
-        <section class="tab-content active" id="tabContentComm">
-            <!-- 配对与专属唤醒词状态提示栏 -->
-            <div class="wake-hint-bar" style="margin-bottom: 12px; background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.35); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.1rem;">🎙️</span>
-                    <div>
-                        <div style="color: #fff; font-weight: 700;">专属日语唤醒词：<span style="color: #00ff88; font-family: 'Share Tech Mono', monospace;">「Makise Kurisu」</span></div>
-                        <div style="color: #88a0b0; font-size: 0.75rem;">喊出 <b>Makise Kurisu</b> 或 <b>牧濑红莉栖</b> 即可唤醒开始交互</div>
-                    </div>
-                </div>
-                <div id="wakeStatusBadge" style="background: rgba(0,255,136,0.25); color: #00ff88; border: 1px solid #00ff88; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 0.78rem; white-space: nowrap;">
-                    🟢 常亮绿 (待唤醒)
-                </div>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <span class="mobile-brand">A<span>·</span></span
+          ><span>光影实验室</span><b>/</b><strong id="pageTitle">概览</strong>
+        </div>
+        <div class="topbar-actions">
+          <span class="connection-pill" id="connectionPill"
+            ><i class="status-dot"></i
+            ><span id="connectionText">连接中</span></span
+          ><button
+            class="icon-button"
+            id="openConnection"
+            aria-label="连接设置"
+          >
+            <svg><use href="#i-link" /></svg></button
+          ><img
+            class="avatar-small"
+            src="assets/kurisu-hero.png"
+            alt="红莉栖头像"
+          />
+        </div>
+      </header>
+      <div id="offlineBanner" class="connection-banner" hidden>
+        <span id="offlineText">尚未连接电脑服务。</span
+        ><button id="retryConnection" class="text-button">重新连接</button>
+      </div>
+      <main id="mainContent">
+        <section
+          class="page active"
+          id="page-overview"
+          aria-labelledby="overviewTitle"
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">A LITTLE SCIENCE, A LITTLE MAGIC</p>
+              <h1 id="overviewTitle">
+                欢迎回到实验室<span class="accent-dot">。</span>
+              </h1>
+              <p class="muted">让光与音乐，回应你的每一个想法。</p>
             </div>
-
-            <!-- 语义灵感胶囊药丸 (一键体验高阶语义理解灯光) -->
-            <div class="pill-carousel-wrap">
-                <div class="section-sub-title">/// 语义理解交互灵感词库</div>
-                <div class="pill-scroll">
-                    <button class="pill-btn" onclick="triggerBootCeremony()" style="background: linear-gradient(90deg, #00d2ff, #0072ff); color: #fff; font-weight: bold; border-color: #00f0ff; box-shadow: 0 0 10px rgba(0,210,255,0.4);">⚡ 脑波配对握手自检</button>
-                    <a href="/Kurisu_Amadeus.apk" download="Kurisu_Amadeus.apk" class="pill-btn" style="background: linear-gradient(90deg, #ff5500, #ff8800); color: #fff; font-weight: bold; text-decoration: none; border-color: #ffaa00;">📱 下载安卓 APK</a>
-                    <button class="pill-btn" onclick="sendQuickPrompt('助手，我想看大海的颜色')">🌊 大海的颜色</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('来点灯笼的颜色')">🏮 灯笼的颜色</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('帮我打开纯红警戒灯')">🔴 纯红警戒</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('向我汇报现在的世界线变动率')">⏳ 世界线变动率</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('红莉栖，帮我倒计时15秒')">⏱️ 倒计时15秒</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('展示赛博烈焰')">🔥 赛博烈焰</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('展示黑客代码雨')">🟢 代码雨</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('克里斯蒂娜助手，笑一个看看')">😏 笑一个</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('我想玩贪吃蛇')">🐍 玩贪吃蛇</button>
-                    <button class="pill-btn" onclick="sendQuickPrompt('音量调到85%')">🔊 调高音量</button>
+            <span class="date-label" id="todayLabel"></span>
+          </div>
+          <div class="overview-grid">
+            <article class="hero-card">
+              <div class="hero-copy">
+                <span class="character-tag"><i></i> AMADEUS · 牧濑红莉栖</span>
+                <h2>不只是灯光，<br />也是你的<span>桌面伙伴。</span></h2>
+                <p>“想做点什么实验？<br />灯光、音乐，还是先聊一会儿？”</p>
+                <div class="hero-actions">
+                  <button class="primary" id="startConversation">
+                    和红莉栖聊聊 <svg><use href="#i-arrow" /></svg></button
+                  ><button class="hero-secondary" data-go="lights">
+                    探索灯光
+                  </button>
                 </div>
-            </div>
-
-            <!-- 对话历史记录列表 -->
-            <div class="chat-viewport" id="chatViewport">
-                <div class="chat-bubble assistant">
-                    <div class="bubble-sender">AMADEUS · 牧濑红莉栖</div>
-                    <div class="bubble-body">
-                        未来道具研究所 LabMem No.004，牧濑红莉栖。有什么科学实验需要协助吗？可以通过打字或者按住下方麦克风与我对话。不过事先声明，绝对不准叫我助手！
-                    </div>
-                    <div class="bubble-time">SYSTEM READY</div>
+                <span class="hero-footnote"
+                  >STEINS;GATE INSPIRED · PERSONAL LIGHTING LAB</span
+                >
+              </div>
+              <img
+                class="hero-art"
+                src="assets/kurisu-hero.png"
+                alt="牧濑红莉栖主题插画"
+                fetchpriority="high"
+              />
+            </article>
+            <article class="card preview-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">LIVE MATRIX</p>
+                  <h2>此刻的光</h2>
                 </div>
-            </div>
-
-            <!-- 语音输入与文字发送栏 -->
-            <div class="chat-input-bar">
-                <button class="mic-toggle-btn" id="micBtn" title="点击开始语音识别" onclick="toggleWebSpeech()">
-                    <span class="mic-icon" id="micIcon">🎙️</span>
-                    <span class="mic-wave" id="micWave"></span>
+                <span class="live-tag" id="frameTag">等待回读</span>
+              </div>
+              <div class="home-matrix-wrap">
+                <canvas
+                  id="homeMatrix"
+                  width="320"
+                  height="320"
+                  aria-label="灯板实际帧预览"
+                ></canvas
+                ><span id="homeFrameEmpty">等待灯板连接</span>
+              </div>
+              <div class="preview-footer">
+                <span
+                  ><i class="mode-dot"></i
+                  ><b id="currentModeLabel">尚未读取</b></span
+                ><button class="text-button" data-go="lights">
+                  调整灯光 ↗
                 </button>
-                <input type="text" class="text-input" id="textInput" placeholder="输入你想对红莉栖说的话..." onkeypress="handleInputKey(event)">
-                <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
-            </div>
-
-            <!-- 音量与语音控制面板 -->
-            <div class="volume-panel">
-                <div class="vol-label-row">
-                    <span class="vol-title">🔈 实体扬声器音量</span>
-                    <span class="vol-val" id="volValText">85%</span>
+              </div>
+            </article>
+          </div>
+          <div class="section-heading">
+            <h2>给桌面换个心情</h2>
+            <button class="text-button" data-go="lights">
+              全部灯效 <span>↗</span>
+            </button>
+          </div>
+          <div class="scene-grid" id="quickScenes"></div>
+          <div class="dashboard-bottom">
+            <article class="card chat-card" id="conversationCard">
+              <div class="card-heading">
+                <div class="assistant-heading">
+                  <img
+                    class="avatar-small"
+                    src="assets/kurisu-hero.png"
+                    alt=""
+                  />
+                  <div>
+                    <h2>与红莉栖对话</h2>
+                    <p class="muted small" id="voiceState">
+                      也可以对板载麦克风说“助手”
+                    </p>
+                  </div>
                 </div>
-                <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="85" oninput="changeVolume(this.value)">
-            </div>
+                <span class="subtle-badge">AMADEUS</span>
+              </div>
+              <div
+                class="chat-log"
+                id="chatLog"
+                role="log"
+                aria-label="对话记录"
+                aria-live="polite"
+              >
+                <div class="chat-message assistant">
+                  <span>红莉栖</span>
+                  <p>
+                    告诉我，你想让这里变成什么样？连接设备后，就一起试试看。
+                  </p>
+                </div>
+              </div>
+              <div class="prompt-chips">
+                <button data-prompt="让灯板像满天繁星那样">
+                  让桌面像满天繁星</button
+                ><button data-prompt="播放周杰伦的七里香">
+                  播放一首七里香
+                </button>
+              </div>
+              <form class="chat-composer" id="chatForm">
+                <input
+                  id="chatInput"
+                  aria-label="对红莉栖说的话"
+                  placeholder="输入你的想法，或对板子说“助手”…"
+                  maxlength="2000"
+                  autocomplete="off"
+                /><button
+                  id="browserMic"
+                  class="icon-button"
+                  type="button"
+                  aria-label="浏览器语音输入，仅填入文字"
+                  hidden
+                >
+                  🎙</button
+                ><button
+                  class="send-button"
+                  id="sendChat"
+                  type="submit"
+                  aria-label="发送对话"
+                >
+                  <svg><use href="#i-send" /></svg>
+                </button>
+              </form>
+              <p class="field-help" id="chatStatus">
+                点上方的灵感词，只填入输入框；发送后才会执行。
+              </p>
+            </article>
+            <article class="card essentials-card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">MAKE IT YOURS</p>
+                  <h2>刚刚好的氛围</h2>
+                </div>
+                <svg class="heading-icon"><use href="#i-light" /></svg>
+              </div>
+              <div class="slider-control">
+                <label for="brightness"
+                  >灯光亮度 <output id="brightnessValue">—</output></label
+                ><input
+                  id="brightness"
+                  type="range"
+                  min="0"
+                  max="60"
+                  value="20"
+                  data-hardware
+                />
+                <p>找到舒服的亮度，留一点光就好。</p>
+              </div>
+              <div class="slider-control">
+                <label for="volume"
+                  >板载扬声器音量 <output id="volumeValue">—</output></label
+                ><input
+                  id="volume"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="70"
+                  data-hardware
+                />
+                <p>调整板载扬声器的播放音量。</p>
+              </div>
+              <div class="essentials-actions">
+                <button class="secondary" data-mode="17" data-hardware>
+                  返回桌宠</button
+                ><button class="quiet" data-mode="0" data-hardware>
+                  关闭灯光
+                </button>
+              </div>
+            </article>
+          </div>
         </section>
 
-        <!-- ============================================== -->
-        <!-- TAB 2: 光场实验室 (MATRIX & COUNTDOWN) -->
-        <!-- ============================================== -->
-        <section class="tab-content" id="tabContentMatrix">
-            <!-- 实时 16x16 拟真画布 -->
-            <div class="matrix-canvas-card">
-                <div class="canvas-header">
-                    <span class="canvas-title">16x16 LED OPTICAL FIELD SIMULATOR</span>
-                    <span class="fps-badge">60 FPS DMA</span>
-                </div>
-                <div class="canvas-wrap">
-                    <canvas id="matrixCanvas" width="256" height="256"></canvas>
-                </div>
-                <div class="brightness-row">
-                    <span>全局亮度:</span>
-                    <input type="range" class="bright-slider" id="brightSlider" min="5" max="50" value="20" onchange="changeBrightness(this.value)">
-                    <span id="brightVal">20</span>
-                </div>
+        <section
+          class="page"
+          id="page-lights"
+          aria-labelledby="lightsTitle"
+          hidden
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">LIGHT, SHAPED BY YOU</p>
+              <h1 id="lightsTitle">
+                光，随你想象<span class="accent-dot">。</span>
+              </h1>
+              <p class="muted">一块灯板，装下许多种心情。</p>
             </div>
-
-            <!-- 物理沙漏倒计时遥控器 -->
-            <div class="control-box">
-                <div class="box-title">⏳ 物理沙漏倒计时器 (按秒等比衰减)</div>
-                <div class="quick-cd-row">
-                    <button class="btn-sub" onclick="setCountdown(10)">10 秒</button>
-                    <button class="btn-sub" onclick="setCountdown(30)">30 秒</button>
-                    <button class="btn-sub" onclick="setCountdown(60)">1 分钟</button>
-                    <button class="btn-sub" onclick="setCountdown(180)">3 分钟</button>
+            <button class="secondary" data-mode="0" data-hardware>
+              关闭灯光
+            </button>
+          </div>
+          <div class="light-layout">
+            <article class="card matrix-card">
+              <div class="card-heading">
+                <h2>灯板预览</h2>
+                <div class="segmented" aria-label="预览视图">
+                  <button class="active" data-preview="2d" aria-pressed="true">
+                    像素</button
+                  ><button data-preview="3d" aria-pressed="false">3D</button>
                 </div>
-                <div class="custom-cd-row">
-                    <input type="number" class="cd-num-input" id="customCdSec" placeholder="输入秒数" min="1" max="3600">
-                    <button class="btn-action" onclick="setCustomCountdown()">启动沙漏</button>
-                    <button class="btn-danger" onclick="stopCountdown()">停止倒计时</button>
-                </div>
+              </div>
+              <div class="matrix-stage">
+                <canvas
+                  id="matrixCanvas"
+                  width="512"
+                  height="512"
+                  aria-label="16×16 实际像素帧"
+                ></canvas
+                ><canvas
+                  id="view"
+                  width="768"
+                  height="600"
+                  aria-label="基于实际帧的三维预览"
+                  hidden
+                ></canvas
+                ><span id="lightFrameEmpty">等待设备帧</span>
+              </div>
+              <div class="frame-caption">
+                <span id="frameSource">尚无设备帧</span
+                ><span id="modeName">—</span>
+              </div>
+              <div class="exposure-control" id="exposureControl" hidden>
+                <label for="previewExposure">预览曝光</label
+                ><input
+                  id="previewExposure"
+                  type="range"
+                  min="1"
+                  max="6"
+                  step=".25"
+                  value="3"
+                />
+              </div>
+              <p class="field-help">
+                预览来自实际回读；屏幕光晕与曝光仅用于展示。
+              </p>
+            </article>
+            <div class="light-presets">
+              <div class="card-heading">
+                <h2>灯效预设</h2>
+                <select id="effectCategory" aria-label="灯效分类">
+                  <option value="all">全部灯效</option>
+                  <option value="ambient">氛围与动态</option>
+                  <option value="character">表情与桌宠</option>
+                  <option value="solid">纯色</option>
+                  <option value="interactive">互动与工具</option>
+                </select>
+              </div>
+              <div class="effect-grid" id="effectGrid"></div>
             </div>
-
-            <!-- 原生光场预设网格 (25 模式一览) -->
-            <div class="control-box">
-                <div class="box-title">💡 原生光影预设模式切换</div>
-                <div class="mode-grid">
-                    <button class="mode-item" onclick="setMode(1)">🔴 纯红警戒</button>
-                    <button class="mode-item" onclick="setMode(2)">🔵 纯蓝矩阵</button>
-                    <button class="mode-item" onclick="setMode(3)">🟢 纯绿通道</button>
-                    <button class="mode-item" onclick="setMode(4)">🌈 幻彩霓虹</button>
-                    <button class="mode-item" onclick="setMode(5)">🌌 极光呼吸</button>
-                    <button class="mode-item" onclick="setMode(6)">🌠 流星穿梭</button>
-                    <button class="mode-item" onclick="setMode(7)">✨ 繁星闪烁</button>
-                    <button class="mode-item" onclick="setMode(8)">🎨 纯色循环</button>
-                    <button class="mode-item" onclick="setMode(9)">💧 乱序雨滴</button>
-                    <button class="mode-item" onclick="setMode(10)">🌊 中心水波</button>
-                    <button class="mode-item" onclick="setMode(11)">😊 微笑表情</button>
-                    <button class="mode-item" onclick="setMode(12)">😢 哭泣表情</button>
-                    <button class="mode-item" onclick="setMode(13)">😐 平静表情</button>
-                    <button class="mode-item" onclick="setMode(14)">👁️ 灵动凝视</button>
-                    <button class="mode-item" onclick="setMode(15)">🎵 音乐律动</button>
-                    <button class="mode-item" onclick="setMode(16)">🤖 唤醒反馈</button>
-                    <button class="mode-item" onclick="setMode(17)">👩‍🔬 红莉栖桌宠</button>
-                    <button class="mode-item" onclick="setMode(19)">🐍 贪吃蛇</button>
-                    <button class="mode-item" onclick="setMode(21)">🧱 俄罗斯方块</button>
-                    <button class="mode-item" onclick="setMode(23)">🔥 赛博烈焰</button>
-                    <button class="mode-item" onclick="setMode(24)">💻 代码雨Pro</button>
-                    <button class="mode-item" onclick="setMode(25)">⏳ 物理沙漏</button>
-                    <button class="mode-item mode-off" onclick="setMode(0)">⬛ 关闭光场</button>
+          </div>
+          <div class="two-columns">
+            <article class="card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">A MOMENT, JUST FOR YOU</p>
+                  <h2>专注倒计时</h2>
                 </div>
+                <span class="subtle-badge" id="countdownState">尚未开始</span>
+              </div>
+              <div class="timer-presets">
+                <button data-timer="60" data-hardware>1 分钟</button
+                ><button data-timer="300" data-hardware>5 分钟</button
+                ><button data-timer="1500" data-hardware>25 分钟</button>
+              </div>
+              <form id="timerForm" class="inline-form">
+                <label
+                  >自定秒数<input
+                    id="seconds"
+                    type="number"
+                    min="1"
+                    max="86400"
+                    value="60" /></label
+                ><button class="primary" type="submit" data-hardware>
+                  开始计时</button
+                ><button
+                  class="quiet"
+                  id="stopTimer"
+                  type="button"
+                  data-hardware
+                >
+                  停止
+                </button>
+              </form>
+            </article>
+            <article class="card">
+              <div class="card-heading">
+                <div>
+                  <p class="eyebrow">A SMALL EASTER EGG</p>
+                  <h2>世界线仪表</h2>
+                </div>
+                <span class="worldline miniature">1.048596<span>%</span></span>
+              </div>
+              <p class="muted">让数字在灯板上滚动，定格在熟悉的那条世界线。</p>
+              <button class="secondary" data-mode="28" data-hardware>
+                显示世界线彩蛋
+              </button>
+            </article>
+          </div>
+          <details class="card drawing-card">
+            <summary>像素创作 <span>画下你想让灯板呈现的样子</span></summary>
+            <div class="editor-layout">
+              <canvas
+                id="editor"
+                width="320"
+                height="320"
+                aria-label="16×16 像素编辑器"
+              ></canvas>
+              <div class="editor-tools">
+                <label
+                  >画笔颜色<input
+                    id="color"
+                    type="color"
+                    value="#a82d16" /></label
+                ><button id="clearCanvas" class="quiet">清空草稿</button
+                ><button id="sendCanvas" class="primary" data-hardware>
+                  应用到灯板</button
+                ><button id="saveCanvas" class="secondary">导出画布</button
+                ><label class="file-label"
+                  >导入画布<input
+                    id="loadCanvas"
+                    type="file"
+                    accept="application/json"
+                /></label>
+                <p class="field-help">
+                  草稿不会自动发送到灯板。应用后才会切换到像素画布。
+                </p>
+              </div>
             </div>
+          </details>
         </section>
 
-        <!-- ============================================== -->
-        <!-- TAB 3: 掌上街机手柄 (ARCADE CONTROLLER) -->
-        <!-- ============================================== -->
-        <section class="tab-content" id="tabContentArcade">
-            <div class="arcade-card">
-                <div class="arcade-header">
-                    <span class="arcade-badge">RETRO GADGET ARCADE</span>
-                    <span class="game-indicator" id="gameIndicator">当前未运行游戏</span>
-                </div>
-
-                <!-- 游戏选择与开始条 -->
-                <div class="game-select-bar">
-                    <button class="btn-game" id="btnStartSnake" onclick="startGame('snake')">🐍 启动贪吃蛇 (Mode 19)</button>
-                    <button class="btn-game" id="btnStartTetris" onclick="startGame('tetris')">🧱 启动俄罗斯方块 (Mode 21)</button>
-                </div>
-
-                <!-- 街机十字键与动作按键区 -->
-                <div class="gamepad-area">
-                    <!-- 虚拟十字键 D-PAD -->
-                    <div class="dpad-cross">
-                        <button class="dpad-btn dpad-up" id="btnDpadUp" onpointerdown="sendGameKey('up', event)">▲</button>
-                        <div class="dpad-mid-row">
-                            <button class="dpad-btn dpad-left" id="btnDpadLeft" onpointerdown="sendGameKey('left', event)">◀</button>
-                            <div class="dpad-center"></div>
-                            <button class="dpad-btn dpad-right" id="btnDpadRight" onpointerdown="sendGameKey('right', event)">▶</button>
-                        </div>
-                        <button class="dpad-btn dpad-down" id="dpadDown" onpointerdown="sendGameKey('down', event)">▼</button>
-                    </div>
-
-                    <!-- 动作按键区 (旋转 / 下落) -->
-                    <div class="action-buttons-wrap">
-                        <button class="action-btn btn-rot" id="btnActionRot" onpointerdown="sendGameAction('rot', event)">
-                            <span class="btn-letter">A</span>
-                            <span class="btn-sub-label">旋转/加速</span>
-                        </button>
-                        <button class="action-btn btn-drop" id="btnActionDrop" onpointerdown="sendGameAction('drop', event)">
-                            <span class="btn-letter">B</span>
-                            <span class="btn-sub-label">极速坠落</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="game-tips">
-                    * 手机搓键指令瞬间通过局域网 WiFi 发送至板端，并在 16x16 点阵屏上实时运行！
-                </div>
+        <section
+          class="page"
+          id="page-music"
+          aria-labelledby="musicTitle"
+          hidden
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">HEAR THE MUSIC. SEE THE RHYTHM.</p>
+              <h1 id="musicTitle">
+                把音乐，变成光<span class="accent-dot">。</span>
+              </h1>
+              <p class="muted">从你的本地曲库点歌，声音与光在桌面相遇。</p>
             </div>
+            <button class="secondary" id="rescanLibrary">刷新曲库</button>
+          </div>
+          <article class="music-player card">
+            <div class="album-art" aria-hidden="true">
+              <div class="record">
+                <div class="record-label">
+                  <svg><use href="#i-music" /></svg>
+                </div>
+              </div>
+              <span class="album-caption">SOUND × LIGHT</span>
+            </div>
+            <div class="player-content">
+              <p class="eyebrow" id="playerState">READY WHEN YOU ARE</p>
+              <h2 id="nowPlaying">选一首喜欢的歌</h2>
+              <p class="muted" id="nowArtist">
+                由板载扬声器播放，灯光随音乐律动
+              </p>
+              <div class="progress-row">
+                <progress
+                  id="musicProgress"
+                  value="0"
+                  max="1"
+                  aria-label="歌曲播放进度"
+                ></progress
+                ><span id="musicTime">00:00 / 00:00</span>
+              </div>
+              <div class="player-controls">
+                <div>
+                  <button
+                    id="previousMusic"
+                    class="icon-button"
+                    aria-label="上一首"
+                  >
+                    <svg><use href="#i-prev" /></svg></button
+                  ><button
+                    id="stopMusic"
+                    class="round-control"
+                    aria-label="停止音乐"
+                  >
+                    <svg><use href="#i-stop" /></svg></button
+                  ><button
+                    id="nextMusic"
+                    class="icon-button"
+                    aria-label="下一首"
+                  >
+                    <svg><use href="#i-next" /></svg>
+                  </button>
+                </div>
+                <label
+                  >灯光<select id="musicVisual">
+                    <option value="fluid">音乐光环</option>
+                    <option value="spectrum">16 列频谱</option>
+                  </select></label
+                >
+              </div>
+              <div class="player-options">
+                <label
+                  >播放顺序<select id="musicOrder">
+                    <option value="sequential">顺序播放</option>
+                    <option value="shuffle">随机播放</option>
+                  </select></label
+                ><label
+                  >循环<select id="musicRepeat">
+                    <option value="off">播完列表停止</option>
+                    <option value="all">列表循环</option>
+                    <option value="one">单曲循环</option>
+                  </select></label
+                >
+              </div>
+              <p class="field-help" id="musicVoiceHint">
+                先说“助手”，再告诉她你想听的歌。
+              </p>
+            </div>
+          </article>
+          <article class="card library-card">
+            <div class="card-heading">
+              <div>
+                <h2>
+                  你的音乐库
+                  <span class="count-badge" id="libraryCount">—</span>
+                </h2>
+                <p class="muted small" id="libraryState">正在读取曲库…</p>
+              </div>
+              <button
+                class="text-button"
+                data-go="settings"
+                data-anchor="librarySettings"
+              >
+                管理曲库 ↗
+              </button>
+            </div>
+            <form class="search-form" id="librarySearchForm">
+              <svg><use href="#i-search" /></svg
+              ><input
+                type="search"
+                id="libraryQuery"
+                aria-label="搜索歌名或歌手"
+                placeholder="搜索歌名、歌手，或者你记得的几个字…"
+                maxlength="300"
+              /><button class="primary" type="submit">搜索</button
+              ><button id="clearLibrarySearch" class="quiet" type="button">
+                全部
+              </button>
+            </form>
+            <div class="library-table-head">
+              <span>歌曲 / 歌手</span><span>播放</span>
+            </div>
+            <div id="libraryTracks" aria-label="曲库搜索结果"></div>
+            <div class="pagination">
+              <span id="libraryPageState"></span>
+              <div>
+                <button id="libraryPreviousPage" class="quiet">上一页</button
+                ><button id="libraryNextPage" class="quiet">下一页</button>
+              </div>
+            </div>
+          </article>
+          <details class="card">
+            <summary>
+              临时音源 <span>选择单个音频文件，或播放直接音频链接</span>
+            </summary>
+            <div class="upload-row">
+              <label class="file-label"
+                >选择音频<input
+                  id="musicFile"
+                  type="file"
+                  accept="audio/*" /></label
+              ><input
+                id="musicUrl"
+                type="url"
+                aria-label="音频直链"
+                placeholder="HTTP(S) 直接音频链接"
+              /><button id="playUrl" class="secondary" data-hardware>
+                播放链接
+              </button>
+            </div>
+            <p class="field-help">
+              临时上传上限 20 MiB；本地曲库不受此上传限制。音乐最长 30
+              分钟。选择临时音源会退出当前曲库队列。
+            </p>
+          </details>
         </section>
 
-        <!-- ============================================== -->
-        <!-- TAB 4: 系统与世界线拓扑 (SYSTEM) -->
-        <!-- ============================================== -->
-        <section class="tab-content" id="tabContentSystem">
-            <div class="system-card">
-                <div class="box-title">🖥️ 端-边具身协同系统架构拓扑</div>
-                <div class="topology-box">
-                    <div class="topo-node">
-                        <div class="node-icon">📱</div>
-                        <div class="node-name">手机客户端</div>
-                        <div class="node-detail">Web PWA / 触摸手柄</div>
-                    </div>
-                    <div class="topo-arrow">WiFi HTTP / WS</div>
-                    <div class="topo-node">
-                        <div class="node-icon">🧠</div>
-                        <div class="node-name">PC 具身大脑</div>
-                        <div class="node-detail">Qwen2.5-7B / RTX 4060</div>
-                    </div>
-                    <div class="topo-arrow">USB-JTAG 12Mbps</div>
-                    <div class="topo-node">
-                        <div class="node-icon">⚡</div>
-                        <div class="node-name">ESP32-S3 双核</div>
-                        <div class="node-detail">Core 1 光场 / Core 0 通信</div>
-                    </div>
-                </div>
-
-                <div class="spec-list">
-                    <div class="spec-row">
-                        <span class="spec-k">本地访问 IP</span>
-                        <span class="spec-v" id="sysIp">http://192.168.0.181:8080</span>
-                    </div>
-                    <div class="spec-row">
-                        <span class="spec-k">全时 WiFi 热点 (SoftAP)</span>
-                        <span class="spec-v" style="color: #00ff88; font-weight: 700;">Kurisu-Matrix-AP (192.168.4.1)</span>
-                    </div>
-                    <div class="spec-row">
-                        <span class="spec-k">局域网 STA IP (热点)</span>
-                        <span class="spec-v" id="wifiStaIp" style="color: #00d2ff;">搜寻中...</span>
-                    </div>
-                    <div class="spec-row">
-                        <span class="spec-k">通信模式保障</span>
-                        <span class="spec-v" id="commStatus" style="color: #ffaa00;">双通道自适应 (USB + 全时 WiFi)</span>
-                    </div>
-                    <div class="spec-row">
-                        <span class="spec-k">声学驱动</span>
-                        <span class="spec-v">MAX98357A (扬声器) + INMP441 (麦克风)</span>
-                    </div>
-                    <div class="spec-row">
-                        <span class="spec-k">光场显示</span>
-                        <span class="spec-v">16x16 WS2812B (FastLED 线性 60FPS)</span>
-                    </div>
-                    <div class="spec-row">
-                        <span class="spec-k">当前世界线收敛率</span>
-                        <span class="spec-v highlight">1.048596% (Steins;Gate)</span>
-                    </div>
-                </div>
-
-                <!-- 手动握手仪式感按钮 -->
-                <div style="margin-top: 14px; text-align: center;">
-                    <button onclick="triggerBootCeremony()" style="width: 100%; background: linear-gradient(90deg, #00d2ff, #0072ff); color: #fff; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.95rem; border: none; cursor: pointer; box-shadow: 0 0 15px rgba(0,210,255,0.4);">
-                        ⚡ 重新触发端-边脑波握手与自检正向反馈仪式
-                    </button>
-                </div>
-
-                <!-- APK 下载区 -->
-                <div class="apk-download-box" style="margin-top: 16px; background: linear-gradient(135deg, rgba(255,102,0,0.2), rgba(0,255,204,0.15)); border: 1px solid rgba(255,136,0,0.6); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 0 15px rgba(255,102,0,0.2);">
-                    <div style="font-size: 1rem; font-weight: 700; color: #ffaa33; margin-bottom: 6px;">📱 牧濑红莉栖 Android 原生 APK 安装包</div>
-                    <div style="font-size: 0.8rem; color: #a0b0c0; margin-bottom: 12px;">已编译签名 (v1.0.0)，支持 Android 7.0 ~ 15，安装后即可在手机上独立畅玩与声光交互！</div>
-                    <a href="/Kurisu_Amadeus.apk" download="Kurisu_Amadeus.apk" style="display: inline-block; background: linear-gradient(90deg, #ff5500, #ff8800); color: #fff; padding: 11px 26px; border-radius: 8px; font-weight: 700; font-size: 0.95rem; text-decoration: none; box-shadow: 0 0 16px rgba(255,85,0,0.6); letter-spacing: 0.5px;">
-                        📥 立即下载 APK 安装包 (0.51 MB)
-                    </a>
-                </div>
+        <section
+          class="page"
+          id="page-interaction"
+          aria-labelledby="interactionTitle"
+          hidden
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">LET'S TRY SOMETHING DIFFERENT</p>
+              <h1 id="interactionTitle">
+                和光，一起玩<span class="accent-dot">。</span>
+              </h1>
+              <p class="muted">触控、手势、视线，让桌面有更多回应。</p>
             </div>
+          </div>
+          <div class="two-columns">
+            <article class="card arcade-card">
+              <div class="card-heading">
+                <h2>掌上街机</h2>
+                <span class="subtle-badge" id="gameState">选择游戏开始</span>
+              </div>
+              <div class="game-selection">
+                <button class="secondary" data-game="snake" data-hardware>
+                  贪吃蛇</button
+                ><button class="secondary" data-game="tetris" data-hardware>
+                  俄罗斯方块
+                </button>
+              </div>
+              <div
+                class="gamepad"
+                id="gamepad"
+                tabindex="0"
+                role="group"
+                aria-label="游戏手柄，支持方向键"
+              >
+                <div class="dpad">
+                  <button
+                    data-direction="up"
+                    aria-label="向上 / 旋转"
+                    data-hardware
+                  >
+                    ↑</button
+                  ><button
+                    data-direction="left"
+                    aria-label="向左"
+                    data-hardware
+                  >
+                    ←</button
+                  ><span>+</span
+                  ><button
+                    data-direction="right"
+                    aria-label="向右"
+                    data-hardware
+                  >
+                    →</button
+                  ><button
+                    data-direction="down"
+                    aria-label="向下 / 快速下落"
+                    data-hardware
+                  >
+                    ↓
+                  </button>
+                </div>
+                <div class="game-actions">
+                  <button
+                    class="game-action"
+                    data-game-action="rot"
+                    data-hardware
+                  >
+                    A<small>旋转</small></button
+                  ><button
+                    class="game-action alternative"
+                    data-game-action="drop"
+                    data-hardware
+                  >
+                    B<small>快速下落</small>
+                  </button>
+                </div>
+              </div>
+              <p class="field-help">
+                操作在灯板上运行；也可以聚焦手柄后使用键盘方向键。
+              </p>
+              <div class="slider-control">
+                <label for="difficulty"
+                  >游戏难度 <output id="difficultyValue">中等</output></label
+                ><input
+                  id="difficulty"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step=".05"
+                  value=".5"
+                /><label class="switch-label"
+                  ><input
+                    id="adaptive"
+                    type="checkbox"
+                    checked
+                  />自适应难度</label
+                ><button id="setDifficulty" class="secondary" data-hardware>
+                  应用难度
+                </button>
+              </div>
+            </article>
+            <article class="card vision-card">
+              <div class="card-heading">
+                <h2>视觉互动</h2>
+                <span class="subtle-badge" id="visionBadge">未启用</span>
+              </div>
+              <p class="muted">
+                使用电脑连接的摄像头。只有你点击启用时才会开始。
+              </p>
+              <label class="stack-label"
+                >互动方式<select id="visionMode">
+                  <option value="pet">陪伴与离席</option>
+                  <option value="fingertip">指尖追踪</option>
+                  <option value="sandbox">光球抓投</option>
+                  <option value="gesture_game">手势游戏</option>
+                  <option value="gaze_game">视线游戏</option>
+                  <option value="identity">人脸问候</option>
+                </select></label
+              ><label class="stack-label"
+                >电脑摄像头编号<input
+                  id="camera"
+                  type="number"
+                  min="0"
+                  max="9"
+                  value="1"
+              /></label>
+              <div class="button-row">
+                <button id="visionStart" class="primary" data-hardware>
+                  启用视觉</button
+                ><button id="visionStop" class="quiet">停止视觉</button>
+              </div>
+              <p id="visionSummary" class="field-help">摄像头未启用</p>
+              <details class="nested-details">
+                <summary>视线校准与人脸问候</summary>
+                <p class="field-help">
+                  视线游戏需先启用摄像头并完成校准。登记人脸会保存本地样本，仅在你点击登记时执行。
+                </p>
+                <div class="button-row">
+                  <button id="calibrate" class="secondary">开始九点校准</button
+                  ><button id="sampleGaze" class="quiet">采集当前点</button>
+                </div>
+                <p id="calibration" role="status"></p>
+                <div class="inline-form">
+                  <input
+                    id="identity"
+                    aria-label="人脸登记名称"
+                    placeholder="登记名称"
+                    maxlength="60"
+                  /><button id="enroll" class="secondary" data-hardware>
+                    登记当前人脸
+                  </button>
+                </div>
+              </details>
+            </article>
+          </div>
         </section>
 
+        <section
+          class="page"
+          id="page-settings"
+          aria-labelledby="settingsTitle"
+          hidden
+        >
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">YOUR LAB, YOUR PREFERENCES</p>
+              <h1 id="settingsTitle">
+                让一切，刚刚好<span class="accent-dot">。</span>
+              </h1>
+              <p class="muted">连接你的设备，留下你的偏好。</p>
+            </div>
+          </div>
+          <div class="two-columns">
+            <article class="card">
+              <div class="card-heading">
+                <h2>连接与设备</h2>
+                <span id="serverStatus" class="subtle-badge">读取中</span>
+              </div>
+              <dl class="device-list">
+                <div>
+                  <dt>电脑服务</dt>
+                  <dd id="serverAddress">—</dd>
+                </div>
+                <div>
+                  <dt>灯板连接</dt>
+                  <dd id="boardConnection">—</dd>
+                </div>
+                <div>
+                  <dt>语音唤醒</dt>
+                  <dd id="wakeState">—</dd>
+                </div>
+                <div>
+                  <dt>音频传输</dt>
+                  <dd id="audioTransport">—</dd>
+                </div>
+              </dl>
+              <button class="secondary" id="connectionSettings">
+                连接设置
+              </button>
+              <p class="field-help">
+                手机和灯板需能访问同一电脑服务。模型、曲库和视觉处理仍在电脑上运行。
+              </p>
+            </article>
+            <article class="card" id="librarySettings">
+              <div class="card-heading">
+                <h2>本地曲库</h2>
+                <span class="subtle-badge" id="librarySettingsCount"
+                  >未配置</span
+                >
+              </div>
+              <label class="stack-label"
+                >电脑上的音乐文件夹<input
+                  id="libraryRoot"
+                  placeholder="电脑上的绝对路径"
+                  autocomplete="off"
+              /></label>
+              <div class="button-row">
+                <button id="configureLibrary" class="primary">保存并扫描</button
+                ><button id="rescanLibrarySettings" class="quiet">
+                  重新扫描
+                </button>
+              </div>
+              <p class="field-help">
+                填写的是电脑上的目录，不是手机存储路径。歌曲保持原位，选择时才解码。
+              </p>
+              <p class="field-help" id="librarySettingsState"></p>
+            </article>
+          </div>
+          <article class="card">
+            <div class="card-heading">
+              <div>
+                <h2>记忆与资料</h2>
+                <p class="muted small">
+                  让她记住你愿意分享的偏好，随时可查看和删除。
+                </p>
+              </div>
+              <button id="listMemory" class="text-button">刷新记忆</button>
+            </div>
+            <textarea
+              id="memoryText"
+              aria-label="需要记住的内容"
+              placeholder="例如：我喜欢柔和的暖光，晚上不要太亮。"
+              maxlength="100000"
+            ></textarea>
+            <div class="button-row">
+              <button id="addMemory" class="secondary">保存记忆</button
+              ><button id="addDocument" class="quiet">作为参考资料导入</button>
+            </div>
+            <div id="memories" class="memory-list"></div>
+          </article>
+          <details class="card">
+            <summary>设备详情与诊断</summary>
+            <p class="field-help">
+              这里显示真实服务状态，便于排查连接；不是实时性能保证。
+            </p>
+            <div class="button-row">
+              <button id="runCeremony" class="secondary" data-hardware>
+                播放连接自检提示</button
+              ><button id="refreshStatus" class="quiet">刷新状态</button>
+            </div>
+            <pre id="status">尚未读取</pre>
+            <pre id="visionStatus"></pre>
+          </details>
+          <footer class="app-footer">
+            <span>AMADEUS · 未来道具研究所</span
+            ><span>世界线彩蛋 1.048596% · 非测量值</span>
+          </footer>
+        </section>
+      </main>
     </div>
 
-    <script src="app.js"></script>
-</body>
+    <nav class="mobile-nav" aria-label="手机功能导航">
+      <button class="active" data-page="overview" aria-current="page">
+        <svg><use href="#i-home" /></svg><span>概览</span></button
+      ><button data-page="lights">
+        <svg><use href="#i-light" /></svg><span>灯光</span></button
+      ><button data-page="music">
+        <svg><use href="#i-music" /></svg><span>音乐</span></button
+      ><button data-page="interaction">
+        <svg><use href="#i-interact" /></svg><span>互动</span></button
+      ><button data-page="settings">
+        <svg><use href="#i-settings" /></svg><span>设置</span>
+      </button>
+    </nav>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="connectionDialog">
+      <form id="serverForm">
+        <div class="card-heading">
+          <h2>连接电脑服务</h2>
+          <button
+            type="button"
+            class="icon-button"
+            id="closeConnection"
+            aria-label="关闭连接设置"
+          >
+            ×
+          </button>
+        </div>
+        <p class="muted">
+          电脑启动服务后，输入其局域网地址。手机与电脑需处于可互访的网络。
+        </p>
+        <label class="stack-label"
+          >服务地址<input
+            id="serverUrl"
+            type="url"
+            placeholder="http://电脑IP:8080"
+            required
+        /></label>
+        <p class="field-help">
+          浏览器会打开该服务；Android 应用会保存所选地址。
+        </p>
+        <button type="submit" class="primary">连接服务</button>
+      </form>
+    </dialog>
+    <script src="matrix3d.js?v=20261025u"></script>
+    <script src="app.js?v=20261025u"></script>
+  </body>
 </html>

@@ -6,7 +6,7 @@ Chinese homophones are matched against the catalog. Larger pronunciation differe
 
 The PC reads the original files, decodes the selected song to 16 kHz mono PCM, and sends it to the board speaker over the existing Wi-Fi PCM or USB path. FFT bands, RMS and onsets from the same PCM drive the halo or 16-column spectrum. No SD-card hardware is required; keep the PC running and connected to the board's network.
 
-Open `/pro.html#musicLibrary`, enter an absolute folder path and save/scan. Search titles and artists, then play a result. The current search result defines the queue; clear the search to use the full catalog. Previous/next, stop, sequential/shuffle and off/list/single repeat are available. The progress indicator is read-only; seeking and resume-from-position are not implemented.
+Open `/#settings` to configure the PC music folder, then use `/#music` to search titles/artists and play a result. The legacy `/pro.html#musicLibrary` redirects to the unified music page. The current search result defines the queue; clear the search to use the full catalog. Previous/next, stop, sequential/shuffle and off/list/single repeat are available. The progress indicator is read-only; seeking and resume-from-position are not implemented.
 
 Embedded title/artist tags take priority over filenames. Source files are not moved or batch-converted. Only the selected song is decoded. Local playback bypasses the 20 MiB upload limit but retains a 30-minute duration limit and 16 kHz mono output. SoundFile handles available formats; existing PyAV supplies a fallback, whose codec support depends on the installed environment. Not every file/codec has been individually validated.
 

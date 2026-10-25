@@ -37,7 +37,7 @@
 
 PC 3.10 环境安装 `pc-agent-vision/requirements-pro.txt`。它覆盖控制、Web、视觉、MIR、MCP 和 Opus 适配；现有 Whisper／KWS／Torch／GPT-SoVITS 的环境、模型和参考音频仍按 [语音恢复记录](VOICE_CONTROL_RECOVERY.md) 准备，不会由模拟模式自动下载。
 
-运行入口仍为 `pc-agent-vision/web_server.py`，新增页面 `/pro.html`。新页面通过实际 API 操作，不使用原页面的独立动画代替硬件回读。
+运行入口仍为 `pc-agent-vision/web_server.py`。2026-10-25 起两套页面合并到 `/`，`/pro.html` 只保留兼容跳转。统一界面通过实际 API 操作，不使用独立动画代替硬件回读；桌面与手机布局共用源码。[界面说明](UNIFIED_WEB.md)。
 
 | 配置 | 默认／含义 |
 | --- | --- |
@@ -69,7 +69,7 @@ $env:KURISU_CACHE_DIR = Join-Path $task 'cache'
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 ```
 
-访问 `http://127.0.0.1:8086/pro.html`。模拟聊天只执行明确字面灯效命令；不会伪装成本地模型已经理解任意语义。
+访问 `http://127.0.0.1:8086/`。模拟聊天只执行明确字面灯效命令；不会伪装成本地模型已经理解任意语义。
 
 如需预览真实 C++ 动画，先准备 Clang/WebAssembly 和相应 sysroot，生成到同一任务缓存，然后启动服务：
 

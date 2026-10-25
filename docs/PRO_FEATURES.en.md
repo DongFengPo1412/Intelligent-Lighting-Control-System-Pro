@@ -37,7 +37,7 @@ On 2026-10-24, fixed squares, endpoint markers and all 16 row starts identified 
 
 Use Python 3.10 and `pc-agent-vision/requirements-pro.txt` for control/Web/vision/MIR/MCP/Opus. Whisper, KWS, Torch, GPT-SoVITS, model weights and reference audio need their separate [voice-baseline setup](VOICE_CONTROL_RECOVERY.md). Simulation downloads none of them.
 
-The entry remains `pc-agent-vision/web_server.py`; the current console is `/pro.html` and operates actual APIs.
+The entry remains `pc-agent-vision/web_server.py`. Since 2026-10-25, `/` serves the unified responsive interface; `/pro.html` redirects there. Browser and Android share one frontend using actual APIs and frame readback. [UI guide](UNIFIED_WEB.md).
 
 | Setting | Default and purpose |
 | --- | --- |
@@ -66,7 +66,7 @@ $env:KURISU_CACHE_DIR = Join-Path $task 'cache'
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 ```
 
-Open `http://127.0.0.1:8086/pro.html`. Simulated chat accepts explicit literal lighting commands; it does not imitate arbitrary LLM understanding. For real C++ animation, build using Clang/WebAssembly and a compatible sysroot:
+Open `http://127.0.0.1:8086/`. Simulated chat accepts explicit literal lighting commands; it does not imitate arbitrary LLM understanding. For real C++ animation, build using Clang/WebAssembly and a compatible sysroot:
 
 ```powershell
 python -B scripts/build_offline_renderer.py --clang <clang.exe> --sysroot <wasm-sysroot> --output-dir "$task\engine"

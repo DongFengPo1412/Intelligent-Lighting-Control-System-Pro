@@ -4,6 +4,8 @@ A local PC voice agent and one ESP32-S3 drive a 16×16 light matrix, a Kurisu pi
 
 [简体中文](README.md) · **English** · [日本語](README_JA.md)
 
+**2026-10-25: one responsive Amadeus interface now serves desktop and mobile.** `/` contains Overview, Lights, Music, Interaction and Settings; `/pro.html` redirects to it. Android packages the same web source. [UI details and validation limits](docs/UNIFIED_WEB.md) · [APK build](android-app/README.md).
+
 **2026-10-24: source and offline checks are supplemented by limited board records; full-system hardware acceptance remains incomplete.** The [current implementation and deployment guide](docs/PRO_FEATURES.en.md) maps all 18 historical requirements to code and explicitly records differences.
 
 ## Current implementation
@@ -46,7 +48,7 @@ Install `pc-agent-vision/requirements-pro.txt`; voice/model resources require th
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 ```
 
-Open `http://127.0.0.1:8086/pro.html`. This path does not discover hardware, load models, capture sensors or play sound. Full animated simulation requires building the WASM engine and setting `KURISU_RENDERER_WASM`; otherwise only limited static fixtures are provided.
+Open `http://127.0.0.1:8086/`. This path does not discover hardware, load models, capture sensors or play sound. Full animated simulation requires building the WASM engine and setting `KURISU_RENDERER_WASM`; otherwise only limited static fixtures are provided.
 
 Offline validation covers a complete ESP-IDF build, Python runtime/protocol and voice regressions, real C++ engine tests, real Opus encode/decode, browser simulation checks and Android compilation/signature verification. **Those offline checks involved no device operation. Later board receipts and audio-sample checks are documented separately and do not establish full-system acceptance.** Generated binaries, APKs, logs and models are excluded from commits.
 

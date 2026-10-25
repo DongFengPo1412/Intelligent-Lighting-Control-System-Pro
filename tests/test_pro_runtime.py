@@ -333,6 +333,34 @@ class XiaoZhiContracts(unittest.IsolatedAsyncioTestCase):
 
 
 class WebContracts(unittest.IsolatedAsyncioTestCase):
+    async def test_unified_entry_delivers_all_local_assets_and_legacy_alias(self):
+        from html.parser import HTMLParser
+
+        class Assets(HTMLParser):
+            paths = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag in ('script', 'img', 'link'):
+                    path = attrs.get('src') or attrs.get('href')
+                    if path:
+                        self.paths.append(path)
+
+        response = await self.client.get('/')
+        self.assertEqual(response.status, 200)
+        html = await response.text()
+        parser = Assets()
+        parser.feed(html)
+        for path in set(parser.paths):
+            self.assertFalse(path.startswith(('http:', 'https:')), path)
+            asset = await self.client.get('/' + path)
+            self.assertEqual(asset.status, 200, path)
+        for page in ('overview', 'lights', 'music', 'interaction', 'settings'):
+            self.assertIn('id="page-' + page + '"', html)
+        alias = await (await self.client.get('/pro.html')).text()
+        self.assertIn('pro.js', alias)
+        self.assertNotIn('id="musicFile"', alias)
+
     async def test_music_visual_selection_reaches_player(self):
         import web_server
         with patch.object(web_server.pro_api.music,'play') as play:

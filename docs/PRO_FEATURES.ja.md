@@ -37,7 +37,7 @@
 
 Python 3.10 と `pc-agent-vision/requirements-pro.txt` を使います。制御・Web・視覚・MIR・MCP・Opusを含みますが、Whisper・KWS・Torch・GPT-SoVITS・重み・参照音源は[過去の音声基準](VOICE_CONTROL_RECOVERY.md)に従い別途準備します。模擬モードはそれらをダウンロードしません。
 
-入口は `pc-agent-vision/web_server.py`、現在の画面は実APIを操作する `/pro.html` です。
+入口は `pc-agent-vision/web_server.py` です。2026-10-25から `/` にPC・スマートフォン共通の画面を統合し、`/pro.html` は同じ画面へ移動します。実APIとフレーム読戻しを使い、Androidも同一ソースを使用します。[画面ガイド](UNIFIED_WEB.md)。
 
 | 設定 | 既定値・用途 |
 | --- | --- |
@@ -66,7 +66,7 @@ $env:KURISU_CACHE_DIR = Join-Path $task 'cache'
 python -B pc-agent-vision/web_server.py --simulate --no-audio --port 8086
 ```
 
-`http://127.0.0.1:8086/pro.html` を開きます。模擬対話は明確な文字どおりの灯光命令だけを処理し、任意の意味をLLMが理解したようには見せません。正式C++アニメーションにはClang/WebAssemblyと対応sysrootを使います。
+`http://127.0.0.1:8086/` を開きます。模擬対話は明確な文字どおりの灯光命令だけを処理し、任意の意味をLLMが理解したようには見せません。正式C++アニメーションにはClang/WebAssemblyと対応sysrootを使います。
 
 ```powershell
 python -B scripts/build_offline_renderer.py --clang <clang.exe> --sysroot <wasm-sysroot> --output-dir "$task\engine"

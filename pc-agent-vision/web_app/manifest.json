@@ -1,17 +1,12 @@
 {
-  "name": "未来道具研究所 · 智光魔方",
-  "short_name": "智光魔方",
-  "description": "牧濑红莉栖具身多模态光场与掌上街机控制终端",
-  "start_url": "/",
+  "name": "Amadeus · 红莉栖的光影实验室",
+  "short_name": "Amadeus",
+  "description": "灯光、音乐与桌面伙伴，一个统一入口",
+  "start_url": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0a0e14",
-  "theme_color": "#ff3b30",
+  "background_color": "#111316",
+  "theme_color": "#111316",
   "icons": [
-    {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    }
+    { "src": "assets/icon.png", "sizes": "256x256", "type": "image/png" }
   ]
 }
