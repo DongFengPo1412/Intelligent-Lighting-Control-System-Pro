@@ -2,7 +2,7 @@
 
 PCのローカル音声エージェントと1台のESP32-S3による、16×16 LED、紅莉栖のピクセルペット、ドットマトリクスゲームの開発プロジェクトです。
 
-[简体中文](README.md) · [English](README_EN.md) · **日本語**
+[简体中文](README_ZH.md) · [English](README.md) · **日本語**
 
 **2026-10-25：PCとスマートフォンのWeb画面をAmadeusに統合しました。** `/` に概要・照明・音楽・インタラクション・設定を集約し、`/pro.html` は同じ画面へ移動します。Androidも同一のWebソースを使用します。[画面と検証範囲](docs/UNIFIED_WEB.md) · [APKビルド](android-app/README.md)。
 
