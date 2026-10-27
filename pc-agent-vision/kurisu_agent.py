@@ -180,12 +180,18 @@ class KurisuAgent:
         q = query.casefold()
         scored = []
         for fact in self._lore_data:
+            if fact.get('verification_status') == 'PENDING_VERIFICATION':
+                continue
             score = 0
             for kw in fact.get('keywords', []):
                 if kw.casefold() in q:
                     score += 2
-            if fact.get('title', '').casefold() in q:
-                score += 1
+            title = fact.get('title', '')
+            if title.casefold() in q:
+                score += 3
+            for word in re.split(r'[与和、·\s/（）\(\)]+', title):
+                if len(word) >= 2 and word.casefold() in q:
+                    score += 2
             if score > 0:
                 scored.append((score, f"{fact['title']}：{fact['zh']}"))
         scored.sort(key=lambda x: x[0], reverse=True)

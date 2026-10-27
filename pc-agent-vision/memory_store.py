@@ -61,6 +61,18 @@ def lexical_vector(text, dimensions=256):
     return [v / norm for v in vector]
 
 
+COLOR_CHARS = set("红蓝绿黄紫白黑粉橙灰青褐金银铜色")
+
+
+def is_color_name(val: str) -> bool:
+    if not val or len(val) > 8:
+        return False
+    non_colors = {"颜色", "东西", "事情", "食物", "动作", "别人", "时间", "将棋", "拉面", "器材"}
+    if val in non_colors or any(nc in val for nc in non_colors):
+        return False
+    return any(c in val for c in COLOR_CHARS) or val.endswith("色")
+
+
 def parse_preference_action(statement: str):
     """Parse user preference updates into structured attribute operations.
     Returns None if statement is not a structured preference update."""
@@ -70,6 +82,7 @@ def parse_preference_action(statement: str):
     # 0. Reject interrogatives / queries so questions like "我最喜欢的颜色是什么？" are never parsed as preferences
     if re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', s):
         return None
+
     # 1. Name & Nickname
     m = re.fullmatch(r'(?:我的名字是|我叫)\s*([^\s，。！!]+)[。！!]?', s)
     if m:
@@ -96,12 +109,26 @@ def parse_preference_action(statement: str):
             'clean_keywords': []
         }
 
-    # 2. Color preferences
-    # 2a. Color replacement ("我改喜欢墨绿色了，不再喜欢深蓝色", "我最喜欢墨绿色了", "我最喜欢的颜色是墨绿色")
-    m_replace = re.search(r'(?:我改喜欢|我最喜欢|最喜欢的颜色是)\s*([^\s，,。！!]+?)(?:了)?(?:[，,]\s*(?:不再喜欢|不喜欢)\s*([^\s，,。！!]+?)(?:了)?)?[。！!]?$', s)
-    if m_replace:
-        new_color = m_replace.group(1).rstrip('了。！!')
-        old_color = m_replace.group(2).rstrip('了。！!') if m_replace.group(2) else None
+    # 2. Food preferences: "我最喜欢的食物是拉面", "我最喜欢吃拉面", "我也喜欢吃寿司"
+    m_food = re.search(r'(?:我最喜欢的食物是|最喜欢的食物是|我最喜欢吃|最喜欢吃)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
+    if m_food:
+        food = m_food.group(1).rstrip('了。！!')
+        return {
+            'action': 'replace',
+            'attr': 'food',
+            'key': 'pref:food:favorite',
+            'kind': 'pref:food',
+            'text': f'我最喜欢的食物是{food}。',
+            'clean_keys': ['pref:food:favorite'],
+            'clean_keywords': []
+        }
+
+    # 3. Color preferences:
+    # 3a. Explicit "我最喜欢的颜色是..." or "最喜欢的颜色是..."
+    m_color_explicit = re.search(r'(?:我最喜欢的颜色是|最喜欢的颜色是|我最喜爱的颜色是|喜欢的颜色是)\s*([^\s，,。！!]+?)(?:了)?(?:[，,]\s*(?:不再喜欢|不喜欢)\s*([^\s，,。！!]+?)(?:了)?)?[。！!]?$', s)
+    if m_color_explicit:
+        new_color = m_color_explicit.group(1).rstrip('了。！!')
+        old_color = m_color_explicit.group(2).rstrip('了。！!') if m_color_explicit.group(2) else None
         clean_keywords = [old_color] if old_color else []
         return {
             'action': 'replace',
@@ -113,38 +140,96 @@ def parse_preference_action(statement: str):
             'clean_keys': ['pref:color:favorite']
         }
 
-    # 2b. Color append ("我也喜欢银白色", "我还喜欢银白色")
-    m_append = re.search(r'(?:我也喜欢|我还喜欢)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
-    if m_append:
-        color = m_append.group(1).rstrip('了。！!')
-        return {
-            'action': 'append',
-            'attr': 'color',
-            'key': f'pref:color:liked:{color}',
-            'kind': 'pref:color',
-            'text': f'我也喜欢{color}。',
-            'clean_keys': [],
-            'clean_keywords': []
-        }
+    # 3b. Color replacement: "我改喜欢墨绿色了，不再喜欢深蓝色", "我改喜欢墨绿色", "我最喜欢墨绿色了"
+    m_color_replace = re.search(r'(?:我改喜欢|我最喜欢|最喜欢)\s*([^\s，,。！!]+?)(?:了)?(?:[，,]\s*(?:不再喜欢|不喜欢)\s*([^\s，,。！!]+?)(?:了)?)?[。！!]?$', s)
+    if m_color_replace:
+        val = m_color_replace.group(1).rstrip('了。！!')
+        old_val = m_color_replace.group(2).rstrip('了。！!') if m_color_replace.group(2) else None
+        if is_color_name(val):
+            clean_keywords = [old_val] if old_val and is_color_name(old_val) else []
+            return {
+                'action': 'replace',
+                'attr': 'color',
+                'key': 'pref:color:favorite',
+                'kind': 'pref:color',
+                'text': f'我最喜欢的颜色是{val}。',
+                'clean_keywords': clean_keywords,
+                'clean_keys': ['pref:color:favorite']
+            }
+        elif "吃" in s or "食物" in s or "饭" in s:
+            return {
+                'action': 'replace',
+                'attr': 'food',
+                'key': 'pref:food:favorite',
+                'kind': 'pref:food',
+                'text': f'我最喜欢的食物是{val}。',
+                'clean_keywords': [],
+                'clean_keys': ['pref:food:favorite']
+            }
+        else:
+            return {
+                'action': 'statement',
+                'attr': 'general',
+                'key': None,
+                'kind': 'preference',
+                'text': s if s.endswith(('。', '！', '!')) else s + '。',
+                'clean_keys': [],
+                'clean_keywords': []
+            }
 
-    # 2c. Color revoke ("我不再喜欢银白色了", "我不喜欢银白色了")
+    # 3c. Color append ("我也喜欢银白色", "我还喜欢银白色", "我也喜欢红色")
+    m_append = re.search(r'(?:我也喜欢|我还喜欢|我同时也喜欢)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
+    if m_append:
+        val = m_append.group(1).rstrip('了。！!')
+        if is_color_name(val):
+            return {
+                'action': 'append',
+                'attr': 'color',
+                'key': f'pref:color:liked:{val}',
+                'kind': 'pref:color',
+                'text': f'我也喜欢{val}。',
+                'clean_keys': [],
+                'clean_keywords': []
+            }
+        elif "吃" in s:
+            return {
+                'action': 'append',
+                'attr': 'food',
+                'key': f'pref:food:liked:{val}',
+                'kind': 'pref:food',
+                'text': f'我也喜欢吃{val}。',
+                'clean_keys': [],
+                'clean_keywords': []
+            }
+        else:
+            return {
+                'action': 'statement',
+                'attr': 'general',
+                'key': None,
+                'kind': 'preference',
+                'text': s if s.endswith(('。', '！', '!')) else s + '。',
+                'clean_keys': [],
+                'clean_keywords': []
+            }
+
+    # 3d. Color revoke ("我不再喜欢白色了", "我不喜欢白色了")
     m_revoke = re.search(r'(?:我不再喜欢|我不喜欢)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
     if m_revoke:
         revoked_val = m_revoke.group(1).rstrip('了。！!')
-        color_terms = ("红", "蓝", "绿", "黄", "紫", "白", "黑", "粉", "橙", "灰", "青", "色")
-        if any(c in revoked_val for c in color_terms) and len(revoked_val) <= 6:
+        if is_color_name(revoked_val):
             return {
                 'action': 'revoke',
                 'attr': 'color',
                 'key': f'pref:color:liked:{revoked_val}',
+                'target_color': revoked_val,
                 'kind': 'pref:color',
                 'text': f'我不再喜欢{revoked_val}了。',
                 'clean_keys': [f'pref:color:liked:{revoked_val}'],
                 'clean_keywords': [revoked_val]
             }
 
-    # 2d. General statement/dislike ("我不喜欢别人乱动我的实验器材")
-    if s.startswith(('我不喜欢', '我习惯', '我每天')):
+    # 4. General statements / non-color dislike ("我不喜欢别人乱动我的实验器材", "我习惯早上喝咖啡")
+    if s.startswith(('我不喜欢', '我习惯', '我每天', '我经常', '讨厌')):
         return {
             'action': 'statement',
             'attr': 'general',
@@ -175,6 +260,13 @@ class MemoryStore:
             "CREATE TABLE IF NOT EXISTS turns (id INTEGER PRIMARY KEY, role TEXT, text TEXT, created REAL)"
         )
         self.db.commit()
+
+    def close(self):
+        with self.lock:
+            try:
+                self.db.close()
+            except Exception:
+                pass
 
     def remember(self, text, key=None, kind="fact"):
         if not isinstance(text, str) or not 1 <= len(text.strip()) <= 8000:
@@ -208,27 +300,64 @@ class MemoryStore:
 
         with self.lock, self.db:
             if action == 'replace':
-                if parsed.get('key'):
-                    self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
-                for kw in parsed.get('clean_keywords', []):
-                    if kw:
-                        self.db.execute("DELETE FROM memories WHERE kind LIKE 'pref:color%' AND text LIKE ?", (f"%{kw}%",))
-                        self.db.execute("DELETE FROM memories WHERE text LIKE ?", (f"%最喜欢的颜色是{kw}%",))
-                k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
-                return True, k, parsed['text']
+                if attr == 'color':
+                    # 1. 删除相同属性的已有标准记录
+                    if parsed.get('key'):
+                        self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
+
+                    # 2. 兼容旧格式与遗留记录：清理所有旧的“最喜欢的颜色”相关条目（无论旧格式 ID 为何）
+                    for row in self.db.execute("SELECT id, text FROM memories").fetchall():
+                        rid, rtext = row[0], row[1]
+                        if ("最喜欢的颜色" in rtext or "最喜爱的颜色" in rtext or "最喜欢" in rtext) and any(c in rtext for c in COLOR_CHARS):
+                            self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
+
+                    # 3. 如果用户明确说明了旧颜色（如“不再喜欢深蓝色”），清理该旧颜色的相关记录
+                    for kw in parsed.get('clean_keywords', []):
+                        if kw:
+                            exact_old_patterns = [
+                                f"我最喜欢的颜色是{kw}。", f"我最喜欢的颜色是{kw}",
+                                f"最喜欢{kw}。", f"最喜欢{kw}",
+                                f"我喜欢{kw}。", f"我喜欢{kw}",
+                                f"我也喜欢{kw}。", f"我也喜欢{kw}"
+                            ]
+                            for ep in exact_old_patterns:
+                                self.db.execute("DELETE FROM memories WHERE text = ?", (ep,))
+                            self.db.execute("DELETE FROM memories WHERE id = ?", (f"pref:color:liked:{kw}",))
+
+                    k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
+                    return True, k, parsed['text']
+
+                elif attr in ('name', 'nickname', 'food'):
+                    if parsed.get('key'):
+                        self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
+                    if attr == 'food':
+                        for row in self.db.execute("SELECT id, text FROM memories").fetchall():
+                            rid, rtext = row[0], row[1]
+                            if "最喜欢的食物" in rtext or "最喜欢吃" in rtext:
+                                self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
+                    k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
+                    return True, k, parsed['text']
 
             elif action == 'append':
                 k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
                 return True, k, parsed['text']
 
             elif action == 'revoke':
+                target = parsed.get('target_color')
                 if parsed.get('key'):
                     self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
-                for kw in parsed.get('clean_keywords', []):
-                    if kw:
-                        self.db.execute("DELETE FROM memories WHERE kind LIKE 'pref:color%' AND text LIKE ?", (f"%{kw}%",))
-                k = self.remember(parsed['text'], key=parsed['key'], kind='pref:color:revoked')
-                return True, k, parsed['text']
+                if target:
+                    exact_revoke_patterns = [
+                        f"我也喜欢{target}。", f"我也喜欢{target}",
+                        f"我还喜欢{target}。", f"我还喜欢{target}",
+                        f"我喜欢{target}。", f"我喜欢{target}",
+                        f"我最喜欢的颜色是{target}。", f"我最喜欢的颜色是{target}"
+                    ]
+                    for ep in exact_revoke_patterns:
+                        self.db.execute("DELETE FROM memories WHERE text = ?", (ep,))
+                    self.db.execute("DELETE FROM memories WHERE id = ?", (f"pref:color:liked:{target}",))
+                    k = self.remember(parsed['text'], key=f"pref:color:revoked:{target}", kind='pref:color:revoked')
+                    return True, k, parsed['text']
 
             elif action == 'statement':
                 k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
