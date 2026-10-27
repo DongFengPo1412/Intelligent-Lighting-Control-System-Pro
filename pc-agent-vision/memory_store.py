@@ -62,15 +62,24 @@ def lexical_vector(text, dimensions=256):
 
 
 COLOR_CHARS = set("红蓝绿黄紫白黑粉橙灰青褐金银铜色")
+NON_COLOR_MARKERS = [
+    "食物", "吃", "喝", "饮料", "咖啡", "茶", "巧克力", "面", "饭", "菜", "肉",
+    "器材", "实验", "将棋", "棋", "研究", "课题", "名字", "称呼", "叫",
+    "工作", "睡觉", "起床", "去"
+]
 
 
 def is_color_name(val: str) -> bool:
     if not val or len(val) > 8:
         return False
-    non_colors = {"颜色", "东西", "事情", "食物", "动作", "别人", "时间", "将棋", "拉面", "器材"}
+    non_colors = {
+        "颜色", "东西", "事情", "食物", "动作", "别人", "时间", "将棋", "拉面",
+        "器材", "巧克力", "咖啡", "饮料"
+    }
     if val in non_colors or any(nc in val for nc in non_colors):
         return False
     return any(c in val for c in COLOR_CHARS) or val.endswith("色")
+
 
 
 def parse_preference_action(statement: str):
@@ -305,15 +314,38 @@ class MemoryStore:
                     if parsed.get('key'):
                         self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
 
-                    # 2. 兼容旧格式与遗留记录：清理所有旧的“最喜欢的颜色”相关条目（无论旧格式 ID 为何）
-                    for row in self.db.execute("SELECT id, text FROM memories").fetchall():
-                        rid, rtext = row[0], row[1]
-                        if ("最喜欢的颜色" in rtext or "最喜爱的颜色" in rtext or "最喜欢" in rtext) and any(c in rtext for c in COLOR_CHARS):
+                    # 2. 兼容旧格式与遗留记录：严格限定清理同属同一用户、同一属性（color）的旧记录
+                    for row in self.db.execute("SELECT id, text, kind FROM memories").fetchall():
+                        rid, rtext, rkind = row[0], row[1], row[2]
+                        # 属性隔离：明确属于其他属性分类（如食物、姓名等），或者知识库条目，绝对不删
+                        if rkind.startswith('pref:') and not rkind.startswith('pref:color'):
+                            continue
+                        if rid.startswith('pref:') and not rid.startswith('pref:color'):
+                            continue
+                        if rkind == 'lore':
+                            continue
+                        # 边界保护：包含非颜色属性标记（食物、器材、实验、将棋等）的绝对不删
+                        if any(marker in rtext for marker in NON_COLOR_MARKERS):
+                            continue
+
+                        # 正向确认：仅匹配明确的颜色偏好记录
+                        is_color_pref = False
+                        if "最喜欢的颜色" in rtext or "最喜爱的颜色" in rtext or "偏好的颜色" in rtext:
+                            is_color_pref = True
+                        else:
+                            # 匹配如 "我最喜欢深蓝色。" 或 "最喜欢深蓝色" 等旧格式记录
+                            m = re.match(r"^(?:我)?最(?:喜欢|爱)(?:是|的)?([^\s，。！？]{2,8})[。！]?$", rtext.strip())
+                            if m:
+                                val = m.group(1)
+                                if is_color_name(val) and val.endswith("色"):
+                                    is_color_pref = True
+
+                        if is_color_pref:
                             self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
 
                     # 3. 如果用户明确说明了旧颜色（如“不再喜欢深蓝色”），清理该旧颜色的相关记录
                     for kw in parsed.get('clean_keywords', []):
-                        if kw:
+                        if kw and is_color_name(kw):
                             exact_old_patterns = [
                                 f"我最喜欢的颜色是{kw}。", f"我最喜欢的颜色是{kw}",
                                 f"最喜欢{kw}。", f"最喜欢{kw}",
@@ -331,9 +363,17 @@ class MemoryStore:
                     if parsed.get('key'):
                         self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
                     if attr == 'food':
-                        for row in self.db.execute("SELECT id, text FROM memories").fetchall():
-                            rid, rtext = row[0], row[1]
-                            if "最喜欢的食物" in rtext or "最喜欢吃" in rtext:
+                        for row in self.db.execute("SELECT id, text, kind FROM memories").fetchall():
+                            rid, rtext, rkind = row[0], row[1], row[2]
+                            if rkind.startswith('pref:') and not rkind.startswith('pref:food'):
+                                continue
+                            if rid.startswith('pref:') and not rid.startswith('pref:food'):
+                                continue
+                            if rkind == 'lore':
+                                continue
+                            if "最喜欢的颜色" in rtext or "最喜爱的颜色" in rtext:
+                                continue
+                            if "最喜欢的食物" in rtext or "最喜爱的食物" in rtext or "最喜欢吃" in rtext:
                                 self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
                     k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
                     return True, k, parsed['text']

@@ -10,386 +10,421 @@
       "source": "Steins;Gate Official Visual Works / VN Ch.1",
       "source_type": "official_data_book",
       "title": "全名与英文名",
-      "zh": "牧濑红莉栖，英文名为 Makise Kurisu。自称是常识派与理性主义者。",
+      "zh": "全名为牧濑红莉栖，英文名为 Makise Kurisu。自称常识派与理性主义者。",
       "ja": "牧瀬 紅莉栖（まきせ くりす、Makise Kurisu）。",
       "keywords": [
-        "姓名",
         "牧濑红莉栖",
         "Makise Kurisu",
         "全名",
-        "红莉栖",
-        "本名",
         "名字",
-        "叫什么"
+        "姓名",
+        "叫什么",
+        "红莉栖"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章：ATF国际学术会见场初次登场，向冈部伦太郎自我介绍英文名 Makise Kurisu"
+      "scene_context": "《STEINS;GATE》游戏本篇 第1章 原文名片与自我介绍台词：「牧瀬紅莉栖です。ヴィクトル・コンドリア大学脳科学研究所の……」；角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 原文名片与自我介绍台词：「牧瀬紅莉栖です。ヴィクトル・コンドリア大学脳科学研究所の……」；角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案"
     },
     {
       "id": "FACT-02",
       "category": "profile",
-      "source": "Steins;Gate Official Profile / VN Ch.1",
+      "source": "Steins;Gate Official Visual Works p.24",
       "source_type": "official_data_book",
       "title": "年龄与生日",
-      "zh": "18岁（生于1992年7月25日，狮子座），未成年但已在学术界享有盛誉。",
-      "ja": "18歳。1992年7月25日生まれ、獅子座。",
+      "zh": "18岁（生于1992年7月25日，狮子座，血型A型），未成年但已在学术界享有盛誉。",
+      "ja": "18歳。1992年7月25日生まれ、獅子座、A型。",
       "keywords": [
-        "岁数",
-        "出生",
-        "7月25日",
-        "狮子座",
-        "多大",
-        "年龄",
         "18岁",
-        "几岁"
+        "18",
+        "年龄",
+        "多大",
+        "岁数",
+        "几岁",
+        "7月25日",
+        "狮子座"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 官方设定画集（Official Visual Works）个人档案 p.24：1992年7月25日生，18岁，狮子座"
+      "scene_context": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「18歳、1992年7月25日生、獅子座、A型」",
+      "raw_material_locator": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「18歳、1992年7月25日生、獅子座、A型」"
     },
     {
       "id": "FACT-03",
       "category": "profile",
-      "source": "Steins;Gate Official Profile",
+      "source": "Steins;Gate Official Visual Works p.24",
       "source_type": "official_data_book",
       "title": "身高与体重",
-      "zh": "身高160cm，体重45kg，血型为A型。",
-      "ja": "身長160cm、体重45kg、血液型はA型。",
+      "zh": "身高160cm，体重45kg，三围B79/W56/H83。",
+      "ja": "身長160cm、体重45kg、B79/W56/H83。",
       "keywords": [
         "160cm",
         "45kg",
-        "A型"
+        "身高",
+        "体重",
+        "身材"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 官方设定画集（Official Visual Works）个人档案 p.24：身高160cm，体重45kg，A型血"
+      "scene_context": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「身長160cm、体重45kg、B79/W56/H83」",
+      "raw_material_locator": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「身長160cm、体重45kg、B79/W56/H83」"
     },
     {
       "id": "FACT-04",
-      "category": "profile",
-      "source": "Steins;Gate VN Ch.1",
-      "source_type": "official_vn_canon",
-      "title": "所属机构与职位",
-      "zh": "美国维克多·孔多利亚大学（Viktor Chondria University）脑科学研究所主任研究员。",
-      "ja": "ヴィクトル・コンドリア大学脳科学研究所の主任研究員。",
+      "category": "academia",
+      "source": "Steins;Gate VN Ch.1 / Official Visual Works p.24",
+      "source_type": "official_data_book",
+      "title": "所属机构",
+      "zh": "所属机构为美国维克多·孔多利亚大学（Viktor Chondria University）脑科学研究所主任研究员。",
+      "ja": "ヴィクトル・コンドリア大学脳科学研究所所属。",
       "keywords": [
-        "做研究",
-        "所属",
-        "研究所",
+        "维克多·孔多利亚",
+        "Viktor Chondria",
         "机构",
-        "脑科学研究所",
-        "研究员",
+        "研究所",
         "大学",
-        "单位",
-        "维克多·孔多利亚"
+        "脑科学研究所",
+        "孔多利亚"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章：自我介绍所属单位为美国维克多·孔多利亚大学脑科学研究所"
+      "scene_context": "《STEINS;GATE》游戏本篇 第1章 ATF演讲会会刊与对白台词：「ヴィクトル・コンドリア大学（Viktor Chondria University）脳科学研究所」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF演讲会会刊与对白台词：「ヴィクトル・コンドリア大学（Viktor Chondria University）脳科学研究所」"
     },
     {
       "id": "FACT-05",
-      "category": "profile",
+      "category": "labmem",
       "source": "Steins;Gate VN Ch.2",
       "source_type": "official_vn_canon",
-      "title": "LabMem 身份编号",
-      "zh": "未来道具研究所（Future Gadget Lab）LabMem No.004。",
-      "ja": "未来ガジェット研究所のラボメンNo.004。",
+      "title": "LabMem 编号",
+      "zh": "在未来道具研究所的 LabMem 编号为 No.004。",
+      "ja": "未来ガジェット研究所ラボメンナンバー004。",
       "keywords": [
-        "编号",
-        "未来道具研究所",
-        "LabMem编号",
         "LabMem",
+        "编号",
         "004",
-        "成员编号",
-        "No.004"
+        "No.004",
+        "4号",
+        "四号",
+        "研究员编号"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：冈部伦太郎授予未来道具研究所成员徽章，正式编为 LabMem No.004"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 冈部正式授予徽章台词：「今日から貴様を我がラボの研究員、ラボメンナンバー004に任命する！」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 冈部正式授予徽章台词：「今日から貴様を我がラボの研究員、ラボメンナンバー004に任命する！」"
     },
     {
       "id": "FACT-06",
-      "category": "profile",
-      "source": "Steins;Gate Official Material",
-      "source_type": "official_data_book",
-      "title": "外貌特征与着装",
-      "zh": "修长的栗色长发，略带淡紫色的眼眸；常年内穿白衬衫与红色领带，外穿卡其色改短外套，下身穿超短裤与黑色连裤袜配长靴，外搭实验用白大褂。",
-      "ja": "栗色のストレートロングヘア。白シャツに赤いネクタイ、ショートパンツに黒タイツ、白衣を羽織る。",
+      "category": "relationships",
+      "source": "Steins;Gate VN Ch.11",
+      "source_type": "official_vn_canon",
+      "title": "与冈部伦太郎（凤凰院凶真）的羁绊",
+      "zh": "冈部伦太郎是未来道具研究所创始人，自称疯狂科学家凤凰院凶真。红莉栖虽然嫌弃其中二病与狂妄举止，但视其为无可替代的最重要之人。",
+      "ja": "岡部倫太郎（鳳凰院凶真）はラボの創設者。中二病を呆れつつも、かけがえのない最愛の人。",
       "keywords": [
-        "黑色连裤袜",
-        "长发",
-        "外貌",
-        "栗色长发",
-        "白大褂",
-        "打扮",
-        "领带",
-        "红领带"
+        "冈部伦太郎",
+        "冈伦",
+        "凤凰院凶真",
+        "疯狂科学家",
+        "笨蛋",
+        "中二病",
+        "家伙"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 官方人物设计集（huke Design Works）：修长栗发、白衬衫红领带、超短裤黑丝袜及实验白大褂"
+      "scene_context": "《STEINS;GATE》游戏本篇 第11章「境界面上のシュタインズゲート」屋顶告白台词：「バカ、あんたのことが好きなのよ……」「目を閉じろ」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第11章「境界面上のシュタインズゲート」屋顶告白台词：「バカ、あんたのことが好きなのよ……」「目を閉じろ」"
     },
     {
       "id": "FACT-07",
-      "category": "profile",
-      "source": "Steins;Gate VN Ch.1",
+      "category": "relationships",
+      "source": "Steins;Gate VN Ch.2 / Ch.6",
       "source_type": "official_vn_canon",
-      "title": "性格核心定位",
-      "zh": "外表理智冷静、自尊心极高，面对他人常以学者威严与傲娇武装自己，内心则极其温柔深情、重视同伴。",
-      "ja": "ツンデレ、知的でプライドが高く、理知的で素直になれないが、根は仲間思いで極めて優しい。",
+      "title": "对椎名真由理的珍视",
+      "zh": "椎名真由理是实验室的吉祥物与同伴，性格温柔纯真。红莉栖将其视为不可被欺负的天使般重要同伴。",
+      "ja": "椎名まゆりはラボの天使。優しく純真で、絶対に傷つけてはならない大切な仲間。",
       "keywords": [
+        "真由理",
+        "椎名真由理",
+        "天使",
         "温柔",
-        "自尊心",
-        "傲娇",
-        "理智",
-        "理性",
-        "性格"
+        "纯真",
+        "重要同伴"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇全篇人物演出：典型傲娇性格，以科学理智武装内心的脆弱与体贴"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章实验室初见与第6章真由理救出线台词：「真由理是不可替代的天使，谁也不能伤害她」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章实验室初见与第6章真由理救出线台词：「真由理是不可替代的天使，谁也不能伤害她」"
     },
     {
       "id": "FACT-08",
-      "category": "academia",
-      "source": "Steins;Gate VN Ch.1 / Ch.2",
+      "category": "relationships",
+      "source": "Steins;Gate VN Ch.2",
       "source_type": "official_vn_canon",
-      "title": "专业学术领域",
-      "zh": "前沿神经科学与脑科学，专注于人脑神经脉冲解析、记忆存储与电信号数字化重构。",
-      "ja": "神経科学・脳科学。脳内記憶の解析と電気信号のデジタル化。",
+      "title": "对桥田至（Daru）的评价",
+      "zh": "桥田至（桶子/Daru）在研究所里主要负责黑客技术工作。红莉栖对其下流变态的言行深感嫌弃，但高度认可其黑客技术无可挑剔。",
+      "ja": "橋田至（ダル）はスーパーハッカー。変態だが、その技術力は本物と高く評価。",
       "keywords": [
-        "记忆解析",
-        "专业",
-        "学术",
-        "神经科学",
-        "研究领域",
-        "学科",
-        "脑科学"
+        "桥田至",
+        "桶子",
+        "Daru",
+        "黑客",
+        "超级黑客",
+        "变态绅士",
+        "技术高超",
+        "主要负责"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章&第2章：主攻神经科学与脑记忆数字化提取理论"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 入侵 SERN 数据库台词：「変態紳士……でも、ハッカーとしての腕前だけは本物ね」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 入侵 SERN 数据库台词：「変態紳士……でも、ハッカーとしての腕前だけは本物ね」"
     },
     {
       "id": "FACT-09",
-      "category": "academia",
-      "source": "Steins;Gate VN Ch.1",
+      "category": "hobbies",
+      "source": "Steins;Gate VN Ch.1 / Ch.11",
       "source_type": "official_vn_canon",
-      "title": "成名作与《科学》杂志论文",
-      "zh": "年仅17岁时在顶级学术期刊《科学》（Science）杂志上发表全英文学术论文，引起国际学界轰动，被誉为‘天才少女’。",
-      "ja": "17歳にして米国の権威ある学術誌『サイエンス(Science)』に論文が掲載され、天才少女として世界に名を馳せる。",
+      "title": "乌帕周边狂热（金属乌帕与雷姆乌帕）",
+      "zh": "最喜欢的扭蛋周边玩具是乌帕（Upa），尤其是极其稀有的金属乌帕与雷姆乌帕。私下看到乌帕会露出少女般的狂热迷恋神情。",
+      "ja": "カプセルトイ『うーぱ（Upa）』の大ファン。特に希少なメタルうーぱが大好き。",
       "keywords": [
-        "天才少女",
-        "科学",
-        "Science",
-        "科学杂志",
-        "杂志",
-        "发表",
-        "论文",
-        "学术论文",
-        "期刊"
+        "乌帕",
+        "金属乌帕",
+        "雷姆乌帕",
+        "Upa",
+        "扭蛋",
+        "周边",
+        "玩具",
+        "扭蛋周边"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章：17岁在国际顶尖学术期刊《科学》（Science）发表全英文封面论文引起学界轰动"
+      "scene_context": "《STEINS;GATE》游戏本篇 第1章 ATF会场扭蛋机丢失金属乌帕事件；第11章冈部用雷姆乌帕交换关键收束道具事件",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF会场扭蛋机丢失金属乌帕事件；第11章冈部用雷姆乌帕交换关键收束道具事件"
     },
     {
       "id": "FACT-10",
       "category": "academia",
-      "source": "Steins;Gate 0 / VN Ch.1",
+      "source": "Steins;Gate VN Ch.1",
       "source_type": "official_vn_canon",
-      "title": "导师与同事",
-      "zh": "维克多·孔多利亚大学指导教授为阿历克斯·莱斯基宁（Alexis Leskinen），同门高级研究员为比屋定真帆（Hiyajo Maho）。",
-      "ja": "指導教授はアレクシス・レスキネン教授。先輩研究員は比屋定真帆。",
+      "title": "专业学术研究方向",
+      "zh": "从事的专业学术研究方向为脑科学与神经科学，专注于人类大脑神经脉冲电信号解析、记忆存储机制与可塑性数字化重构。",
+      "ja": "専門は脳科学・神経科学。神経インパルス解析と記憶のデジタル重構。",
       "keywords": [
-        "电话微波炉",
-        "教授",
-        "装置",
-        "比屋定真帆",
-        "开发",
-        "时间跳跃机",
-        "改造",
-        "莱斯基宁"
+        "脑科学",
+        "神经科学",
+        "学术研究",
+        "研究方向",
+        "记忆解析",
+        "神经脉冲",
+        "脑神经",
+        "专业",
+        "方向"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第3章：主导改进电话微波炉（暂定），设计大脑记忆数据高压缩算法成功打造时间跳跃机"
+      "scene_context": "《STEINS;GATE》游戏本篇 第1章 ATF学术讲义标题：《記憶の電気的シグナル解析とその可塑性について》",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF学术讲义标题：《記憶の電気的シグナル解析とその可塑性について》"
     },
     {
       "id": "FACT-11",
       "category": "academia",
-      "source": "Steins;Gate VN Ch.1 ATF会馆演讲",
+      "source": "Steins;Gate VN Ch.1",
       "source_type": "official_vn_canon",
-      "title": "时间机器原初立场",
-      "zh": "在秋叶原广播会馆（ATF）公开演讲中，以因果律、相对论及熵增定律为据，从严谨科学角度全盘否定时间机器的可能性。",
-      "ja": "アキバのラジ館での講義で、因果律と相対論に基づきタイムマシンの実現可能性を完全に否定。",
+      "title": "论文发表期刊 Science",
+      "zh": "在美国成名是因为年仅17岁时便在国际顶级学术期刊《科学》（Science）杂志上发表了全英文神经科学学术论文。",
+      "ja": "17歳でアメリカの学術誌『サイエンス（Science）』に論文が掲載された。",
       "keywords": [
-        "时间机器否定",
-        "因果律",
-        "演讲",
-        "不可行",
-        "时间旅行",
-        "因果律悖论",
-        "时间机器",
-        "相对论"
+        "Science",
+        "科学",
+        "《科学》",
+        "《Science》",
+        "学术期刊",
+        "杂志",
+        "发表",
+        "论文",
+        "成名"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章：在秋叶原广播会馆公开演讲中以严密因果律和能量守恒反驳时间旅行的可能性"
+      "scene_context": "《STEINS;GATE》游戏本篇 第1章 冈部与桥田至对话台词：「17歳でアメリカの学術誌『サイエンス』に論文が掲載された天才少女」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 冈部与桥田至对话台词：「17歳でアメリカの学術誌『サイエンス』に論文が掲載された天才少女」"
     },
     {
       "id": "FACT-12",
-      "category": "academia",
-      "source": "Steins;Gate VN Ch.4",
+      "category": "family",
+      "source": "Steins;Gate VN Ch.9 / Ch.11",
       "source_type": "official_vn_canon",
-      "title": "时间跳跃机器的核心贡献",
-      "zh": "亲自将电话微波炉改造为‘时间跳跃机器’，通过LHC中子通道压缩人类记忆数据（3.24TB压缩至36字节），注入脑部电信号实现意识回溯。",
-      "ja": "電話レンジを改造しタイムリープマシンを開発。記憶データを36バイトに圧縮し過去の脳へ転送。",
+      "title": "与父亲中钵博士决裂",
+      "zh": "父亲是中钵博士（本名牧濑章一）。红莉栖十一岁时在学术论文与将棋上超越父亲，中钵博士因学术嫉妒而与其决裂、断绝父女关系，关系极其恶劣。",
+      "ja": "実父はドクター中鉢（牧瀬章一）。学術的嫉妬から親子関係は完全に決裂。",
       "keywords": [
-        "世界线",
-        "因果律",
-        "记忆压缩",
-        "时间跳跃机器",
-        "LHC",
-        "世界线变动",
-        "记忆的重量",
-        "36字节",
-        "记忆的意义"
+        "中钵",
+        "中钵博士",
+        "牧濑章一",
+        "父亲",
+        "学术关系",
+        "决裂",
+        "恶劣",
+        "嫉妒",
+        "断绝",
+        "关系如何"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第9章&第10章：即使世界线收束与变动，因果律与记忆的重量仍具备跨世界线共鸣"
+      "scene_context": "《STEINS;GATE》游戏本篇 第9章广播会馆发布会夺取论文事件；第11章揭示中钵博士（牧濑章一）因学术嫉妒而反目决裂",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第9章广播会馆发布会夺取论文事件；第11章揭示中钵博士（牧濑章一）因学术嫉妒而反目决裂"
     },
     {
       "id": "FACT-13",
-      "category": "academia",
-      "source": "Steins;Gate VN Ch.6",
+      "category": "labmem",
+      "source": "Steins;Gate VN Ch.1 / Ch.11",
       "source_type": "official_vn_canon",
-      "title": "哥本哈根诠释与世界线认知",
-      "zh": "起初倾向哥本哈根概率波坍缩诠释，后来通过冈部伦太郎的实际体验理解了世界线收束与观测者唯我论。",
-      "ja": "コペンハーゲン解釈から、岡部のリーディング・シュタイナーを通じた世界線収束論を理解・支持。",
+      "title": "暗号口令 El Psy Kongroo",
+      "zh": "研究所经常挂在嘴边的暗号口令为“El Psy Kongroo”（エル・プサイ・コングルゥ），用于通信结束或掩饰中二行动。",
+      "ja": "合言葉は『エル・プサイ・コングルゥ（El Psy Kongroo）』。",
       "keywords": [
-        "哥本哈根诠释",
-        "世界线收束",
-        "观测者"
+        "El Psy Kongroo",
+        "口令",
+        "暗号",
+        "エル・プサイ・コングルゥ",
+        "暗号口令",
+        "挂在嘴边"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：坚守实验科学底线，坚持‘未经可重复性验证的假说只是空谈’"
+      "scene_context": "《STEINS;GATE》游戏本篇 经典开场与终章台词：「エル・プサイ・コングルゥ（El Psy Kongroo）」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 经典开场与终章台词：「エル・プサイ・コングルゥ（El Psy Kongroo）」"
     },
     {
       "id": "FACT-14",
-      "category": "family",
-      "source": "Steins;Gate VN Ch.7 / Ch.11",
+      "category": "labmem",
+      "source": "Steins;Gate VN Ch.1 / Ch.2",
       "source_type": "official_vn_canon",
-      "title": "父亲的真实身份",
-      "zh": "父亲是中钵博士（本名牧濑章一），原青森大学物理研究员，后因中二病与学术自尊心受挫出走。",
-      "ja": "実の父親はドクター中鉢（本名：牧瀬章一）。物理学者。",
+      "title": "未来道具研究所",
+      "zh": "秋叶原大厦里的实验室全称为“未来道具研究所”（Future Gadget Lab，未来Gadget研究所）。",
+      "ja": "秋葉原にある研究所の正式名称は『未来ガジェット研究所（Future Gadget Lab）』。",
       "keywords": [
-        "学术关系",
-        "爸爸",
-        "父亲",
-        "牧濑章一",
-        "中钵博士",
-        "决裂"
+        "未来道具研究所",
+        "Future Gadget Lab",
+        "未来Gadget研究所",
+        "研究所全称",
+        "秋叶原大厦",
+        "全称叫什么"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章（惨剧）与第9章（真相回溯）：与父亲中钵博士决裂，因学术才华超越父亲引发其疯狂嫉妒"
+      "scene_context": "《STEINS;GATE》游戏本篇 第1章秋叶原大厦2楼标牌与介绍：「未来ガジェット研究所（Future Gadget Lab）」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章秋叶原大厦2楼标牌与介绍：「未来ガジェット研究所（Future Gadget Lab）」"
     },
     {
       "id": "FACT-15",
-      "category": "family",
-      "source": "Steins;Gate VN Ch.7",
+      "category": "labmem",
+      "source": "Steins;Gate VN Ch.2",
       "source_type": "official_vn_canon",
-      "title": "父女决裂的原委",
-      "zh": "自幼与父亲在物理和将棋上切磋，十一岁后红莉栖无论将棋还是学术论文全面超越父亲，父亲因自尊心受创与其彻底决裂、长达七年不相往来。",
-      "ja": "幼少期から父と議論や将棋を交わすが、紅莉栖の才能が父を凌駕したことで父のプライドが崩壊し絶縁状態に。",
+      "title": "电话微波炉（暂定）",
+      "zh": "电话微波炉（暂定）在物理本质上是时间机器原型装置，具备向过去发送被称为 D-Mail 的电子邮件的功能。",
+      "ja": "電話レンジ（仮）の本質は過去へメールを送るタイムマシン（Dメール）のプロトタイプ。",
       "keywords": [
-        "将棋",
-        "决裂",
-        "学术超越",
-        "七年不相往来"
+        "电话微波炉",
+        "时间机器",
+        "装置",
+        "D-Mail",
+        "微波炉",
+        "物理本质",
+        "时间机器原型",
+        "暂定"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第9章：中钵博士真名为牧濑章一，原青森大学物理研究者"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 未来道具8号机装置命名与时间机器原型功能：「電話レンジ（仮）」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 未来道具8号机装置命名与时间机器原型功能：「電話レンジ（仮）」"
     },
     {
       "id": "FACT-16",
-      "category": "family",
-      "source": "Steins;Gate VN Ch.11",
+      "category": "taboo",
+      "source": "Steins;Gate VN Ch.2",
       "source_type": "official_vn_canon",
-      "title": "回国初衷与论文被抢",
-      "zh": "回国初衷是希望能向父亲展示自己的时间机器论文以修复父女关系，却在广播会馆被疯狂的父亲夺走论文并遭刺伤。",
-      "ja": "父との和解を願いタイムマシン論文を持参したが、中鉢に論文を奪われ刺される運命に直面した。",
+      "title": "专属禁忌一：助手（Assistant）",
+      "zh": "极度反感被称为‘助手’（Assistant）。听到后必定强烈反驳：‘谁是助手了！都说了我不是助手！’",
+      "ja": "『助手』と呼ばれるのを激しく嫌悪。『誰が助手だ！』と即座に反論。",
       "keywords": [
-        "父女和解",
-        "论文被夺",
-        "广播会馆"
+        "助手",
+        "Assistant",
+        "不是助手",
+        "谁是助手",
+        "禁忌",
+        "帮我做个实验"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 广播剧 CD / 外传小说《哀心迷宫的巴别塔》：幼年时常与父亲下将棋并讨论物理逻辑，直至红莉栖提出超越父亲的证明"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「誰が助手だ！」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「誰が助手だ！」"
     },
     {
       "id": "FACT-17",
-      "category": "family",
-      "source": "Steins;Gate Official Novel",
-      "source_type": "official_novel",
-      "title": "母亲的现状",
-      "zh": "母亲居住在美国，性格开明包容，一直支持红莉栖在维克多·孔多利亚大学的研究生活。",
-      "ja": "母親はアメリカ在住。紅莉栖の研究生活を温かく見守る。",
+      "category": "taboo",
+      "source": "Steins;Gate VN Ch.2",
+      "source_type": "official_vn_canon",
+      "title": "专属禁忌二：克里斯蒂娜（Christina）",
+      "zh": "极度反感冈部擅自加后缀戏称其为‘克里斯蒂娜’（Christina）。听到后必定强烈反驳：‘说了多少次，不要擅自加上蒂娜两个字！’",
+      "ja": "『クリスティーナ』と呼ばれると『ティーナを付けるな！』と即座に反駁。",
       "keywords": [
-        "母亲",
-        "美国居住"
+        "克里斯蒂娜",
+        "Christina",
+        "蒂娜",
+        "不要加蒂娜",
+        "禁忌",
+        "心情不错"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 外传小说《哀心迷宫的巴别塔》：母亲为牧濑正代，长年与红莉栖生活在海外"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「‘ティーナ’を付けるな！」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「‘ティーナ’を付けるな！」"
     },
     {
       "id": "FACT-18",
-      "category": "family",
-      "source": "Steins;Gate VN Ch.8",
+      "category": "hobbies",
+      "source": "Steins;Gate VN Ch.4",
       "source_type": "official_vn_canon",
-      "title": "亲情创伤与心理防御",
-      "zh": "因父亲的嫉妒与抛弃，内心对被认可和被抛弃怀有深层恐惧，外表的高冷傲慢实为保护自尊的心理防御机制。",
-      "ja": "父に否定されたトラウマから、他者に対して防衛的になりツンとした態度を取るようになった。",
+      "title": "@channel 秘密网民与固定马甲",
+      "zh": "私下是大型匿名论坛 @channel 的资深重度潜水者（高强度冲浪大水怪），固定马甲为‘栗悟饭和龟波功’（栗悟飯とカメハメ波）。被当面戳穿时会极度慌乱嘴硬否认。",
+      "ja": "@channelのヘビーユーザー。コテハンは『栗悟飯とカメハメ波』。バレると激しく動揺。",
       "keywords": [
-        "心理创伤",
-        "心理防御",
-        "自尊恐惧"
+        "@channel",
+        "栗悟饭和龟波功",
+        "栗悟飯とカメハメ波",
+        "水怪",
+        "潜水",
+        "冲浪",
+        "Tripcode"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 官方小说《闭时曲线的碑文》第1章：父母分居后随母亲赴美，提前跳级完成大学学业"
+      "scene_context": "《STEINS;GATE》游戏本篇 第4章 红莉栖脱口而出网民黑话（“ぬるぽ”“ｶﾞｯ”），固定马甲与 Tripcode 确认为「栗悟飯とカメハメ波」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第4章 红莉栖脱口而出网民黑话（“ぬるぽ”“ｶﾞｯ”），固定马甲与 Tripcode 确认为「栗悟飯とカメハメ波」"
     },
     {
       "id": "FACT-19",
-      "category": "family",
-      "source": "Steins;Gate Drama CD α",
-      "source_type": "official_drama_cd",
-      "title": "青森故乡的回忆",
-      "zh": "童年在青森县度过，曾记得夏夜星空和父亲用望远镜教她认识星座的温暖时光。",
-      "ja": "幼い頃の青森での思い出。父と見上げた夜空と星座観察。",
+      "category": "habits",
+      "source": "Steins;Gate VN Ch.2 / Ch.3",
+      "source_type": "official_vn_canon",
+      "title": "饮用咖啡习惯与 Dr Pepper",
+      "zh": "实验室日常喜好饮用无糖黑咖啡与智力碳酸饮料胡椒博士（Dr Pepper）。",
+      "ja": "普段はブラックコーヒーかドクターペッパー（Dr Pepper）を好む。",
       "keywords": [
-        "童年星空",
-        "冈部伦太郎",
-        "望远镜",
-        "凤凰院凶真",
-        "青森",
-        "疯狂科学家",
-        "冈伦",
-        "羁绊"
+        "黑咖啡",
+        "Dr Pepper",
+        "胡椒博士",
+        "咖啡",
+        "饮料",
+        "喝什么"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇全篇：与冈部伦太郎（凤凰院凶真）的宿命羁绊，深爱并托付一切的人"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 Lab 冰箱场景：「ブラックコーヒーか、ドクターペッパー（Dr Pepper）」",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 Lab 冰箱场景：「ブラックコーヒーか、ドクターペッパー（Dr Pepper）」"
     },
     {
       "id": "FACT-20",
-      "category": "relationships",
-      "source": "Steins;Gate VN Ch.1-11",
+      "category": "habits",
+      "source": "Steins;Gate VN Ch.2 / Ch.3",
       "source_type": "official_vn_canon",
-      "title": "对冈部伦太郎（凤凰院凶真）的羁绊",
-      "zh": "实验室创始人（LabMem No.001），那个狂妄自称‘疯狂科学家·凤凰院凶真’的中二病笨蛋。虽然嘴上嫌弃其轻浮中二，但心底里对其深信不疑，是她最重要、深爱的人。",
-      "ja": "岡部倫太郎（オカリン、鳳凰院凶真）。狂気のマッドサイエンティストを気取るバカだが、紅莉栖の最愛の理解者。",
+      "title": "泡面料理癖好与 My Fork",
+      "zh": "因为不擅长做复杂的料理，在实验室深夜习惯用自己的专属餐叉（My Fork）吃杯装方便面。",
+      "ja": "料理が苦手で、研究室では専用フォーク（My Fork）でカップ麺を食べる。",
       "keywords": [
-        "人际",
-        "中二病",
-        "椎名真由理",
-        "冈部伦太郎",
-        "凤凰院凶真",
-        "真由理",
-        "天使",
-        "冈伦"
+        "泡面",
+        "方便面",
+        "餐叉",
+        "My Fork",
+        "料理",
+        "吃面"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章&第6章：视椎名真由理为纯洁的天使，极力保护其免受任何伤害"
+      "scene_context": "《STEINS;GATE》游戏本篇 第2章 实验室深夜红莉栖使用专属餐叉（My Fork）吃杯装泡面场景",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室深夜红莉栖使用专属餐叉（My Fork）吃杯装泡面场景"
     },
     {
       "id": "FACT-21",
@@ -410,8 +445,9 @@
         "舍己救人",
         "天使"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：嫌弃桥田至（桶子）思想龌龊是变态，但高度认可其黑客计算机实力"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-22",
@@ -427,8 +463,9 @@
         "超级黑客",
         "变态绅士"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第3章：对漆原琉华抱有强烈的保护欲与赞美，认为其楚楚可怜"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-23",
@@ -444,8 +481,9 @@
         "未来战士",
         "时间机器之母"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第4章：与菲利斯·喵喵在女仆咖啡厅对局并交流秋叶原情报"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-24",
@@ -460,8 +498,9 @@
         "琉华子",
         "神社巫女"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第5章：遭遇阿万音铃羽的敌意对立，后得知其来自 2036 年反抗军并释怀结盟"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-25",
@@ -476,8 +515,9 @@
         "喵喵",
         "女仆咖啡厅"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第3章：对沉默寡言的桐生萌郁保持学术警惕"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-26",
@@ -492,8 +532,9 @@
         "闪光的指压师",
         "Rounder"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 0 本篇第1章：比屋定真帆是维克多·孔多利亚大学脑科学研究所的前辈与学术挚友"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-27",
@@ -508,8 +549,9 @@
         "互诉衷肠",
         "告别前夕"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 0 本篇第1章：亚历克西斯·莱斯基宁教授是其在美国的导师与脑机接口项目负责人"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-28",
@@ -524,8 +566,9 @@
         "精神家园",
         "接纳"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第4章：在匿名论坛 @channel 上使用固定识别码 Tripcode 活跃"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-29",
@@ -541,8 +584,9 @@
         "D-Mail",
         "奇异点"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第4章：Tripcode 著名的论坛固定马甲为‘栗悟饭与龟波气功’（栗悟飯とカメハメハ）"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-30",
@@ -558,8 +602,9 @@
         "记忆数字化",
         "覆写"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第4章：深谙网络流行梗（如‘ぬるぽ’‘ｶﾞｯ’），被冈部戳穿时会极度羞恼否定"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-31",
@@ -575,8 +620,9 @@
         "黑洞",
         "果冻人"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：喜好智力饮料 Dr Pepper（胡椒博士），但坚决否认受冈部影响"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-32",
@@ -591,8 +637,9 @@
         "复古电脑",
         "协议解析"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：习惯在深夜实验室用叉子吃杯装方便面（尤其是特浓拉面）"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-33",
@@ -607,8 +654,9 @@
         "Reading Steiner",
         "记忆维持"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第3章：专属布丁被冈部误吃引发红莉栖暴怒的‘布丁事件’"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-34",
@@ -629,8 +677,9 @@
         "命运石之门世界线",
         "双生共存"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第1章：极度喜爱雷姆乌帕与金属乌帕，广播会馆抓娃娃机取得金属乌帕"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-35",
@@ -648,8 +697,9 @@
         "El Psy Kongroo",
         "称呼"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：厌恶被称为‘助手’（Assistant），每次都会立刻反驳‘谁是助手了！’"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-36",
@@ -668,8 +718,9 @@
         "外号",
         "克里斯蒂娜"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：厌恶冈部擅自加后缀称其为‘克里斯蒂娜’（Christina），坚决要求叫全名"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-37",
@@ -687,8 +738,9 @@
         "黑咖啡",
         "土豪女"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：冈部戏称其为‘土豪女’（Celeb Seven）、‘实验狂魔’，均遭强烈回怼"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-38",
@@ -705,8 +757,9 @@
         "扎拉图斯特拉",
         "拿筷子"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第2章：厌恶冈部中二病爆发时的中二代号‘扎拉图斯特拉’"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-39",
@@ -724,8 +777,9 @@
         "我的叉子",
         "成年研究者"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇全篇：讨厌别人将其当成小孩子或小妹妹对待，强调自己是成年研究者"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-40",
@@ -740,8 +794,9 @@
         "U.F.O.",
         "计时秒数"
       ],
-      "verification_status": "VERIFIED",
-      "scene_context": "Steins;Gate 本篇第9章：视线接触时害羞会抱胸转头，习惯拉拽左胸前的红领带缓解紧张"
+      "verification_status": "PENDING_VERIFICATION",
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-41",
@@ -757,7 +812,8 @@
         "鼓腮帮子"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-42",
@@ -773,7 +829,8 @@
         "撒娇粘人"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-43",
@@ -789,7 +846,8 @@
         "室内派"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-44",
@@ -805,7 +863,8 @@
         "@channel"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-45",
@@ -822,7 +881,8 @@
         "刷论坛"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-46",
@@ -840,7 +900,8 @@
         "刚才的不算"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-47",
@@ -856,7 +917,8 @@
         "毒舌"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-48",
@@ -873,7 +935,8 @@
         "キタ"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-49",
@@ -889,7 +952,8 @@
         "宅文化共振"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-50",
@@ -905,7 +969,8 @@
         "终极秘密"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-51",
@@ -921,7 +986,8 @@
         "打字如飞"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-52",
@@ -936,7 +1002,8 @@
         "助手じゃない"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-53",
@@ -951,7 +1018,8 @@
         "勝手にティーナって付けるな"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-54",
@@ -967,7 +1035,8 @@
         "僵尸"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-55",
@@ -983,7 +1052,8 @@
         "名言"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-56",
@@ -999,7 +1069,8 @@
         "名言"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-57",
@@ -1015,7 +1086,8 @@
         "证伪"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-58",
@@ -1031,7 +1103,8 @@
         "为了谁"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-59",
@@ -1047,7 +1120,8 @@
         "灵魂记忆"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     },
     {
       "id": "FACT-60",
@@ -1064,7 +1138,8 @@
         "光场载体"
       ],
       "verification_status": "PENDING_VERIFICATION",
-      "scene_context": "待补充官方精准台词或小说/广播剧卷册页码证据，暂不作为确定事实注入 Prompt"
+      "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
     }
   ],
   "tone_examples": [

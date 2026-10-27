@@ -66,14 +66,72 @@ class SilentVoiceEngine:
         return "分かったわ。（シミュレーション翻訳）"
 
 
-def resolve_ollama_endpoint() -> Tuple[str, int]:
-    raw = os.environ.get("KURISU_API_BASE") or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434"
+def get_unified_llm_config() -> Dict[str, Any]:
+    raw = os.environ.get("KURISU_API_BASE") or os.environ.get("OLLAMA_HOST") or os.environ.get("OPENAI_BASE_URL") or "http://127.0.0.1:11434"
     if not raw.startswith("http"):
         raw = "http://" + raw
     parsed = urllib.parse.urlparse(raw)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or 11434
-    return host, port
+    scheme = parsed.scheme or "http"
+    base_url = f"{scheme}://{host}:{port}"
+    api_base_v1 = f"{base_url}/v1"
+    return {
+        "raw": raw,
+        "host": host,
+        "port": port,
+        "base_url": base_url,
+        "api_base": api_base_v1
+    }
+
+
+def resolve_ollama_endpoint() -> Tuple[str, int]:
+    cfg = get_unified_llm_config()
+    return cfg["host"], cfg["port"]
+
+
+def check_fact_satisfaction(text: str, required_facts: List[str], fact_aliases: Dict[str, List[str]]) -> Tuple[bool, List[str]]:
+    missing = []
+    for r in required_facts:
+        acceptable = [r] + fact_aliases.get(r, [])
+        if not any(term in text for term in acceptable):
+            missing.append(r)
+    return (len(missing) == 0), missing
+
+
+def test_strict_fact_scoring_without_alias_bypass() -> bool:
+    """验证别名旁路已彻底阻断：'只答对姓名、漏答关系' 必须被严格判负"""
+    f10_case = {
+        "case_id": "F10",
+        "category": "character_facts",
+        "input": "你的父亲是谁？你们之间的学术关系如何？",
+        "required_facts": ["中钵", "关系恶劣"],
+        "fact_aliases": {
+            "中钵": ["牧濑章一", "中钵博士"],
+            "关系恶劣": ["决裂", "恶劣", "嫉妒", "断绝", "反目", "对立", "矛盾"]
+        },
+        "forbidden_contradictions": ["和睦相处", "关系很好"]
+    }
+
+    # 场景1：只答对姓名、漏答关系（反例，必须失败）
+    partial_reply = "我的父亲是中钵博士。"
+    passed_partial, missing_partial = check_fact_satisfaction(
+        partial_reply, f10_case["required_facts"], f10_case["fact_aliases"]
+    )
+    if any(f in partial_reply for f in f10_case["forbidden_contradictions"]):
+        passed_partial = False
+    assert passed_partial is False, f"只答对姓名、漏答关系的回答应被判负！当前判断却通过，缺少项: {missing_partial}"
+    assert "关系恶劣" in missing_partial, "必须准确指出遗漏了关系事实"
+
+    # 场景2：同时答对姓名与关系（正例，必须通过）
+    full_reply = "我的父亲是中钵博士，但因为他在学术上极度嫉妒我，我们早就已经决裂断绝关系了。"
+    passed_full, missing_full = check_fact_satisfaction(
+        full_reply, f10_case["required_facts"], f10_case["fact_aliases"]
+    )
+    if any(f in full_reply for f in f10_case["forbidden_contradictions"]):
+        passed_full = False
+    assert passed_full is True, "姓名与关系均回答完整时应判定通过"
+    return True
 
 
 def check_port_listening(host: str, port: int, timeout: float = 0.5) -> bool:
@@ -91,9 +149,10 @@ def load_cases(fixture_path: Path) -> List[Dict[str, Any]]:
 
 class TestAgentEnvironment:
     """统一测试环境工厂：负责隔离拦截、SQLite专属缓存目录分配、所有数据库连接追踪与关闭"""
-    def __init__(self, cache_dir: Path, live_mode: bool = False):
+    def __init__(self, cache_dir: Path, live_mode: bool = False, llm_config: Optional[Dict[str, Any]] = None):
         self.cache_dir = cache_dir
         self.live_mode = live_mode
+        self.llm_config = llm_config or get_unified_llm_config()
         self.interceptor = ToolCallInterceptor()
         self.voice = SilentVoiceEngine()
         self.open_stores: List[MemoryStore] = []
@@ -108,6 +167,7 @@ class TestAgentEnvironment:
         self.open_stores.append(store)
 
         agent = KurisuAgent(
+            api_base=self.llm_config["api_base"],
             controller=self.interceptor,
             voice=self.voice,
             memory=store
@@ -291,11 +351,19 @@ def run_management_suite(env: TestAgentEnvironment) -> List[Dict[str, Any]]:
     p6 = (ramen_row is not None) and (ramen_row.get("kind") == "pref:food")
     results.append({"case_id": "MGT-06", "name": "食物属性独立隔离（不被判为颜色）", "passed": p6})
 
-    # 7. 无关否定保护：不喜欢别人动器材不干扰颜色偏好
-    agent.chat("我不喜欢别人乱动我的实验器材。", speak=False)
+    # 7. 交叉属性保护：更新颜色墨绿色，断言食物黑巧克力、普通事实实验器材与知识库事实完好保留
+    agent.chat("我最喜欢的食物是黑巧克力。", speak=False)
+    agent.memory.remember("我不喜欢别人乱动我的实验器材。", kind="fact")
+    agent.memory.remember("牧濑红莉栖在脑科学研究所工作。", kind="lore")
+    agent.chat("我最喜欢的颜色是墨绿色。", speak=False)
     recs7 = agent.memory.list()
-    p7 = any("实验器材" in r["text"] for r in recs7) and any("墨绿色" in r["text"] for r in recs7)
-    results.append({"case_id": "MGT-07", "name": "无关否定表达保护（不伤及颜色偏好）", "passed": p7})
+    p7 = (
+        any("黑巧克力" in r["text"] for r in recs7) and
+        any("实验器材" in r["text"] for r in recs7) and
+        any("脑科学研究所" in r["text"] for r in recs7) and
+        any("墨绿色" in r["text"] for r in recs7)
+    )
+    results.append({"case_id": "MGT-07", "name": "颜色更新交叉保护（保护食物、普通事实与资料条目）", "passed": p7})
 
     # 8. 疑问句防污染：问句“我最喜欢的颜色是什么？”不作为偏好覆盖
     agent.chat("我最喜欢的颜色是什么？", speak=False)
@@ -337,8 +405,9 @@ def evaluate_t02(
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. 真实模式探测：使用配置的服务地址，若端口未监听，严格报告 BLOCKED 并退出
-    ollama_host, ollama_port = resolve_ollama_endpoint()
+    # 1. 真实模式探测：使用统一配置的服务地址，若端口未监听，严格报告 BLOCKED 并退出
+    llm_cfg = get_unified_llm_config()
+    ollama_host, ollama_port = llm_cfg["host"], llm_cfg["port"]
     ollama_online = check_port_listening(ollama_host, ollama_port)
     if live_mode and not ollama_online:
         blocked_summary = {
@@ -351,8 +420,11 @@ def evaluate_t02(
         print(f"[恢复指引] {blocked_summary['guidance']}")
         return blocked_summary
 
-    # 初始化统一测试环境工厂
-    env = TestAgentEnvironment(cache_dir=cache_dir, live_mode=live_mode)
+    # 执行评分断言：严格阻断别名旁路（反例：'只答对姓名、漏答关系'必须判负）
+    test_strict_fact_scoring_without_alias_bypass()
+
+    # 初始化统一测试环境工厂（注入统一LLM配置与api_base）
+    env = TestAgentEnvironment(cache_dir=cache_dir, live_mode=live_mode, llm_config=llm_cfg)
 
     try:
         agent = env.create_agent()
@@ -438,16 +510,13 @@ def evaluate_t02(
             raw_reply = agent.chat(inp, speak=False)
 
             req = case.get("required_facts", [])
-            aliases = case.get("allowed_aliases", [])
+            fact_aliases = case.get("fact_aliases", {})
             forbidden = case.get("forbidden_contradictions", [])
 
-            # 严格评分：逐项满足必需项（或允许别名），且禁止矛盾绝不出现
-            all_req_satisfied = all(
-                (r in raw_reply) or any(a in raw_reply for a in aliases)
-                for r in req
-            )
+            # 严格评分：逐项满足必需项（仅允许对应项的具体别名），绝不允许单一全局别名旁路多个事实
+            is_satisfied, missing = check_fact_satisfaction(raw_reply, req, fact_aliases)
             has_forbidden = any(f in raw_reply for f in forbidden)
-            answered_ok = all_req_satisfied and not has_forbidden
+            answered_ok = is_satisfied and not has_forbidden
 
             # 检索能力核查：必须命中有来源的世界观条目
             lore_hits = agent._search_lore(inp)
@@ -455,7 +524,7 @@ def evaluate_t02(
 
             if live_mode:
                 passed = answered_ok
-                error_type = None if passed else "FACT_ANSWER_FAILED"
+                error_type = None if passed else f"FACT_ANSWER_FAILED (missing: {missing})"
             else:
                 # 离线契约模式：验证世界观检索命中与资料隔离
                 passed = retrieved_ok and not has_forbidden
