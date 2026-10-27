@@ -10,7 +10,8 @@ import json
 import asyncio
 import socket
 import time
-from typing import Set, Optional
+import threading
+from typing import Set, Optional, Dict, List
 from aiohttp import web
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -69,26 +70,276 @@ async def broadcast_ws(payload: dict):
         active_websockets.discard(dead)
 
 # ==========================================
-# REST API 路由处理
+# REST API 路由处理与交互生命周期管理
 # ==========================================
+class ChatJob:
+    """每次聊天交互的工作记录（覆盖准备、排队、执行与收尾全生命周期）"""
+    def __init__(self, job_id: int, message: str, state: str = "preparing"):
+        self.job_id = job_id
+        self.message = message
+        self.state = state  # "preparing", "queued", "running", "completed", "failed", "queued_cancelled", "running_cancelled"
+        self.done_event = threading.Event()
+        self.start_time = time.monotonic()
+        self.cancel_requested = False
+        self.started = False
+        self.finished = False
+        self.error: Optional[str] = None
+        self.owns_pause: bool = False
+
+    def is_done(self) -> bool:
+        return self.done_event.is_set()
+
+    def is_active(self) -> bool:
+        return not self.done_event.is_set()
+
+    def wait(self, timeout: Optional[float] = None) -> bool:
+        return self.done_event.wait(timeout=timeout)
+
+    def mark_done(self, state: str, error: Optional[str] = None):
+        self.state = state
+        self.finished = True
+        if error:
+            self.error = error
+        self.done_event.set()
+
+    def __repr__(self) -> str:
+        return f"<ChatJob id={self.job_id} state={self.state} done={self.is_done()}>"
+
+
+shutting_down = False
+chat_job_lock = threading.Lock()
+active_chat_jobs: Dict[int, ChatJob] = {}
+_chat_job_counter = 0
+active_chat_threads: Set[threading.Thread] = set()
+active_chat_tasks: Set[asyncio.Task] = set()
 chat_lock = asyncio.Lock()
 
 
+def get_active_chat_jobs() -> List[ChatJob]:
+    """线程安全地获取当前在途聊天工作记录快照"""
+    lock = globals().get('chat_job_lock')
+    jobs = globals().get('active_chat_jobs')
+    if lock is None or jobs is None:
+        return []
+    with lock:
+        return list(jobs.values())
+
+
+def check_reinit_allowed():
+    """检查是否允许重新初始化服务（存在旧任务或旧线程时严禁盲目清空覆盖）"""
+    lock = globals().get('chat_job_lock')
+    jobs = globals().get('active_chat_jobs')
+    if lock and jobs:
+        with lock:
+            active = [j for j in jobs.values() if not j.is_done()]
+            if active:
+                raise RuntimeError(f"Cannot re-initialize application: previous chat jobs are still active ({active})")
+    active_chat_threads = globals().get('active_chat_threads')
+    if active_chat_threads:
+        live_chat_threads = [th for th in active_chat_threads if th.is_alive()]
+        if live_chat_threads:
+            raise RuntimeError(f"Cannot re-initialize application: previous chat worker threads are still alive ({live_chat_threads})")
+    active_chat_tasks = globals().get('active_chat_tasks')
+    if active_chat_tasks:
+        live_tasks = [t for t in active_chat_tasks if not t.done()]
+        if live_tasks:
+            raise RuntimeError(f"Cannot re-initialize application: previous chat tasks are still running ({live_tasks})")
+    cur_listener = globals().get('listener')
+    if cur_listener and hasattr(cur_listener, 'has_live_threads') and cur_listener.has_live_threads():
+        live_threads = [
+            th.name for th in (
+                getattr(cur_listener, '_process_thread', None),
+                getattr(cur_listener, '_worker_thread', None),
+                getattr(cur_listener, '_watchdog_thread', None),
+                getattr(cur_listener, '_teardown_thread', None)
+            ) if th and th.is_alive()
+        ]
+        if live_threads:
+            raise RuntimeError(f"Cannot re-initialize application: previous listener threads are still alive ({live_threads})")
+
+    # 检查存活的预热工作线程与延后清理线程
+    for th in threading.enumerate():
+        if th.is_alive():
+            if "kurisu_warmup" in th.name:
+                raise RuntimeError(f"Cannot re-initialize application: previous warmup thread is still running ({th.name})")
+            if "webserver_deferred_cleanup" in th.name:
+                raise RuntimeError(f"Cannot re-initialize application: previous deferred cleanup thread is still running ({th.name})")
+
+    # 全部检查通过后，才安全清理容器状态
+    if lock and jobs:
+        with lock:
+            jobs.clear()
+    if active_chat_threads:
+        active_chat_threads.clear()
+    if active_chat_tasks:
+        active_chat_tasks.clear()
+
+
 async def run_chat(message: str):
-    async with chat_lock:
-        if pro_api:
-            if pro_api.music.running:await asyncio.to_thread(pro_api.playback.stop, False)
-        loop = asyncio.get_running_loop()
-        owns_pause = listener is not None and not listener.is_paused
-        if owns_pause:
-            await loop.run_in_executor(None, listener.pause)
-        try:
-            response_text = await loop.run_in_executor(None, agent.chat, message)
-            return {"reply": response_text, "model_error": agent.last_model_error,
-                    "translation_error": agent.last_translation_error}
-        finally:
-            if owns_pause:
-                await loop.run_in_executor(None, listener.resume)
+    if globals().get('shutting_down', False):
+        raise RuntimeError("Server is shutting down: rejecting new chat requests")
+
+    global _chat_job_counter
+    lock = globals().get('chat_job_lock')
+    jobs_dict = globals().get('active_chat_jobs')
+    job = None
+
+    # 1. 完整交互登记 (Item 1: 准备、排队、执行全覆盖；关停后拒绝登记)
+    if lock and jobs_dict is not None:
+        with lock:
+            if globals().get('shutting_down', False):
+                raise RuntimeError("Server is shutting down: rejecting new chat requests")
+            _chat_job_counter += 1
+            job = ChatJob(_chat_job_counter, message, state="preparing")
+            jobs_dict[job.job_id] = job
+
+    def _finish_job(final_state: str, error_msg: Optional[str] = None):
+        if job and not job.is_done():
+            job.mark_done(final_state, error_msg)
+            if lock and jobs_dict is not None:
+                with lock:
+                    jobs_dict.pop(job.job_id, None)
+
+    owns_pause = False
+    worker_started = False
+    loop = asyncio.get_running_loop()
+
+    current_task = None
+    try:
+        current_task = asyncio.current_task(loop)
+    except Exception:
+        pass
+    if current_task and 'active_chat_tasks' in globals():
+        active_chat_tasks.add(current_task)
+
+    try:
+        async with chat_lock:
+            if globals().get('shutting_down', False):
+                _finish_job("unsubmitted_cancelled", "Server is shutting down during lock wait")
+                raise RuntimeError("Server is shutting down: rejecting new chat requests")
+
+            if pro_api and getattr(pro_api, 'music', None) and getattr(pro_api.music, 'running', False):
+                stop_fut = loop.run_in_executor(None, lambda: pro_api.playback.stop(False))
+                try:
+                    await asyncio.shield(stop_fut)
+                except asyncio.CancelledError:
+                    try:
+                        await stop_fut
+                    except Exception:
+                        pass
+                    raise
+
+            if listener is not None and not getattr(listener, 'is_paused', False):
+                owns_pause = True
+                if job:
+                    job.owns_pause = True
+                pause_fut = loop.run_in_executor(None, listener.pause)
+                try:
+                    await asyncio.shield(pause_fut)
+                except asyncio.CancelledError:
+                    # 关键保障：若在等待暂停时被取消，必须等待底层 pause() 真正执行结束！
+                    # 底层暂停结束前，ChatJob 绝不提前标记完成，也绝不能恢复收音
+                    try:
+                        await pause_fut
+                    except Exception:
+                        pass
+                    raise
+
+            if globals().get('shutting_down', False):
+                _finish_job("unsubmitted_cancelled", "Server is shutting down during preparation")
+                raise RuntimeError("Server is shutting down: rejecting new chat requests")
+
+            # 2. 进入排队阶段 (Item 1 & Item 2)
+            if job:
+                job.state = "queued"
+
+            def _sync_chat_worker():
+                nonlocal worker_started
+                th = threading.current_thread()
+                if 'active_chat_threads' in globals():
+                    active_chat_threads.add(th)
+
+                # 排队取消检查 (Item 2)
+                if job and job.cancel_requested:
+                    if 'active_chat_threads' in globals():
+                        active_chat_threads.discard(th)
+                    _finish_job("queued_cancelled", "Cancelled while queued in thread pool")
+                    if owns_pause and listener and not globals().get('shutting_down', False):
+                        try:
+                            listener.resume()
+                        except Exception:
+                            pass
+                    return None
+
+                worker_started = True
+                if job:
+                    job.started = True
+                    job.state = "running"
+
+                try:
+                    return agent.chat(message)
+                except Exception as ex:
+                    if job:
+                        job.error = str(ex)
+                    raise
+                finally:
+                    # Item 3: 收音恢复顺序！
+                    # 必须在底层工作真正结束（完成 LLM 推理与回复播报）后才允许恢复；关停时严禁恢复！
+                    if owns_pause and listener and not globals().get('shutting_down', False):
+                        try:
+                            listener.resume()
+                        except Exception as resume_ex:
+                            print(f"[WebServer] 恢复收音异常: {resume_ex}")
+
+                    if 'active_chat_threads' in globals():
+                        active_chat_threads.discard(th)
+
+                    final_st = "running_cancelled" if (job and job.cancel_requested) else ("failed" if (job and job.error) else "completed")
+                    _finish_job(final_st, getattr(job, 'error', None))
+
+            # 提交到线程池 (Item 2: 提交失败分支)
+            try:
+                executor_fut = loop.run_in_executor(None, _sync_chat_worker)
+            except Exception as submit_ex:
+                _finish_job("unsubmitted_failed", f"Failed to submit to executor: {submit_ex}")
+                if owns_pause and listener and not globals().get('shutting_down', False):
+                    try:
+                        listener.resume()
+                    except Exception:
+                        pass
+                raise
+
+            try:
+                response_text = await executor_fut
+                return {
+                    "reply": response_text,
+                    "model_error": getattr(agent, 'last_model_error', None),
+                    "translation_error": getattr(agent, 'last_translation_error', None),
+                }
+            except asyncio.CancelledError:
+                if job:
+                    job.cancel_requested = True
+                    if not worker_started:
+                        job.state = "queued_cancelled"
+                    else:
+                        job.state = "running_cancelled"
+                raise
+
+    except (asyncio.CancelledError, Exception) as outer_ex:
+        # 如果在 worker 启动前发生取消或异常，清理未执行的 job 与收音状态
+        # 因为准备工作已被 shield 并等待完成，进入此处时底层 pause/playback 确已真正结束
+        if job and not worker_started and not job.is_done():
+            cancel_st = "queued_cancelled" if job.state == "queued_cancelled" else "unsubmitted_cancelled"
+            _finish_job(cancel_st if isinstance(outer_ex, asyncio.CancelledError) else "failed", str(outer_ex))
+            if owns_pause and listener and not globals().get('shutting_down', False):
+                try:
+                    listener.resume()
+                except Exception:
+                    pass
+        raise
+    finally:
+        if current_task and 'active_chat_tasks' in globals():
+            active_chat_tasks.discard(current_task)
 
 
 async def device_call(function, *args):
@@ -100,6 +351,8 @@ async def device_call(function, *args):
 
 async def handle_chat(request: web.Request):
     """处理用户文字/语音对话输入"""
+    if globals().get('shutting_down', False):
+        return web.json_response({"error": "Server is shutting down"}, status=503)
     try:
         data = await request.json()
         message = data.get("message", "").strip()
@@ -215,11 +468,58 @@ async def handle_game(request: web.Request):
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
+async def handle_retry_warmup(request: web.Request):
+    """手动触发模型预热重试（用于重试耗尽后用户恢复 Ollama 后的重新连接）"""
+    if globals().get('shutting_down', False):
+        return web.json_response({"error": "Server is shutting down"}, status=503)
+    app = request.app
+    existing_task = app.get('warmup_task')
+    if existing_task and not existing_task.done():
+        return web.json_response({"status": "busy", "message": "Warmup is already in progress"}, status=409)
+
+    app['warmup_task'] = asyncio.create_task(background_model_warmup(app, max_retries=3, initial_backoff=0.5))
+    return web.json_response({"status": "ok", "message": "Model warmup retry initiated"})
+
 async def handle_status(request: web.Request):
-    """获取系统整体拓扑状态与全时 WiFi / 硬件双通道信息"""
+    """获取系统整体拓扑状态与全时 WiFi / 硬件双通道信息 (含各子系统独立健康度)"""
+    listener_healthy = bool(listener and listener.is_healthy()) if listener else False
+    listener_threads = listener.get_thread_status() if listener else {"process": False, "worker": False, "watchdog": False}
+
+    # ASR 独立状态
+    if listener:
+        if getattr(listener, '_heal_circuit_broken', False):
+            asr_status = "error"
+        elif getattr(listener, 'whisper_model', None) is not None:
+            asr_status = "ready"
+        else:
+            asr_status = "disabled"
+    else:
+        asr_status = "disabled"
+
+    # KWS 唤醒词独立状态
+    kws_status = "ready" if (listener and getattr(listener, 'wake_detector', None) is not None) else "disabled"
+
+    # TTS 语音合成独立状态
+    if voice is not None:
+        if voice.__class__.__name__ == 'SilentVoice' or getattr(voice, 'is_silent', False) or not hasattr(voice, 'synthesize_speech_bundle'):
+            tts_status = "silent_fallback"
+        else:
+            tts_status = "ready"
+    else:
+        tts_status = "disabled"
+
     if controller.port=='SIMULATION':
         return web.json_response(dict(status='online',simulated=True,host_ip='127.0.0.1',
              port='SIMULATION',is_connected=True,audio_usb_connected=False,wake_detector_ready=False,
+             listener_listening=False,listener_paused=False,listener_stop_pending=False,
+             listener_threads_alive=False,listener_healthy=False,
+             listener_threads={'process': False, 'worker': False, 'watchdog': False},
+             model_status=getattr(agent, 'model_status', 'ready'),
+             model_ready=bool(getattr(agent, 'model_ready', True)),
+             model_recovery_guidance=getattr(agent, 'model_recovery_guidance', None),
+             asr_status=asr_status,
+             kws_status=kws_status,
+             tts_status=tts_status,
              wifi={'wifi_online':False,'simulated':True,'last_command':controller.status()},
              model_error=agent.last_model_error,translation_error=agent.last_translation_error))
     from wifi_gateway import get_wifi_gateway
@@ -234,11 +534,23 @@ async def handle_status(request: web.Request):
         "audio_usb_connected": controller.is_connected,
         "board_audio_recent": bool(listener and listener.has_board_audio and time.time() - listener._last_board_frame_time < 3),
         "model_error": agent.last_model_error,
+        "model_status": getattr(agent, 'model_status', 'uninitialized'),
+        "model_ready": bool(getattr(agent, 'model_ready', False)),
+        "model_recovery_guidance": getattr(agent, 'model_recovery_guidance', None),
         "translation_error": agent.last_translation_error,
+        "asr_status": asr_status,
+        "kws_status": kws_status,
+        "tts_status": tts_status,
+        "listener_listening": bool(listener and listener.is_listening and listener_healthy),
+        "listener_healthy": listener_healthy,
+        "listener_threads": listener_threads,
+        "listener_threads_alive": bool(listener and listener.has_live_threads()),
+        "listener_paused": bool(listener and listener.is_paused),
+        "listener_stop_pending": bool(listener and getattr(listener, 'stop_pending', False)),
         "wifi": wifi_info,
         "volume": wifi_info.get('last_command', {}).get('volume', 70),
         "last_audio_error": getattr(controller, 'last_audio_error', None),
-        "wake_detector_ready": bool(listener and listener.wake_detector),
+        "wake_detector_ready": bool(listener and listener.wake_detector and listener_healthy),
         "world_line": "1.048596%"
     })
 
@@ -309,6 +621,9 @@ async def handle_ceremony(request: web.Request):
 def on_voice_detected(speech_text: str):
     """当麦克风检测到用户说话时的回调"""
     global server_loop
+    if globals().get('shutting_down', False):
+        print("[WebServer] 关停中，丢弃新的免触语音输入。")
+        return
     if not speech_text or not speech_text.strip():
         return
     print(f"\n[免触麦克风输入]: {speech_text}")
@@ -316,11 +631,16 @@ def on_voice_detected(speech_text: str):
         # The ASR worker stays paused until inference AND playback finish.
         # This callback runs on the ASR thread, never on the event-loop thread.
         future = asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text), server_loop)
-        future.result()
+        try:
+            future.result()
+        except Exception as e:
+            print(f"[免触语音交互异常]: {e}")
 
 async def process_voice_interaction(speech_text: str):
     """异步执行大模型思考并向全端广播"""
     global listener, agent
+    if globals().get('shutting_down', False):
+        return
     try:
         result = await run_chat(speech_text)
         reply = result["reply"]
@@ -338,7 +658,10 @@ async def process_voice_interaction(speech_text: str):
 # 主启动器
 # ==========================================
 async def on_startup(app: web.Application):
-    global server_loop, listener, HOST_IP, agent, controller, voice, pro_api
+    # 先做完整检查；若被拒绝，严禁修改当前 shutting_down 状态
+    check_reinit_allowed()
+    global server_loop, listener, HOST_IP, agent, controller, voice, pro_api, shutting_down
+    shutting_down = False
     server_loop = asyncio.get_running_loop()
     if app['simulate']:
         from simulator import SimulatedController,SilentVoice
@@ -349,24 +672,43 @@ async def on_startup(app: web.Application):
         class OfflinePlanner:
             def plan(self,text,history=()):return exact_plan(text) or {'kind':'clarify','actions':[]}
         agent.semantic=OfflinePlanner()
+        agent.model_status="ready"
+        agent.model_ready=True
     else:
-        if not app['no_audio']:import torch
-        if app['no_audio']:
+        if not app.get('no_audio', False):
+            try:
+                import torch
+                from voice_engine import get_voice_engine
+                voice = get_voice_engine()
+            except Exception as audio_err:
+                print(f"[WebServer] 语音依赖或硬件缺失，降级至无语音控制模式 (SilentVoice): {audio_err}")
+                app['no_audio'] = True
+                from simulator import SilentVoice
+                voice = SilentVoice()
+        else:
             from simulator import SilentVoice
-            voice=SilentVoice()
-        agent=KurisuAgent(voice=voice)
-        controller=agent.controller;voice=agent.voice
+            voice = SilentVoice()
+        agent = KurisuAgent(voice=voice)
+        controller = agent.controller; voice = agent.voice
     from advanced_api import ProApi
     pro_api=ProApi(controller,agent,voice)
     pro_api.start()
     if app['simulate']:return
 
     # 1. 触发上电与配对连接成功正向反馈仪式感
+    t_phase0 = time.perf_counter()
     loop = asyncio.get_running_loop()
     if await loop.run_in_executor(None, controller.wait_for_control, 8.0):
-        if not app['no_audio']:await loop.run_in_executor(None, controller.run_boot_ceremony, False)
+        if not app['no_audio']:
+            try:
+                await loop.run_in_executor(None, controller.run_boot_ceremony, False)
+            except Exception as cer_err:
+                print(f"[WebServer] 启动仪式执行跳过: {cer_err}")
     else:
         print("[WebServer] 尚未收到板端 Wi-Fi 回执，未宣告配对成功。")
+    t_handshake = (time.perf_counter() - t_phase0) * 1000.0
+    print(f"[WebServer 启动耗时] 阶段1 板端连接/握手: {t_handshake:.1f}ms")
+
     from wifi_gateway import get_wifi_gateway
     HOST_IP = get_local_ip(get_wifi_gateway().board_sta_ip)
     from service_discovery import ServiceAdvertisement
@@ -374,33 +716,363 @@ async def on_startup(app: web.Application):
     await asyncio.to_thread(app['discovery'].start,HOST_IP,WEB_PORT)
     print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
 
-    if app['no_audio'] or app['xiaozhi_bridge']:return
-    # Generate once; subsequent wake/color confirmations play the same Kurisu voice from cache.
-    from semantic_control import describe_action
-    for mode in (1, 2, 3, 7, 23):
-        lines = describe_action({'tool': 'set_light_mode', 'value': mode})
-        await loop.run_in_executor(None, voice.synthesize_speech_bundle, '\n'.join(lines))
+    if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
+        try:
+            t_synth0 = time.perf_counter()
+            from semantic_control import describe_action
+            for mode in (1, 2, 3, 7, 23):
+                lines = describe_action({'tool': 'set_light_mode', 'value': mode})
+                await loop.run_in_executor(None, voice.synthesize_speech_bundle, '\n'.join(lines))
+            t_synth = (time.perf_counter() - t_synth0) * 1000.0
+            print(f"[WebServer 启动耗时] 阶段2 动作语音预合成: {t_synth:.1f}ms")
+        except Exception as synth_err:
+            print(f"[WebServer] 动作语音预合成跳过或异常: {synth_err}")
 
-    # 2. 启动全自动麦克风免触拾音监听
-    from voice_listener import get_voice_listener
-    listener = get_voice_listener(on_voice_detected)
-    try:
-        print('[WebServer] 正在预热本地语义模型；完成前不接收语音指令。')
-        await loop.run_in_executor(None, agent.semantic.warmup)
-    except Exception as error:
-        agent.last_model_error = str(error)
-        print(f'[WebServer] 模型预热失败，暂不启动自动语音监听：{error}')
+        # 2. 初始化全自动麦克风免触拾音监听
+        try:
+            t_listen0 = time.perf_counter()
+            from voice_listener import get_voice_listener
+            listener = get_voice_listener(on_voice_detected)
+            t_listen = (time.perf_counter() - t_listen0) * 1000.0
+            print(f"[WebServer 启动耗时] 阶段3 语音监听器初始化: {t_listen:.1f}ms")
+        except Exception as listen_err:
+            print(f"[WebServer] 语音监听器初始化失败 (保持降级运行，网页直接控制可用): {listen_err}")
+            listener = None
+
+    # 3. 异步解耦后台模型预热与自动恢复任务，解耦 Web 主服务启动 (仅在非模拟模式下启动)
+    if not app.get('simulate'):
+        app['warmup_task'] = asyncio.create_task(background_model_warmup(app))
+        print("[WebServer] 后台模型预热任务已创建，Web 路由已就绪（降级运行模式就绪）。")
+
+async def background_model_warmup(app: web.Application, max_retries: int = 5, initial_backoff: float = 1.0):
+    """后台解耦预热语义模型，并在失败时受控重试；成功后自动使能语音监听"""
+    global listener, agent
+    if not agent or not getattr(agent, 'semantic', None):
         return
-    listener.start()
-    print("[WebServer] 语音监听已启动；板载音频是否就绪请查看 /api/status。")
+
+    agent.model_status = "warming_up"
+    agent.model_ready = False
+    backoff = initial_backoff
+    warmup_state = app.get('warmup_state')
+    abort_event = warmup_state['abort_event'] if warmup_state else app.get('warmup_abort_event')
+
+    for attempt in range(1, max_retries + 1):
+        if abort_event and abort_event.is_set():
+            agent.model_status = "cancelled"
+            break
+        if globals().get('shutting_down', False):
+            agent.model_status = "cancelled"
+            break
+
+        try:
+            print(f"[WebServer] 正在后台预热本地语义模型 (尝试 {attempt}/{max_retries})...")
+            t_warm0 = time.perf_counter()
+
+            warmup_done = threading.Event()
+            warmup_exc = []
+
+            def _run_warmup():
+                try:
+                    agent.semantic.warmup(timeout=30.0, abort_event=abort_event)
+                except Exception as ex:
+                    warmup_exc.append(ex)
+                finally:
+                    warmup_done.set()
+
+            warmup_th = threading.Thread(target=_run_warmup, daemon=True, name=f"kurisu_warmup_attempt_{attempt}")
+            if warmup_state:
+                warmup_state['thread'] = warmup_th
+            warmup_th.start()
+
+            # 异步非阻塞等待底层工作线程执行完成或取消
+            while not warmup_done.is_set():
+                await asyncio.sleep(0.02)
+
+            if warmup_exc:
+                raise warmup_exc[0]
+
+            t_warm = (time.perf_counter() - t_warm0) * 1000.0
+            print(f"[WebServer 启动耗时] 阶段4 本地语义模型预热成功: {t_warm:.1f}ms")
+            agent.model_status = "ready"
+            agent.model_ready = True
+            agent.last_model_error = None
+            agent.model_recovery_guidance = None
+
+            if listener:
+                if getattr(listener, 'is_paused', False):
+                    print("[WebServer] 模型已就绪，但语音监听处于暂停状态，保持暂停。")
+                elif not listener.is_listening:
+                    started = listener.start()
+                    if started:
+                        print("[WebServer] 语音监听已随模型就绪自动启动。")
+                    else:
+                        print("[WebServer] 语音监听自动启动失败 (上组线程退出中或硬件忙)。")
+            return
+        except (asyncio.CancelledError, InterruptedError):
+            print("[WebServer] 后台模型预热任务被取消/中断。")
+            agent.model_status = "cancelled"
+            raise asyncio.CancelledError()
+        except Exception as error:
+            agent.model_status = "error"
+            agent.model_ready = False
+            agent.last_model_error = str(error)
+            print(f"[WebServer] 模型预热失败 (尝试 {attempt}/{max_retries}，保持降级运行)：{error}")
+            if attempt < max_retries:
+                if abort_event and abort_event.is_set():
+                    agent.model_status = "cancelled"
+                    break
+                if globals().get('shutting_down', False):
+                    agent.model_status = "cancelled"
+                    break
+                try:
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 30.0)
+                except asyncio.CancelledError:
+                    agent.model_status = "cancelled"
+                    raise
+            else:
+                agent.model_status = "unreachable"
+                agent.model_ready = False
+                guidance = f"本地大模型服务不可达。请检查 Ollama 服务是否已启动 (如执行 `ollama serve`)，并核对模型 '{getattr(agent.semantic, 'model', 'qwen2.5:7b')}' 是否已拉取。恢复后可通过 POST /api/retry_warmup 触发重试。"
+                agent.model_recovery_guidance = guidance
+                print(f"[WebServer] {guidance}")
 
 async def on_cleanup(app: web.Application):
-    global listener
+    global listener, agent, controller, pro_api, shutting_down
+    shutting_down = True
+    warmup_state = app.get('warmup_state')
+    abort_event = warmup_state['abort_event'] if warmup_state else app.get('warmup_abort_event')
+    if abort_event:
+        abort_event.set()
+
+    warmup_task = app.get('warmup_task')
+    if warmup_task and not warmup_task.done():
+        warmup_task.cancel()
+        try:
+            await asyncio.wait_for(warmup_task, timeout=1.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+            pass
+
+    # 等待底层独立预热工作线程退出，明确超时状态与资源归属
+    warmup_thread = warmup_state['thread'] if warmup_state else app.get('warmup_thread')
+    if warmup_thread and warmup_thread.is_alive():
+        await asyncio.to_thread(warmup_thread.join, 1.0)
+        if warmup_thread.is_alive():
+            # 真实网络阻塞等原因导致工作线程未能在有界超时内退出：
+            # 绝不虚假宣称线程已被回收，如实记录 exit_complete=False 并保留 unresponsive_thread 归属引用
+            if warmup_state:
+                warmup_state['exit_complete'] = False
+                warmup_state['unresponsive_thread'] = warmup_thread
+            print(f"[WebServer] 预热工作线程在 1.0s 内未退出 (可能网络阻塞)，明确标记 exit_complete=False，归属: {warmup_thread.name}")
+        else:
+            if warmup_state:
+                warmup_state['exit_complete'] = True
+                warmup_state['unresponsive_thread'] = None
+    elif warmup_state:
+        warmup_state['exit_complete'] = True
+        warmup_state['unresponsive_thread'] = None
+
+    cleanup_state = app.get('cleanup_state')
+    if cleanup_state is None:
+        cleanup_state = {
+            'listener_stopped': None,
+            'exit_complete': None,
+            'unresponsive_threads': [],
+            'retained_resources': {},
+            'deferred_cleanup_scheduled': False,
+        }
+
+    # 1. 停止后台周期任务、视觉采集与音乐播放，禁止接收新交互 (在所属事件循环关闭前完成异步收尾)
+    if pro_api:
+        try:
+            if hasattr(pro_api, 'stop_tasks'):
+                await pro_api.stop_tasks()
+            else:
+                await pro_api.cleanup()
+            cleanup_state['pro_api_tasks_stopped'] = True
+            cleanup_state['pro_api_cleaned'] = True
+        except Exception as ex:
+            print(f"[WebServer] pro_api 任务停止异常: {ex}")
+
+    if app.get('discovery'):
+        try:
+            await asyncio.to_thread(app['discovery'].close)
+        except Exception:
+            pass
+
+    # 2. 在事件循环仍运行时，停止监听并等待正在执行的交互
+    listener_stopped = True
+    active_listener_threads = []
     if listener:
-        listener.stop()
-    if pro_api:await pro_api.cleanup()
-    if controller:controller.close()
-    if app.get('discovery'):await asyncio.to_thread(app['discovery'].close)
+        # 在线程池中执行 stop，避免阻塞 asyncio 事件循环导致工作线程死锁
+        stop_ok = await asyncio.to_thread(listener.stop, 2.0)
+        has_live = bool(getattr(listener, 'has_live_threads', lambda: False)())
+        if not stop_ok or has_live:
+            listener_stopped = False
+            pending = list(getattr(listener, 'stop_pending_threads', []))
+            active_listener_threads = [
+                th for th in (
+                    getattr(listener, '_process_thread', None),
+                    getattr(listener, '_worker_thread', None),
+                    getattr(listener, '_watchdog_thread', None),
+                    getattr(listener, '_teardown_thread', None),
+                ) if th and th.is_alive()
+            ]
+            print(f"[WebServer] 监听器停止未完成 (超时挂起或有存活工作/收尾线程: {pending})")
+
+    cleanup_state['listener_stopped'] = listener_stopped
+
+    # 2b. 等待正在排队或执行中的聊天工作记录（依据每个工作独立的 done_event，绝不受线程池复用干扰）
+    chat_wait_timeout = 2.0
+    t_chat_start = time.monotonic()
+    while time.monotonic() - t_chat_start < chat_wait_timeout:
+        current_jobs = get_active_chat_jobs()
+        if not current_jobs or all(j.is_done() for j in current_jobs):
+            break
+        await asyncio.sleep(0.05)
+
+    pending_jobs = [j for j in get_active_chat_jobs() if not j.is_done()]
+    chat_stopped = (len(pending_jobs) == 0)
+    cleanup_state['chat_stopped'] = chat_stopped
+    cleanup_state['pending_chat_jobs'] = pending_jobs
+    if not chat_stopped:
+        print(f"[WebServer] 聊天交互工作仍在排队或执行中 (未完成工作记录数: {len(pending_jobs)})")
+
+    # 汇总所有未退出的活跃交互与监听工作
+    all_interactions_stopped = listener_stopped and chat_stopped
+
+    # 3. 确认所有使用者（监听器与底层聊天工作）退出后，再关闭记忆数据库和控制器；超时则保留资源、报告未完成
+    target_ctrl = controller
+    target_api = pro_api
+    target_agent = agent
+    target_memory = getattr(agent, 'memory', None) or (pro_api.agent.memory if pro_api and hasattr(pro_api, 'agent') else None)
+
+    def _close_shared_resources():
+        if 'close_errors' not in cleanup_state:
+            cleanup_state['close_errors'] = {}
+
+        # 释放记忆数据库 (必须在所有使用者完全退出后关闭)
+        if target_api and hasattr(target_api, 'close_resources'):
+            try:
+                target_api.close_resources()
+                if target_memory and hasattr(target_memory, 'closed') and not target_memory.closed:
+                    cleanup_state['memory_closed'] = False
+                    cleanup_state['close_errors']['memory'] = "MemoryStore is not marked closed after close_resources()"
+                    cleanup_state['retained_resources']['memory'] = target_memory
+                else:
+                    cleanup_state['memory_closed'] = True
+            except Exception as ex:
+                cleanup_state['memory_closed'] = False
+                cleanup_state['close_errors']['memory'] = str(ex)
+                cleanup_state['retained_resources']['memory'] = target_memory
+                print(f"[WebServer] pro_api 资源关闭异常: {ex}")
+        elif target_memory and hasattr(target_memory, 'close'):
+            try:
+                target_memory.close()
+                if hasattr(target_memory, 'closed') and not target_memory.closed:
+                    cleanup_state['memory_closed'] = False
+                    cleanup_state['close_errors']['memory'] = "MemoryStore is not marked closed after close()"
+                    cleanup_state['retained_resources']['memory'] = target_memory
+                else:
+                    cleanup_state['memory_closed'] = True
+            except Exception as ex:
+                cleanup_state['memory_closed'] = False
+                cleanup_state['close_errors']['memory'] = str(ex)
+                cleanup_state['retained_resources']['memory'] = target_memory
+                print(f"[WebServer] memory 关闭异常: {ex}")
+        else:
+            cleanup_state['memory_closed'] = True
+
+        # 释放硬件控制器
+        if target_ctrl and hasattr(target_ctrl, 'close'):
+            try:
+                target_ctrl.close()
+                cleanup_state['controller_closed'] = True
+            except Exception as ex:
+                cleanup_state['controller_closed'] = False
+                cleanup_state['close_errors']['controller'] = str(ex)
+                cleanup_state['retained_resources']['controller'] = target_ctrl
+                print(f"[WebServer] controller 关闭异常: {ex}")
+        else:
+            cleanup_state['controller_closed'] = True
+
+    if all_interactions_stopped:
+        _close_shared_resources()
+        warmup_ok = app.get('warmup_state', {}).get('exit_complete')
+        no_errors = len(cleanup_state.get('close_errors', {})) == 0
+        cleanup_state['exit_complete'] = bool(
+            (warmup_ok is not False)
+            and no_errors
+            and cleanup_state.get('memory_closed', False)
+            and cleanup_state.get('controller_closed', False)
+        )
+    else:
+        # 核心关键闭环：仍有未退出的监听或聊天任务时，严禁提前关闭仍在使用的 controller 与 memory 数据库！
+        cleanup_state['exit_complete'] = False
+        cleanup_state['controller_closed'] = False
+        cleanup_state['memory_closed'] = False
+        cleanup_state['deferred_cleaned'] = False
+        cleanup_state['unresponsive_threads'] = list(active_listener_threads)
+        cleanup_state['pending_chat_jobs'] = list(pending_jobs)
+        cleanup_state['retained_resources']['controller'] = target_ctrl
+        cleanup_state['retained_resources']['memory'] = target_memory
+        cleanup_state['deferred_cleanup_scheduled'] = True
+        print(f"[WebServer] 交互或监听退出未完成，保持控制器与记忆库引用，安排安全延后清理 (保护监听线程数: {len(active_listener_threads)}, 保护聊天工作数: {len(pending_jobs)})")
+
+        target_listener_threads = list(active_listener_threads)
+        target_chat_jobs = list(pending_jobs)
+
+        def _safe_deferred_cleanup():
+            # 使用统一等待截止时间，绝非每个任务各自等待累计超长
+            max_wait_total = float(os.environ.get('KURISU_DEFERRED_CLEANUP_TIMEOUT', '3.0'))
+            deadline = time.monotonic() + max_wait_total
+
+            # 1. 等待未退出的监听器专用线程 (真正随任务退出而终止的独立 OS 线程)
+            for th in target_listener_threads:
+                if th and th.is_alive():
+                    remaining = max(0.0, deadline - time.monotonic())
+                    if remaining > 0.0:
+                        th.join(timeout=remaining)
+
+            # 2. 等待未退出的聊天工作记录 (依据每次交互独立的 done_event，绝不受线程池复用干扰)
+            for job in target_chat_jobs:
+                if not job.is_done():
+                    remaining = max(0.0, deadline - time.monotonic())
+                    if remaining > 0.0:
+                        job.wait(timeout=remaining)
+
+            # 到期后重新检查完成状态
+            still_alive_threads = [th for th in target_listener_threads if th and th.is_alive()]
+            still_pending_jobs = [j for j in target_chat_jobs if not j.is_done()]
+            if still_alive_threads or still_pending_jobs:
+                # 超时仍有任务未完成：继续保留资源并报告未完成，禁止关闭控制器与记忆库、禁止标记清理完成
+                cleanup_state['exit_complete'] = False
+                cleanup_state['controller_closed'] = False
+                cleanup_state['memory_closed'] = False
+                cleanup_state['deferred_cleaned'] = False
+                cleanup_state['unresponsive_threads'] = still_alive_threads
+                cleanup_state['pending_chat_jobs'] = still_pending_jobs
+                print(f"[WebServer] 延后清理截止时间到达，仍有任务存活 (线程: {[th.name for th in still_alive_threads]}, 聊天工作: {still_pending_jobs})，继续保留控制器与记忆库，禁止关闭，标记退出未完成")
+            else:
+                # 所有线程与聊天工作均已安全完成：此时方可关闭记忆数据库与控制器
+                _close_shared_resources()
+                cleanup_state['deferred_cleaned'] = True
+                warmup_ok = app.get('warmup_state', {}).get('exit_complete', True)
+                no_errors = len(cleanup_state.get('close_errors', {})) == 0
+                cleanup_state['exit_complete'] = bool(
+                    (warmup_ok is not False)
+                    and no_errors
+                    and cleanup_state.get('memory_closed', False)
+                    and cleanup_state.get('controller_closed', False)
+                )
+                if cleanup_state['exit_complete']:
+                    print("[WebServer] 活跃工作/收尾任务已全部完成，延后关闭记忆库与 controller 完成。")
+                else:
+                    print(f"[WebServer] 延后关闭存在异常，标记 exit_complete=False: {cleanup_state.get('close_errors')}")
+
+        deferred_th = threading.Thread(target=_safe_deferred_cleanup, daemon=True, name="webserver_deferred_cleanup")
+        deferred_th.start()
+        cleanup_state['deferred_cleanup_thread'] = deferred_th
 
 async def on_shutdown(app):
     for ws in list(active_websockets):await ws.close(code=1001,message=b'Server shutdown')
@@ -409,13 +1081,41 @@ async def on_shutdown(app):
         await connection.close();await connection.ws.close(code=1001,message=b'Server shutdown')
 
 def create_app(simulate=False,no_audio=False) -> web.Application:
+    # 严格先进行完整生命周期与旧任务/旧线程检查；若被拒绝，旧服务的 shutting_down 准入状态与资源归属必须保持不变
+    check_reinit_allowed()
+    global shutting_down
+    shutting_down = False
     app = web.Application(client_max_size=21*1024*1024)
     app['simulate']=simulate;app['no_audio']=no_audio
+    warmup_abort_ev = threading.Event()
+    app['warmup_state'] = {
+        'abort_event': warmup_abort_ev,
+        'thread': None,
+        'exit_complete': None,
+        'unresponsive_thread': None,
+    }
+    app['warmup_abort_event'] = warmup_abort_ev
+    app['cleanup_state'] = {
+        'listener_stopped': None,
+        'chat_stopped': None,
+        'pending_chat_jobs': [],
+        'exit_complete': None,
+        'unresponsive_threads': [],
+        'retained_resources': {},
+        'deferred_cleanup_scheduled': False,
+        'pro_api_tasks_stopped': False,
+        'pro_api_cleaned': False,
+        'memory_closed': False,
+        'controller_closed': False,
+        'deferred_cleaned': False,
+        'close_errors': {},
+    }
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
     app.on_shutdown.append(on_shutdown)
     app.router.add_get("/", handle_index)
     app.router.add_post("/api/chat", handle_chat)
+    app.router.add_post("/api/retry_warmup", handle_retry_warmup)
     app.router.add_post("/api/ceremony", handle_ceremony)
     app.router.add_post("/api/mode", handle_mode)
     app.router.add_post("/api/volume", handle_volume)

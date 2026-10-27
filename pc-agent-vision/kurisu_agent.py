@@ -28,15 +28,19 @@ def get_voice_engine():
     return factory()
 
 class KurisuAgent:
-    def __init__(self, api_base: Optional[str] = None, api_key: Optional[str] = None, model: str = "kurisu", controller=None, voice=None, memory=None):
+    def __init__(self, api_base: Optional[str] = None, api_key: Optional[str] = None, model: str = "kurisu", controller=None, voice=None, memory=None, backend: Optional[str] = None):
         self.api_base = api_base or os.environ.get("OPENAI_BASE_URL", "http://localhost:11434/v1")
+        self.backend = backend or os.environ.get("KURISU_LLM_BACKEND")
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "ollama")
         self.model = model
         self._chat_lock = threading.Lock()
-        self.semantic = SemanticControl(model=self.model, api_base=self.api_base)
+        self.semantic = SemanticControl(model=self.model, api_base=self.api_base, backend=self.backend)
         self._tool_results = {}
+        self.model_status = "uninitialized"
+        self.model_ready = False
         self.last_model_error = None
         self.last_translation_error = None
+        self.model_recovery_guidance = None
         
         self.memory = memory if memory is not None else configured_memory()
         # Persistent user-controlled facts and recent conversational context.
@@ -49,6 +53,14 @@ class KurisuAgent:
         self.controller = controller if controller is not None else get_light_controller()
         self.voice = voice if voice is not None else get_voice_engine()
         print(f"[KurisuAgent] 牧濑红莉栖具身大脑已初始化. (硬件端口: {self.controller.port})")
+
+    @property
+    def is_ollama(self) -> bool:
+        backend = getattr(self, 'backend', None)
+        if backend:
+            return backend.lower() == "ollama"
+        api_base = getattr(self, 'api_base', '') or ''
+        return "11434" in api_base or "ollama" in api_base.lower()
 
     def _execute_action(self, name, arguments):
         cancel=getattr(self,'_cancel_turn',None)
@@ -138,7 +150,7 @@ class KurisuAgent:
     def _converse(self):
         # Conversation cannot execute tools or parse instructions from model prose.
         import urllib.request
-        is_ollama = '11434' in self.api_base
+        is_ollama = self.is_ollama
         endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/chat' if is_ollama else self.api_base.rstrip('/') + '/chat/completions'
         try:recalled = self.memory.search(self.history[-1]['content'])
         except Exception as error:

@@ -178,6 +178,17 @@ class MemoryStore:
                 )
             ]
 
+    @property
+    def closed(self) -> bool:
+        try:
+            self.db.total_changes
+            return False
+        except (sqlite3.ProgrammingError, AttributeError):
+            return True
+
     def close(self):
         with self.lock:
-            self.db.close()
+            try:
+                self.db.close()
+            except (sqlite3.ProgrammingError, Exception):
+                pass

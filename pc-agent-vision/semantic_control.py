@@ -1,6 +1,9 @@
 """Validated control planning, separate from persona text and speech synthesis."""
 import json
+import os
 import re
+import threading
+from typing import Optional
 import urllib.request
 
 # Keep every physical display mode in one catalog, including the two score screens.
@@ -188,32 +191,61 @@ def explicit_parameters(text):
 
 
 class SemanticControl:
-    def __init__(self, model='kurisu', api_base='http://localhost:11434/v1'):
+    def __init__(self, model='kurisu', api_base='http://localhost:11434/v1', backend=None):
         self.model = model
         self.api_base = api_base
+        self.backend = backend or os.environ.get('KURISU_LLM_BACKEND')
 
-    def warmup(self):
+    @property
+    def is_ollama(self) -> bool:
+        backend = getattr(self, 'backend', None)
+        if backend:
+            return backend.lower() == 'ollama'
+        api_base = getattr(self, 'api_base', '') or ''
+        return '11434' in api_base or 'ollama' in api_base.lower()
+
+    def warmup(self, timeout: float = 120, abort_event: Optional[threading.Event] = None):
         """Load the same context used by parsing/chat before accepting speech.
 
         A cold model load may exceed the normal per-command deadline. Keep it
         outside that deadline instead of repeatedly cancelling the model loader.
+        Supports abort_event and timeout to ensure background worker threads
+        can be cleanly terminated without leaving orphaned unmanaged tasks.
         """
+        if abort_event and abort_event.is_set():
+            raise InterruptedError("Model warmup aborted before start")
+
         endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/generate'
         payload = {'model': self.model, 'prompt': '', 'stream': False,
                    'keep_alive': '30m', 'options': {'num_ctx': 4096}}
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(),
                                          headers={'Content-Type': 'application/json'})
-        with opener.open(request, timeout=120) as response:
+
+        req_timeout = timeout
+        with opener.open(request, timeout=req_timeout) as response:
             result = json.loads(response.read())
+
+        if abort_event and abort_event.is_set():
+            raise InterruptedError("Model warmup aborted during loading")
+
         if not result.get('done'):
             raise RuntimeError('Local model did not finish loading')
+
+        if abort_event and abort_event.is_set():
+            raise InterruptedError("Model warmup aborted before plan")
+
         # Also populate the stable parsing prompt prefix while still offline
         # from the microphone. Merely loading weights leaves a slow first turn.
-        self.plan('你好，很高兴见到你', timeout=120)
+        if abort_event is not None:
+            self.plan('你好，很高兴见到你', timeout=req_timeout, abort_event=abort_event)
+        else:
+            self.plan('你好，很高兴见到你', timeout=req_timeout)
         return result
 
-    def plan(self, text, history=(), timeout=30):
+    def plan(self, text, history=(), timeout=30, abort_event: Optional[threading.Event] = None):
+        if abort_event and abort_event.is_set():
+            raise InterruptedError("Semantic plan aborted before start")
         direct = exact_plan(text)
         if direct:
             return direct
@@ -260,14 +292,18 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                    [{'role': 'user', 'content': text}], 'stream': False,
                    'format': WIRE_SCHEMA, 'keep_alive': '30m',
                    'options': {'temperature': 0, 'num_predict': 250, 'num_ctx': 4096}}
-        if '11434' not in self.api_base:
+        if not self.is_ollama:
             raise ConnectionError('Semantic planning requires the configured local Ollama endpoint')
         endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/chat'
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         for attempt in range(2):
+            if abort_event and abort_event.is_set():
+                raise InterruptedError("Semantic plan aborted before request")
             request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
             with opener.open(request, timeout=timeout) as response:
                 result = json.loads(response.read())
+            if abort_event and abort_event.is_set():
+                raise InterruptedError("Semantic plan aborted after response")
             self.last_model_stats = {key: result.get(key) for key in ('prompt_eval_count', 'eval_count', 'total_duration')}
             raw = result['message']['content']
             try:

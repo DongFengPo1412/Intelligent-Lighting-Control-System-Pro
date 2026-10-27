@@ -374,15 +374,31 @@ class ProApi:
             response, headers={"Mcp-Session-Id": sid} if sid else {}
         )
 
-    async def cleanup(self):
+    async def stop_tasks(self):
+        """停止后台周期任务、视觉采集与音乐播放，禁止接收新交互"""
         if self.life_task:
             self.life_task.cancel()
             await asyncio.gather(self.life_task, return_exceptions=True)
+            self.life_task = None
         await asyncio.to_thread(self.vision.stop)
         await asyncio.to_thread(self.playback.stop, False)
         if self.scan_task:
+            if not self.scan_task.done():
+                self.scan_task.cancel()
             await asyncio.gather(self.scan_task, return_exceptions=True)
-        self.agent.memory.close()
+            self.scan_task = None
+
+    def close_resources(self):
+        """确认使用者退出后，释放记忆数据库等底层共享持久化资源"""
+        if hasattr(self.agent, "memory") and self.agent.memory and hasattr(self.agent.memory, "close"):
+            try:
+                self.agent.memory.close()
+            except Exception:
+                pass
+
+    async def cleanup(self):
+        await self.stop_tasks()
+        self.close_resources()
 
 
 def register(app, api_getter):

@@ -213,9 +213,12 @@
       : s?.is_connected
         ? "Wi-Fi 已连接"
         : "未连接";
-    $("wakeState").textContent = s?.wake_detector_ready
+    const wakeReady = Boolean(s?.wake_detector_ready && s?.listener_healthy !== false);
+    $("wakeState").textContent = wakeReady
       ? "唤醒检测器就绪"
-      : "未就绪";
+      : (s?.listener_listening === false && s?.model_ready)
+        ? "监听异常 / 未就绪"
+        : "未就绪";
     $("audioTransport").textContent = s?.audio_transport
       ? s.audio_transport === "wifi"
         ? "Wi-Fi PCM"
@@ -223,7 +226,7 @@
       : "由电脑服务配置";
     $("voiceState").textContent = s?.simulated
       ? "模拟服务，不进行真实语音识别"
-      : s?.wake_detector_ready
+      : wakeReady
         ? "对板载麦克风说“助手”即可开始"
         : "可发送文字；板载语音状态见设置";
     $("sendChat").disabled = !state.online || !!state.ownChat;

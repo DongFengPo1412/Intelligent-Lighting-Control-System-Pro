@@ -47,8 +47,27 @@ class VoiceListener:
         self._worker_thread: Optional[threading.Thread] = None
         self._watchdog_thread: Optional[threading.Thread] = None
         self._work_lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._ready_event = threading.Event()
+        self.stop_pending = False
+        self.stop_pending_threads: List[str] = []
         self._pending_prefix = ""
         self._speech_active = False
+
+        # 会话代次与硬件收尾管理 (防止旧会话异步收尾线程干扰新会话)
+        self._session_generation = 0
+        self._teardown_thread: Optional[threading.Thread] = None
+
+        # 看门狗受控自愈控制 (重试上限、指数退避、持续健康防抖与失败熔断)
+        self._heal_attempts = 0
+        self._max_heal_retries = 3
+        self._heal_backoff = 1.0
+        self._last_heal_time = 0.0
+        self._healthy_since = 0.0
+        self._heal_stable_duration = 5.0  # 核心线程需持续健康 5.0 秒以上方可完全复位自愈计数
+        self._heal_circuit_broken = False
+        self.heal_status = "ok"
 
         # 唤醒状态机 (True 表示已唤醒，正在等待具体指令)
         self.is_awake = False
@@ -153,15 +172,12 @@ class VoiceListener:
         except queue.Full:
             pass
 
-    def pause(self):
-        """暂停收音并硬件级关闭麦克风 (在播放扬声器或思考时调用，杜绝回声循环与啸叫)"""
+    def pause(self, timeout: Optional[float] = None, drain_only: bool = False):
+        """暂停收音并排空队列 (受代次校验与硬件收尾管理保护)"""
         self.is_paused = True
         self._speech_active = False
-        try:
-            if not self.duplex:self.controller.enable_mic(False)
-        except Exception:
-            pass
-        # 清空所有待处理音频缓冲与队列
+
+        # 1. 清空所有待处理音频缓冲与队列 (内存操作，极快且绝不阻塞)
         while not self._pcm_queue.empty():
             try:
                 self._pcm_queue.get_nowait()
@@ -172,6 +188,18 @@ class VoiceListener:
                 self._utterance_queue.get_nowait()
             except queue.Empty:
                 break
+
+        if drain_only:
+            return
+
+        # 2. 硬件级关闭麦克风：受当前会话代次保护，杜绝无归属守护线程
+        cur_gen = self._session_generation
+        if not self.duplex and hasattr(self.controller, 'enable_mic'):
+            try:
+                if cur_gen == self._session_generation:
+                    self.controller.enable_mic(False)
+            except Exception:
+                pass
 
     def resume(self):
         """恢复收音 (播报完毕后重新开启麦克风监听)"""
@@ -230,10 +258,14 @@ class VoiceListener:
 
     def _worker_loop(self):
         """专属单任务 ASR 消费线程：保证先进先出且不堆积，杜绝延迟积压"""
-        while self.is_listening:
+        if not self._ready_event.wait(timeout=10.0) or self._stop_event.is_set() or not self.is_listening:
+            return
+        while self.is_listening and not self._stop_event.is_set():
             try:
                 pcm_bytes = self._utterance_queue.get(timeout=0.2)
             except queue.Empty:
+                if self._stop_event.is_set():
+                    break
                 continue
 
             if self.is_paused:
@@ -487,10 +519,75 @@ class VoiceListener:
         self._update_board_led('active' if self.is_awake else 'listening')
 
     def _watchdog_loop(self):
-        """后台看门狗：唤醒后若 10 秒内未收到具体指令，自动退回暗红待命状态"""
-        while self.is_listening:
-            time.sleep(1.0)
+        """后台看门狗：空闲超时检测，以及核心工作线程存活监测与受控自愈"""
+        if not self._ready_event.wait(timeout=10.0) or self._stop_event.is_set() or not self.is_listening:
+            return
+        while self.is_listening and not self._stop_event.is_set():
+            if self._stop_event.wait(1.0):
+                break
             self._expire_idle_wake()
+            self._check_and_heal_threads()
+
+    def _check_and_heal_threads(self):
+        """受控自愈：若监听中但核心线程意外退出，执行重试上限、指数退避、暂停保护与失败熔断"""
+        # 1. 停止与挂起保护：停止期间不重建
+        if not self.is_listening or self._stop_event.is_set() or self.stop_pending:
+            return
+
+        # 2. 暂停保护：暂停期间不擅自重建
+        if self.is_paused:
+            return
+
+        # 3. 熔断保护：达到重试上限后彻底熔断，拒绝盲目高频重建
+        if self._heal_circuit_broken:
+            return
+
+        now = time.monotonic()
+        st = self.get_thread_status()
+        if st["process"] and st["worker"]:
+            # 核心线程均健康：必须持续健康一段时间 (_heal_stable_duration) 方可复位计数，防止快速反复震荡绕过上限熔断
+            if self._healthy_since == 0.0:
+                self._healthy_since = now
+            elif (now - self._healthy_since) >= self._heal_stable_duration:
+                if self._heal_attempts > 0:
+                    self._heal_attempts = 0
+                    self._heal_backoff = 1.0
+                    self.heal_status = "ok"
+            return
+        else:
+            self._healthy_since = 0.0
+
+        # 4. 指数退避检查：未到退避周期前跳过
+        now = time.monotonic()
+        if now - self._last_heal_time < self._heal_backoff:
+            return
+
+        with self._lifecycle_lock:
+            # 二次检查停止、暂停与熔断状态
+            if not self.is_listening or self._stop_event.is_set() or self.is_paused or self.stop_pending:
+                return
+            if self._heal_circuit_broken:
+                return
+
+            # 5. 重试上限与熔断触发
+            if self._heal_attempts >= self._max_heal_retries:
+                self._heal_circuit_broken = True
+                self.heal_status = "circuit_broken"
+                print(f"[VoiceListener 看门狗] 核心线程自愈重试已达上限 ({self._max_heal_retries} 次)，触发失败熔断，停止重建并上报故障！")
+                return
+
+            self._heal_attempts += 1
+            self._last_heal_time = time.monotonic()
+            self.heal_status = "healing"
+            print(f"[VoiceListener 看门狗] 核心工作线程异常退出，执行受控自愈 ({self._heal_attempts}/{self._max_heal_retries})，退避 {self._heal_backoff:.1f}s...")
+            self._heal_backoff = min(self._heal_backoff * 2.0, 30.0)
+
+            if not (self._process_thread and self._process_thread.is_alive()):
+                self._process_thread = threading.Thread(target=self._process_loop, daemon=True)
+                self._process_thread.start()
+            if not (self._worker_thread and self._worker_thread.is_alive()):
+                self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+                self._worker_thread.start()
 
     def _expire_idle_wake(self):
         # Keep the current wake window while capture/recognition is in flight.
@@ -535,10 +632,15 @@ class VoiceListener:
         ambient_energy = 1000.0  # 动态环境声能基线
         warmup_frames = 20  # 启动前 600ms 用于麦克风硬件稳定与 DC 校准
 
-        while self.is_listening:
+        if not self._ready_event.wait(timeout=10.0) or self._stop_event.is_set() or not self.is_listening:
+            return
+
+        while self.is_listening and not self._stop_event.is_set():
             try:
                 pcm_chunk = self._pcm_queue.get(timeout=0.2)
             except queue.Empty:
+                if self._stop_event.is_set():
+                    break
                 if self.is_listening and not self.is_paused and (time.time() - self._last_board_frame_time > 6.0):
                     self._last_board_frame_time = time.time()
                     self._speech_active = False
@@ -695,34 +797,227 @@ class VoiceListener:
                         speech_frames.clear()
                         self._speech_active = False
 
-    def start(self):
-        if self.is_listening:
-            return
-        self.is_listening = True
-        self.controller._voice_listener = self
-        self.is_paused = False
-        self.is_awake = False
-        self._pending_prefix = ""
-        self._is_processing = False
+    def check_stopped(self) -> bool:
+        """检查工作线程与硬件收尾存活状态；全部退出后自动清除挂起状态与线程句柄"""
+        threads = [
+            ('process', self._process_thread),
+            ('worker', self._worker_thread),
+            ('watchdog', self._watchdog_thread),
+            ('teardown', self._teardown_thread),
+        ]
+        alive = [name for name, th in threads if th and th.is_alive()]
+        if not alive:
+            self.stop_pending = False
+            self.stop_pending_threads = []
+            self._process_thread = None
+            self._worker_thread = None
+            self._watchdog_thread = None
+            self._teardown_thread = None
+            return True
+        else:
+            self.stop_pending = True
+            self.stop_pending_threads = alive
+            return False
 
-        self.controller.on_mic_data = self._on_board_pcm
-        if self.controller.connect_audio():
-            self.controller.enable_mic(True)
-            self._update_board_led("listening")
+    def get_thread_status(self) -> dict:
+        """分别报告核心工作线程与硬件收尾的存活状态"""
+        return {
+            'process': bool(self._process_thread and self._process_thread.is_alive()),
+            'worker': bool(self._worker_thread and self._worker_thread.is_alive()),
+            'watchdog': bool(self._watchdog_thread and self._watchdog_thread.is_alive()),
+            'teardown': bool(self._teardown_thread and self._teardown_thread.is_alive()),
+        }
 
-        self._process_thread = threading.Thread(target=self._process_loop, daemon=True)
-        self._process_thread.start()
-        self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
-        self._worker_thread.start()
-        self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
-        self._watchdog_thread.start()
+    def is_healthy(self) -> bool:
+        """
+        完整健康运行条件：
+        - 若未处于监听中：只要不处于停止挂起 (stop_pending) 状态且无活跃硬件收尾即为健康；
+        - 若处于监听中：必须核心线程均存活，未熔断，无活跃硬件收尾，且未在 stop_pending 挂起状态。
+        """
+        if self.stop_pending or self._heal_circuit_broken:
+            return False
+        st = self.get_thread_status()
+        if st['teardown']:
+            return False
+        if not self.is_listening:
+            return True
+        return st['process'] and st['worker'] and st['watchdog']
 
-    def stop(self):
-        self.is_listening = False
-        self.pause()
-        if self.controller.audio_connected:
-            self.controller.enable_mic(False)
-            self._update_board_led("green")
+    def is_alive(self) -> bool:
+        """判断是否具有完整健康运行的核心工作线程（监听中时必须 process 与 worker 存活，杜绝仅剩 watchdog 虚假汇报存活）"""
+        if not self.is_listening or self._heal_circuit_broken:
+            return False
+        st = self.get_thread_status()
+        return st['process'] and st['worker']
+
+    def has_live_threads(self) -> bool:
+        """判断是否有任一底层线程（含硬件收尾）仍在运行（供资源清理与回收等待使用）"""
+        return any(th and th.is_alive() for th in (self._process_thread, self._worker_thread, self._watchdog_thread, self._teardown_thread))
+
+    def start(self) -> bool:
+        with self._lifecycle_lock:
+            if self.is_listening:
+                return True
+            if not self.check_stopped():
+                print(f"[VoiceListener] 拒绝重复启动：上一组线程或硬件收尾仍在退出中 ({self.stop_pending_threads})")
+                return False
+
+            self.stop_pending = False
+            self.stop_pending_threads = []
+            self._stop_event.clear()
+            self._ready_event.clear()
+            self.is_listening = False
+            self.controller._voice_listener = self
+            self.is_paused = False
+            self.is_awake = False
+            self._pending_prefix = ""
+            self._is_processing = False
+
+            # 新会话代次递增
+            self._session_generation += 1
+
+            # 重置自愈控制状态
+            self._heal_attempts = 0
+            self._heal_backoff = 1.0
+            self._last_heal_time = 0.0
+            self._healthy_since = 0.0
+            self._heal_circuit_broken = False
+            self.heal_status = "ok"
+
+            started_threads = []
+            try:
+                self.controller.on_mic_data = self._on_board_pcm
+                if self.controller.connect_audio():
+                    self.controller.enable_mic(True)
+                    self._update_board_led("listening")
+
+                self._process_thread = threading.Thread(target=self._process_loop, daemon=True, name="voicelistener_process")
+                self._process_thread.start()
+                started_threads.append(self._process_thread)
+
+                self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True, name="voicelistener_worker")
+                self._worker_thread.start()
+                started_threads.append(self._worker_thread)
+
+                self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True, name="voicelistener_watchdog")
+                self._watchdog_thread.start()
+                started_threads.append(self._watchdog_thread)
+
+                # 只有全部组件和线程均已成功启动，才最终置位 is_listening = True 并触发启动屏障放行工作线程
+                self.is_listening = True
+                self._ready_event.set()
+                return True
+            except Exception as start_ex:
+                # 出现任何异常（连接失败、线程启动失败等），执行完整原子级回滚
+                print(f"[VoiceListener] 启动过程异常，执行完整失败回滚: {start_ex}")
+                self._stop_event.set()
+                self.is_listening = False
+                self._ready_event.set()
+                for th in started_threads:
+                    if th and th.is_alive():
+                        th.join(timeout=0.15)
+
+                unresponsive = [th for th in started_threads if th and th.is_alive()]
+                if unresponsive:
+                    self.stop_pending = True
+                    self.stop_pending_threads = [th.name for th in unresponsive]
+                else:
+                    self._process_thread = None
+                    self._worker_thread = None
+                    self._watchdog_thread = None
+                    self.stop_pending = False
+                    self.stop_pending_threads = []
+
+                try:
+                    self.controller.enable_mic(False)
+                except Exception:
+                    pass
+                self.controller.on_mic_data = None
+                return False
+
+    def stop(self, timeout: float = 2.0) -> bool:
+        start_time = time.monotonic()
+        budget = max(0.0, float(timeout))
+        deadline = start_time + budget
+
+        # 1. 尝试获取生命周期锁，等待时间严格受总预算约束
+        lock_budget = max(0.0, deadline - time.monotonic())
+        acquired = self._lifecycle_lock.acquire(timeout=lock_budget)
+        if not acquired:
+            self.stop_pending = True
+            if "lock" not in self.stop_pending_threads:
+                self.stop_pending_threads.append("lock")
+            print(f"[VoiceListener] 停止超时：生命周期锁获取等待超时 ({lock_budget:.3f}s)")
+            return False
+
+        try:
+            if not self.is_listening and not self.stop_pending and self.check_stopped():
+                return True
+
+            self.is_listening = False
+            self._stop_event.set()
+            self._ready_event.set()
+
+            # 2. 暂停与排空音频缓冲 (纯内存排空，杜绝阻塞主控线程)
+            self.pause(drain_only=True)
+
+            # 3. 硬件收尾统一登记管理：代次校验 + 线程化受控等待
+            gen_to_teardown = self._session_generation
+
+            def _managed_hw_teardown():
+                if gen_to_teardown != self._session_generation:
+                    return
+                if getattr(self.controller, 'audio_connected', False):
+                    try:
+                        if not self.duplex and hasattr(self.controller, 'enable_mic'):
+                            self.controller.enable_mic(False)
+                        if gen_to_teardown == self._session_generation:
+                            self._update_board_led("green")
+                    except Exception as ex:
+                        print(f"[VoiceListener] 硬件收尾异常: {ex}")
+
+            if not (self._teardown_thread and self._teardown_thread.is_alive()):
+                self._teardown_thread = threading.Thread(
+                    target=_managed_hw_teardown, daemon=True, name=f"hw_teardown_gen_{gen_to_teardown}"
+                )
+                self._teardown_thread.start()
+
+            # 4. 全链路等待：按剩余总预算分配 join 时间（涵盖 process, worker, watchdog 以及 teardown）
+            current = threading.current_thread()
+            threads = [
+                ('process', self._process_thread),
+                ('worker', self._worker_thread),
+                ('watchdog', self._watchdog_thread),
+                ('teardown', self._teardown_thread),
+            ]
+            pending = []
+            for name, th in threads:
+                if th and th.is_alive():
+                    if th == current:
+                        # 当前线程自身发起 stop，不能 join 自身，必须记录为存活挂起
+                        pending.append(name)
+                    else:
+                        remaining = max(0.0, deadline - time.monotonic())
+                        if remaining > 0.0:
+                            th.join(timeout=remaining)
+                        if th.is_alive():
+                            pending.append(name)
+
+            if pending:
+                self.stop_pending = True
+                self.stop_pending_threads = pending
+                print(f"[VoiceListener] 停止超时：部分工作/收尾仍在执行 ({pending})，标记为挂起状态")
+                return False
+            else:
+                self.stop_pending = False
+                self.stop_pending_threads = []
+                self._process_thread = None
+                self._worker_thread = None
+                self._watchdog_thread = None
+                self._teardown_thread = None
+                return True
+        finally:
+            self._lifecycle_lock.release()
 
 _voice_listener_instance: Optional[VoiceListener] = None
 
