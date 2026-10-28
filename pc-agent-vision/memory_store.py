@@ -61,39 +61,58 @@ def lexical_vector(text, dimensions=256):
     return [v / norm for v in vector]
 
 
-COLOR_CHARS = set("红蓝绿黄紫白黑粉橙灰青褐金银铜色")
-NON_COLOR_MARKERS = [
-    "食物", "吃", "喝", "饮料", "咖啡", "茶", "巧克力", "面", "饭", "菜", "肉",
-    "器材", "实验", "将棋", "棋", "研究", "课题", "名字", "称呼", "叫",
-    "工作", "睡觉", "起床", "去"
-]
+COLOR_ROOTS = frozenset("红蓝绿黄紫白黑粉橙灰青褐金银铜棕赤靛翠碧绯苍茜朱丹栗橘绛黛")
+BASIC_COLOR_ROOTS = frozenset("红蓝绿黄紫白黑橙灰青棕褐")
+SHADE_MODIFIERS = frozenset(
+    "深浅暗亮淡浓暖冷纯鲜明柔嫩正大水天湖宝藏草果鹅乳米银金墨烟雾铁古荧光酒玫品洋蔚湛海冰奶军"
+)
+PURE_SHADE_PREFIXES = frozenset("深浅暗亮淡浓暖冷纯鲜墨银天湖宝藏草翠碧酒玫品蔚湛军")
+LOAN_COLORS = frozenset({
+    "米色", "杏色", "桃色", "卡其色", "咖啡色", "琥珀色", "珊瑚色",
+    "薄荷色", "香槟色", "玫瑰色", "柠檬色", "薰衣草色", "驼色",
+    "象牙白", "象牙色", "珍珠白", "樱花粉", "橄榄绿", "祖母绿", "雾霾蓝",
+})
+
+# Only structured user-preference kinds for the same attribute or legacy user-memory kinds
+# may ever be modified/deleted by automatic preference updates. Reference materials such as
+# "document" (uploaded files) and "lore" are unconditionally excluded across all branches.
+USER_PREF_LEGACY_KINDS = frozenset({"preference", "fact"})
+
+_QUERY_RE = re.compile(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$')
+_USER_HEAD = r'(?:(?:(?:现在|其实|目前)\s*)?我(?:\s*(?:现在|其实|目前))?\s*|)'
 
 
 def is_color_name(val: str) -> bool:
-    if not val or len(val) > 8:
+    if not val or len(val) > 8 or val == "颜色" or val.endswith("颜色"):
         return False
-    non_colors = {
-        "颜色", "东西", "事情", "食物", "动作", "别人", "时间", "将棋", "拉面",
-        "器材", "巧克力", "咖啡", "饮料"
-    }
-    if val in non_colors or any(nc in val for nc in non_colors):
-        return False
-    return any(c in val for c in COLOR_CHARS) or val.endswith("色")
-
+    if val in LOAN_COLORS:
+        return True
+    if val.endswith("色"):
+        stem = val[:-1]
+        return (
+            1 <= len(stem) <= 5
+            and stem[-1] in COLOR_ROOTS
+            and all(c in (COLOR_ROOTS | SHADE_MODIFIERS) for c in stem)
+        )
+    if len(val) == 1:
+        return val in BASIC_COLOR_ROOTS
+    if len(val) == 2:
+        return val[0] in PURE_SHADE_PREFIXES and val[1] in BASIC_COLOR_ROOTS
+    return False
 
 
 def parse_preference_action(statement: str):
-    """Parse user preference updates into structured attribute operations.
-    Returns None if statement is not a structured preference update."""
-    if not statement:
+    """Parse first-person user preference updates into structured attribute operations.
+    Returns None for queries, third-person statements, or unstructured text."""
+    if not statement or not isinstance(statement, str):
         return None
     s = statement.strip()
-    # 0. Reject interrogatives / queries so questions like "我最喜欢的颜色是什么？" are never parsed as preferences
-    if re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', s):
+    s = re.sub(r'^(?:请?记住[：:，,\s]*)', '', s).strip()
+    if not s or _QUERY_RE.search(s):
         return None
 
-    # 1. Name & Nickname
-    m = re.fullmatch(r'(?:我的名字是|我叫)\s*([^\s，。！!]+)[。！!]?', s)
+    # 1. Name & Nickname (strictly first-person user)
+    m = re.fullmatch(r'(?:(?:现在|其实)\s*)?(?:我的名字是|我叫)\s*([^\s，,。！!？?：:；;]+?)[。！!]?', s)
     if m:
         name = m.group(1).rstrip('。！!')
         return {
@@ -101,11 +120,12 @@ def parse_preference_action(statement: str):
             'attr': 'name',
             'key': 'pref:user:name',
             'kind': 'pref:name',
+            'value': name,
             'text': f'我的名字是{name}。',
             'clean_keys': ['pref:user:name'],
             'clean_keywords': []
         }
-    m = re.fullmatch(r'(?:以后请?叫我|请叫我|叫我)\s*([^\s，。！!]+)[。！!]?', s)
+    m = re.fullmatch(r'(?:以后请?叫我|请叫我|叫我)\s*([^\s，,。！!？?：:；;]+?)[。！!]?', s)
     if m:
         nick = m.group(1).rstrip('。！!')
         return {
@@ -113,13 +133,17 @@ def parse_preference_action(statement: str):
             'attr': 'nickname',
             'key': 'pref:user:nickname',
             'kind': 'pref:nickname',
+            'value': nick,
             'text': f'以后请叫我{nick}。',
             'clean_keys': ['pref:user:nickname'],
             'clean_keywords': []
         }
 
-    # 2. Food preferences: "我最喜欢的食物是拉面", "我最喜欢吃拉面", "我也喜欢吃寿司"
-    m_food = re.search(r'(?:我最喜欢的食物是|最喜欢的食物是|我最喜欢吃|最喜欢吃)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
+    # 2. Food preferences: anchored first-person / zero-subject user only; rejects "甲最喜欢的食物是..."
+    m_food = re.fullmatch(
+        _USER_HEAD + r'(?:最喜欢的食物是|最喜爱的食物是|最喜欢吃)\s*([^\s，,。！!？?：:；;]+?)(?:了)?[。！!]?',
+        s,
+    )
     if m_food:
         food = m_food.group(1).rstrip('了。！!')
         return {
@@ -127,55 +151,59 @@ def parse_preference_action(statement: str):
             'attr': 'food',
             'key': 'pref:food:favorite',
             'kind': 'pref:food',
+            'value': food,
             'text': f'我最喜欢的食物是{food}。',
             'clean_keys': ['pref:food:favorite'],
             'clean_keywords': []
         }
 
     # 3. Color preferences:
-    # 3a. Explicit "我最喜欢的颜色是..." or "最喜欢的颜色是..."
-    m_color_explicit = re.search(r'(?:我最喜欢的颜色是|最喜欢的颜色是|我最喜爱的颜色是|喜欢的颜色是)\s*([^\s，,。！!]+?)(?:了)?(?:[，,]\s*(?:不再喜欢|不喜欢)\s*([^\s，,。！!]+?)(?:了)?)?[。！!]?$', s)
+    # 3a. Explicit favorite color (anchored to user; rejects third-person like "甲最喜欢的颜色是红色")
+    m_color_explicit = re.fullmatch(
+        _USER_HEAD
+        + r'(?:最喜欢的颜色是|最喜爱的颜色是|偏好的颜色是|喜欢的颜色是)\s*([^\s，,。！!？?：:；;]+?)(?:了)?'
+        + r'(?:[，,]\s*(?:我)?(?:不再喜欢|不喜欢)\s*([^\s，,。！!？?：:；;]+?)(?:了)?)?[。！!]?',
+        s,
+    )
     if m_color_explicit:
         new_color = m_color_explicit.group(1).rstrip('了。！!')
         old_color = m_color_explicit.group(2).rstrip('了。！!') if m_color_explicit.group(2) else None
-        clean_keywords = [old_color] if old_color else []
-        return {
-            'action': 'replace',
-            'attr': 'color',
-            'key': 'pref:color:favorite',
-            'kind': 'pref:color',
-            'text': f'我最喜欢的颜色是{new_color}。',
-            'clean_keywords': clean_keywords,
-            'clean_keys': ['pref:color:favorite']
-        }
-
-    # 3b. Color replacement: "我改喜欢墨绿色了，不再喜欢深蓝色", "我改喜欢墨绿色", "我最喜欢墨绿色了"
-    m_color_replace = re.search(r'(?:我改喜欢|我最喜欢|最喜欢)\s*([^\s，,。！!]+?)(?:了)?(?:[，,]\s*(?:不再喜欢|不喜欢)\s*([^\s，,。！!]+?)(?:了)?)?[。！!]?$', s)
-    if m_color_replace:
-        val = m_color_replace.group(1).rstrip('了。！!')
-        old_val = m_color_replace.group(2).rstrip('了。！!') if m_color_replace.group(2) else None
-        if is_color_name(val):
-            clean_keywords = [old_val] if old_val and is_color_name(old_val) else []
+        if not any(ch in new_color for ch in '的之是'):
+            clean_keywords = [old_color] if (old_color and is_color_name(old_color)) else []
             return {
                 'action': 'replace',
                 'attr': 'color',
                 'key': 'pref:color:favorite',
                 'kind': 'pref:color',
+                'value': new_color,
+                'text': f'我最喜欢的颜色是{new_color}。',
+                'clean_keywords': clean_keywords,
+                'clean_keys': ['pref:color:favorite']
+            }
+
+    # 3b. Implicit color replacement ("我改喜欢墨绿色了，不再喜欢深蓝色", "最喜欢深蓝色")
+    m_color_replace = re.fullmatch(
+        _USER_HEAD
+        + r'(?:改喜欢|最喜欢|最喜爱)\s*([^\s，,。！!？?：:；;]+?)(?:了)?'
+        + r'(?:[，,]\s*(?:我)?(?:不再喜欢|不喜欢)\s*([^\s，,。！!？?：:；;]+?)(?:了)?)?[。！!]?',
+        s,
+    )
+    if m_color_replace:
+        val = m_color_replace.group(1).rstrip('了。！!')
+        old_val = m_color_replace.group(2).rstrip('了。！!') if m_color_replace.group(2) else None
+        if is_color_name(val):
+            clean_keywords = [old_val] if (old_val and is_color_name(old_val)) else []
+            return {
+                'action': 'replace',
+                'attr': 'color',
+                'key': 'pref:color:favorite',
+                'kind': 'pref:color',
+                'value': val,
                 'text': f'我最喜欢的颜色是{val}。',
                 'clean_keywords': clean_keywords,
                 'clean_keys': ['pref:color:favorite']
             }
-        elif "吃" in s or "食物" in s or "饭" in s:
-            return {
-                'action': 'replace',
-                'attr': 'food',
-                'key': 'pref:food:favorite',
-                'kind': 'pref:food',
-                'text': f'我最喜欢的食物是{val}。',
-                'clean_keywords': [],
-                'clean_keys': ['pref:food:favorite']
-            }
-        else:
+        if s.startswith(('我', '现在我', '其实我', '目前我')):
             return {
                 'action': 'statement',
                 'attr': 'general',
@@ -185,44 +213,53 @@ def parse_preference_action(statement: str):
                 'clean_keys': [],
                 'clean_keywords': []
             }
+        return None
 
-    # 3c. Color append ("我也喜欢银白色", "我还喜欢银白色", "我也喜欢红色")
-    m_append = re.search(r'(?:我也喜欢|我还喜欢|我同时也喜欢)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
+    # 3c. Append preference ("我也喜欢银白色", "我还喜欢银白色", "我也喜欢吃寿司")
+    m_append = re.fullmatch(
+        r'(?:(?:现在|其实|目前)\s*)?我(?:\s*(?:现在|其实|目前))?\s*(?:也喜欢|还喜欢|同时也喜欢)(吃)?\s*([^\s，,。！!？?：:；;]+?)(?:了)?[。！!]?',
+        s,
+    )
     if m_append:
-        val = m_append.group(1).rstrip('了。！!')
-        if is_color_name(val):
+        is_eat = bool(m_append.group(1))
+        val = m_append.group(2).rstrip('了。！!')
+        if not is_eat and is_color_name(val):
             return {
                 'action': 'append',
                 'attr': 'color',
                 'key': f'pref:color:liked:{val}',
                 'kind': 'pref:color',
+                'value': val,
                 'text': f'我也喜欢{val}。',
                 'clean_keys': [],
                 'clean_keywords': []
             }
-        elif "吃" in s:
+        if is_eat:
             return {
                 'action': 'append',
                 'attr': 'food',
                 'key': f'pref:food:liked:{val}',
                 'kind': 'pref:food',
+                'value': val,
                 'text': f'我也喜欢吃{val}。',
                 'clean_keys': [],
                 'clean_keywords': []
             }
-        else:
-            return {
-                'action': 'statement',
-                'attr': 'general',
-                'key': None,
-                'kind': 'preference',
-                'text': s if s.endswith(('。', '！', '!')) else s + '。',
-                'clean_keys': [],
-                'clean_keywords': []
-            }
+        return {
+            'action': 'statement',
+            'attr': 'general',
+            'key': None,
+            'kind': 'preference',
+            'text': s if s.endswith(('。', '！', '!')) else s + '。',
+            'clean_keys': [],
+            'clean_keywords': []
+        }
 
     # 3d. Color revoke ("我不再喜欢白色了", "我不喜欢白色了")
-    m_revoke = re.search(r'(?:我不再喜欢|我不喜欢)\s*([^\s，,。！!]+?)(?:了)?[。！!]?$', s)
+    m_revoke = re.fullmatch(
+        r'(?:(?:现在|其实|目前)\s*)?我(?:\s*(?:现在|其实|目前))?\s*(?:不再喜欢|不喜欢)\s*([^\s，,。！!？?：:；;]+?)(?:了)?[。！!]?',
+        s,
+    )
     if m_revoke:
         revoked_val = m_revoke.group(1).rstrip('了。！!')
         if is_color_name(revoked_val):
@@ -237,8 +274,8 @@ def parse_preference_action(statement: str):
                 'clean_keywords': [revoked_val]
             }
 
-    # 4. General statements / non-color dislike ("我不喜欢别人乱动我的实验器材", "我习惯早上喝咖啡")
-    if s.startswith(('我不喜欢', '我习惯', '我每天', '我经常', '讨厌')):
+    # 4. General first-person statements / non-color dislike ("我不喜欢别人乱动我的实验器材", "我每天早上八点去实验室")
+    if s.startswith(('我不喜欢', '我习惯', '我每天', '我经常')):
         return {
             'action': 'statement',
             'attr': 'general',
@@ -270,13 +307,6 @@ class MemoryStore:
         )
         self.db.commit()
 
-    def close(self):
-        with self.lock:
-            try:
-                self.db.close()
-            except Exception:
-                pass
-
     def remember(self, text, key=None, kind="fact"):
         if not isinstance(text, str) or not 1 <= len(text.strip()) <= 8000:
             raise ValueError("Memory must contain 1..8000 characters")
@@ -298,6 +328,61 @@ class MemoryStore:
             )
         return key
 
+    @staticmethod
+    def _is_modifiable_user_pref_domain(rid: str, rkind: str, attr: str) -> bool:
+        """Single boundary gate: only structured user preferences of the same attribute
+        or legacy user-memory kinds ('preference', 'fact') with non-conflicting IDs are
+        ever eligible for auto-replacement/revocation. 'document', 'lore', and all other
+        material kinds are unconditionally protected across all deletion branches."""
+        if not isinstance(rid, str) or not isinstance(rkind, str):
+            return False
+        structured_prefix = f"pref:{attr}"
+        is_structured_attr = (
+            rkind == structured_prefix or rkind.startswith(structured_prefix + ":")
+        )
+        is_legacy_candidate = rkind in USER_PREF_LEGACY_KINDS
+        if not (is_structured_attr or is_legacy_candidate):
+            return False
+        expected_id_prefix = (
+            f"pref:user:{attr}" if attr in ("name", "nickname") else f"pref:{attr}:"
+        )
+        if rid.startswith("pref:") and not rid.startswith(expected_id_prefix):
+            return False
+        return True
+
+    def _delete_user_pref_rows(self, attr: str, predicate) -> int:
+        """Delete only rows that pass BOTH the user-preference domain boundary AND predicate."""
+        rows = self.db.execute("SELECT id, text, kind FROM memories").fetchall()
+        to_delete = [
+            rid
+            for rid, rtext, rkind in rows
+            if self._is_modifiable_user_pref_domain(rid, rkind, attr)
+            and predicate(rid, rtext, rkind)
+        ]
+        for rid in to_delete:
+            self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
+        return len(to_delete)
+
+    @staticmethod
+    def _matches_user_color_target(rid: str, rtext: str, target_color: str) -> bool:
+        if not target_color or not is_color_name(target_color):
+            return False
+        if rid == f"pref:color:liked:{target_color}":
+            return True
+        if rid.startswith("pref:") and rid != "pref:color:favorite":
+            return False
+        stripped = rtext.strip()
+        exact_user_sentences = {
+            f"我最喜欢的颜色是{target_color}。", f"我最喜欢的颜色是{target_color}",
+            f"最喜欢的颜色是{target_color}。", f"最喜欢的颜色是{target_color}",
+            f"我最喜欢{target_color}。", f"我最喜欢{target_color}",
+            f"最喜欢{target_color}。", f"最喜欢{target_color}",
+            f"我喜欢{target_color}。", f"我喜欢{target_color}",
+            f"我也喜欢{target_color}。", f"我也喜欢{target_color}",
+            f"我还喜欢{target_color}。", f"我还喜欢{target_color}",
+        }
+        return stripped in exact_user_sentences
+
     def remember_preference(self, text: str):
         parsed = parse_preference_action(text)
         if not parsed:
@@ -309,94 +394,58 @@ class MemoryStore:
 
         with self.lock, self.db:
             if action == 'replace':
+                target_key = parsed.get('key')
+                new_val = parsed.get('value')
+
+                def is_same_single_user_pref(rid: str, rtext: str, rkind: str) -> bool:
+                    if target_key and rid == target_key:
+                        return True
+                    if attr == 'color' and new_val and rid == f"pref:color:revoked:{new_val}":
+                        return True
+                    if rid.startswith("pref:"):
+                        return False
+                    row_parsed = parse_preference_action(rtext)
+                    return bool(
+                        row_parsed
+                        and row_parsed.get('action') == 'replace'
+                        and row_parsed.get('attr') == attr
+                    )
+
+                self._delete_user_pref_rows(attr, is_same_single_user_pref)
+
                 if attr == 'color':
-                    # 1. 删除相同属性的已有标准记录
-                    if parsed.get('key'):
-                        self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
-
-                    # 2. 兼容旧格式与遗留记录：严格限定清理同属同一用户、同一属性（color）的旧记录
-                    for row in self.db.execute("SELECT id, text, kind FROM memories").fetchall():
-                        rid, rtext, rkind = row[0], row[1], row[2]
-                        # 属性隔离：明确属于其他属性分类（如食物、姓名等），或者知识库条目，绝对不删
-                        if rkind.startswith('pref:') and not rkind.startswith('pref:color'):
-                            continue
-                        if rid.startswith('pref:') and not rid.startswith('pref:color'):
-                            continue
-                        if rkind == 'lore':
-                            continue
-                        # 边界保护：包含非颜色属性标记（食物、器材、实验、将棋等）的绝对不删
-                        if any(marker in rtext for marker in NON_COLOR_MARKERS):
-                            continue
-
-                        # 正向确认：仅匹配明确的颜色偏好记录
-                        is_color_pref = False
-                        if "最喜欢的颜色" in rtext or "最喜爱的颜色" in rtext or "偏好的颜色" in rtext:
-                            is_color_pref = True
-                        else:
-                            # 匹配如 "我最喜欢深蓝色。" 或 "最喜欢深蓝色" 等旧格式记录
-                            m = re.match(r"^(?:我)?最(?:喜欢|爱)(?:是|的)?([^\s，。！？]{2,8})[。！]?$", rtext.strip())
-                            if m:
-                                val = m.group(1)
-                                if is_color_name(val) and val.endswith("色"):
-                                    is_color_pref = True
-
-                        if is_color_pref:
-                            self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
-
-                    # 3. 如果用户明确说明了旧颜色（如“不再喜欢深蓝色”），清理该旧颜色的相关记录
                     for kw in parsed.get('clean_keywords', []):
                         if kw and is_color_name(kw):
-                            exact_old_patterns = [
-                                f"我最喜欢的颜色是{kw}。", f"我最喜欢的颜色是{kw}",
-                                f"最喜欢{kw}。", f"最喜欢{kw}",
-                                f"我喜欢{kw}。", f"我喜欢{kw}",
-                                f"我也喜欢{kw}。", f"我也喜欢{kw}"
-                            ]
-                            for ep in exact_old_patterns:
-                                self.db.execute("DELETE FROM memories WHERE text = ?", (ep,))
-                            self.db.execute("DELETE FROM memories WHERE id = ?", (f"pref:color:liked:{kw}",))
+                            self._delete_user_pref_rows(
+                                'color',
+                                lambda rid, rtext, rkind, t=kw: self._matches_user_color_target(rid, rtext, t),
+                            )
 
-                    k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
-                    return True, k, parsed['text']
-
-                elif attr in ('name', 'nickname', 'food'):
-                    if parsed.get('key'):
-                        self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
-                    if attr == 'food':
-                        for row in self.db.execute("SELECT id, text, kind FROM memories").fetchall():
-                            rid, rtext, rkind = row[0], row[1], row[2]
-                            if rkind.startswith('pref:') and not rkind.startswith('pref:food'):
-                                continue
-                            if rid.startswith('pref:') and not rid.startswith('pref:food'):
-                                continue
-                            if rkind == 'lore':
-                                continue
-                            if "最喜欢的颜色" in rtext or "最喜爱的颜色" in rtext:
-                                continue
-                            if "最喜欢的食物" in rtext or "最喜爱的食物" in rtext or "最喜欢吃" in rtext:
-                                self.db.execute("DELETE FROM memories WHERE id=?", (rid,))
-                    k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
-                    return True, k, parsed['text']
+                k = self.remember(parsed['text'], key=target_key, kind=parsed['kind'])
+                return True, k, parsed['text']
 
             elif action == 'append':
+                new_val = parsed.get('value')
+                if attr == 'color' and new_val:
+                    self._delete_user_pref_rows(
+                        'color',
+                        lambda rid, rtext, rkind: rid == f"pref:color:revoked:{new_val}",
+                    )
                 k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
                 return True, k, parsed['text']
 
             elif action == 'revoke':
                 target = parsed.get('target_color')
-                if parsed.get('key'):
-                    self.db.execute("DELETE FROM memories WHERE id=?", (parsed['key'],))
                 if target:
-                    exact_revoke_patterns = [
-                        f"我也喜欢{target}。", f"我也喜欢{target}",
-                        f"我还喜欢{target}。", f"我还喜欢{target}",
-                        f"我喜欢{target}。", f"我喜欢{target}",
-                        f"我最喜欢的颜色是{target}。", f"我最喜欢的颜色是{target}"
-                    ]
-                    for ep in exact_revoke_patterns:
-                        self.db.execute("DELETE FROM memories WHERE text = ?", (ep,))
-                    self.db.execute("DELETE FROM memories WHERE id = ?", (f"pref:color:liked:{target}",))
-                    k = self.remember(parsed['text'], key=f"pref:color:revoked:{target}", kind='pref:color:revoked')
+                    self._delete_user_pref_rows(
+                        'color',
+                        lambda rid, rtext, rkind: self._matches_user_color_target(rid, rtext, target),
+                    )
+                    k = self.remember(
+                        parsed['text'],
+                        key=f"pref:color:revoked:{target}",
+                        kind='pref:color:revoked',
+                    )
                     return True, k, parsed['text']
 
             elif action == 'statement':

@@ -43,6 +43,37 @@ class RuntimeContracts(unittest.TestCase):
             self.assertEqual(m.search("蓝色海洋"), [])
             m.close()
 
+    def test_preference_update_preserves_document_lore_and_third_party_preferences(self):
+        with task_directory() as d:
+            p = Path(d) / "memory.sqlite3"
+            m = MemoryStore(p)
+            try:
+                doc_other = m.remember("甲最喜欢的颜色是红色。", kind="document")
+                doc_self_text = m.remember("我最喜欢的颜色是深蓝色。", kind="document")
+                doc_liked_text = m.remember("我也喜欢纯白色。", kind="document")
+                lore_other = m.remember("牧濑红莉栖喜欢的颜色是酒红色。", kind="lore")
+                fact_other = m.remember("乙最喜欢的颜色是黄色。", kind="fact")
+                m.remember_preference("我最喜欢的食物是黑巧克力。")
+                m.remember("最喜欢蓝色", kind="preference")
+
+                m.remember_preference("我最喜欢的颜色是墨绿色。")
+                m.remember_preference("我改喜欢墨绿色了，不再喜欢深蓝色。")
+                m.remember_preference("我不再喜欢纯白色了。")
+                m.remember_preference("我不再喜欢红色了。")
+
+                by_id = {r["id"]: r for r in m.list()}
+                self.assertEqual(by_id[doc_other]["text"], "甲最喜欢的颜色是红色。")
+                self.assertEqual(by_id[doc_other]["kind"], "document")
+                self.assertEqual(by_id[doc_self_text]["text"], "我最喜欢的颜色是深蓝色。")
+                self.assertEqual(by_id[doc_liked_text]["text"], "我也喜欢纯白色。")
+                self.assertEqual(by_id[lore_other]["text"], "牧濑红莉栖喜欢的颜色是酒红色。")
+                self.assertEqual(by_id[fact_other]["text"], "乙最喜欢的颜色是黄色。")
+                self.assertEqual(by_id["pref:food:favorite"]["text"], "我最喜欢的食物是黑巧克力。")
+                self.assertEqual(by_id["pref:color:favorite"]["text"], "我最喜欢的颜色是墨绿色。")
+                self.assertFalse(any(r["text"] == "最喜欢蓝色" for r in by_id.values()))
+            finally:
+                m.close()
+
     def test_mcp_initialization_validation_and_failure(self):
         calls = []
         tools = [

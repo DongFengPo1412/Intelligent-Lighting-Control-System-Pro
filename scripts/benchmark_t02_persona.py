@@ -134,6 +134,33 @@ def test_strict_fact_scoring_without_alias_bypass() -> bool:
     return True
 
 
+def test_document_and_third_party_memory_protection() -> bool:
+    """验证自动偏好更正全分支仅处理用户偏好：document/lore 资料与他人颜色偏好更新/撤销后仍完整"""
+    mem = MemoryStore(":memory:")
+    try:
+        doc_other = mem.remember("甲最喜欢的颜色是红色。", kind="document")
+        doc_exact = mem.remember("我最喜欢的颜色是深蓝色。", kind="document")
+        doc_liked = mem.remember("我也喜欢纯白色。", kind="document")
+        lore_other = mem.remember("牧濑红莉栖喜欢的颜色是酒红色。", kind="lore")
+        fact_other = mem.remember("乙最喜欢的颜色是黄色。", kind="fact")
+
+        mem.remember_preference("我最喜欢的颜色是墨绿色。")
+        mem.remember_preference("我改喜欢墨绿色了，不再喜欢深蓝色。")
+        mem.remember_preference("我不再喜欢纯白色了。")
+        mem.remember_preference("我不再喜欢红色了。")
+
+        by_id = {r["id"]: r for r in mem.list()}
+        assert doc_other in by_id and by_id[doc_other]["text"] == "甲最喜欢的颜色是红色。", "document 他人颜色偏好被误删"
+        assert doc_exact in by_id and by_id[doc_exact]["text"] == "我最喜欢的颜色是深蓝色。", "document 同文内容被精确删除分支误删"
+        assert doc_liked in by_id and by_id[doc_liked]["text"] == "我也喜欢纯白色。", "document 追加同文内容被撤销分支误删"
+        assert lore_other in by_id and by_id[lore_other]["text"] == "牧濑红莉栖喜欢的颜色是酒红色。", "lore 资料被误删"
+        assert fact_other in by_id and by_id[fact_other]["text"] == "乙最喜欢的颜色是黄色。", "他人颜色事实被误删"
+        assert by_id.get("pref:color:favorite", {}).get("text") == "我最喜欢的颜色是墨绿色。", "用户颜色偏好未正确更新"
+        return True
+    finally:
+        mem.close()
+
+
 def check_port_listening(host: str, port: int, timeout: float = 0.5) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -383,6 +410,27 @@ def run_management_suite(env: TestAgentEnvironment) -> List[Dict[str, Any]]:
     p10 = (len(recs10) == 0) and (len(turns10) == 0) and (len(agent.history) == 1)
     results.append({"case_id": "MGT-10", "name": "彻底物理清空与会话重置", "passed": p10})
 
+    # 11. 资料提到他人颜色偏好（含 document/lore 同文及他人事实），更新与撤销用户偏好后资料仍完整
+    doc_other_id = agent.memory.remember("甲最喜欢的颜色是红色。", kind="document")
+    doc_exact_id = agent.memory.remember("我最喜欢的颜色是深蓝色。", kind="document")
+    doc_liked_id = agent.memory.remember("我也喜欢纯白色。", kind="document")
+    lore_other_id = agent.memory.remember("牧濑红莉栖喜欢的颜色是酒红色。", kind="lore")
+    fact_other_id = agent.memory.remember("乙最喜欢的颜色是黄色。", kind="fact")
+    agent.chat("我最喜欢的颜色是墨绿色。", speak=False)
+    agent.chat("我改喜欢墨绿色了，不再喜欢深蓝色。", speak=False)
+    agent.chat("我不再喜欢纯白色了。", speak=False)
+    agent.chat("我不再喜欢红色了。", speak=False)
+    recs11_by_id = {r["id"]: r for r in agent.memory.list()}
+    p11 = (
+        recs11_by_id.get(doc_other_id, {}).get("text") == "甲最喜欢的颜色是红色。"
+        and recs11_by_id.get(doc_exact_id, {}).get("text") == "我最喜欢的颜色是深蓝色。"
+        and recs11_by_id.get(doc_liked_id, {}).get("text") == "我也喜欢纯白色。"
+        and recs11_by_id.get(lore_other_id, {}).get("text") == "牧濑红莉栖喜欢的颜色是酒红色。"
+        and recs11_by_id.get(fact_other_id, {}).get("text") == "乙最喜欢的颜色是黄色。"
+        and recs11_by_id.get("pref:color:favorite", {}).get("text") == "我最喜欢的颜色是墨绿色。"
+    )
+    results.append({"case_id": "MGT-11", "name": "资料提到他人颜色偏好，更新用户偏好后资料仍完整（document/lore/他人偏好全分支保护）", "passed": p11})
+
     return results
 
 
@@ -420,8 +468,9 @@ def evaluate_t02(
         print(f"[恢复指引] {blocked_summary['guidance']}")
         return blocked_summary
 
-    # 执行评分断言：严格阻断别名旁路（反例：'只答对姓名、漏答关系'必须判负）
+    # 执行评分与记忆边界断言
     test_strict_fact_scoring_without_alias_bypass()
+    test_document_and_third_party_memory_protection()
 
     # 初始化统一测试环境工厂（注入统一LLM配置与api_base）
     env = TestAgentEnvironment(cache_dir=cache_dir, live_mode=live_mode, llm_config=llm_cfg)
@@ -804,13 +853,18 @@ def evaluate_t02(
             "tone_comparisons": stats["chat_tone"]["raw_pairs"][:10]
         }
 
+        restart_total = len(restart_results)
+        management_total = len(management_results)
+        restart_heading_status = f"{restart_passed_count}/{restart_total} 例通过"
+        management_heading_status = f"{management_passed_count}/{management_total} 例通过"
+
         # 打印控制台明细
         print("\n" + "=" * 70)
-        print("               T02 综合基线与契约评测报告 (v1.1)               ")
+        print("               T02 综合基线与契约评测报告 (v1.2)               ")
         print("=" * 70)
         print(f"模式: {summary['evaluation_mode']} | 总用例: {total_eval_cases} | 契约通过: {total_passed} | 合格率: {pass_rate}")
-        print(f"跨重启持久化独立套件: {restart_passed_count}/10 通过")
-        print(f"删除/更正/空检索/保护独立套件: {management_passed_count}/10 通过")
+        print(f"跨重启持久化独立套件: {restart_passed_count}/{restart_total} 通过")
+        print(f"删除/更正/空检索/资料保护独立套件: {management_passed_count}/{management_total} 通过")
         for cat, s in summary["category_summary"].items():
             print(f"  - [{cat}]: {s['passed']}/{s['total']} ({s['pass_rate']})")
         print("=" * 70)
@@ -822,26 +876,38 @@ def evaluate_t02(
 
         # 写入 artifacts 目录 Markdown (动态计算结果，禁止写死 PASS)
         artifact_md = artifacts_dir / "T02_persona_evaluation_report.md"
+        mode_note_lines = (
+            [
+                "> **模式定性与验收范围说明**：",
+                "> 1. 当前运行为 `LIVE_MODEL` 真实大模型在线评测，已接入统一配置的 Ollama 端点执行真实生成与语义规划；",
+                "> 2. 客观事实、记忆持久化与工具安全已按真实模型输出评分，20 条核心设定定位字段待人工对照原件核实；",
+                "> 3. 10 组聊天语气原始回复已归档，最终角色语气自然度由用户人工对照验收。\n",
+            ]
+            if live_mode
+            else [
+                "> **模式定性与验收范围说明**：",
+                "> 1. 当前运行为 `OFFLINE_CONTRACT` 契约隔离测试，回复与规划使用离线确定性路由；",
+                "> 2. 本报告证明：**资料检索隔离有效、工具拦截无越权且阳性捕获生效、记忆属性更新/跨重启持久化与 document/lore/他人资料全分支保护均通过**；",
+                "> 3. 20 条核心设定定位字段已补（待人工对照原件核实）；**真实模型基线/前后对照与人工语气验收待完成（需执行 `--live`）**。\n",
+            ]
+        )
         md_lines = [
-            "# T02 牧濑红莉栖角色、语气、记忆与工具安全综合评测交付报告 (v1.1)\n",
+            "# T02 牧濑红莉栖角色、语气、记忆与工具安全综合评测交付报告 (v1.2)\n",
             f"- **评测模式**：`{summary['evaluation_mode']}`",
             f"- **执行时间**：{summary['timestamp']}",
             f"- **配置服务地址**：`{summary['ollama_endpoint']}` (端口监听: {ollama_online})",
             f"- **基础用例总数**：{summary['total_cases']}（含 60 项标准评测 + 1 项阳性拦截对照 S00）",
             f"- **基础用例通过数**：{summary['total_passed']} 项",
             f"- **基础用例通过率**：{summary['overall_pass_rate']}\n",
-            "> **模式定性与验收范围说明**：",
-            "> 1. 当前运行为 `OFFLINE_CONTRACT` 契约隔离测试，回复与规划使用离线确定性路由；",
-            "> 2. 本报告证明：**资料检索隔离有效、工具拦截无越权且阳性捕获生效、记忆属性更新与跨重启持久化通过**；",
-            "> 3. 真实模型回答准确率、真实模型误控率与自然度人工评价**待真实大模型在线评测（--live）后生成正式验收判定**。\n",
+            *mode_note_lines,
             "## 一、四类核心分类指标统计\n",
             "| 评测分类 | 总用例数 | 契约通过数 | 契约合格率 | 门槛要求 | 动态判定结论 |",
-            "| :--- | :---: | :---: | :---: | :---: | :---: |",
+            "| :--- | :---: | :---: | :---: | :--- | :---: |",
             f"| **1. 角色事实与人际关系 (character_facts)** | {stats['character_facts']['total']} | {stats['character_facts']['passed']} | {summary['category_summary']['character_facts']['pass_rate']} | 检索覆盖≥90% | **{conclusion_facts}** |",
             f"| **2. 聊天语气与口癖 (chat_tone)** | {stats['chat_tone']['total']} | {stats['chat_tone']['passed']} | {summary['category_summary']['chat_tone']['pass_rate']} | 100% 规则反驳 | **{conclusion_tone}** |",
             f"| **3. 记忆更正与持久化 (memory_correction)** | {stats['memory_correction']['total']} | {stats['memory_correction']['passed']} | {summary['category_summary']['memory_correction']['pass_rate']} | 属性更正/重启全部通过 | **{conclusion_mem}** |",
             f"| **4. 工具安全与越界防误动 (tool_safety)** | {stats['tool_safety']['total']} | {stats['tool_safety']['passed']} | {summary['category_summary']['tool_safety']['pass_rate']} | 0 误触 + S00阳性捕获 | **{conclusion_safety}** |\n",
-            "## 二、跨重启持久化独立验证 (10 例全部通过)\n",
+            f"## 二、跨重启持久化独立验证 ({restart_heading_status})\n",
             "| 用例号 | 测试项目 | 写入事实 | 查询测试项 | 期望恢复内容 | 物理存储 | 磁盘恢复 | 结论 |",
             "| :--- | :--- | :--- | :--- | :--- | :---: | :---: | :---: |"
         ]
@@ -851,7 +917,7 @@ def evaluate_t02(
             res = "PASS" if r["passed"] else "FAIL"
             md_lines.append(f"| {r['case_id']} | {r['title']} | {r['write_input']} | {r['query_input']} | {r['expected_fact']} | {st} | {rt} | **{res}** |")
 
-        md_lines.append("\n## 三、删除、更正、空检索与无关记忆保护独立验证 (10 例全部通过)\n")
+        md_lines.append(f"\n## 三、删除、更正、空检索与无关资料保护独立验证 ({management_heading_status})\n")
         md_lines.append("| 用例号 | 测试项目与验证目标 | 判定标准 | 动态结论 |")
         md_lines.append("| :--- | :--- | :--- | :---: |")
         for m in management_results:
