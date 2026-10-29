@@ -501,9 +501,15 @@
     try {
       const r = await api("/api/chat", { message }, "POST", 120000);
       addMessage("assistant", r.reply || "暂时没有收到回复");
-      $("chatStatus").textContent = r.model_error
-        ? "模型状态：" + r.model_error
-        : "回复已收到";
+      if (r.model_error) {
+        $("chatStatus").textContent = "模型状态：" + r.model_error;
+      } else if (r.translation_error) {
+        $("chatStatus").textContent = "翻译状态：" + r.translation_error;
+      } else if (r.tts_error) {
+        $("chatStatus").textContent = "语音合成状态：" + r.tts_error;
+      } else {
+        $("chatStatus").textContent = "回复已收到";
+      }
     } catch (error) {
       $("chatStatus").textContent = error.message;
       notice(error.message);

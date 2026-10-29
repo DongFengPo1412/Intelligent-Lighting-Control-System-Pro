@@ -1,9 +1,9 @@
 """
-VoiceEngine: 牧濑红莉栖 (Makise Kurisu, CV: 今井麻美) 纯正开源神经声学语音引擎
-- 核心模型: 基于开源 GPT-SoVITS (v2Pro) 架构 + 牧濑红莉栖中日双语大模型权重 (kurisu-e15.ckpt + kurisu_e4_s972.pth)
-- 语言处理: 中文先发，配合 180ms 自然换气微停顿，再以牧濑红莉栖原作正统傲娇日文台词收束
-- 铁律约束: 坚决禁用任何 Microsoft (SAPI/OneCore/系统机械音) 语音包；要么输出清晰纯正红莉栖原声，要么保持静默 (Fail-Silent)
-- 硬件直通: 16kHz 16-bit 单声道线性 PCM 零重采样损耗直推 ESP32-S3 MAX98357A I2S 硬件
+VoiceEngine: 牧濑红莉栖 (Makise Kurisu, CV: 今井麻美) 开源神经声学语音引擎
+- 核心模型: 基于开源 GPT-SoVITS (v2Pro) 架构 + 牧濑红莉栖中日双语权重 (kurisu-e15.ckpt + kurisu_e4_s972.pth)
+- 语言处理: 以确定的中文语义为基准先合成中文，经 180ms 换气停顿后合成等义日文译文（不使用固定日语台词替代）
+- 铁律约束: 坚决禁用任何 Microsoft (SAPI/OneCore/系统机械音) 语音包；角色 TTS 或翻译失败时保持静默 (Fail-Silent) 并记录可见错误
+- 音频链路: 32kHz 声学滤波与电平塑形后，经多相重采样输出 16kHz 16-bit 单声道线性 PCM 推送至 ESP32-S3 MAX98357A I2S 硬件
 """
 
 import os
@@ -47,35 +47,45 @@ except Exception as e:
 class VoiceEngine:
     def __init__(self):
         self._lock = threading.Lock()
-        
-        # 音量控制 (默认 75% 适度清脆)
+
+        # 音量控制 (默认 75% 适度清脆，保留已验收电平基线)
         self.current_volume = 75
-        
+        self.api_base: Optional[str] = (
+            os.environ.get("KURISU_API_BASE")
+            or os.environ.get("OLLAMA_HOST")
+            or os.environ.get("OPENAI_BASE_URL")
+            or "http://127.0.0.1:11434/v1"
+        )
+        self.model: str = os.environ.get("KURISU_MODEL", "kurisu")
+        self.backend: Optional[str] = os.environ.get("KURISU_LLM_BACKEND")
+        self.last_translation_error: Optional[str] = None
+        self.last_tts_error: Optional[str] = None
+
         # 模型与提示音频路径
         self.model_dir = os.path.join(repo_root, "models", "kurisu_tts")
         self.t2s_weights = os.path.join(self.model_dir, "kurisu-e15.ckpt")
         self.vits_weights = os.path.join(self.model_dir, "kurisu_e4_s972.pth")
         self.bert_base_path = os.path.join(repo_root, "models", "pretrained_models", "chinese-roberta-wwm-ext-large")
         self.cnhuhbert_base_path = os.path.join(repo_root, "models", "pretrained_models", "chinese-hubert-base")
-        
-        # 牧濑红莉栖官方纯净参考音频 (来自训练集无杂音切片 prompt_shy.wav, 4.35s, 文本完全对齐, 无底噪无杂音)
+
+        # 牧濑红莉栖官方参考音频 (prompt_shy.wav, 4.35s, 文本对齐)
         self.ref_audio_path = os.path.join(self.model_dir, "prompt_shy.wav")
         self.prompt_text = "私が言ったのは親子で仲が良くて羨ましいな"
         self.prompt_lang = "ja"
-        
+
         self.tts: Optional[TTS] = None
         self._init_kurisu_model()
 
     def _init_kurisu_model(self):
-        """初始化牧濑红莉栖纯正 GPT-SoVITS 神经网络"""
+        """初始化牧濑红莉栖 GPT-SoVITS 神经网络"""
         if not _HAS_GPT_SOVITS:
             print("[VoiceEngine] GPT-SoVITS 未加载，遵从用户铁律：绝不使用任何微软语音包，静音备用。")
             return
-        
+
         if not os.path.exists(self.t2s_weights) or not os.path.exists(self.vits_weights):
             print(f"[VoiceEngine] 牧濑红莉栖模型权重不存在 ({self.t2s_weights})，静音就绪。")
             return
-        
+
         try:
             print("[VoiceEngine] 正在载入牧濑红莉栖 (CV: 今井麻美) 专属中日双语大模型...")
             t0 = time.time()
@@ -106,22 +116,12 @@ class VoiceEngine:
         self.current_volume = max(0, min(100, int(pct)))
         print(f"[VoiceEngine] 音量已调整为: {self.current_volume}%")
 
-    def _clean_text_for_tts(self, text: str) -> str:
-        """清洗文本中的特殊标签、微表情、系统记号、工具残渣、连续换行"""
+    def _clean_text_for_tts(self, text: str, lang: str = "zh") -> str:
+        """清洗单语文本中的伪工具残渣、舞台说明、颜文字与多余空白（保留合法专名括号）"""
         if not text:
             return ""
-        t = re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL | re.I)
-        t = re.sub(r'</?tool_call>', '', t, flags=re.I)
-        t = re.sub(r'(?:zion|arton|xon)[,\s]*\{.*?(?:\}|$|\n)', '', t, flags=re.I)
-        t = re.sub(r'(?:zion|arton|xon)[,\s]+[a-zA-Z0-9_]+(?:\s+\w+)?', '', t, flags=re.I)
-        t = re.sub(r'[a-zA-Z_]+_mode\s+\d+', '', t, flags=re.I)
-        t = re.sub(r'[a-zA-Z_]+\([^\)]*\)', '', t)
-        t = re.sub(r'\{[^{}]*\}', '', t)
-        t = re.sub(r'\b(?:arton|zion|xon)\b', '', t, flags=re.I)
-        t = re.sub(r'\[.*?\]|\(.*?\)|\（.*?\）|\【.*?\】', '', t)
-        t = t.replace('*', '').replace('`', '').replace('#', '')
-        t = re.sub(r'\s+', ' ', t).strip()
-        return t
+        from bilingual_guard import clean_production_prose
+        return clean_production_prose(text, lang=lang)
 
     def _contains_japanese(self, text: str) -> bool:
         """检测文本是否包含日文假名"""
@@ -132,90 +132,43 @@ class VoiceEngine:
 
     def _translate_zh_to_ja_kurisu(self, zh_text: str) -> str:
         """
-        基于本地端侧 Qwen2.5-7B 实施 100% 动态实时中日互译
-        将输入的中文精准、完全一致地翻译为牧濑红莉栖原声傲娇语气的日文对白
-        彻底杜绝任何固定死板的模板句子！
+        基于统一配置的本地模型端点，将已确定的中文台词忠实翻译为等义日文台词。
+        经过数字、专名、颜色、否定与无口癖污染校验；若失败则返回空串并记录错误，绝不使用固定台词掩盖。
         """
+        self.last_translation_error = None
         if not zh_text or not zh_text.strip():
+            self.last_translation_error = "待翻译中文为空"
             return ""
 
-        # 清洗待翻译的中文，避免工具代码污染翻译
-        clean_zh = self._clean_text_for_tts(zh_text)
-        if not clean_zh:
+        from bilingual_guard import translate_zh_to_ja
+        ja, err = translate_zh_to_ja(
+            zh_text,
+            api_base=getattr(self, "api_base", None),
+            model=getattr(self, "model", "kurisu") or "kurisu",
+            backend=getattr(self, "backend", None),
+            timeout=15.0,
+        )
+        if err:
+            self.last_translation_error = err
+            print(f"[VoiceEngine 动态中译日未通过]: {err}")
             return ""
-
-        try:
-            import urllib.request
-            import json
-            payload = {
-                "model": "kurisu",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "你是《命运石之门》中的牧濑红莉栖(CV:今井麻美)。\n"
-                            "你的任务：将用户提供的【中文台词】精准翻译为【完全对应含义的日语台词】。\n"
-                            "翻译铁律：\n"
-                            "1. 意思必须与中文分毫不差、完全一致。\n"
-                            "2. 语气为牧濑红莉栖经典的傲娇少女、天才学者语调（口癖自然，如「ふん」「〜でしょ」「〜わよ」「アンタ」「バカ」）。\n"
-                            "3. 纯正日文输出，严禁任何英文，严禁任何多余解释或前缀。"
-                        )
-                    },
-                    {
-                        "role": "user",
-                        "content": clean_zh
-                    }
-                ],
-                "stream": False,
-                "keep_alive": "30m",
-                "options": {"temperature": 0.2, "num_predict": 180, "num_ctx": 4096}
-            }
-            req = urllib.request.Request(
-                "http://127.0.0.1:11434/api/chat",
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"}
-            )
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(req, timeout=10.0) as resp:
-                res = json.loads(resp.read().decode("utf-8"))
-                ja = res.get("message", {}).get("content", "").strip()
-                ja = re.sub(r'^(日文翻译[：:]|翻译[：:]|日本語[：:]|牧濑红莉栖[：:]|紅莉栖[：:])', '', ja).strip()
-                ja = ja.replace('`', '').replace('"', '').strip()
-                if ja and re.search(r'[\u3040-\u30ff]', ja):
-                    return ja
-        except Exception as e:
-            print(f"[VoiceEngine 动态中译日异常]: {e}")
-
-        return ""
+        return ja
 
     def _split_zh_ja(self, text: str):
-        """将混合文本拆分为中文段落与日文段落 (严格中日互译对齐)"""
-        sentences = re.split(r'([。！？!\?\n]+)', text)
-        full_sentences = []
-        for i in range(0, len(sentences) - 1, 2):
-            s = sentences[i].strip() + sentences[i + 1].strip()
-            if s:
-                full_sentences.append(s)
-        if len(sentences) % 2 == 1 and sentences[-1].strip():
-            full_sentences.append(sentences[-1].strip())
-
-        zh_parts = []
-        ja_parts = []
-        for s in full_sentences:
-            if re.search(r'[\u3040-\u30ff]', s):
-                ja_parts.append(s)
-            else:
-                zh_parts.append(s)
-
-        zh_text = " ".join(zh_parts).strip()
-        ja_text = " ".join(ja_parts).strip()
+        """将输入文本按行与完整句边界拆分为中文段落与日文段落，避免换行先被合并导致串语"""
+        if not text or not text.strip():
+            return "", ""
+        from bilingual_guard import split_bilingual_text, clean_production_prose
+        zh_raw, ja_raw = split_bilingual_text(text)
+        zh_text = clean_production_prose(zh_raw, lang="zh") if zh_raw else ""
+        ja_text = clean_production_prose(ja_raw, lang="ja") if ja_raw else ""
         return zh_text, ja_text
 
     def _synthesize_raw(self, text: str, lang: str) -> Optional[np.ndarray]:
         """调用 GPT-SoVITS 单独合成一段文本 (32kHz numpy float32)"""
         if not self.tts or not text or not text.strip():
             return None
-        
+
         req = {
             'text': text,
             'text_lang': lang,
@@ -244,13 +197,13 @@ class VoiceEngine:
 
     def _postprocess_audio_32k(self, audio_32k: np.ndarray) -> np.ndarray:
         """
-        录音棚级母带声学塑形与降噪滤波:
-        1. 95Hz 二阶高通滤波: 消除低频嗡鸣、杂散交流声与 DC 偏移;
-        2. noisereduce 神经静音降噪: 彻底消除 HiFi-GAN 声码器潜伏的底噪与沙沙声;
-        3. 300Hz 陷波去浑浊 (De-mud, -3.5dB): 削减发闷发糊的谐波共振, 人声立刻通透;
-        4. 3800Hz 临场高频激励 (+3.5dB): 增强今井麻美清澈透亮的傲娇少女原声;
-        5. 14500Hz 低通滤波: 阻止超高频数字采样镜象;
-        6. 动态电平安全归一化: 保留 -1.2dB (0.88) 净空, 杜绝 DAC 削波失真与爆音。
+        声学滤波与电平塑形处理链 (保持已验收参数不变):
+        1. 95Hz 二阶高通滤波;
+        2. noisereduce 平稳降噪 (可选依赖);
+        3. 300Hz 去浑浊衰减 (-3.5dB);
+        4. 3800Hz 临场激励 (+3.5dB);
+        5. 14500Hz 二阶低通滤波;
+        6. 动态电平安全归一化 (保留 -1.2dB / 0.88 净空)。
         """
         if audio_32k is None or len(audio_32k) == 0:
             return audio_32k
@@ -303,69 +256,110 @@ class VoiceEngine:
             print(f"[VoiceEngine 滤波异常]: {e}")
             return np.clip(audio_32k, -32768, 32767).astype(np.int16)
 
+    def _synthesize_language_chunks(self, text: str, lang: str) -> Optional[np.ndarray]:
+        """按完整句子分块合成单语音频，不切断 UTF-8 或句子；任一分块失败整体返回 None"""
+        from bilingual_guard import chunk_sentences_safe
+        chunks_text = chunk_sentences_safe(text, max_chars=90)
+        if not chunks_text:
+            return None
+        audio_segments = []
+        inter_pause = np.zeros(int(32000 * 0.06), dtype=np.float32)
+        for idx, seg_text in enumerate(chunks_text):
+            seg_audio = self._synthesize_raw(seg_text, lang)
+            if seg_audio is None or len(seg_audio) == 0:
+                return None
+            if idx > 0:
+                audio_segments.append(inter_pause.astype(seg_audio.dtype))
+            audio_segments.append(seg_audio)
+        return np.concatenate(audio_segments) if len(audio_segments) > 1 else audio_segments[0]
+
     def synthesize_speech_bundle(self, text: str) -> Optional[Tuple[bytes, bytes]]:
         """
-        合成红莉栖全方位声线:
+        合成红莉栖双语声线:
         返回: (pcm_16k, wav_32k_bytes)
-        严格确保: 【先中文高保真回答】 + 【180ms 呼吸微停顿】 + 【后牧濑红莉栖正统日文互译 (完全一致的对应含义)】
-        严守铁律: 绝不使用任何微软语音包; 若未生成红莉栖人声则返回 None (静默)
+        确保: 【先完整中文分句】 + 【180ms 呼吸微停顿】 + 【后等义日文分句】
+        严守铁律: 绝不使用任何微软/系统语音包；若角色 TTS 不可用、翻译失败或分块合成失败，
+        保持静默 (Fail-Silent)、不写入残缺缓存、不误播历史缓存，并记录 last_tts_error。
         """
-        if not text or not text.strip() or not self.tts:
+        self.last_tts_error = None
+        if not text or not text.strip():
+            return None
+        if not self.tts:
+            self.last_tts_error = "角色TTS模型未加载，已按静音保护跳过播报（未使用系统替代音色）"
             return None
 
-        cleaned = self._clean_text_for_tts(text)
-        if not cleaned:
-            return None
-
+        import hashlib
+        import io
+        import wave
         from pro_paths import cache_dir as runtime_cache_dir
-        cache_dir = runtime_cache_dir() / 'voice'
-        cache_key = hashlib.sha256(f'original-v1:{self.current_volume}:{cleaned}'.encode('utf-8')).hexdigest()
-        cache_file = cache_dir / (cache_key + '.wav')
+
         with self._lock:
             try:
+                # 先在保留换行的前提下分离并清洗中文与日文
+                zh_text, ja_text = self._split_zh_ja(text)
+                if not zh_text and not ja_text:
+                    self.last_tts_error = "清洗后无可播报有效文本"
+                    return None
+
+                # 若仅有中文而无日文，基于已确定的中文动态生成等义日文；失败则静音报错，不用固定台词掩盖
+                if zh_text and not ja_text:
+                    ja_text = self._translate_zh_to_ja_kurisu(zh_text)
+                    if not ja_text:
+                        self.last_tts_error = (
+                            self.last_translation_error or "动态日文翻译失败，已保持静音（未使用固定台词替代）"
+                        )
+                        return None
+
+                cache_dir = runtime_cache_dir() / 'voice'
+                canonical_pair = f"{zh_text}\n{ja_text}"
+                cache_key = hashlib.sha256(
+                    f'bilingual-v2:{self.current_volume}:{canonical_pair}'.encode('utf-8')
+                ).hexdigest()
+                cache_file = cache_dir / (cache_key + '.wav')
+
                 if cache_file.exists():
                     wav_bytes = cache_file.read_bytes()
                     with wave.open(io.BytesIO(wav_bytes), 'rb') as w:
                         samples = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-                    pcm = scipy.signal.resample_poly(samples.astype(np.float32), 1, 2)
-                    return np.clip(pcm, -32768, 32767).astype(np.int16).tobytes(), wav_bytes
-                # 严格分离中文与日文
-                zh_text, ja_text = self._split_zh_ja(cleaned)
-                
-                # 如果没有日文部分，自动根据中文内容生成严格对应的牧濑红莉栖日文互译
-                if not ja_text:
-                    ja_text = self._translate_zh_to_ja_kurisu(zh_text or cleaned)
-                
+                    if len(samples) > 0:
+                        pcm = scipy.signal.resample_poly(samples.astype(np.float32), 1, 2)
+                        return np.clip(pcm, -32768, 32767).astype(np.int16).tobytes(), wav_bytes
+
                 audio_zh = None
                 audio_ja = None
-                
-                # 1. 牧濑红莉栖声线：先中文合成 (使用 cut5 标点分句，无论长短句均稳定生成)
+
+                # 1. 先中文完整句分块合成
                 if zh_text:
-                    audio_zh = self._synthesize_raw(zh_text, "zh")
-                
-                # 2. 牧濑红莉栖声线：后日文合成 (精准对应互译)
+                    audio_zh = self._synthesize_language_chunks(zh_text, "zh")
+                    if audio_zh is None or len(audio_zh) == 0:
+                        self.last_tts_error = "角色中文语音分块合成失败，已保持静音"
+                        return None
+
+                # 2. 后日文完整句分块合成
                 if ja_text:
-                    audio_ja = self._synthesize_raw(ja_text, "ja")
-                
+                    audio_ja = self._synthesize_language_chunks(ja_text, "ja")
+                    if audio_ja is None or len(audio_ja) == 0:
+                        self.last_tts_error = "角色日文语音分块合成失败，已保持静音"
+                        return None
+
                 # 3. 缝合输出：先中文 + 180ms呼吸停顿 + 后日文
                 if audio_zh is not None and audio_ja is not None:
                     silence = np.zeros(int(32000 * 0.18), dtype=audio_zh.dtype)
                     audio_res = np.concatenate([audio_zh, silence, audio_ja])
-                elif audio_zh is not None:
-                    audio_res = audio_zh
-                elif audio_ja is not None:
+                elif audio_ja is not None and not zh_text:
                     audio_res = audio_ja
                 else:
-                    audio_res = None
-
-                if audio_res is None or len(audio_res) == 0:
+                    self.last_tts_error = "双语音频未完整生成，已保持静音"
                     return None
 
-                # 声学后处理 (录音棚级母带降噪与清晰度 EQ 塑形)
+                if audio_res is None or len(audio_res) == 0:
+                    self.last_tts_error = "合成音频为空，已保持静音"
+                    return None
+
+                # 声学后处理 (保持既有滤波参数与 75% 默认电平基线)
                 processed_32k = self._postprocess_audio_32k(audio_res)
 
-
-                # 生成 PC 专用的 32000Hz 高保真 WAV
+                # 生成 PC 专用的 32000Hz WAV 并原子写入内容寻址缓存
                 wav_io = io.BytesIO()
                 with wave.open(wav_io, 'wb') as w:
                     w.setnchannels(1)
@@ -373,16 +367,20 @@ class VoiceEngine:
                     w.setframerate(32000)
                     w.writeframes(processed_32k.tobytes())
                 wav_32k_bytes = wav_io.getvalue()
-                cache_dir.mkdir(exist_ok=True)
-                if len(list(cache_dir.glob('*.wav')))<64:cache_file.write_bytes(wav_32k_bytes)
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                if len(list(cache_dir.glob('*.wav'))) < 64:
+                    tmp_cache = cache_dir / (cache_key + f'.{os.getpid()}.tmp')
+                    tmp_cache.write_bytes(wav_32k_bytes)
+                    tmp_cache.replace(cache_file)
 
-                # 生成 ESP32 板载专用的 16000Hz PCM 流
+                # 多相重采样生成 ESP32 板载 16000Hz PCM16LE 流
                 resampled_16k = scipy.signal.resample_poly(processed_32k.astype(np.float32), 1, 2)
                 pcm_16k = np.clip(resampled_16k, -32768, 32767).astype(np.int16).tobytes()
 
                 return pcm_16k, wav_32k_bytes
 
             except Exception as e:
+                self.last_tts_error = f"角色语音合成中断: {e}"
                 print(f"[VoiceEngine 异常] 牧濑红莉栖语音合成中断: {e}，遵循静音准则，不播放任何杂音。")
                 return None
 
@@ -413,24 +411,27 @@ class VoiceEngine:
 
         from light_controller import get_light_controller
         ctrl = get_light_controller()
-        board_ready = ctrl.audio_connected or (getattr(ctrl,'audio_transport','usb')=='wifi' and ctrl.connect_audio())
+        board_ready = ctrl.audio_connected or (getattr(ctrl, 'audio_transport', 'usb') == 'wifi' and ctrl.connect_audio())
         if board_ready:
             ctrl.set_board_led("speaking")
 
         if to_board and board_ready:
             # One physical output avoids delayed PC/board copies sounding like echo.
             if not ctrl.play_audio_pcm(pcm_16k):
+                self.last_tts_error = "板载语音流发送或播放失败"
                 print('[VoiceEngine] 板载语音播放失败')
             return
         try:
             import winsound
             winsound.PlaySound(wav_32k_bytes, winsound.SND_MEMORY)
         except Exception as e:
+            self.last_tts_error = f"本地扬声器播放失败: {e}"
             print(f"[VoiceEngine] 本地电脑扬声器播放异常: {e}")
 
 
 # 单例导出
 _voice_instance: Optional[VoiceEngine] = None
+
 
 def get_voice_engine() -> VoiceEngine:
     global _voice_instance

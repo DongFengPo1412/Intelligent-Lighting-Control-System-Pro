@@ -112,20 +112,27 @@ def parse_preference_action(statement: str):
         return None
 
     # 1. Name & Nickname (strictly first-person user)
-    m = re.fullmatch(r'(?:(?:现在|其实)\s*)?(?:我的名字是|我叫)\s*([^\s，,。！!？?：:；;]+?)[。！!]?', s)
+    m = re.fullmatch(
+        r'(?:(?:现在|其实)\s*)?(?:我的(?:本名|真名|名字|姓名)是|我本名叫|我真名叫|我叫)\s*([^\s，,。！!？?：:；;]+?)[。！!]?',
+        s,
+    )
     if m:
         name = m.group(1).rstrip('。！!')
-        return {
-            'action': 'replace',
-            'attr': 'name',
-            'key': 'pref:user:name',
-            'kind': 'pref:name',
-            'value': name,
-            'text': f'我的名字是{name}。',
-            'clean_keys': ['pref:user:name'],
-            'clean_keywords': []
-        }
-    m = re.fullmatch(r'(?:以后请?叫我|请叫我|叫我)\s*([^\s，,。！!？?：:；;]+?)[。！!]?', s)
+        if len(name) <= 10 and not name.startswith(('你', '他', '她', '醒', '不动', '出来')):
+            return {
+                'action': 'replace',
+                'attr': 'name',
+                'key': 'pref:user:name',
+                'kind': 'pref:name',
+                'value': name,
+                'text': f'我的名字是{name}。',
+                'clean_keys': ['pref:user:name'],
+                'clean_keywords': []
+            }
+    m = re.fullmatch(
+        r'(?:(?:我)?希望(?:你)?(?:以后)?(?:叫我|称呼我为?|把?我称作)|(?:我)?希望被称(?:作|呼为?)|以后请?(?:改)?叫我|请(?:改)?叫我|以后(?:改)?称呼我为?|请称呼我为?|你可以(?:叫我|称呼我为?)|改叫我|叫我)\s*([^\s，,。！!？?：:；;]+?)[。！!]?',
+        s,
+    )
     if m:
         nick = m.group(1).rstrip('。！!')
         return {
@@ -137,6 +144,22 @@ def parse_preference_action(statement: str):
             'text': f'以后请叫我{nick}。',
             'clean_keys': ['pref:user:nickname'],
             'clean_keywords': []
+        }
+    m_rev_nick = re.fullmatch(
+        r'(?:(?:现在|以后)\s*)?(?:不用|不要|别)(?:再)?(?:叫我|称呼我为?)\s*([^\s，,。！!？?：:；;]+?)(?:了)?[。！!]?',
+        s,
+    )
+    if m_rev_nick:
+        rev_nick = m_rev_nick.group(1).rstrip('了。！!')
+        return {
+            'action': 'revoke_nickname',
+            'attr': 'nickname',
+            'key': 'pref:user:nickname',
+            'kind': 'pref:nickname',
+            'target_nickname': rev_nick,
+            'text': f'不用再叫我{rev_nick}了。',
+            'clean_keys': ['pref:user:nickname'],
+            'clean_keywords': [rev_nick]
         }
 
     # 2. Food preferences: anchored first-person / zero-subject user only; rejects "甲最喜欢的食物是..."
@@ -386,6 +409,19 @@ class MemoryStore:
     def remember_preference(self, text: str):
         parsed = parse_preference_action(text)
         if not parsed:
+            if any(sep in text for sep in ('，', ',', '；', ';')):
+                clauses = [
+                    re.sub(r'^(?:但是|但|不过|可是|而且|并且)\s*', '', c.strip())
+                    for c in re.split(r'[，,；;]+', text)
+                    if c.strip()
+                ]
+                if len(clauses) >= 2:
+                    sub_parsed = [parse_preference_action(c) for c in clauses]
+                    if all(p and p.get('attr') in ('name', 'nickname') for p in sub_parsed):
+                        last_res = (False, None, text)
+                        for c in clauses:
+                            last_res = self.remember_preference(c)
+                        return last_res
             k = self.remember(text, kind="fact")
             return False, k, text
 
@@ -448,11 +484,45 @@ class MemoryStore:
                     )
                     return True, k, parsed['text']
 
+            elif action == 'revoke_nickname':
+                target_nick = parsed.get('target_nickname')
+                if target_nick:
+                    self._delete_user_pref_rows(
+                        'nickname',
+                        lambda rid, rtext, rkind: (
+                            rid == 'pref:user:nickname' and target_nick in rtext
+                        ),
+                    )
+                    return True, 'pref:user:nickname', parsed['text']
+
             elif action == 'statement':
                 k = self.remember(parsed['text'], key=parsed['key'], kind=parsed['kind'])
                 return True, k, parsed['text']
 
         return False, None, text
+
+    def user_address_profile(self):
+        """Return structured user real_name and preferred_address from active user preference rows."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id, text, kind FROM memories WHERE id IN ('pref:user:nickname', 'pref:user:name') "
+                "OR kind IN ('pref:nickname', 'pref:name') ORDER BY updated DESC"
+            ).fetchall()
+        preferred_address = None
+        real_name = None
+        for rid, rtext, rkind in rows:
+            parsed = parse_preference_action(rtext)
+            if (rid == "pref:user:nickname" or rkind == "pref:nickname") and preferred_address is None:
+                preferred_address = parsed.get("value") if parsed else None
+                if not preferred_address:
+                    m = re.search(r"叫我([^\s，,。！!？?]+)", rtext)
+                    preferred_address = m.group(1) if m else None
+            elif (rid == "pref:user:name" or rkind == "pref:name") and real_name is None:
+                real_name = parsed.get("value") if parsed else None
+                if not real_name:
+                    m = re.search(r"名字是([^\s，,。！!？?]+)", rtext)
+                    real_name = m.group(1) if m else None
+        return {"preferred_address": preferred_address, "real_name": real_name}
 
     def search(self, query, limit=5):
         if not isinstance(query, str) or len(query) > 8000 or not 1 <= limit <= 20:
@@ -461,6 +531,8 @@ class MemoryStore:
         if not vector or len(vector) > 8192 or not all(math.isfinite(x) for x in vector):
             raise ValueError("Invalid query embedding")
         norm = math.sqrt(sum(x * x for x in vector)) or 1
+        is_address_query = bool(re.search(r"叫我|称呼我|管我叫|怎么叫|怎么称呼", query))
+        is_name_query = bool(re.search(r"(?:我的|我)(?:本名|真名|名字|姓名)|我叫什么|我是谁", query))
         with self.lock:
             rows = self.db.execute(
                 "SELECT id,text,kind,vector,updated FROM memories ORDER BY updated DESC LIMIT 5000"
@@ -486,6 +558,16 @@ class MemoryStore:
             )
             if query and query.casefold() in text.casefold():
                 score += 1
+            if is_address_query:
+                if key == "pref:user:nickname" or kind == "pref:nickname":
+                    score += 2.5
+                elif key == "pref:user:name" or kind == "pref:name":
+                    score += 0.5
+            elif is_name_query:
+                if key == "pref:user:name" or kind == "pref:name":
+                    score += 2.5
+                elif key == "pref:user:nickname" or kind == "pref:nickname":
+                    score += 0.5
             if score > 0.08:
                 results.append(dict(id=key, text=text, kind=kind, score=score, updated=updated))
         return sorted(results, key=lambda r: r["score"], reverse=True)[:limit]

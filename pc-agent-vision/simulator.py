@@ -247,14 +247,41 @@ class SimulatedController(LightController):
 
 
 class SilentVoice:
+    is_silent = True
     volume = 70
+
+    def __init__(self, api_base=None, model="kurisu", backend=None, enable_translation=False):
+        self.api_base = api_base
+        self.model = model
+        self.backend = backend
+        self.enable_translation = enable_translation
+        self.last_translation_error = None
+        self.last_tts_error = None
 
     def speak(self, text, block=True):
         return None
 
     def _split_zh_ja(self, text):
-        lines = text.splitlines()
-        return (lines[0] if lines else "", "\n".join(lines[1:]))
+        from bilingual_guard import split_bilingual_text, clean_production_prose
+        zh_raw, ja_raw = split_bilingual_text(text or "")
+        return (
+            clean_production_prose(zh_raw, lang="zh") if zh_raw else "",
+            clean_production_prose(ja_raw, lang="ja") if ja_raw else "",
+        )
 
     def _translate_zh_to_ja_kurisu(self, text):
-        return ""
+        self.last_translation_error = None
+        if not self.enable_translation or os.environ.get("KURISU_SIMULATE") == "1":
+            return ""
+        from bilingual_guard import translate_zh_to_ja
+        ja, err = translate_zh_to_ja(
+            text,
+            api_base=self.api_base,
+            model=self.model or "kurisu",
+            backend=self.backend,
+            timeout=15.0,
+        )
+        if err:
+            self.last_translation_error = err
+            return ""
+        return ja

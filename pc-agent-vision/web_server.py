@@ -315,6 +315,7 @@ async def run_chat(message: str):
                     "reply": response_text,
                     "model_error": getattr(agent, 'last_model_error', None),
                     "translation_error": getattr(agent, 'last_translation_error', None),
+                    "tts_error": getattr(agent, 'last_tts_error', None),
                 }
             except asyncio.CancelledError:
                 if job:
@@ -500,9 +501,17 @@ async def handle_status(request: web.Request):
     kws_status = "ready" if (listener and getattr(listener, 'wake_detector', None) is not None) else "disabled"
 
     # TTS 语音合成独立状态
+    tts_error = getattr(agent, 'last_tts_error', None) or (getattr(voice, 'last_tts_error', None) if voice is not None else None)
     if voice is not None:
-        if voice.__class__.__name__ == 'SilentVoice' or getattr(voice, 'is_silent', False) or not hasattr(voice, 'synthesize_speech_bundle'):
+        if (
+            voice.__class__.__name__ == 'SilentVoice'
+            or getattr(voice, 'is_silent', False)
+            or not hasattr(voice, 'synthesize_speech_bundle')
+            or (hasattr(voice, 'tts') and getattr(voice, 'tts', None) is None)
+        ):
             tts_status = "silent_fallback"
+        elif tts_error:
+            tts_status = "error"
         else:
             tts_status = "ready"
     else:
@@ -521,7 +530,7 @@ async def handle_status(request: web.Request):
              kws_status=kws_status,
              tts_status=tts_status,
              wifi={'wifi_online':False,'simulated':True,'last_command':controller.status()},
-             model_error=agent.last_model_error,translation_error=agent.last_translation_error))
+             model_error=agent.last_model_error,translation_error=agent.last_translation_error,tts_error=tts_error))
     from wifi_gateway import get_wifi_gateway
     gw = get_wifi_gateway()
     wifi_info = gw.get_status()
@@ -538,6 +547,7 @@ async def handle_status(request: web.Request):
         "model_ready": bool(getattr(agent, 'model_ready', False)),
         "model_recovery_guidance": getattr(agent, 'model_recovery_guidance', None),
         "translation_error": agent.last_translation_error,
+        "tts_error": tts_error,
         "asr_status": asr_status,
         "kws_status": kws_status,
         "tts_status": tts_status,
@@ -684,10 +694,10 @@ async def on_startup(app: web.Application):
                 print(f"[WebServer] 语音依赖或硬件缺失，降级至无语音控制模式 (SilentVoice): {audio_err}")
                 app['no_audio'] = True
                 from simulator import SilentVoice
-                voice = SilentVoice()
+                voice = SilentVoice(enable_translation=True)
         else:
             from simulator import SilentVoice
-            voice = SilentVoice()
+            voice = SilentVoice(enable_translation=True)
         agent = KurisuAgent(voice=voice)
         controller = agent.controller; voice = agent.voice
     from advanced_api import ProApi

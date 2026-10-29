@@ -56,14 +56,40 @@ class ToolCallInterceptor:
 
 
 class SilentVoiceEngine:
+    def __init__(self, api_base: Optional[str] = None, model: str = "kurisu", live_mode: bool = False):
+        self.api_base = api_base
+        self.model = model
+        self.live_mode = live_mode
+        self.backend = None
+        self.last_translation_error = None
+        self.last_tts_error = None
+
     def speak(self, text, block=True): pass
+
     def _split_zh_ja(self, text):
-        lines = [line.strip() for line in text.split("\n") if line.strip()]
-        if len(lines) >= 2:
-            return lines[0], lines[1]
-        return text, ""
+        from bilingual_guard import split_bilingual_text, clean_production_prose
+        zh_raw, ja_raw = split_bilingual_text(text or "")
+        return (
+            clean_production_prose(zh_raw, lang="zh") if zh_raw else "",
+            clean_production_prose(ja_raw, lang="ja") if ja_raw else "",
+        )
+
     def _translate_zh_to_ja_kurisu(self, zh):
-        return "分かったわ。（シミュレーション翻訳）"
+        self.last_translation_error = None
+        if not self.live_mode:
+            return "分かったわ。（シミュレーション翻訳）"
+        from bilingual_guard import translate_zh_to_ja
+        ja, err = translate_zh_to_ja(
+            zh,
+            api_base=self.api_base,
+            model=self.model or "kurisu",
+            backend=self.backend,
+            timeout=20.0,
+        )
+        if err:
+            self.last_translation_error = err
+            return ""
+        return ja
 
 
 def get_unified_llm_config() -> Dict[str, Any]:
@@ -180,8 +206,13 @@ class TestAgentEnvironment:
         self.cache_dir = cache_dir
         self.live_mode = live_mode
         self.llm_config = llm_config or get_unified_llm_config()
+        self.model_name = os.environ.get("KURISU_MODEL", "kurisu")
         self.interceptor = ToolCallInterceptor()
-        self.voice = SilentVoiceEngine()
+        self.voice = SilentVoiceEngine(
+            api_base=self.llm_config["api_base"],
+            model=self.model_name,
+            live_mode=self.live_mode,
+        )
         self.open_stores: List[MemoryStore] = []
         self.open_agents: List[KurisuAgent] = []
         self.temp_db_files: List[Path] = []
@@ -195,6 +226,7 @@ class TestAgentEnvironment:
 
         agent = KurisuAgent(
             api_base=self.llm_config["api_base"],
+            model=self.model_name,
             controller=self.interceptor,
             voice=self.voice,
             memory=store
@@ -438,7 +470,9 @@ def evaluate_t02(
     cases_path: Path = None,
     live_mode: bool = False,
     artifacts_dir: Path = None,
-    cache_dir: Path = None
+    cache_dir: Path = None,
+    json_filename: str = None,
+    md_filename: str = None,
 ) -> Dict[str, Any]:
     if cases_path is None:
         cases_path = ROOT_DIR / "tests" / "fixtures" / "t02_persona_cases_v1.json"
@@ -498,6 +532,7 @@ def evaluate_t02(
             start_t = time.perf_counter()
 
             interceptor.calls.clear()
+            agent.history = agent.history[:1]
             plan = agent.semantic.plan(inp)
             raw_reply = agent.chat(inp, speak=False)
 
@@ -590,6 +625,7 @@ def evaluate_t02(
             results.append({
                 "case_id": cid,
                 "category": "character_facts",
+                "sub_type": "address_behavior_rule" if cid in ("F14", "F15") else "worldview_lore",
                 "input": inp,
                 "passed": passed,
                 "score": 1.0 if passed else 0.0,
@@ -869,26 +905,28 @@ def evaluate_t02(
             print(f"  - [{cat}]: {s['passed']}/{s['total']} ({s['pass_rate']})")
         print("=" * 70)
 
-        # 写入 cache 目录 JSON
-        cache_json = cache_dir / "T02_persona_evaluation_report.json"
+        # 写入 cache 目录 JSON（默认写入独立文件名，不覆盖已锁定的首次真实对照记录）
+        out_json_name = json_filename or ("T02_live_recheck_report.json" if live_mode else "T02_contract_evaluation_report.json")
+        out_md_name = md_filename or ("T02_live_recheck_report.md" if live_mode else "T02_contract_evaluation_report.md")
+        cache_json = cache_dir / out_json_name
         with open(cache_json, "w", encoding="utf-8") as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
 
         # 写入 artifacts 目录 Markdown (动态计算结果，禁止写死 PASS)
-        artifact_md = artifacts_dir / "T02_persona_evaluation_report.md"
+        artifact_md = artifacts_dir / out_md_name
         mode_note_lines = (
             [
                 "> **模式定性与验收范围说明**：",
-                "> 1. 当前运行为 `LIVE_MODEL` 真实大模型在线评测，已接入统一配置的 Ollama 端点执行真实生成与语义规划；",
-                "> 2. 客观事实、记忆持久化与工具安全已按真实模型输出评分，20 条核心设定定位字段待人工对照原件核实；",
+                "> 1. 当前运行为 `LIVE_MODEL` 真实大模型在线评测，已接入统一配置的 Ollama 端点执行真实生成、动态中译日对齐与语义规划；",
+                "> 2. 客观事实、记忆持久化与工具安全已按原固定评分规则评分（注：`F14`、`F15` 虽归在 `character_facts` 组，实质考察“助手／克里斯蒂娜”**称呼／行为回应规则**而非世界观资料缺失）；20 条核心设定定位字段待人工对照原件核实；",
                 "> 3. 10 组聊天语气原始回复已归档，最终角色语气自然度由用户人工对照验收。\n",
             ]
             if live_mode
             else [
                 "> **模式定性与验收范围说明**：",
                 "> 1. 当前运行为 `OFFLINE_CONTRACT` 契约隔离测试，回复与规划使用离线确定性路由；",
-                "> 2. 本报告证明：**资料检索隔离有效、工具拦截无越权且阳性捕获生效、记忆属性更新/跨重启持久化与 document/lore/他人资料全分支保护均通过**；",
-                "> 3. 20 条核心设定定位字段已补（待人工对照原件核实）；**真实模型基线/前后对照与人工语气验收待完成（需执行 `--live`）**。\n",
+                "> 2. 本报告证明：**资料检索隔离有效、工具拦截无越权且阳性捕获生效、记忆属性更新/跨重启持久化与 document/lore/他人资料全分支保护均通过**（注：`F14`、`F15` 实质属于“助手／克里斯蒂娜”称呼／行为回应规则）；",
+                "> 3. 20 条核心设定定位字段已补（待人工对照原件核实）；**真实模型对照与人工语气验收请参见真实评测报告**。\n",
             ]
         )
         md_lines = [
@@ -924,12 +962,20 @@ def evaluate_t02(
             m_res = "PASS" if m["passed"] else "FAIL"
             md_lines.append(f"| {m['case_id']} | {m['name']} | 精准属性定位，不产生子串误删与格式污染 | **{m_res}** |")
 
-        md_lines.append("\n## 四、10 组典型语气预期规范 (供真实模型执行后人工复审)\n")
-        md_lines.append("> 注：离线契约模式下回复为模拟测试串，不作为最终人工风格评价依据。真实模型前后对照将在执行真实评测（--live）后归档。\n")
-        md_lines.append("| 编号 | 用户输入语境 | 评分标准与口吻预期规范 | 待复审状态 |")
-        md_lines.append("| :--- | :--- | :--- | :---: |")
-        for pair in summary["tone_comparisons"]:
-            md_lines.append(f"| {pair['case_id']} | {pair['input']} | {pair['rubric']} | **人工验收待完成 (待真实模型执行)** |")
+        if live_mode:
+            md_lines.append("\n## 四、10 组真实角色回复对照（供用户人工最终风格判断）\n")
+            md_lines.append("| 编号 | 用户输入语境 | 真实原始输出（中日双语） | 评分标准与口吻预期规范 | 复审状态 |")
+            md_lines.append("| :--- | :--- | :--- | :--- | :---: |")
+            for pair in summary["tone_comparisons"]:
+                raw_fmt = (pair.get("raw_output") or "").replace("\n", "<br>")
+                md_lines.append(f"| {pair['case_id']} | {pair['input']} | {raw_fmt} | {pair['rubric']} | **待用户最终判断** |")
+        else:
+            md_lines.append("\n## 四、10 组典型语气预期规范 (供真实模型执行后人工复审)\n")
+            md_lines.append("> 注：离线契约模式下回复为模拟测试串，不作为最终人工风格评价依据。真实模型前后对照将在执行真实评测（--live）后归档。\n")
+            md_lines.append("| 编号 | 用户输入语境 | 评分标准与口吻预期规范 | 待复审状态 |")
+            md_lines.append("| :--- | :--- | :--- | :---: |")
+            for pair in summary["tone_comparisons"]:
+                md_lines.append(f"| {pair['case_id']} | {pair['input']} | {pair['rubric']} | **人工验收待完成 (待真实模型执行)** |")
 
         with open(artifact_md, "w", encoding="utf-8") as f:
             f.write("\n".join(md_lines))
