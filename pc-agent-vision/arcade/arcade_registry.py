@@ -45,6 +45,7 @@ from .game_039_legend_of_kage import Game039LegendOfKage
 from .game_040_dodgeball import Game040Dodgeball
 from .game_041_crush_roller import Game041CrushRoller
 from .game_042_mario_bros import Game042MarioBros
+from .game_043_centipede import Game043Centipede
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -122,3 +123,4 @@ ArcadeRegistry.register(Game039LegendOfKage)
 ArcadeRegistry.register(Game040Dodgeball)
 ArcadeRegistry.register(Game041CrushRoller)
 ArcadeRegistry.register(Game042MarioBros)
+ArcadeRegistry.register(Game043Centipede)
