@@ -28,6 +28,7 @@ from .game_022_galaga import Game022Galaga
 from .game_023_donkey_kong import Game023DonkeyKong
 from .game_024_lode_runner import Game024LodeRunner
 from .game_025_bubble_bobble import Game025BubbleBobble
+from .game_026_whack_a_mole import Game026WhackAMole
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -88,3 +89,4 @@ ArcadeRegistry.register(Game022Galaga)
 ArcadeRegistry.register(Game023DonkeyKong)
 ArcadeRegistry.register(Game024LodeRunner)
 ArcadeRegistry.register(Game025BubbleBobble)
+ArcadeRegistry.register(Game026WhackAMole)
