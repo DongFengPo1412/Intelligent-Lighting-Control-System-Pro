@@ -80,6 +80,7 @@ from .game_074_donkeykong3 import Game074DonkeyKong3
 from .game_075_outrun import Game075OutRun
 from .game_076_spelunker import Game076Spelunker
 from .game_077_windjammers import Game077Windjammers
+from .game_078_karatechamp import Game078KarateChamp
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -192,3 +193,4 @@ ArcadeRegistry.register(Game074DonkeyKong3)
 ArcadeRegistry.register(Game075OutRun)
 ArcadeRegistry.register(Game076Spelunker)
 ArcadeRegistry.register(Game077Windjammers)
+ArcadeRegistry.register(Game078KarateChamp)
