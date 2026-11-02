@@ -70,6 +70,7 @@ from .game_064_inthehunt import Game064InTheHunt
 from .game_065_punchout import Game065PunchOut
 from .game_066_twinbee import Game066TwinBee
 from .game_067_snowbros import Game067SnowBros
+from .game_068_metalgear import Game068MetalGear
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -172,3 +173,4 @@ ArcadeRegistry.register(Game064InTheHunt)
 ArcadeRegistry.register(Game065PunchOut)
 ArcadeRegistry.register(Game066TwinBee)
 ArcadeRegistry.register(Game067SnowBros)
+ArcadeRegistry.register(Game068MetalGear)
