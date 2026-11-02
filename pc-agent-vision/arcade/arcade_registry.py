@@ -15,6 +15,7 @@ from .game_009_space_invaders import Game009SpaceInvaders
 from .game_010_pacman import Game010Pacman
 from .game_011_frogger import Game011Frogger
 from .game_012_highway_racer import Game012HighwayRacer
+from .game_013_bomberman import Game013Bomberman
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -62,3 +63,4 @@ ArcadeRegistry.register(Game009SpaceInvaders)
 ArcadeRegistry.register(Game010Pacman)
 ArcadeRegistry.register(Game011Frogger)
 ArcadeRegistry.register(Game012HighwayRacer)
+ArcadeRegistry.register(Game013Bomberman)
