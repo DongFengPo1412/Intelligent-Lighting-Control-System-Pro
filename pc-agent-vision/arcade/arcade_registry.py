@@ -49,6 +49,7 @@ from .game_043_centipede import Game043Centipede
 from .game_044_excitebike import Game044Excitebike
 from .game_045_side_pocket import Game045SidePocket
 from .game_046_city_connection import Game046CityConnection
+from .game_047_double_dragon import Game047DoubleDragon
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -130,3 +131,4 @@ ArcadeRegistry.register(Game043Centipede)
 ArcadeRegistry.register(Game044Excitebike)
 ArcadeRegistry.register(Game045SidePocket)
 ArcadeRegistry.register(Game046CityConnection)
+ArcadeRegistry.register(Game047DoubleDragon)
