@@ -51,6 +51,7 @@ from .game_045_side_pocket import Game045SidePocket
 from .game_046_city_connection import Game046CityConnection
 from .game_047_double_dragon import Game047DoubleDragon
 from .game_048_elevator_action import Game048ElevatorAction
+from .game_049_balloon_fight import Game049BalloonFight
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -134,3 +135,4 @@ ArcadeRegistry.register(Game045SidePocket)
 ArcadeRegistry.register(Game046CityConnection)
 ArcadeRegistry.register(Game047DoubleDragon)
 ArcadeRegistry.register(Game048ElevatorAction)
+ArcadeRegistry.register(Game049BalloonFight)
