@@ -82,6 +82,7 @@ from .game_076_spelunker import Game076Spelunker
 from .game_077_windjammers import Game077Windjammers
 from .game_078_karatechamp import Game078KarateChamp
 from .game_079_subroc3d import Game079SubRoc3D
+from .game_080_cadillacs import Game080Cadillacs
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -196,3 +197,4 @@ ArcadeRegistry.register(Game076Spelunker)
 ArcadeRegistry.register(Game077Windjammers)
 ArcadeRegistry.register(Game078KarateChamp)
 ArcadeRegistry.register(Game079SubRoc3D)
+ArcadeRegistry.register(Game080Cadillacs)
