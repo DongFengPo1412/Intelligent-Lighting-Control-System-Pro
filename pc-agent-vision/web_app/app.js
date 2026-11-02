@@ -657,10 +657,8 @@
     ])
       if (value && document.activeElement !== $(id)) $(id).value = value;
     if (m.gain && $("musicBoost") && document.activeElement !== $("musicBoost")) {
-      const gStr = String(m.gain);
-      if (Array.from($("musicBoost").options).some((o) => o.value === gStr)) {
-        $("musicBoost").value = gStr;
-      }
+      const match = Array.from($("musicBoost").options).find((o) => Math.abs(Number(o.value) - Number(m.gain)) < 0.01);
+      if (match) $("musicBoost").value = match.value;
     }
     $("previousMusic").disabled = $("nextMusic").disabled =
       !state.board || !m.queue_count;

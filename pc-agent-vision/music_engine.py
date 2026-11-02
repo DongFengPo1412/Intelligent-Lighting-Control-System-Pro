@@ -70,18 +70,19 @@ class MusicFeatures:
         )
 
 
-def process_speaker_audio(pcm_bytes, gain=1.35):
+def process_speaker_audio(pcm_bytes, gain=0.62):
     """
-    Studio-grade speaker mastering chain for MAX98357A & miniature speaker:
+    Studio-grade speaker mastering chain aligned to MAX98357A 5V rail headroom:
     1. Baseline passthrough for gain == 0.25 (unit test / headroom verification baseline).
     2. 105Hz 2nd-order Butterworth High-Pass Filter:
        Eliminates inaudible sub-bass rumble (<105Hz) that mechanically bottoms out
        small speaker voice coils and sags the 5V power supply, freeing up massive headroom.
-    3. Soft-Knee Studio Limiter (threshold 0.82):
-       Signal below 0.82 is 100% linear and untouched (0.00% distortion, hi-fi transparency).
-       Transients above 0.82 are softly and musically rounded to prevent hard clipping.
+    3. Robust percentile loudness normalization aligned to safe 5V rail ceiling:
+       Locks peak voltage output at MAX98357A so it NEVER clips into the 5V power rail.
+    4. Soft-Knee Studio Limiter (threshold 0.84 of ceiling):
+       Signal is 100% linear and untouched in normal listening range.
+       Extreme transient peaks are softly and musically rounded to prevent hard rail clipping.
     """
-    import scipy.signal
     g = float(gain)
     if abs(g - 0.25) < 1e-4:
         return (
@@ -93,20 +94,29 @@ def process_speaker_audio(pcm_bytes, gain=1.35):
             .astype("<i2")
             .tobytes()
         )
+    import scipy.signal
     s = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32) / 32768.0
     sr = 16000
     b_hp, a_hp = scipy.signal.butter(2, 105.0 / (sr / 2.0), btype="high")
     hp = scipy.signal.lfilter(b_hp, a_hp, s)
-    x = hp * g
-    abs_x = np.abs(x)
-    sign = np.sign(x)
-    th = 0.82
+
+    target_ceiling = min(0.95, max(0.40, g))
+    p_high = float(np.percentile(np.abs(hp), 99.5))
+    if p_high < 1e-4:
+        return (np.clip(hp, -target_ceiling, target_ceiling) * 32767.0).astype("<i2").tobytes()
+
+    norm_gain = min(2.5, target_ceiling / p_high)
+    scaled = hp * norm_gain
+
+    th = target_ceiling * 0.84
+    abs_s = np.abs(scaled)
+    sign_s = np.sign(scaled)
     out = np.where(
-        abs_x <= th,
-        x,
-        sign * (th + (1.0 - th) * np.tanh((abs_x - th) / (1.0 - th))),
+        abs_s <= th,
+        scaled,
+        sign_s * (th + (target_ceiling - th) * np.tanh((abs_s - th) / (target_ceiling - th))),
     )
-    return (np.clip(out, -0.985, 0.985) * 32767.0).astype("<i2").tobytes()
+    return (np.clip(out, -target_ceiling, target_ceiling) * 32767.0).astype("<i2").tobytes()
 
 
 def decode_audio(raw):
