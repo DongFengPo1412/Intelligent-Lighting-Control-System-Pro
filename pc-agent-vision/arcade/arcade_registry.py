@@ -102,6 +102,7 @@ from .game_096_pooyan import Game096Pooyan
 from .game_097_tapper import Game097Tapper
 from .game_098_mappy import Game098Mappy
 from .game_099_joust import Game099Joust
+from .game_100_timepilot import Game100TimePilot
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -236,3 +237,4 @@ ArcadeRegistry.register(Game096Pooyan)
 ArcadeRegistry.register(Game097Tapper)
 ArcadeRegistry.register(Game098Mappy)
 ArcadeRegistry.register(Game099Joust)
+ArcadeRegistry.register(Game100TimePilot)
