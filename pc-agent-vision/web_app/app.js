@@ -656,6 +656,12 @@
       ["musicRepeat", m.repeat],
     ])
       if (value && document.activeElement !== $(id)) $(id).value = value;
+    if (m.gain && $("musicBoost") && document.activeElement !== $("musicBoost")) {
+      const gStr = String(m.gain);
+      if (Array.from($("musicBoost").options).some((o) => o.value === gStr)) {
+        $("musicBoost").value = gStr;
+      }
+    }
     $("previousMusic").disabled = $("nextMusic").disabled =
       !state.board || !m.queue_count;
     $("stopMusic").disabled = !state.board || !m.running;
