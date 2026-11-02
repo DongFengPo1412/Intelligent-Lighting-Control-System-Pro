@@ -54,6 +54,7 @@ from .game_048_elevator_action import Game048ElevatorAction
 from .game_049_balloon_fight import Game049BalloonFight
 from .game_050_kung_fu_master import Game050KungFuMaster
 from .game_051_shinobi import Game051Shinobi
+from .game_052_gunsmoke import Game052GunSmoke
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -140,3 +141,4 @@ ArcadeRegistry.register(Game048ElevatorAction)
 ArcadeRegistry.register(Game049BalloonFight)
 ArcadeRegistry.register(Game050KungFuMaster)
 ArcadeRegistry.register(Game051Shinobi)
+ArcadeRegistry.register(Game052GunSmoke)
