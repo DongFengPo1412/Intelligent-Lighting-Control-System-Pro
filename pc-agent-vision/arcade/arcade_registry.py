@@ -95,6 +95,7 @@ from .game_089_snowbros2 import Game089SnowBros2
 from .game_090_sunsetriders import Game090SunsetRiders
 from .game_091_ninjabaseball import Game091NinjaBaseball
 from .game_092_sengokublade import Game092SengokuBlade
+from .game_093_pengo import Game093Pengo
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -222,3 +223,4 @@ ArcadeRegistry.register(Game089SnowBros2)
 ArcadeRegistry.register(Game090SunsetRiders)
 ArcadeRegistry.register(Game091NinjaBaseball)
 ArcadeRegistry.register(Game092SengokuBlade)
+ArcadeRegistry.register(Game093Pengo)
