@@ -77,6 +77,7 @@ from .game_071_ghostsngoblins import Game071GhostsNGoblins
 from .game_072_bombjack import Game072BombJack
 from .game_073_gradius import Game073Gradius
 from .game_074_donkeykong3 import Game074DonkeyKong3
+from .game_075_outrun import Game075OutRun
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -186,3 +187,4 @@ ArcadeRegistry.register(Game071GhostsNGoblins)
 ArcadeRegistry.register(Game072BombJack)
 ArcadeRegistry.register(Game073Gradius)
 ArcadeRegistry.register(Game074DonkeyKong3)
+ArcadeRegistry.register(Game075OutRun)
