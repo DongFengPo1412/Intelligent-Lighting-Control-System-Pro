@@ -88,6 +88,7 @@ from .game_082_chasehq import Game082ChaseHQ
 from .game_083_puyopuyo import Game083PuyoPuyo
 from .game_084_warriorsoffate import Game084WarriorsOfFate
 from .game_085_renegade import Game085Renegade
+from .game_086_kikikaikai import Game086KiKiKaiKai
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -208,3 +209,4 @@ ArcadeRegistry.register(Game082ChaseHQ)
 ArcadeRegistry.register(Game083PuyoPuyo)
 ArcadeRegistry.register(Game084WarriorsOfFate)
 ArcadeRegistry.register(Game085Renegade)
+ArcadeRegistry.register(Game086KiKiKaiKai)
