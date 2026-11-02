@@ -12,6 +12,7 @@ from .game_006_stack import Game006Stack
 from .game_007_pong import Game007Pong
 from .game_008_breakout import Game008Breakout
 from .game_009_space_invaders import Game009SpaceInvaders
+from .game_010_pacman import Game010Pacman
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -56,3 +57,4 @@ ArcadeRegistry.register(Game006Stack)
 ArcadeRegistry.register(Game007Pong)
 ArcadeRegistry.register(Game008Breakout)
 ArcadeRegistry.register(Game009SpaceInvaders)
+ArcadeRegistry.register(Game010Pacman)
