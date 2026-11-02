@@ -84,6 +84,7 @@ from .game_078_karatechamp import Game078KarateChamp
 from .game_079_subroc3d import Game079SubRoc3D
 from .game_080_cadillacs import Game080Cadillacs
 from .game_081_rampage import Game081Rampage
+from .game_082_chasehq import Game082ChaseHQ
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -200,3 +201,4 @@ ArcadeRegistry.register(Game078KarateChamp)
 ArcadeRegistry.register(Game079SubRoc3D)
 ArcadeRegistry.register(Game080Cadillacs)
 ArcadeRegistry.register(Game081Rampage)
+ArcadeRegistry.register(Game082ChaseHQ)
