@@ -107,6 +107,7 @@ from .game_101_spyhunter import Game101SpyHunter
 from .game_102_columns import Game102Columns
 from .game_103_dkjr import Game103DKJr
 from .game_104_digdug2 import Game104DigDug2
+from .game_105_arkanoid import Game105Arkanoid
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -246,3 +247,4 @@ ArcadeRegistry.register(Game101SpyHunter)
 ArcadeRegistry.register(Game102Columns)
 ArcadeRegistry.register(Game103DKJr)
 ArcadeRegistry.register(Game104DigDug2)
+ArcadeRegistry.register(Game105Arkanoid)
