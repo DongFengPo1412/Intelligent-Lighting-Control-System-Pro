@@ -93,6 +93,7 @@ from .game_087_streetsofrage import Game087StreetsOfRage
 from .game_088_bumpnjump import Game088BumpNJump
 from .game_089_snowbros2 import Game089SnowBros2
 from .game_090_sunsetriders import Game090SunsetRiders
+from .game_091_ninjabaseball import Game091NinjaBaseball
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -218,3 +219,4 @@ ArcadeRegistry.register(Game087StreetsOfRage)
 ArcadeRegistry.register(Game088BumpNJump)
 ArcadeRegistry.register(Game089SnowBros2)
 ArcadeRegistry.register(Game090SunsetRiders)
+ArcadeRegistry.register(Game091NinjaBaseball)
