@@ -107,9 +107,13 @@ class ProApi:
                 )
             if action == "status":
                 connection = request.app.get("xiaozhi_connection")
+                is_sim = getattr(self.controller, "port", "") == "SIMULATION"
+                conn_attr = getattr(self.controller, "control_connected", False)
+                is_connected = conn_attr() if callable(conn_attr) else bool(conn_attr)
+                firmware_val = "simulation" if is_sim else ("online" if is_connected else "offline")
                 return web.json_response(
                     dict(
-                        simulated=self.controller.port == "SIMULATION",
+                        simulated=is_sim,
                         vision=self.vision.status(),
                         music=self.music_status(),
                         xiaozhi=dict(
@@ -117,7 +121,8 @@ class ProApi:
                             tools=connection.remote_tools if connection else [],
                         ),
                         continuous=os.environ.get("KURISU_CONTINUOUS", "1") == "1",
-                        firmware_validation="offline-only",
+                        firmware_validation=firmware_val,
+                        firmware_connected=is_connected,
                     )
                 )
             if action == "memory" and request.method == "GET":

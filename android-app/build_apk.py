@@ -1,6 +1,7 @@
 """Build a debug APK without rewriting project sources or creating repo outputs."""
 
 import argparse
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -91,29 +92,31 @@ def build(a):
             archive.writestr(item, source.read(item.filename))
         for file in dex.glob("*.dex"):
             archive.write(file, file.name)
-    key = work / "debug.keystore"
-    run(
-        [
-            java / "keytool.exe",
-            "-genkeypair",
-            "-keystore",
-            key,
-            "-storepass",
-            "android",
-            "-keypass",
-            "android",
-            "-alias",
-            "androiddebugkey",
-            "-keyalg",
-            "RSA",
-            "-keysize",
-            "2048",
-            "-validity",
-            "3650",
-            "-dname",
-            "CN=Android Debug,O=Android,C=US",
-        ]
-    )
+    key = Path(a.keystore).resolve() if a.keystore else work / "debug.keystore"
+    if not key.exists():
+        key.parent.mkdir(parents=True, exist_ok=True)
+        run(
+            [
+                java / "keytool.exe",
+                "-genkeypair",
+                "-keystore",
+                key,
+                "-storepass",
+                a.keystore_pass,
+                "-keypass",
+                a.key_pass,
+                "-alias",
+                a.key_alias,
+                "-keyalg",
+                "RSA",
+                "-keysize",
+                "2048",
+                "-validity",
+                "3650",
+                "-dname",
+                "CN=Android Debug,O=Android,C=US",
+            ]
+        )
     tools = Path(a.build_tools)
     aligned = work / "aligned.apk"
     run([tools / "zipalign.exe", "-p", "4", unaligned, aligned])
@@ -126,9 +129,11 @@ def build(a):
             "--ks",
             key,
             "--ks-pass",
-            "pass:android",
+            f"pass:{a.keystore_pass}",
             "--key-pass",
-            "pass:android",
+            f"pass:{a.key_pass}",
+            "--ks-key-alias",
+            a.key_alias,
             "--v2-signing-enabled",
             "true",
             "--v4-signing-enabled",
@@ -157,4 +162,12 @@ if __name__ == "__main__":
         required=True,
         help="Android SDK Build Tools directory with zipalign and lib/apksigner.jar",
     )
+    p.add_argument(
+        "--keystore",
+        default=os.environ.get("ANDROID_DEBUG_KEYSTORE"),
+        help="Optional path to persistent debug keystore to avoid signature mismatch on update",
+    )
+    p.add_argument("--keystore-pass", default="android", help="Keystore password")
+    p.add_argument("--key-pass", default="android", help="Key password")
+    p.add_argument("--key-alias", default="androiddebugkey", help="Key alias")
     build(p.parse_args())

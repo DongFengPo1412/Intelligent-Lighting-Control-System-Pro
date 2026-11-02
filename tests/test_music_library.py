@@ -61,7 +61,8 @@ class Device:
 
 class LibraryContracts(unittest.TestCase):
     def setUp(self):
-        self.root = Path(tempfile.mkdtemp(dir=os.environ["KURISU_TEST_TMP"]))
+        tmp_base = os.environ.get("KURISU_TEST_TMP") or tempfile.gettempdir()
+        self.root = Path(tempfile.mkdtemp(dir=tmp_base))
         self.music = self.root / "songs"
         self.music.mkdir()
         for name in (
@@ -246,7 +247,8 @@ class MusicLibraryApi(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         from aiohttp.test_utils import TestClient, TestServer
 
-        self.root = Path(tempfile.mkdtemp(dir=os.environ["KURISU_TEST_TMP"]))
+        tmp_base = os.environ.get("KURISU_TEST_TMP") or tempfile.gettempdir()
+        self.root = Path(tempfile.mkdtemp(dir=tmp_base))
         self.songs = self.root / "songs"
         self.songs.mkdir()
         sf.write(self.songs / "演唱者 - 测试.wav", np.zeros(3200), 16000)

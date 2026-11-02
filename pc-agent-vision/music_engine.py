@@ -154,8 +154,8 @@ class MusicPlayer:
     def _play(self, raw, fluid=True):
         if type(fluid) is not bool:
             raise ValueError("Music visual must be fluid or spectrum")
-        pcm = decode_audio(raw)
         self.stop()
+        pcm = decode_audio(raw)
         self.cancel.clear()
         self.error = None
         self.features = {}

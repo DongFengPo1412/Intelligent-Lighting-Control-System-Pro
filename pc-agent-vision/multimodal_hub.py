@@ -247,8 +247,14 @@ class MultimodalHub:
                     min(10000, max(0, (now - self.last_input) * 1000)) if self.last_input else 1000
                 )
                 self.last_input = now
+                game_success = bool(
+                    observation.get(
+                        "game_success",
+                        observation.get("success", observation.get("frustration", 0) <= 0.6),
+                    )
+                )
                 self.controller.performance(
-                    reaction, observation.get("frustration", 0), not observation.get("tired", False)
+                    reaction, observation.get("frustration", 0), game_success
                 )
                 if mode == 19:
                     dx, dy = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}[
