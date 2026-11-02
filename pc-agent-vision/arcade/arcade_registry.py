@@ -66,6 +66,7 @@ from .game_060_marblemadness import Game060MarbleMadness
 from .game_061_battlecity import Game061BattleCity
 from .game_062_shadowwarriors import Game062ShadowWarriors
 from .game_063_rampart import Game063Rampart
+from .game_064_inthehunt import Game064InTheHunt
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -164,3 +165,4 @@ ArcadeRegistry.register(Game060MarbleMadness)
 ArcadeRegistry.register(Game061BattleCity)
 ArcadeRegistry.register(Game062ShadowWarriors)
 ArcadeRegistry.register(Game063Rampart)
+ArcadeRegistry.register(Game064InTheHunt)
