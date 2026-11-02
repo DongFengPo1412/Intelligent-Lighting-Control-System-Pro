@@ -70,6 +70,15 @@ class MusicFeatures:
         )
 
 
+def soft_limit(pcm_float, gain=2.5):
+    """
+    Studio-grade soft limiter with smooth tanh saturation.
+    Prevents digital clipping and wrap-around while dramatically boosting RMS loudness.
+    """
+    norm = (pcm_float * float(gain)) / 32768.0
+    return np.tanh(norm) * 32767.0
+
+
 def decode_audio(raw):
     import soundfile as sf
     from scipy.signal import resample_poly
@@ -128,8 +137,8 @@ class MusicPlayer:
         self.running = False
         self.visual_fluid = True
         self.gain = float(os.environ.get("KURISU_MUSIC_GAIN", "0.25"))
-        if not math.isfinite(self.gain) or not 0 < self.gain <= 2.0:
-            raise ValueError("KURISU_MUSIC_GAIN must be in (0, 2.0]")
+        if not math.isfinite(self.gain) or not 0 < self.gain <= 5.0:
+            raise ValueError("KURISU_MUSIC_GAIN must be in (0, 5.0]")
         self.duration = 0.0
         self._position = 0.0
         self.operations = threading.RLock()
@@ -274,10 +283,9 @@ class MusicPlayer:
             # Music masters are much louder than the accepted speech/chime
             # baseline. Keep speaker headroom without weakening MIR features.
             speaker_pcm = (
-                np.clip(
-                    np.frombuffer(pcm, dtype="<i2").astype(np.float32) * self.gain,
-                    -32768,
-                    32767,
+                soft_limit(
+                    np.frombuffer(pcm, dtype="<i2").astype(np.float32),
+                    gain=self.gain,
                 )
                 .astype("<i2")
                 .tobytes()

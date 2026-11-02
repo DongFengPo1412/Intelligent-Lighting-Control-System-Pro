@@ -813,6 +813,14 @@
         order: $("musicOrder").value,
         repeat: $("musicRepeat").value,
       }).catch((e) => notice(e.message));
+  if ($("musicBoost")) {
+    $("musicBoost").onchange = () => {
+      const val = Number($("musicBoost").value);
+      api("/api/pro/music", { action: "gain", gain: val })
+        .then(() => notice("已切换响度档位: " + val + "x"))
+        .catch((e) => notice(e.message));
+    };
+  }
   $("musicVisual").onchange = async () => {
     try {
       if (state.music.running)

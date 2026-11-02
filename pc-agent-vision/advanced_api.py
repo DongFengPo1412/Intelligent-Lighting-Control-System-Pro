@@ -274,7 +274,7 @@ class ProApi:
                     )
                 elif operation == "gain" or "gain" in data:
                     new_gain = float(data.get("gain", 1.0))
-                    if 0 < new_gain <= 2.0:
+                    if 0 < new_gain <= 5.0:
                         self.music.gain = new_gain
                 elif "track_id" in data:
                     await asyncio.to_thread(
