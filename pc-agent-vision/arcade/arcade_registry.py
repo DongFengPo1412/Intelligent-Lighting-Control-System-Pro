@@ -63,6 +63,7 @@ from .game_057_wonderboy import Game057WonderBoy
 from .game_058_paperboy import Game058Paperboy
 from .game_059_trackfield import Game059TrackField
 from .game_060_marblemadness import Game060MarbleMadness
+from .game_061_battlecity import Game061BattleCity
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -158,3 +159,4 @@ ArcadeRegistry.register(Game057WonderBoy)
 ArcadeRegistry.register(Game058Paperboy)
 ArcadeRegistry.register(Game059TrackField)
 ArcadeRegistry.register(Game060MarbleMadness)
+ArcadeRegistry.register(Game061BattleCity)
