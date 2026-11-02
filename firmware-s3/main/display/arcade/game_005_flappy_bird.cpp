@@ -311,3 +311,4 @@ CartridgeStatus Game005FlappyBird::GetStatus() const {
 }
 
 } // namespace arcade
+

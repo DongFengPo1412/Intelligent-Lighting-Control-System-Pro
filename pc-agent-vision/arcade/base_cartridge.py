@@ -87,3 +87,4 @@ class BaseCartridge(ABC):
     def get_status(self) -> Dict[str, Any]:
         """返回包含 score, lives, state, progress 等字段的状态字典"""
         pass
+

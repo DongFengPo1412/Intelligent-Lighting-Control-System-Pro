@@ -341,3 +341,4 @@ class Game004DoodleJump(BaseCartridge):
             "altitude": round(self.camera_altitude, 1),
             "progress": min(100, int(self.camera_altitude)),
         }
+

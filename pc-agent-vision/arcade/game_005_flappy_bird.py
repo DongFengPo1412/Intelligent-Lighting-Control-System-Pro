@@ -294,3 +294,4 @@ class Game005FlappyBird(BaseCartridge):
             "state": self.state,
             "progress": min(100, self.score * 5),
         }
+

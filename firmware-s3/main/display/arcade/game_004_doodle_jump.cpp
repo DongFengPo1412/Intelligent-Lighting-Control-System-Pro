@@ -349,3 +349,4 @@ CartridgeStatus Game004DoodleJump::GetStatus() const {
 }
 
 } // namespace arcade
+
