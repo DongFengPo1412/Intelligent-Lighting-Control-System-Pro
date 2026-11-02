@@ -2239,6 +2239,21 @@ dialog p {
   color: #94a3b8;
 }
 
+.mario-ctrl-btn.primary {
+  background: linear-gradient(180deg, #10b981, #059669);
+  border-color: #34d399;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+}
+
+.mario-ctrl-btn.primary:active,
+.mario-ctrl-btn.primary.pressed {
+  background: #047857;
+  transform: translateY(2px);
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.3);
+}
+
 .mario-touch-stage {
   display: flex;
   align-items: center;

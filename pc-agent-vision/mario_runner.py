@@ -81,13 +81,15 @@ class MarioSession:
         self.dll.mario_render(self.game, fb0.ctypes.data_as(ctypes.c_char_p))
         self.current_hex = fb0.tobytes().hex()
 
-        # 板端切换到画布模式 (29: PIXEL_CANVAS)，保持完全静音，不开声音
+        # 后台异步切换板端画布模式 (29: PIXEL_CANVAS)，保持完全静音，且不阻塞 HTTP 立即响应
         if self.controller and hasattr(self.controller, "set_mode"):
-            try:
-                self.prev_mode = getattr(self.controller, "current_mode", 23)
-                await asyncio.to_thread(self.controller.set_mode, 29)
-            except Exception as e:
-                print(f"[MarioRunner] 切换板端画布模式提示: {e}")
+            async def _bg_set_mode():
+                try:
+                    self.prev_mode = getattr(self.controller, "current_mode", 23)
+                    await asyncio.to_thread(self.controller.set_mode, 29)
+                except Exception as e:
+                    print(f"[MarioRunner] 切换板端画布模式提示: {e}")
+            asyncio.create_task(_bg_set_mode())
 
         self.task = asyncio.create_task(self._loop())
         return True

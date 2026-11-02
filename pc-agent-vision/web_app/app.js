@@ -160,14 +160,20 @@
     if (page === "lights" && state.frame) renderFrame(state.frame);
   }
   function route() {
+    const hash = location.hash.slice(1);
     const aliases = {
       musicLibrary: "music",
       comm: "overview",
       matrix: "lights",
       arcade: "interaction",
       system: "settings",
+      mario: "interaction",
+      marioContainer: "interaction",
     };
-    navigate(aliases[location.hash.slice(1)] || location.hash.slice(1));
+    navigate(aliases[hash] || hash);
+    if (hash === "mario" || hash === "marioContainer") {
+      setTimeout(() => launchMarioGame(), 80);
+    }
   }
   $$("[data-page]").forEach(
     (b) => (b.onclick = () => navigate(b.dataset.page)),
@@ -929,6 +935,64 @@
       $("marioSyncBadge").textContent = state.board ? "🟢 实时同步中 (静音)" : "📱 触屏本地模式";
       $("marioSyncBadge").style.color = state.board ? "#35c759" : "#ffd23f";
     }
+    if ($("marioStartBtn")) {
+      if (st.state === 0) {
+        $("marioStartBtn").innerHTML = "▶ <strong>点击开始游戏</strong>";
+        $("marioStartBtn").classList.add("primary");
+      } else if (st.state === 1) {
+        $("marioStartBtn").innerHTML = "⏳ 关卡载入中...";
+        $("marioStartBtn").classList.remove("primary");
+      } else if (st.state === 2) {
+        $("marioStartBtn").innerHTML = "⏸ 暂停游戏";
+        $("marioStartBtn").classList.remove("primary");
+      } else if (st.state === 3) {
+        $("marioStartBtn").innerHTML = "▶ 继续游戏";
+        $("marioStartBtn").classList.add("primary");
+      } else if (st.state === 4 || st.state === 5) {
+        $("marioStartBtn").innerHTML = "↺ 重新开始";
+        $("marioStartBtn").classList.add("primary");
+      }
+    }
+  }
+
+  async function launchMarioGame() {
+    state.game = "mario";
+    if ($("gameState")) $("gameState").textContent = "超级马里奥";
+    if ($("marioContainer")) {
+      $("marioContainer").style.display = "flex";
+      try {
+        $("marioContainer").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (_) {}
+    }
+    if ($("gamepad")) $("gamepad").style.display = "none";
+    $$("[data-game]").forEach((btn) => btn.classList.toggle("active", btn.dataset.game === "mario"));
+    
+    // 初始化抬头显示器为准备状态
+    updateMarioHud({ state: 0, score: 0, lives: 3, coins: 0, progress: 0 });
+
+    try {
+      const res = await api("/api/game", { game: "mario", action: "start" });
+      if (res && res.hex && $("marioCanvas")) drawMarioFrame($("marioCanvas"), res.hex);
+      if (res && res.game_status) updateMarioHud(res.game_status);
+    } catch (e) {
+      console.warn("Mario start fallback:", e);
+      notice("已进入马里奥游戏界面");
+    }
+  }
+
+  if ($("btnMarioGame")) {
+    $("btnMarioGame").onclick = (e) => {
+      e.preventDefault();
+      launchMarioGame();
+    };
+  }
+
+  if ($("heroPlayMario")) {
+    $("heroPlayMario").onclick = (e) => {
+      e.preventDefault();
+      navigate("interaction");
+      launchMarioGame();
+    };
   }
 
   $$("[data-game]").forEach(
@@ -936,14 +1000,7 @@
       (b.onclick = async () => {
         try {
           if (b.dataset.game === "mario") {
-            const res = await api("/api/game", { game: "mario", action: "start" });
-            state.game = "mario";
-            $("gameState").textContent = "超级马里奥";
-            if ($("marioContainer")) $("marioContainer").style.display = "flex";
-            if ($("gamepad")) $("gamepad").style.display = "none";
-            $$("[data-game]").forEach((btn) => btn.classList.toggle("active", btn.dataset.game === "mario"));
-            if (res.hex && $("marioCanvas")) drawMarioFrame($("marioCanvas"), res.hex);
-            if (res.game_status) updateMarioHud(res.game_status);
+            await launchMarioGame();
             return;
           }
           if (state.game === "mario") {

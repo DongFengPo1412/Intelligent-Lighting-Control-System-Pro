@@ -1122,12 +1122,31 @@ async def on_shutdown(app):
     if connection:
         await connection.close();await connection.ws.close(code=1001,message=b'Server shutdown')
 
+@web.middleware
+async def no_cache_cors_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        response = web.Response()
+    else:
+        try:
+            response = await handler(request)
+        except web.HTTPException as ex:
+            response = ex
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    path = request.path.lower()
+    if path.endswith((".html", ".js", ".css")) or path == "/" or path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 def create_app(simulate=False,no_audio=False) -> web.Application:
     # 严格先进行完整生命周期与旧任务/旧线程检查；若被拒绝，旧服务的 shutting_down 准入状态与资源归属必须保持不变
     check_reinit_allowed()
     global shutting_down
     shutting_down = False
-    app = web.Application(client_max_size=21*1024*1024)
+    app = web.Application(client_max_size=21*1024*1024, middlewares=[no_cache_cors_middleware])
     app['simulate']=simulate;app['no_audio']=no_audio
     warmup_abort_ev = threading.Event()
     app['warmup_state'] = {

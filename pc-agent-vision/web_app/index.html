@@ -9,7 +9,7 @@
   <title>Amadeus · 红莉栖的光影实验室</title>
   <link rel="icon" href="assets/icon.png" type="image/png" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20261025u" />
+  <link rel="stylesheet" href="style.css?v=20261103_mario_touch_v6" />
 </head>
 
 <body>
@@ -144,6 +144,9 @@
                   和红莉栖聊聊 <svg>
                     <use href="#i-arrow" />
                   </svg></button><button class="hero-secondary" data-go="lights">
+                <button class="hero-secondary" id="heroPlayMario" style="border-color:rgba(235,24,24,0.5);background:rgba(235,24,24,0.18);color:#ffd23f;font-weight:700;">
+                  🎮 玩超级马里奥
+                </button>
                   探索灯光
                 </button>
               </div>
@@ -527,8 +530,8 @@
               <!-- 手机触控虚拟手柄控制区 (无需外接手柄，直接触屏或点击) -->
               <div class="mario-gamepad-controls" id="marioGamepadControls">
                 <div class="mario-mid-btns">
-                  <button type="button" class="mario-ctrl-btn" id="marioStartBtn" data-mario-key="start">
-                    ⏸ 开始 / 暂停
+                  <button type="button" class="mario-ctrl-btn primary" id="marioStartBtn" data-mario-key="start">
+                    ▶ 点击开始游戏
                   </button>
                   <button type="button" class="mario-ctrl-btn secondary" id="marioResetBtn" data-mario-action="reset">
                     ↺ 重新开局
@@ -773,7 +776,7 @@
     </form>
   </dialog>
   <script src="matrix3d.js?v=20261025u"></script>
-  <script src="app.js?v=20261025u"></script>
+  <script src="app.js?v=20261103_mario_touch_v6"></script>
 </body>
 
 </html>
