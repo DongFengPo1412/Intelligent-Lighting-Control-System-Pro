@@ -272,6 +272,10 @@ class ProApi:
                     await asyncio.to_thread(
                         self.playback.set_options, data.get("repeat"), data.get("order")
                     )
+                elif operation == "gain" or "gain" in data:
+                    new_gain = float(data.get("gain", 1.0))
+                    if 0 < new_gain <= 2.0:
+                        self.music.gain = new_gain
                 elif "track_id" in data:
                     await asyncio.to_thread(
                         self.playback.play,

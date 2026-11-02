@@ -128,8 +128,8 @@ class MusicPlayer:
         self.running = False
         self.visual_fluid = True
         self.gain = float(os.environ.get("KURISU_MUSIC_GAIN", "0.25"))
-        if not math.isfinite(self.gain) or not 0 < self.gain <= 1:
-            raise ValueError("KURISU_MUSIC_GAIN must be in (0, 1]")
+        if not math.isfinite(self.gain) or not 0 < self.gain <= 2.0:
+            raise ValueError("KURISU_MUSIC_GAIN must be in (0, 2.0]")
         self.duration = 0.0
         self._position = 0.0
         self.operations = threading.RLock()
@@ -274,7 +274,11 @@ class MusicPlayer:
             # Music masters are much louder than the accepted speech/chime
             # baseline. Keep speaker headroom without weakening MIR features.
             speaker_pcm = (
-                (np.frombuffer(pcm, dtype="<i2").astype(np.float32) * self.gain)
+                np.clip(
+                    np.frombuffer(pcm, dtype="<i2").astype(np.float32) * self.gain,
+                    -32768,
+                    32767,
+                )
                 .astype("<i2")
                 .tobytes()
             )

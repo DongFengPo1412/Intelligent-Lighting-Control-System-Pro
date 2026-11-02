@@ -247,14 +247,16 @@
       const brightness = c.brightness ?? c.state?.brightness;
       syncRange("brightness", brightness, " / 60");
       syncRange("volume", s.volume ?? c.volume, "%");
+      syncRange("musicVolume", s.volume ?? c.volume, "%");
     }
   }
   function syncRange(id, value, suffix = "") {
     if (!Number.isFinite(Number(value)) || value == null) return;
     const el = $(id);
-    if (document.activeElement !== el && el.dataset.busy !== "1") {
+    if (el && document.activeElement !== el && el.dataset.busy !== "1") {
       el.value = String(value);
-      $(id + "Value").textContent = value + suffix;
+      const valEl = $(id + "Value");
+      if (valEl) valEl.textContent = value + suffix;
     }
   }
   function matrix2d(canvas, hex) {
@@ -397,25 +399,63 @@
   $$("[data-mode]").forEach((b) => b.addEventListener("click", modeClick));
   $("effectCategory").onchange = renderEffects;
   renderEffects();
-  for (const id of ["brightness", "volume"]) {
-    $(id).oninput = () =>
-      ($(id + "Value").textContent =
-        $(id).value + (id === "volume" ? "%" : " / 60"));
-    $(id).onchange = async () => {
-      const e = $(id);
-      e.dataset.busy = "1";
+  let volumeDebounce = null;
+  function handleVolumeInput(val) {
+    const num = Number(val);
+    if (!Number.isFinite(num)) return;
+    const vEl = $("volume");
+    if (vEl) vEl.value = String(num);
+    const vvEl = $("volumeValue");
+    if (vvEl) vvEl.textContent = num + "%";
+    const mvEl = $("musicVolume");
+    if (mvEl) mvEl.value = String(num);
+    const mvvEl = $("musicVolumeValue");
+    if (mvvEl) mvvEl.textContent = num + "%";
+
+    clearTimeout(volumeDebounce);
+    volumeDebounce = setTimeout(async () => {
       try {
-        if (id === "volume")
-          await api("/api/volume", { volume: Number(e.value) });
-        else await api("/api/cmd", { cmd: "brightness", val: Number(e.value) });
-        notice(id === "volume" ? "扬声器音量已确认" : "灯光亮度已确认");
-      } catch (error) {
-        notice(error.message);
-      } finally {
-        delete e.dataset.busy;
-        lastGeneral = 0;
-      }
-    };
+        await api("/api/volume", { volume: num });
+      } catch (_) {}
+    }, 70);
+  }
+
+  async function handleVolumeCommit(val) {
+    const num = Number(val);
+    if (!Number.isFinite(num)) return;
+    clearTimeout(volumeDebounce);
+    try {
+      await api("/api/volume", { volume: num });
+      notice("扬声器音量已确认 (" + num + "%)");
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      lastGeneral = 0;
+    }
+  }
+
+  $("brightness").oninput = () =>
+    ($("brightnessValue").textContent = $("brightness").value + " / 60");
+  $("brightness").onchange = async () => {
+    const e = $("brightness");
+    e.dataset.busy = "1";
+    try {
+      await api("/api/cmd", { cmd: "brightness", val: Number(e.value) });
+      notice("灯光亮度已确认");
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      delete e.dataset.busy;
+      lastGeneral = 0;
+    }
+  };
+
+  for (const volId of ["volume", "musicVolume"]) {
+    const el = $(volId);
+    if (el) {
+      el.oninput = (e) => handleVolumeInput(e.target.value);
+      el.onchange = (e) => handleVolumeCommit(e.target.value);
+    }
   }
   async function timer(seconds) {
     if (!Number.isInteger(seconds) || seconds < 1 || seconds > 86400)

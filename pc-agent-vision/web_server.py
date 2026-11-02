@@ -406,6 +406,8 @@ async def handle_volume(request: web.Request):
         loop = asyncio.get_running_loop()
         if not 0 <= vol <= 100:
             raise ValueError('Volume must be between 0 and 100')
+        if voice:
+            voice.set_volume(vol)
         await device_call(controller.set_volume, vol)
         await broadcast_ws({"type": "status", "volume": vol})
         return web.json_response({"status": "ok", "volume": vol})
@@ -1149,6 +1151,7 @@ if __name__ == "__main__":
     parser.add_argument('--port',type=int,default=8080)
     args=parser.parse_args();WEB_PORT=args.port
     if args.simulate:os.environ['KURISU_SIMULATE']='1'
+    if 'KURISU_MUSIC_GAIN' not in os.environ:os.environ['KURISU_MUSIC_GAIN']='0.85'
     app = create_app(args.simulate,args.no_audio)
     print("\n" + "="*60)
     print("  🚀 未来道具研究所 · 牧濑红莉栖具身中枢 (全时强制 WiFi 通信)")
