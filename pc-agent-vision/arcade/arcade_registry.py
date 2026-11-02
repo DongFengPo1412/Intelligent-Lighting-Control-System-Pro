@@ -57,6 +57,7 @@ from .game_051_shinobi import Game051Shinobi
 from .game_052_gunsmoke import Game052GunSmoke
 from .game_053_wrestling import Game053Wrestling
 from .game_054_antarctic import Game054Antarctic
+from .game_055_ninjagaiden import Game055NinjaGaiden
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -146,3 +147,4 @@ ArcadeRegistry.register(Game051Shinobi)
 ArcadeRegistry.register(Game052GunSmoke)
 ArcadeRegistry.register(Game053Wrestling)
 ArcadeRegistry.register(Game054Antarctic)
+ArcadeRegistry.register(Game055NinjaGaiden)
