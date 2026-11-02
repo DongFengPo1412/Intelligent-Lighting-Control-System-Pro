@@ -99,6 +99,7 @@ from .game_093_pengo import Game093Pengo
 from .game_094_crashboys import Game094CrashBoys
 from .game_095_burgertime import Game095BurgerTime
 from .game_096_pooyan import Game096Pooyan
+from .game_097_tapper import Game097Tapper
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -230,3 +231,4 @@ ArcadeRegistry.register(Game093Pengo)
 ArcadeRegistry.register(Game094CrashBoys)
 ArcadeRegistry.register(Game095BurgerTime)
 ArcadeRegistry.register(Game096Pooyan)
+ArcadeRegistry.register(Game097Tapper)
