@@ -19,6 +19,7 @@ from .game_013_bomberman import Game013Bomberman
 from .game_014_sokoban import Game014Sokoban
 from .game_015_tron import Game015Tron
 from .game_016_neon_2048 import Game016Neon2048
+from .game_017_piano_tiles import Game017PianoTiles
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -70,3 +71,4 @@ ArcadeRegistry.register(Game013Bomberman)
 ArcadeRegistry.register(Game014Sokoban)
 ArcadeRegistry.register(Game015Tron)
 ArcadeRegistry.register(Game016Neon2048)
+ArcadeRegistry.register(Game017PianoTiles)
