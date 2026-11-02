@@ -25,6 +25,7 @@ from .game_019_puzzle_bobble import Game019PuzzleBobble
 from .game_020_artillery import Game020Artillery
 from .game_021_dig_dug import Game021DigDug
 from .game_022_galaga import Game022Galaga
+from .game_023_donkey_kong import Game023DonkeyKong
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -82,3 +83,4 @@ ArcadeRegistry.register(Game019PuzzleBobble)
 ArcadeRegistry.register(Game020Artillery)
 ArcadeRegistry.register(Game021DigDug)
 ArcadeRegistry.register(Game022Galaga)
+ArcadeRegistry.register(Game023DonkeyKong)
