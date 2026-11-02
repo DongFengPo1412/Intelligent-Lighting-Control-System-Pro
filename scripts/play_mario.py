@@ -221,3 +221,4 @@ if __name__ == "__main__":
     parser.add_argument("--board", action="store_true", help="同时推流到板载灯板")
     args = parser.parse_args()
     run_mario(stream_to_board=args.board)
+

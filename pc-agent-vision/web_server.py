@@ -460,6 +460,26 @@ async def handle_game(request: web.Request):
         elif game == "tetris":
             action = str(data.get("action", "rot"))
             await device_call(controller.tetris_action, action)
+        elif game == "mario":
+            from mario_runner import get_mario_session
+            mario = get_mario_session(controller, broadcast_ws)
+            action = data.get("action")
+            if action == "start":
+                await mario.start()
+            elif action == "stop":
+                await mario.stop()
+            elif action == "reset":
+                mario.reset()
+            elif action == "key":
+                k = data.get("key", "")
+                down = bool(data.get("down", True))
+                mario.key(k, down)
+            return web.json_response({
+                "status": "ok",
+                "running": mario.is_running,
+                "game_status": mario.status,
+                "hex": mario.current_hex
+            })
         else:
             return web.json_response({"error": "Unknown game"}, status=400)
 
@@ -470,6 +490,16 @@ async def handle_game(request: web.Request):
         return web.json_response({"error": str(e)}, status=503)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
+
+async def handle_mario_frame(request: web.Request):
+    """获取马里奥实时帧与状态"""
+    from mario_runner import get_mario_session
+    mario = get_mario_session(controller, broadcast_ws)
+    return web.json_response({
+        "running": mario.is_running,
+        "status": mario.status,
+        "hex": mario.current_hex
+    })
 
 async def handle_retry_warmup(request: web.Request):
     """手动触发模型预热重试（用于重试耗尽后用户恢复 Ollama 后的重新连接）"""
@@ -1133,6 +1163,7 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     app.router.add_post("/api/volume", handle_volume)
     app.router.add_post("/api/cmd", handle_cmd)
     app.router.add_post("/api/game", handle_game)
+    app.router.add_get("/api/game/mario/frame", handle_mario_frame)
     app.router.add_get("/api/status", handle_status)
     app.router.add_get("/ws", handle_ws)
     from advanced_api import register

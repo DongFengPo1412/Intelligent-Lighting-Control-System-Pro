@@ -53,3 +53,4 @@ MARIO_EXPORT void mario_get_status(void* g, uint16_t* score, uint8_t* lives, uin
 }
 
 }
+
