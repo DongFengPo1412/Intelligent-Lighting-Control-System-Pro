@@ -71,6 +71,7 @@ class TestGame029SlitherArena(unittest.TestCase):
 
     def test_boost_speed_and_segment_drop(self):
         """测试按住 A 键冲刺消耗尾段并在原位掉落光子"""
+        self.game.orbs.clear() # 清除地图随机光子避免意外吞食生长
         self.assertEqual(len(self.game.player_body), 5)
         init_orbs_count = len(self.game.orbs)
 
