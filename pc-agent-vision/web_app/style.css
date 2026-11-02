@@ -2083,3 +2083,347 @@ dialog p {
   flex-shrink: 0;
   margin-left: 12px;
 }
+
+/* ==========================================================================
+   Super Mario 16 Mobile Virtual Gamepad & Arcade Console
+   ========================================================================== */
+.mario-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 16px 14px;
+  background: linear-gradient(180deg, #151b24 0%, #0d1219 100%);
+  border: 1px solid #2d3846;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mario-header {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd23f;
+  letter-spacing: 0.5px;
+}
+
+.mario-sync-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(53, 199, 89, 0.15);
+  border: 1px solid rgba(53, 199, 89, 0.35);
+  color: #35c759;
+}
+
+.mario-screen-housing {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #2a3745;
+  background: #000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.mario-screen-housing canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  background: #000;
+}
+
+.mario-progress-track {
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
+  background: #1a222e;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #2a3745;
+}
+
+.mario-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #35c759, #ffd23f);
+  transition: width 0.15s ease-out;
+}
+
+.mario-hud-panel {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: rgba(22, 30, 42, 0.95);
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #2b3949;
+}
+
+.mario-hud-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mario-state-badge {
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #ffd23f;
+  color: #10141a;
+  font-size: 11px;
+}
+
+.mario-gamepad-controls {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0;
+  touch-action: none;
+}
+
+.mario-mid-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+}
+
+.mario-ctrl-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #24303e;
+  border: 1px solid #36465a;
+  color: #dbe4ef;
+  touch-action: manipulation;
+  transition: all 0.08s ease;
+}
+
+.mario-ctrl-btn:active,
+.mario-ctrl-btn.pressed {
+  transform: translateY(2px);
+  background: #1b242f;
+}
+
+.mario-ctrl-btn.quiet {
+  background: rgba(40, 50, 65, 0.4);
+  color: #94a3b8;
+}
+
+.mario-touch-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 6px 4px;
+}
+
+/* D-Pad 十字方向键 */
+.mario-dpad {
+  position: relative;
+  width: 144px;
+  height: 144px;
+  display: grid;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 0;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.mario-dbtn {
+  background: linear-gradient(180deg, #323b47, #212932);
+  border: 1px solid #434f5e;
+  color: #e2e8f0;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.05s, background 0.05s, box-shadow 0.05s;
+  box-shadow: 0 4px 0 #12171c;
+}
+
+.mario-dbtn:active,
+.mario-dbtn.pressed {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #12171c;
+  background: #182029;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+#marioKeyUp {
+  grid-area: 1 / 2;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+#marioKeyLeft {
+  grid-area: 2 / 1;
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+
+#marioKeyRight {
+  grid-area: 2 / 3;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+#marioKeyDown {
+  grid-area: 3 / 2;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+.mario-dpad-center {
+  grid-area: 2 / 2;
+  background: #1b2129;
+  border: 1px solid #333d4b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mario-dpad-center::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0f141a;
+  border: 1px solid #2a3440;
+}
+
+/* 动作键 A / B */
+.mario-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transform: rotate(-6deg);
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.mario-abtn {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.05s, box-shadow 0.05s, filter 0.05s;
+}
+
+.mario-abtn .btn-letter {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.mario-abtn .btn-sub {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.5px;
+}
+
+.mario-abtn.btn-a {
+  background: radial-gradient(circle at 35% 30%, #5ee486, #22a344 65%, #15732e);
+  box-shadow: 0 6px 0 #0e4c1e, 0 8px 18px rgba(34, 163, 68, 0.35);
+}
+
+.mario-abtn.btn-b {
+  margin-top: 24px;
+  background: radial-gradient(circle at 35% 30%, #ff7669, #e53935 65%, #a81c18);
+  box-shadow: 0 6px 0 #6e1310, 0 8px 18px rgba(229, 57, 53, 0.35);
+}
+
+.mario-abtn:active,
+.mario-abtn.pressed {
+  transform: translateY(4px);
+  filter: brightness(1.15);
+}
+
+.mario-abtn.btn-a:active,
+.mario-abtn.btn-a.pressed {
+  box-shadow: 0 2px 0 #0e4c1e, 0 2px 6px rgba(34, 163, 68, 0.35);
+}
+
+.mario-abtn.btn-b:active,
+.mario-abtn.btn-b.pressed {
+  box-shadow: 0 2px 0 #6e1310, 0 2px 6px rgba(229, 57, 53, 0.35);
+}
+
+.mario-help {
+  text-align: center;
+  font-size: 11px;
+  color: #8b9aab;
+  margin-top: 4px;
+}
+
+@media (max-width: 420px) {
+  .mario-touch-stage {
+    gap: 8px;
+    justify-content: space-around;
+  }
+  .mario-dpad {
+    width: 126px;
+    height: 126px;
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(3, 42px);
+  }
+  .mario-dbtn {
+    font-size: 15px;
+  }
+  .mario-abtn {
+    width: 56px;
+    height: 56px;
+  }
+  .mario-abtn .btn-letter {
+    font-size: 19px;
+  }
+}

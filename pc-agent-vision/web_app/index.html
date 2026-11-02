@@ -496,32 +496,74 @@
             <div class="game-selection">
               <button class="secondary" data-game="snake" data-hardware>
                 贪吃蛇</button><button class="secondary" data-game="tetris" data-hardware>
-                俄罗斯方块</button><button class="secondary" data-game="mario" data-hardware id="btnMarioGame">
+                俄罗斯方块</button><button class="secondary" data-game="mario" id="btnMarioGame">
                 超级马里奥
-              </button><a class="secondary" href="/mario_controller.html" target="_blank"
-                style="text-decoration:none;display:inline-flex;align-items:center;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;color:var(--text);background:var(--surface-muted);border:1px solid var(--border);">
-                独立手柄 ↗
-              </a>
+              </button>
             </div>
-            <!-- 马里奥专属实时交互画布与 HUD -->
-            <div class="mario-container" id="marioContainer" style="display:none; flex-direction:column; align-items:center; gap:10px; margin:12px 0; background:rgba(15,20,28,0.7); border-radius:12px; padding:12px; border:1px solid var(--border);">
-              <div style="position:relative; display:inline-block; border-radius:10px; overflow:hidden; border:2px solid #2a3745; box-shadow:0 4px 16px rgba(0,0,0,0.5);">
-                <canvas id="marioCanvas" width="320" height="320" style="display:block; image-rendering:pixelated; background:#000; width:100%; max-width:320px; aspect-ratio:1/1;"></canvas>
+            <!-- 马里奥专属实时手机触屏街机交互界面 -->
+            <div class="mario-container" id="marioContainer" style="display:none;">
+              <div class="mario-header">
+                <span>🎮 MARIO 16 · 触屏街机</span>
+                <span id="marioSyncBadge" class="mario-sync-pill">🟢 实时同步中 (静音)</span>
               </div>
-              <div style="width:100%; max-width:320px; display:flex; flex-direction:column; gap:4px; font-size:12px; font-family:monospace; background:rgba(20,27,36,0.9); padding:8px 12px; border-radius:8px; border:1px solid #2a3745;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span id="marioStateTag" style="color:#ffd23f; font-weight:bold;">标题画面</span>
-                  <span id="marioScoreStat" style="color:#e8eef5;">得分: 00000</span>
+              <div class="mario-screen-housing">
+                <canvas id="marioCanvas" width="320" height="320" aria-label="16×16 马里奥游戏画面"></canvas>
+              </div>
+              <div class="mario-progress-track">
+                <div id="marioProgFill" class="mario-progress-bar"></div>
+              </div>
+              <div class="mario-hud-panel">
+                <div class="mario-hud-row">
+                  <span id="marioStateTag" class="mario-state-badge">标题画面</span>
+                  <span id="marioScoreStat" style="color:#ffd23f;font-weight:bold;">得分: 00000</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; color:#8b9aab;">
+                <div class="mario-hud-row" style="color:#94a3b8;">
                   <span id="marioLivesStat">❤️ ×3</span>
                   <span id="marioCoinsStat">🪙 ×00</span>
                   <span id="marioProgressStat">🏁 0%</span>
                 </div>
               </div>
-              <div style="display:flex; gap:8px; width:100%; max-width:320px;">
-                <button type="button" id="marioStartBtn" class="primary" style="flex:1;">开始 / 暂停</button>
-                <button type="button" id="marioResetBtn" class="secondary" style="flex:1;">重新开局</button>
+
+              <!-- 手机触控虚拟手柄控制区 (无需外接手柄，直接触屏或点击) -->
+              <div class="mario-gamepad-controls" id="marioGamepadControls">
+                <div class="mario-mid-btns">
+                  <button type="button" class="mario-ctrl-btn" id="marioStartBtn" data-mario-key="start">
+                    ⏸ 开始 / 暂停
+                  </button>
+                  <button type="button" class="mario-ctrl-btn secondary" id="marioResetBtn" data-mario-action="reset">
+                    ↺ 重新开局
+                  </button>
+                  <button type="button" class="mario-ctrl-btn quiet" id="marioStopBtn" data-mario-action="stop">
+                    ✕ 退出游戏
+                  </button>
+                </div>
+
+                <div class="mario-touch-stage">
+                  <!-- 左侧十字方向键 -->
+                  <div class="mario-dpad" role="group" aria-label="移动控制十字键">
+                    <button type="button" class="mario-dbtn" id="marioKeyUp" data-mario-key="up" aria-label="向上跳跃">▲</button>
+                    <button type="button" class="mario-dbtn" id="marioKeyLeft" data-mario-key="left" aria-label="向左走">◀</button>
+                    <div class="mario-dpad-center"></div>
+                    <button type="button" class="mario-dbtn" id="marioKeyRight" data-mario-key="right" aria-label="向右走">▶</button>
+                    <button type="button" class="mario-dbtn" id="marioKeyDown" data-mario-key="down" aria-label="下蹲">▼</button>
+                  </div>
+
+                  <!-- 右侧 A / B 动作键 (大圆触控键，按住 A 跳更高，按 B 加速冲刺) -->
+                  <div class="mario-actions" role="group" aria-label="动作按键">
+                    <button type="button" class="mario-abtn btn-b" id="marioKeyB" data-mario-key="b" aria-label="冲刺加速">
+                      <span class="btn-letter">B</span>
+                      <small class="btn-sub">加速</small>
+                    </button>
+                    <button type="button" class="mario-abtn btn-a" id="marioKeyA" data-mario-key="a" aria-label="跳跃">
+                      <span class="btn-letter">A</span>
+                      <small class="btn-sub">跳跃</small>
+                    </button>
+                  </div>
+                </div>
+
+                <p class="field-help mario-help">
+                  📱 手机触屏直接畅玩（多点触控已优化，长按 A 跳更高，按住 B 加速冲刺）；电脑支持键盘 WASD / 方向键 / 空格。
+                </p>
               </div>
             </div>
             <div class="gamepad" id="gamepad" tabindex="0" role="group" aria-label="游戏手柄，支持方向键">

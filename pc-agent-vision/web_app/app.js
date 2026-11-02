@@ -313,11 +313,9 @@
     });
     if ([19, 20].includes(f.mode)) state.game = "snake";
     else if ([21, 22].includes(f.mode)) state.game = "tetris";
-    else if (state.game === "mario" && f.mode === 29) { /* keep mario */ }
-    else if (f.mode !== 29) {
-      if (state.game === "mario") {
-        api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
-      }
+    else if (state.game === "mario") {
+      /* 马里奥处于主动运行状态，不因底层环境模式上报而被动停止 */
+    } else {
       state.game = null;
     }
     $("gameState").textContent = state.game
@@ -333,11 +331,20 @@
     if ($("marioContainer")) {
       $("marioContainer").style.display = state.game === "mario" ? "flex" : "none";
     }
+    if ($("gamepad")) {
+      $("gamepad").style.display = state.game === "mario" ? "none" : "flex";
+    }
     if (f.brightness != null) syncRange("brightness", f.brightness, " / 60");
     $("countdownState").textContent =
       f.mode === 25 ? "计时画面显示中" : "尚未开始 / 已结束";
   }
   async function setMode(mode) {
+    if (state.game === "mario") {
+      await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
+      state.game = null;
+      if ($("marioContainer")) $("marioContainer").style.display = "none";
+      if ($("gamepad")) $("gamepad").style.display = "flex";
+    }
     await api("/api/mode", { mode });
     notice(
       `${modeName(mode)} · ${state.simulated ? "模拟操作已提交" : "设备已确认"}`,
@@ -623,7 +630,7 @@
         const v = JSON.parse(e.data);
         if (v.type === "mario_frame") {
           if ($("marioCanvas") && v.hex) {
-            matrix2d($("marioCanvas"), v.hex);
+            drawMarioFrame($("marioCanvas"), v.hex);
           }
           if (v.status) {
             updateMarioHud(v.status);
@@ -887,6 +894,29 @@
     }
   };
   const MARIO_STATES = ["标题画面", "准备中", "游戏中", "已暂停", "死亡", "结束", "通关"];
+
+  function drawMarioFrame(canvas, hex) {
+    if (!canvas || !hex || hex.length < 1536) return;
+    const ctx = canvas.getContext("2d");
+    const sz = canvas.width / 16;
+    ctx.fillStyle = "#0c1017";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < 256; i++) {
+      const r = parseInt(hex.slice(i * 6, i * 6 + 2), 16) || 0;
+      const g = parseInt(hex.slice(i * 6 + 2, i * 6 + 4), 16) || 0;
+      const b = parseInt(hex.slice(i * 6 + 4, i * 6 + 6), 16) || 0;
+      const x = (i % 16) * sz;
+      const y = Math.floor(i / 16) * sz;
+      if (r === 0 && g === 0 && b === 0) {
+        ctx.fillStyle = "#121822";
+        ctx.fillRect(x + 1, y + 1, sz - 2, sz - 2);
+      } else {
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x + 1, y + 1, sz - 2, sz - 2);
+      }
+    }
+  }
+
   function updateMarioHud(st) {
     if (!st) return;
     if ($("marioStateTag")) $("marioStateTag").textContent = MARIO_STATES[st.state] || `State ${st.state}`;
@@ -894,6 +924,11 @@
     if ($("marioLivesStat")) $("marioLivesStat").textContent = "❤️ ×" + (st.lives ?? 3);
     if ($("marioCoinsStat")) $("marioCoinsStat").textContent = "🪙 ×" + String(st.coins || 0).padStart(2, "0");
     if ($("marioProgressStat")) $("marioProgressStat").textContent = "🏁 " + (st.progress ?? 0) + "%";
+    if ($("marioProgFill")) $("marioProgFill").style.width = Math.min(100, Math.max(0, st.progress ?? 0)) + "%";
+    if ($("marioSyncBadge")) {
+      $("marioSyncBadge").textContent = state.board ? "🟢 实时同步中 (静音)" : "📱 触屏本地模式";
+      $("marioSyncBadge").style.color = state.board ? "#35c759" : "#ffd23f";
+    }
   }
 
   $$("[data-game]").forEach(
@@ -905,15 +940,16 @@
             state.game = "mario";
             $("gameState").textContent = "超级马里奥";
             if ($("marioContainer")) $("marioContainer").style.display = "flex";
+            if ($("gamepad")) $("gamepad").style.display = "none";
             $$("[data-game]").forEach((btn) => btn.classList.toggle("active", btn.dataset.game === "mario"));
-            if (res.hex && $("marioCanvas")) matrix2d($("marioCanvas"), res.hex);
+            if (res.hex && $("marioCanvas")) drawMarioFrame($("marioCanvas"), res.hex);
             if (res.game_status) updateMarioHud(res.game_status);
-            $("gamepad").focus({ preventScroll: true });
             return;
           }
           if (state.game === "mario") {
             await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
             if ($("marioContainer")) $("marioContainer").style.display = "none";
+            if ($("gamepad")) $("gamepad").style.display = "flex";
           }
           await api("/api/mode", {
             mode: b.dataset.game === "snake" ? 19 : 21,
@@ -926,9 +962,8 @@
         }
       }),
   );
+
   async function gameMove(direction) {
-    if (!state.board) throw Error("灯板未连接");
-    if (!state.game) throw Error("请先选择游戏");
     if (state.game === "mario") {
       await api("/api/game", { game: "mario", action: "key", key: direction, down: true });
       setTimeout(() => {
@@ -936,6 +971,8 @@
       }, 120);
       return;
     }
+    if (!state.board) throw Error("灯板未连接");
+    if (!state.game) throw Error("请先选择游戏");
     if (state.game === "snake") {
       const vectors = {
         up: [0, -1],
@@ -980,18 +1017,63 @@
       }),
   );
 
-  if ($("marioStartBtn")) {
-    $("marioStartBtn").onclick = () => {
-      api("/api/game", { game: "mario", action: "key", key: "start", down: true })
-        .then(() => setTimeout(() => api("/api/game", { game: "mario", action: "key", key: "start", down: false }), 100))
+  // 手机触控虚拟手柄按键事件绑定 (touchstart / touchend / mousedown / mouseup)
+  function bindMarioTouchKey(btn, keyName) {
+    if (!btn) return;
+    let isPressed = false;
+
+    const press = (e) => {
+      e?.preventDefault?.();
+      if (isPressed) return;
+      isPressed = true;
+      btn.classList.add("pressed", "active");
+      if (navigator.vibrate) {
+        try { navigator.vibrate(10); } catch (_) {}
+      }
+      api("/api/game", { game: "mario", action: "key", key: keyName, down: true }).catch(() => {});
+    };
+
+    const release = (e) => {
+      e?.preventDefault?.();
+      if (!isPressed) return;
+      isPressed = false;
+      btn.classList.remove("pressed", "active");
+      api("/api/game", { game: "mario", action: "key", key: keyName, down: false }).catch(() => {});
+    };
+
+    btn.addEventListener("touchstart", press, { passive: false });
+    btn.addEventListener("touchend", release, { passive: false });
+    btn.addEventListener("touchcancel", release, { passive: false });
+    btn.addEventListener("mousedown", press);
+    btn.addEventListener("mouseup", release);
+    btn.addEventListener("mouseleave", release);
+  }
+
+  $$("[data-mario-key]").forEach((btn) => {
+    bindMarioTouchKey(btn, btn.dataset.marioKey);
+  });
+
+  if ($("marioResetBtn")) {
+    $("marioResetBtn").onclick = (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      api("/api/game", { game: "mario", action: "reset" })
+        .then(() => notice("马里奥已重新开局"))
         .catch((e) => notice(e.message));
     };
   }
-  if ($("marioResetBtn")) {
-    $("marioResetBtn").onclick = () => {
-      api("/api/game", { game: "mario", action: "reset" })
-        .then(() => notice("马里奥游戏已重置"))
-        .catch((e) => notice(e.message));
+
+  if ($("marioStopBtn")) {
+    $("marioStopBtn").onclick = async (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
+      state.game = null;
+      $("gameState").textContent = "选择游戏开始";
+      if ($("marioContainer")) $("marioContainer").style.display = "none";
+      if ($("gamepad")) $("gamepad").style.display = "flex";
+      $$("[data-game]").forEach((btn) => btn.classList.remove("active"));
+      notice("已退出马里奥");
     };
   }
 
@@ -1037,11 +1119,11 @@
     if (state.game === "mario" && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
       try {
         const res = await api("/api/game/mario/frame", undefined, "GET", 1500);
-        if (res.hex) matrix2d($("marioCanvas"), res.hex);
+        if (res.hex) drawMarioFrame($("marioCanvas"), res.hex);
         if (res.status) updateMarioHud(res.status);
       } catch (_) {}
     }
-  }, 100);
+  }, 66);
   $("gamepad").onkeydown = (e) => {
     const key = {
       ArrowUp: "up",

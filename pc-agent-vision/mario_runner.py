@@ -75,6 +75,12 @@ class MarioSession:
         self.keys_down = 0
         self.keys_pressed = 0
 
+        # 初始步进与渲染一帧，确保首次启动即可返回完整的标题画面像素
+        fb0 = np.zeros((16, 16, 3), dtype=np.uint8)
+        self.dll.mario_update(self.game, ctypes.c_float(0.0), ctypes.c_uint16(0), ctypes.c_uint16(0))
+        self.dll.mario_render(self.game, fb0.ctypes.data_as(ctypes.c_char_p))
+        self.current_hex = fb0.tobytes().hex()
+
         # 板端切换到画布模式 (29: PIXEL_CANVAS)，保持完全静音，不开声音
         if self.controller and hasattr(self.controller, "set_mode"):
             try:
@@ -116,6 +122,9 @@ class MarioSession:
         if self.game and self.dll:
             self.dll.mario_reset(self.game)
             self.keys_pressed |= KEY_START
+            fb0 = np.zeros((16, 16, 3), dtype=np.uint8)
+            self.dll.mario_render(self.game, fb0.ctypes.data_as(ctypes.c_char_p))
+            self.current_hex = fb0.tobytes().hex()
 
     async def stop(self):
         self.is_running = False
@@ -208,3 +217,4 @@ def get_mario_session(controller=None, broadcast_fn=None):
     elif broadcast_fn and not _global_mario_session.broadcast_fn:
         _global_mario_session.broadcast_fn = broadcast_fn
     return _global_mario_session
+
