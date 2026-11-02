@@ -73,6 +73,7 @@ from .game_067_snowbros import Game067SnowBros
 from .game_068_metalgear import Game068MetalGear
 from .game_069_qbert import Game069Qbert
 from .game_070_lunarpool import Game070LunarPool
+from .game_071_ghostsngoblins import Game071GhostsNGoblins
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -178,3 +179,4 @@ ArcadeRegistry.register(Game067SnowBros)
 ArcadeRegistry.register(Game068MetalGear)
 ArcadeRegistry.register(Game069Qbert)
 ArcadeRegistry.register(Game070LunarPool)
+ArcadeRegistry.register(Game071GhostsNGoblins)
