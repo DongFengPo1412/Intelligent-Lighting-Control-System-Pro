@@ -40,6 +40,7 @@ from .game_034_pipe_dream import Game034PipeDream
 from .game_035_othello import Game035Othello
 from .game_036_missile_command import Game036MissileCommand
 from .game_037_sprint_racer import Game037SprintRacer
+from .game_038_ice_climber import Game038IceClimber
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -112,3 +113,4 @@ ArcadeRegistry.register(Game034PipeDream)
 ArcadeRegistry.register(Game035Othello)
 ArcadeRegistry.register(Game036MissileCommand)
 ArcadeRegistry.register(Game037SprintRacer)
+ArcadeRegistry.register(Game038IceClimber)
