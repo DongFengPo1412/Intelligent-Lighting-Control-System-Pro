@@ -113,6 +113,7 @@ class TestGame022Galaga(unittest.TestCase):
 
         # 玩家被吸取升天 (1.2s 俘虏判定，运行 25 帧 = 1.25s)
         for _ in range(25):
+            self.game.bullets.clear() # 清空随机流弹，专项验证牵引俘虏
             self.game.update(0.05, 0, 0)
 
         self.assertEqual(self.game.lives, 2)
