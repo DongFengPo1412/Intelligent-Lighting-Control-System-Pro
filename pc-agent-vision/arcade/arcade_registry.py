@@ -109,6 +109,7 @@ from .game_103_dkjr import Game103DKJr
 from .game_104_digdug2 import Game104DigDug2
 from .game_105_arkanoid import Game105Arkanoid
 from .game_106_crazyclimber import Game106CrazyClimber
+from .game_107_xevious import Game107Xevious
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -250,3 +251,4 @@ ArcadeRegistry.register(Game103DKJr)
 ArcadeRegistry.register(Game104DigDug2)
 ArcadeRegistry.register(Game105Arkanoid)
 ArcadeRegistry.register(Game106CrazyClimber)
+ArcadeRegistry.register(Game107Xevious)
