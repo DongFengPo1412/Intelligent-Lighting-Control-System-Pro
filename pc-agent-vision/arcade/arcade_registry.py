@@ -34,6 +34,7 @@ from .game_028_danmaku import Game028Danmaku
 from .game_029_slither_arena import Game029SlitherArena
 from .game_030_submarine import Game030Submarine
 from .game_031_rally_x import Game031RallyX
+from .game_032_crossy_road import Game032CrossyRoad
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -100,3 +101,4 @@ ArcadeRegistry.register(Game028Danmaku)
 ArcadeRegistry.register(Game029SlitherArena)
 ArcadeRegistry.register(Game030Submarine)
 ArcadeRegistry.register(Game031RallyX)
+ArcadeRegistry.register(Game032CrossyRoad)
