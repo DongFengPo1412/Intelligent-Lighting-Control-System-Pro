@@ -30,6 +30,7 @@ from .game_024_lode_runner import Game024LodeRunner
 from .game_025_bubble_bobble import Game025BubbleBobble
 from .game_026_whack_a_mole import Game026WhackAMole
 from .game_027_magic_tower import Game027MagicTower
+from .game_028_danmaku import Game028Danmaku
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -92,3 +93,4 @@ ArcadeRegistry.register(Game024LodeRunner)
 ArcadeRegistry.register(Game025BubbleBobble)
 ArcadeRegistry.register(Game026WhackAMole)
 ArcadeRegistry.register(Game027MagicTower)
+ArcadeRegistry.register(Game028Danmaku)
