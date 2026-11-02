@@ -7,6 +7,7 @@ arcade_registry.py —— 街机游戏卡带中央注册中心与版本管理
 from typing import Dict, List, Optional, Type, Any
 from .base_cartridge import BaseCartridge
 from .game_004_doodle_jump import Game004DoodleJump
+from .game_005_flappy_bird import Game005FlappyBird
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -46,3 +47,4 @@ class ArcadeRegistry:
 
 # 注册现存已实现的独立街机游戏
 ArcadeRegistry.register(Game004DoodleJump)
+ArcadeRegistry.register(Game005FlappyBird)
