@@ -896,17 +896,22 @@
     notice("难度已更新");
   });
   bind("visionStart", async () => {
-    await api("/api/pro/vision", {
+    const res = await api("/api/pro/vision", {
       enabled: true,
       mode: $("visionMode").value,
       camera: Number($("camera").value),
     });
-    notice(
-      state.simulated
-        ? "模拟视觉流程已提交，不启用摄像头"
-        : "已请求启用电脑摄像头，请查看状态",
-    );
+    if (res && res.error) {
+      notice("摄像头启动提示: " + res.error);
+    } else {
+      notice(
+        state.simulated
+          ? "模拟视觉流程已提交，不启用摄像头"
+          : "已请求启用电脑摄像头，正在接入观测流",
+      );
+    }
     lastPro = 0;
+    setTimeout(() => poll(), 500);
   });
   bind("visionStop", async () => {
     await api("/api/pro/vision", { enabled: false });
