@@ -60,6 +60,7 @@ from .game_054_antarctic import Game054Antarctic
 from .game_055_ninjagaiden import Game055NinjaGaiden
 from .game_056_1942 import Game056_1942
 from .game_057_wonderboy import Game057WonderBoy
+from .game_058_paperboy import Game058Paperboy
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -152,3 +153,4 @@ ArcadeRegistry.register(Game054Antarctic)
 ArcadeRegistry.register(Game055NinjaGaiden)
 ArcadeRegistry.register(Game056_1942)
 ArcadeRegistry.register(Game057WonderBoy)
+ArcadeRegistry.register(Game058Paperboy)
