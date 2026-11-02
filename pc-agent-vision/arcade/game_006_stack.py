@@ -330,3 +330,4 @@ class Game006Stack(BaseCartridge):
             "width": round(self.active_w, 1),
             "progress": min(100, self.score * 4),
         }
+

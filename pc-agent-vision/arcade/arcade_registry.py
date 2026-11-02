@@ -9,6 +9,7 @@ from .base_cartridge import BaseCartridge
 from .game_004_doodle_jump import Game004DoodleJump
 from .game_005_flappy_bird import Game005FlappyBird
 from .game_006_stack import Game006Stack
+from .game_007_pong import Game007Pong
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -50,3 +51,4 @@ class ArcadeRegistry:
 ArcadeRegistry.register(Game004DoodleJump)
 ArcadeRegistry.register(Game005FlappyBird)
 ArcadeRegistry.register(Game006Stack)
+ArcadeRegistry.register(Game007Pong)

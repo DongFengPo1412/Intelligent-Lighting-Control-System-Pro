@@ -362,3 +362,4 @@ CartridgeStatus Game006Stack::GetStatus() const {
 }
 
 } // namespace arcade
+
