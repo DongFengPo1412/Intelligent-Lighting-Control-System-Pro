@@ -309,6 +309,15 @@ class VoiceEngine:
                             self.last_translation_error or "动态日文翻译失败，已保持静音（未使用固定台词替代）"
                         )
                         return None
+                elif zh_text and ja_text:
+                    # 现成双语输入在读取缓存和合成前统一进行等义校验；不合格则静音报错
+                    from bilingual_guard import validate_bilingual_alignment
+                    ok, reason = validate_bilingual_alignment(zh_text, ja_text)
+                    if not ok:
+                        self.last_translation_error = reason
+                        self.last_tts_error = f"现成双语未通过等义校验（{reason}），已保持静音"
+                        print(f"[VoiceEngine 现成双语校验未通过]: {reason}，已保持静音。")
+                        return None
 
                 cache_dir = runtime_cache_dir() / 'voice'
                 canonical_pair = f"{zh_text}\n{ja_text}"

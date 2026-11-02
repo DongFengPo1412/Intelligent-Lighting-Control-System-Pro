@@ -57,6 +57,22 @@ _CN_DIGITS = {
     "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
 }
 
+_UNIT_MAP_ZH = {
+    "秒钟": "sec", "秒": "sec",
+    "分钟": "min", "分": "min",
+    "小时": "hour", "点钟": "hour", "点": "hour",
+    "岁": "age",
+    "%": "pct", "パーセント": "pct",
+}
+
+_UNIT_MAP_JA = {
+    "秒": "sec",
+    "分間": "min", "分": "min",
+    "時間": "hour", "時": "hour",
+    "歳": "age", "才": "age",
+    "%": "pct", "パーセント": "pct",
+}
+
 _KANJI_NUM_MAP = {
     0: ("0", "０", "零", "ゼロ"),
     1: ("1", "１", "一", "ひと"),
@@ -352,6 +368,151 @@ def _ja_has_integer(ja_text: str, n: int, zh_text: str) -> bool:
     return False
 
 
+def _parse_cn_or_arabic_num(raw: str) -> Optional[float]:
+    if not raw:
+        return None
+    if raw.isdecimal():
+        return float(int(raw))
+    try:
+        return float(raw)
+    except ValueError:
+        pass
+    if raw in _CN_DIGITS:
+        return float(_CN_DIGITS[raw])
+    if "十" in raw and raw.count("十") == 1:
+        left, right = raw.split("十")
+        tens = _CN_DIGITS.get(left, 1) if left else 1
+        ones = _CN_DIGITS.get(right, 0) if right else 0
+        return float(tens * 10 + ones)
+    if "百" in raw and raw.count("百") == 1:
+        left, rest = raw.split("百")
+        hundreds = _CN_DIGITS.get(left, 1) if left else 1
+        tail = _parse_cn_or_arabic_num(rest.lstrip("零")) if rest.lstrip("零") else 0.0
+        if tail is not None:
+            return float(hundreds * 100 + tail)
+    return None
+
+
+def _extract_number_unit_tuples(text: str, lang: str = "zh") -> List[Tuple[float, str, str]]:
+    unit_map = _UNIT_MAP_ZH if lang == "zh" else _UNIT_MAP_JA
+    results: List[Tuple[float, str, str]] = []
+    keys_sorted = sorted(unit_map.keys(), key=len, reverse=True)
+    pat = r"(\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百]+)\s*(" + "|".join(keys_sorted) + r")"
+    for m in re.finditer(pat, text):
+        raw_num = m.group(1)
+        raw_unit = m.group(2)
+        if lang == "zh" and raw_num == "一" and raw_unit in ("点", "个"):
+            continue
+        val = _parse_cn_or_arabic_num(raw_num)
+        if val is not None:
+            results.append((val, unit_map[raw_unit], raw_unit))
+    return results
+
+
+def _check_number_unit_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Optional[str]]:
+    zh_units = _extract_number_unit_tuples(zh_text, "zh")
+    ja_units = _extract_number_unit_tuples(ja_text, "ja")
+    if not zh_units:
+        return True, None
+
+    for n_zh, u_zh, raw_u_zh in zh_units:
+        for n_ja, u_ja, raw_u_ja in ja_units:
+            if n_ja == n_zh and u_ja != u_zh:
+                if not any(n_ja == item[0] and u_ja == item[1] for item in zh_units):
+                    u_names = {"sec": "秒", "min": "分", "hour": "小时/时间", "age": "岁", "pct": "%"}
+                    return False, f"日文译文数值与单位不匹配（中文为 {int(n_zh) if n_zh.is_integer() else n_zh} {u_names.get(u_zh, u_zh)}，日文出现 {int(n_ja) if n_ja.is_integer() else n_ja} {u_names.get(u_ja, u_ja)}）"
+
+    return True, None
+
+
+def _check_operation_negation_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Optional[str]]:
+    neg_op_zh = re.search(
+        r"(?:不要|别|不开|不打开|不要开|不要点亮|不要切换|别切换|不要开启|不要设置|请勿|禁止|不用)\s*(?:再)?\s*(?:去|把)?\s*(?:切换为|设为|设置成|点亮|开启|打开|运行)?\s*(?:蓝灯|红灯|绿灯|白灯|橙灯|深海蓝|极光|流光|照明|灯光|灯|倒计时|计时)",
+        zh_text,
+    ) or re.search(
+        r"(?:蓝灯|红灯|绿灯|白灯|橙灯|深海蓝|倒计时|灯)\s*(?:不要|别|不开|不要开|不要点亮|不要切换|别切换|不要开启|不要设置)",
+        zh_text,
+    )
+    if neg_op_zh:
+        aff_m = re.search(
+            r"(?:に切り替えた(?!り)|に設定した(?!り)|を点灯した(?!り)|を消灯した(?!り)|をつけた(?!り)|つけたわ|点灯したわ|切り替えたわ|設定したわ|つけました|点灯するわ|切り替えるわ|つけてあげる|を開始した(?!り)|を始めた(?!り))",
+            ja_text,
+        )
+        if aff_m:
+            return False, f"中文明确要求不要操作硬件，日文译文却承诺或执行了操作「{aff_m.group(0)}」"
+        if not re.search(r"(?:ない|なかっ|ません|ず|ぬ|やめ|触らな|つけな|消し)", ja_text):
+            return False, "中文明确要求不要操作硬件，日文译文缺少否定表达"
+    return True, None
+
+
+_PREFERENCE_ENTITIES: List[Tuple[str, Tuple[str, ...]]] = [
+    ("墨绿", ("ダークグリーン", "深緑", "黒緑", "モスグリーン")),
+    ("深蓝", ("ダークブルー", "濃紺", "深い青", "紺")),
+    ("银白", ("シルバーホワイト", "シルバー", "銀白")),
+    ("纯白", ("純白", "真っ白", "ホワイト", "白")),
+    ("蓝", ("青", "ブルー")),
+    ("红", ("赤", "レッド")),
+    ("绿", ("緑", "グリーン")),
+    ("黑咖啡", ("ブラックコーヒー", "ブラック")),
+    ("黑巧克力", ("ビターチョコ", "ダークチョコ", "ブラックチョコ", "黒チョコ", "チョコレート")),
+    ("金属乌帕", ("メタルうーぱ",)),
+    ("乌帕", ("うーぱ",)),
+]
+
+
+def _check_preference_polarity_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Optional[str]]:
+    for zh_ent, ja_ents in _PREFERENCE_ENTITIES:
+        if zh_ent not in zh_text:
+            continue
+        if "墨绿" in zh_text and zh_ent == "绿":
+            continue
+        if "深蓝" in zh_text and zh_ent == "蓝":
+            continue
+        if "银白" in zh_text and zh_ent == "纯白":
+            continue
+        if "金属乌帕" in zh_text and zh_ent == "乌帕":
+            continue
+
+        matched_ja = [j for j in sorted(ja_ents, key=len, reverse=True) if j in ja_text]
+        if not matched_ja:
+            continue
+
+        filtered_ja = [j for j in matched_ja if not any(other != j and j in other for other in matched_ja)]
+
+        zh_neg = re.search(r"(?:不|不再|讨厌|厌恶|不是)\s*(?:再)?\s*(?:喜欢|爱)?\s*(?:的[^\s，。！？!?]{0,6}(?:是|为))?\s*" + re.escape(zh_ent), zh_text) or \
+                 re.search(re.escape(zh_ent) + r"\s*(?:不再喜欢|不喜欢|已经不再|不是最喜欢)", zh_text)
+        zh_pos = re.search(r"(?<!不)(?<!不再)(?<!没)(?<!别)(?:喜欢|最喜欢|偏好|爱吃|爱喝)\s*(?:的[^\s，。！？!?]{0,6}(?:是|为))?\s*" + re.escape(zh_ent), zh_text) or \
+                 re.search(re.escape(zh_ent) + r"\s*(?:是|为)?\s*(?:最|很)?喜欢", zh_text)
+
+        for j_ent in filtered_ja:
+            ja_neg = re.search(re.escape(j_ent) + r"[^\s。！？!?，、；;]*?(?:好きじゃない|好きではない|好きじゃありません|嫌い|苦手|もう好きじゃない|じゃない)", ja_text) or \
+                     re.search(r"(?:好きじゃない|好きではない|嫌い|苦手)[^\s。！？!?，、；;]*?" + re.escape(j_ent), ja_text)
+            ja_pos = re.search(re.escape(j_ent) + r"[^\s。！？!?，、；;]*?(?:一番好き|大好き|好き(?![じゃで])|お気に入り)", ja_text) or \
+                     re.search(r"(?:一番好き|大好き|お気に入り)[^\s。！？!?，、；;]*?" + re.escape(j_ent), ja_text)
+
+            if zh_pos and not zh_neg:
+                if ja_neg:
+                    return False, f"中文对「{zh_ent}」为肯定喜好，日文译文却表达为否定/不喜欢"
+            elif zh_neg and not zh_pos:
+                if ja_pos and not ja_neg:
+                    return False, f"中文对「{zh_ent}」为否定喜好，日文译文却表达为肯定喜欢"
+
+    return True, None
+
+
+def _check_perspective_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Optional[str]]:
+    if re.search(r"(?:辛苦了|您辛苦了|大家辛苦了)", zh_text):
+        if re.search(r"(?<!お)(?<!ご)(?:疲れた|くたくた)", ja_text) and not re.search(r"(?:お疲れ|ご苦労)", ja_text):
+            return False, "中文“辛苦了”属于对对方的慰劳，日文译文误翻为红莉栖自己疲劳（疲れた）"
+    if re.search(r"(?:我累了|我好累|好累|有点累|今天累了|浑身酸痛|眼睛都有点酸)", zh_text):
+        if re.search(r"(?:お疲れ様|お疲れさまでした|ご苦労様)", ja_text):
+            return False, "中文表达说话者自己疲倦，日文译文误翻为对对方的慰劳（お疲れ様）"
+    if re.search(r"(?:你让我叫你|我会叫你|平时我叫你|我现在叫你|约定叫你)", zh_text):
+        if re.search(r"私を(?:オカリン|岡倫|リンダ|林達|[^\s，。！？!?]+)(?:と|って)呼", ja_text):
+            return False, "日文译文把称呼用户的方向翻反成了称呼红莉栖自己"
+    return True, None
+
+
 def validate_bilingual_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Optional[str]]:
     """Deterministic check that ja_text carries the same facts/entities/polarity as zh_text."""
     if not zh_text or not zh_text.strip():
@@ -406,6 +567,11 @@ def validate_bilingual_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Opti
     for num in exp_ints:
         if not _ja_has_integer(ja_text, num, zh_text):
             return False, f"日文译文遗漏数字 {num}"
+
+    # 4b. Numerical value and unit binding check (e.g. 60秒 vs 60分, 2分钟 vs 2秒)
+    unit_ok, unit_err = _check_number_unit_alignment(zh_text, ja_text)
+    if not unit_ok:
+        return False, unit_err
 
     ja_decimals = set(re.findall(r"\d+\.\d+", ja_text))
     extra_dec = ja_decimals - exp_decimals
@@ -470,7 +636,12 @@ def validate_bilingual_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Opti
     ):
         return False, "中文未骂“笨蛋”，日文却额外添加了“バカ”"
 
-    # 6. Color fidelity
+    # 5b. Addressee perspective & orientation check (辛苦了 vs 疲れた, 我累了 vs お疲れ様, 称呼方向)
+    persp_ok, persp_err = _check_perspective_alignment(zh_text, ja_text)
+    if not persp_ok:
+        return False, persp_err
+
+    # 6. Color fidelity & preference polarity alignment
     color_rules = [
         ("墨绿", ("深緑", "ダークグリーン", "モスグリーン", "黒緑", "緑")),
         ("深蓝", ("濃紺", "ダークブルー", "深い青", "紺", "青")),
@@ -486,7 +657,15 @@ def validate_bilingual_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Opti
         if zh_col in zh_text and not any(opt in ja_text for opt in ja_opts):
             return False, f"日文译文未对齐颜色/实体“{zh_col}”"
 
-    # 7. Unrequested hardware control promise guard
+    pref_ok, pref_err = _check_preference_polarity_alignment(zh_text, ja_text)
+    if not pref_ok:
+        return False, pref_err
+
+    # 7. Unrequested hardware control promise guard & operation negation polarity
+    op_neg_ok, op_neg_err = _check_operation_negation_alignment(zh_text, ja_text)
+    if not op_neg_ok:
+        return False, op_neg_err
+
     if not any(
         k in zh_text
         for k in ("已切换", "切换为", "已设为", "设为", "已停止", "已开启", "已打开", "已关闭", "已设置")
@@ -515,14 +694,15 @@ TRANSLATION_SYSTEM_PROMPT = (
     "厳守ルール：\n"
     "1. 原文にない文・人物（真由理・岡部など）・口癖（原文にない「助手じゃない」「バカ」など）・照明やタイマー操作の約束を絶対に追加しないこと。\n"
     "2. 一人称は必ず「私」を使い（「僕」「俺」「ございます」「朝っぱら」は禁止）、知的で自然な常体（「〜わ」「〜よ」「〜ね」「〜でしょ」）で出力し、相手の質問文を勝手に作らないこと。\n"
-    "3. 呼称の方向を厳密に保つこと：「你让我叫你X／我会叫你X」は「今はあなたをXって呼ぶことになっているわ／あなたをXって呼ぶわ」であり、「私をXと呼んで」ではない。\n"
-    "4. 固有名詞・挨拶・語彙の対応：牧濑红莉栖=牧瀬紅莉栖、冈部伦太郎=岡部倫太郎、冈伦=オカリン、凤凰院凶真=鳳凰院凶真、疯狂科学家=マッドサイエンティスト、"
+    "3. 呼称と視点の方向を厳密に保つこと：「你让我叫你X／我会叫你X」は「今はあなたをXって呼ぶことになっているわ／あなたをXって呼ぶわ」であり、「私をXと呼んで」ではない。「辛苦了」は「お疲れ様」（相手への労い）とし、「疲れた」（自分が疲労）と誤訳しないこと。逆に「我累了」は「少し疲れたわ」と訳すこと。\n"
+    "4. 数値・単位・否定・好悪の極性一致：「60秒」は「60秒（または1分）」であり絶対に「60分」にしてはならない。「不要开/不要切换」など否定された操作は実行約束（切り替えた/点灯した）とせず否定形（点灯しない/切り替えない）で訳すこと。「喜欢」は「好き」、「不喜欢/不再喜欢」は「好きじゃない/もう好きじゃない」とし、好悪を反転させないこと。\n"
+    "5. 固有名詞・挨拶・語彙の対応：牧濑红莉栖=牧瀬紅莉栖、冈部伦太郎=岡部倫太郎、冈伦=オカリン、凤凰院凶真=鳳凰院凶真、疯狂科学家=マッドサイエンティスト、"
     "椎名真由理=椎名真由理、桥田至=橋田至、桶子=ダル、中钵博士=中鉢博士、牧濑章一=牧瀬章一、"
     "维克多·孔多利亚大学=ヴィクトル・コンドリア大学、未来道具研究所=未来ガジェット研究所、电话微波炉（暂定）=電話レンジ（仮）、"
     "乌帕=うーぱ、雷姆乌帕=雷ネットうーぱ、金属乌帕=メタルうーぱ、《科学》=Science誌、El Psy Kongroo=El Psy Kongroo、林达=リンダ、"
     "墨绿色=ダークグリーン、深蓝色=ダークブルー、银白色=シルバーホワイト、黑咖啡=ブラックコーヒー、早上好=おはよう、下午好=こんにちは、晚上好=こんばんは、"
     "好的=わかったわ、明天见=また明日ね、不客气=どういたしまして、也许=たぶん、提神=目を覚ます、还是=それとも、哼=ふん、外面=外、闪闪发光=ピカピカの、阳光=太陽光、编码=符号化、不要擅自加上“蒂娜”=勝手に「ティーナ」って付けないで。\n"
-    "5. 純粋な日本語の台詞1行のみを出力すること（中国語の簡体字・不要な英単語・括弧のト書き・顔文字は一切混ぜないこと）。"
+    "6. 純粋な日本語の台詞1行のみを出力すること（中国語の簡体字・不要な英単語・括弧のト書き・顔文字は一切混ぜないこと）。"
 )
 
 _TRANSLATION_FEW_SHOT: Tuple[Tuple[str, str], ...] = (

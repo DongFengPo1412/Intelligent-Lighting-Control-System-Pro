@@ -25,7 +25,8 @@ from xiaozhi_bridge import XiaoZhiConnection, OpusCodec
 @contextmanager
 def task_directory():
     # Retain generated fixtures in the task cache for inspection/recovery.
-    yield tempfile.mkdtemp(dir=os.environ["KURISU_TEST_TMP"])
+    base_dir = os.environ.get("KURISU_TEST_TMP") or tempfile.gettempdir()
+    yield tempfile.mkdtemp(dir=base_dir)
 
 
 class RuntimeContracts(unittest.TestCase):
@@ -411,7 +412,8 @@ class WebContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,400)
 
     async def asyncSetUp(self):
-        self.tmp = tempfile.mkdtemp(dir=os.environ["KURISU_TEST_TMP"])
+        base_dir = os.environ.get("KURISU_TEST_TMP") or tempfile.gettempdir()
+        self.tmp = tempfile.mkdtemp(dir=base_dir)
         self.env = patch.dict(os.environ, {"KURISU_DATA_DIR": self.tmp, "KURISU_SIMULATE": "1"})
         self.env.start()
         from aiohttp.test_utils import TestClient, TestServer

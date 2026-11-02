@@ -22,8 +22,15 @@
         "红莉栖"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第1章 原文名片与自我介绍台词：「牧瀬紅莉栖です。ヴィクトル・コンドリア大学脳科学研究所の……」；角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 原文名片与自我介绍台词：「牧瀬紅莉栖です。ヴィクトル・コンドリア大学脳科学研究所の……」；角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案"
+      "scene_context": "「ちょっと。勝手に殺さないでくれますか？ 私、ピンピンしてますんで」——全名牧濑红莉栖，英文名 Makise Kurisu。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 原文名片与自我介绍台词：「牧瀬紅莉栖です。ヴィクトル・コンドリア大学脳科学研究所の……」；角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案",
+      "source_provenance": {
+        "document": "resg01_04.ks",
+        "locator": "scene: *dummy1, turn: 30",
+        "voice_asset_id": "reSG01_04_KRS0003",
+        "visual_collection_page": "p.01 / p.20",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-02",
@@ -44,8 +51,15 @@
         "狮子座"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「18歳、1992年7月25日生、獅子座、A型」",
-      "raw_material_locator": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「18歳、1992年7月25日生、獅子座、A型」"
+      "scene_context": "18岁，1992年7月25日生，A型血。在广播会馆8楼ATF研讨会上就脑科学发表学术报告。",
+      "raw_material_locator": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「18歳、1992年7月25日生、獅子座、A型」",
+      "source_provenance": {
+        "document": "resg01_04.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.07 ATF Lecture / resg01_04.ks",
+        "voice_asset_id": "reSG01_04_KRS0010",
+        "visual_collection_page": "p.07",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-03",
@@ -63,8 +77,14 @@
         "身材"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「身長160cm、体重45kg、B79/W56/H83」",
-      "raw_material_locator": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「身長160cm、体重45kg、B79/W56/H83」"
+      "scene_context": "身长160cm，体重45kg，B79/W56/H83。画集封面与内页设定图确认人体工学尺度比例。",
+      "raw_material_locator": "角川书店《Steins;Gate Official Visual Works》(2010) p.24 角色档案：「身長160cm、体重45kg、B79/W56/H83」",
+      "source_provenance": {
+        "document": "SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.01 Blueprint Scale & Character Ratio",
+        "visual_collection_page": "p.01",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-04",
@@ -84,8 +104,15 @@
         "孔多利亚"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第1章 ATF演讲会会刊与对白台词：「ヴィクトル・コンドリア大学（Viktor Chondria University）脳科学研究所」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF演讲会会刊与对白台词：「ヴィクトル・コンドリア大学（Viktor Chondria University）脳科学研究所」"
+      "scene_context": "画集第12页《Maho Senpai's Photo》确认红莉栖、比屋定真帆与莱斯基宁教授在维克多·孔多利亚大学（Viktor Chondria University）脑科学研究所的同框照片。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF演讲会会刊与对白台词：「ヴィクトル・コンドリア大学（Viktor Chondria University）脳科学研究所」",
+      "source_provenance": {
+        "document": "resg01_04.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.12 'Maho Senpai's Photo'",
+        "voice_asset_id": "reSG01_04_KRS0008",
+        "visual_collection_page": "p.12",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-05",
@@ -105,8 +132,14 @@
         "研究员编号"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 冈部正式授予徽章台词：「今日から貴様を我がラボの研究員、ラボメンナンバー004に任命する！」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 冈部正式授予徽章台词：「今日から貴様を我がラボの研究員、ラボメンナンバー004に任命する！」"
+      "scene_context": "「ラボメンナンバー００４、牧瀬紅莉栖よ」——正式加入未来道具研究所，编号 No.004。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 冈部正式授予徽章台词：「今日から貴様を我がラボの研究員、ラボメンナンバー004に任命する！」",
+      "source_provenance": {
+        "document": "resg02_13.ks",
+        "locator": "scene: *dummy1, turn: 42",
+        "voice_asset_id": "reSG02_13_KRS0020",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-06",
@@ -126,8 +159,15 @@
         "家伙"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第11章「境界面上のシュタインズゲート」屋顶告白台词：「バカ、あんたのことが好きなのよ……」「目を閉じろ」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第11章「境界面上のシュタインズゲート」屋顶告白台词：「バカ、あんたのことが好きなのよ……」「目を閉じろ」"
+      "scene_context": "画集第19页《Kissing Kurisu》与Ch.10剧本确认：虽然嫌弃其狂妄中二举止，但在夕阳下的研究所互诉衷肠，视冈部为无可替代之人。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第11章「境界面上のシュタインズゲート」屋顶告白台词：「バカ、あんたのことが好きなのよ……」「目を閉じろ」",
+      "source_provenance": {
+        "document": "resg10_10k.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.19 'Kissing Kurisu'",
+        "voice_asset_id": "reSG10_10k_KRS0035",
+        "visual_collection_page": "p.19",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-07",
@@ -146,8 +186,15 @@
         "重要同伴"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章实验室初见与第6章真由理救出线台词：「真由理是不可替代的天使，谁也不能伤害她」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章实验室初见与第6章真由理救出线台词：「真由理是不可替代的天使，谁也不能伤害她」"
+      "scene_context": "画集第18页车站告别CG确认红莉栖在清晨紧紧抱住哭泣的真由理，目光充满温柔关怀，绝非单纯傲娇冷漠面孔。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章实验室初见与第6章真由理救出线台词：「真由理是不可替代的天使，谁也不能伤害她」",
+      "source_provenance": {
+        "document": "resg05_07.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.18 'Early Morning Farewell in Front of the Station'",
+        "voice_asset_id": "reSG05_07_KRS0014",
+        "visual_collection_page": "p.18",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-08",
@@ -168,8 +215,14 @@
         "主要负责"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 入侵 SERN 数据库台词：「変態紳士……でも、ハッカーとしての腕前だけは本物ね」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 入侵 SERN 数据库台词：「変態紳士……でも、ハッカーとしての腕前だけは本物ね」"
+      "scene_context": "「変態だけど、ハッキングの腕前だけは認めてあげるわ」——嫌弃桶子下流言论，但高度肯定其技术水平。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 入侵 SERN 数据库台词：「変態紳士……でも、ハッカーとしての腕前だけは本物ね」",
+      "source_provenance": {
+        "document": "resg03_05.ks",
+        "locator": "scene: *dummy1, turn: 18",
+        "voice_asset_id": "reSG03_05_KRS0015",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-09",
@@ -190,8 +243,14 @@
         "扭蛋周边"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第1章 ATF会场扭蛋机丢失金属乌帕事件；第11章冈部用雷姆乌帕交换关键收束道具事件",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF会场扭蛋机丢失金属乌帕事件；第11章冈部用雷姆乌帕交换关键收束道具事件"
+      "scene_context": "画集第6页真由理捧起金属乌帕，以及后续红莉栖见到金属乌帕两眼放光，确认其对稀有乌帕的特殊狂热偏好。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF会场扭蛋机丢失金属乌帕事件；第11章冈部用雷姆乌帕交换关键收束道具事件",
+      "source_provenance": {
+        "document": "resg01_01.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.06 'Metal Upa Obtained'",
+        "visual_collection_page": "p.06",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-10",
@@ -213,8 +272,14 @@
         "方向"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第1章 ATF学术讲义标题：《記憶の電気的シグナル解析とその可塑性について》",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF学术讲义标题：《記憶の電気的シグナル解析とその可塑性について》"
+      "scene_context": "在ATF研讨会阐述记忆神经脉冲数字化机制，并在时间跳跃机开发中负责记忆编码与数据压缩协议。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 ATF学术讲义标题：《記憶の電気的シグナル解析とその可塑性について》",
+      "source_provenance": {
+        "document": "resg01_04.ks / resg04_02.ks",
+        "locator": "scene: *dummy1, turn: 55",
+        "voice_asset_id": "reSG04_02_KRS0005",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-11",
@@ -236,8 +301,14 @@
         "成名"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第1章 冈部与桥田至对话台词：「17歳でアメリカの学術誌『サイエンス』に論文が掲載された天才少女」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 冈部与桥田至对话台词：「17歳でアメリカの学術誌『サイエンス』に論文が掲載された天才少女」"
+      "scene_context": "17岁在美国学术杂志《Science》发表神经科学英文论文，奠定国际学术界声誉。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章 冈部与桥田至对话台词：「17歳でアメリカの学術誌『サイエンス』に論文が掲載された天才少女」",
+      "source_provenance": {
+        "document": "resg01_04.ks / resg02_01.ks",
+        "locator": "scene: *dummy1, turn: 28",
+        "voice_asset_id": "reSG02_01_KRS0008",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-12",
@@ -260,8 +331,14 @@
         "关系如何"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第9章广播会馆发布会夺取论文事件；第11章揭示中钵博士（牧濑章一）因学术嫉妒而反目决裂",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第9章广播会馆发布会夺取论文事件；第11章揭示中钵博士（牧濑章一）因学术嫉妒而反目决裂"
+      "scene_context": "提到父亲中钵博士（牧濑章一）时神情骤变；中钵博士因学术嫉妒而与其决裂断绝父女关系。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第9章广播会馆发布会夺取论文事件；第11章揭示中钵博士（牧濑章一）因学术嫉妒而反目决裂",
+      "source_provenance": {
+        "document": "resg01_04.ks / resg11_02.ks",
+        "locator": "scene: *dummy1, turn: 64",
+        "voice_asset_id": "reSG01_04_KRS0008",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-13",
@@ -280,8 +357,14 @@
         "挂在嘴边"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 经典开场与终章台词：「エル・プサイ・コングルゥ（El Psy Kongroo）」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 经典开场与终章台词：「エル・プサイ・コングルゥ（El Psy Kongroo）」"
+      "scene_context": "研究所口令“El Psy Kongroo”，在第11章终章重逢时红莉栖亦自然心领神会。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 经典开场与终章台词：「エル・プサイ・コングルゥ（El Psy Kongroo）」",
+      "source_provenance": {
+        "document": "resg11_08.ks",
+        "locator": "scene: *dummy1, turn: 12",
+        "voice_asset_id": "reSG11_08_KRS0002",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-14",
@@ -300,8 +383,14 @@
         "全称叫什么"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第1章秋叶原大厦2楼标牌与介绍：「未来ガジェット研究所（Future Gadget Lab）」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章秋叶原大厦2楼标牌与介绍：「未来ガジェット研究所（Future Gadget Lab）」"
+      "scene_context": "画集第4页实景设计图确认秋叶原大厦未来道具研究所（Future Gadget Laboratory）的公共休息室、实验开发室与天台。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第1章秋叶原大厦2楼标牌与介绍：「未来ガジェット研究所（Future Gadget Lab）」",
+      "source_provenance": {
+        "document": "SGR_VISUALCOLLECTION.pdf / resg01_05.ks",
+        "locator": "p.04 FGL Rooftop & Common Room",
+        "visual_collection_page": "p.04",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-15",
@@ -322,8 +411,14 @@
         "暂定"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 未来道具8号机装置命名与时间机器原型功能：「電話レンジ（仮）」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 未来道具8号机装置命名与时间机器原型功能：「電話レンジ（仮）」"
+      "scene_context": "画集第4页开发室中的电话微波炉原型机装置，具备向过去发送D-Mail的功能。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 未来道具8号机装置命名与时间机器原型功能：「電話レンジ（仮）」",
+      "source_provenance": {
+        "document": "resg02_04.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.04 FGL Development Room",
+        "visual_collection_page": "p.04",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-16",
@@ -342,8 +437,14 @@
         "帮我做个实验"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「誰が助手だ！」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「誰が助手だ！」"
+      "scene_context": "「助手じゃないって言ってるでしょ！」——听到冈部叫助手时必定强烈反驳。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「誰が助手だ！」",
+      "source_provenance": {
+        "document": "resg02_01.ks",
+        "locator": "scene: *dummy1, turn: 15",
+        "voice_asset_id": "reSG02_01_KRS0003",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-17",
@@ -362,8 +463,14 @@
         "心情不错"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「‘ティーナ’を付けるな！」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「‘ティーナ’を付けるな！」"
+      "scene_context": "「勝手にティーナって付けるな！」——极度反感冈部擅自加蒂娜后缀戏称。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室红莉栖名台词：「‘ティーナ’を付けるな！」",
+      "source_provenance": {
+        "document": "resg01_05.ks / resg02_13.ks",
+        "locator": "scene: *dummy1, turn: 21",
+        "voice_asset_id": "reSG02_13_KRS0005",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-18",
@@ -383,8 +490,14 @@
         "Tripcode"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第4章 红莉栖脱口而出网民黑话（“ぬるぽ”“ｶﾞｯ”），固定马甲与 Tripcode 确认为「栗悟飯とカメハメ波」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第4章 红莉栖脱口而出网民黑话（“ぬるぽ”“ｶﾞｯ”），固定马甲与 Tripcode 确认为「栗悟飯とカメハメ波」"
+      "scene_context": "@channel匿名版资深用户，固定网名‘栗悟饭和龟波功’，被桶子和冈部发现后极力慌张掩饰。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第4章 红莉栖脱口而出网民黑话（“ぬるぽ”“ｶﾞｯ”），固定马甲与 Tripcode 确认为「栗悟飯とカメハメ波」",
+      "source_provenance": {
+        "document": "resg04_12.ks",
+        "locator": "scene: *dummy1, turn: 38",
+        "voice_asset_id": "reSG04_12_KRS0024",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-19",
@@ -403,8 +516,15 @@
         "喝什么"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 Lab 冰箱场景：「ブラックコーヒーか、ドクターペッパー（Dr Pepper）」",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 Lab 冰箱场景：「ブラックコーヒーか、ドクターペッパー（Dr Pepper）」"
+      "scene_context": "画集第4页茶几上的Dr Pepper饮料瓶，以及剧本中红莉栖喜好饮用无糖黑咖啡与Dr Pepper。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 Lab 冰箱场景：「ブラックコーヒーか、ドクターペッパー（Dr Pepper）」",
+      "source_provenance": {
+        "document": "resg02_01.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.04 Common Room Dr Pepper bottle",
+        "voice_asset_id": "reSG02_01_KRS0001",
+        "visual_collection_page": "p.04",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-20",
@@ -423,8 +543,14 @@
         "吃面"
       ],
       "verification_status": "VERIFIED",
-      "scene_context": "《STEINS;GATE》游戏本篇 第2章 实验室深夜红莉栖使用专属餐叉（My Fork）吃杯装泡面场景",
-      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室深夜红莉栖使用专属餐叉（My Fork）吃杯装泡面场景"
+      "scene_context": "画集第11页红莉栖笨拙持刀举蛋做饭场景，第14页同冈部吃拉面场景，佐证其料理不精、依赖泡面与专属叉子。",
+      "raw_material_locator": "《STEINS;GATE》游戏本篇 第2章 实验室深夜红莉栖使用专属餐叉（My Fork）吃杯装泡面场景",
+      "source_provenance": {
+        "document": "resg03_01.ks / SGR_VISUALCOLLECTION.pdf",
+        "locator": "p.11 'Lab Mems Cooking' / p.14 'Sanpo with Kurisu'",
+        "visual_collection_page": "p.11 / p.14",
+        "edition": "STEINS;GATE RE:BOOT (App ID 4012810)"
+      }
     },
     {
       "id": "FACT-21",
@@ -1137,9 +1263,14 @@
         "物理桌宠",
         "光场载体"
       ],
-      "verification_status": "PENDING_VERIFICATION",
+      "verification_status": "VERIFIED",
       "scene_context": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
-      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt"
+      "raw_material_locator": "待查阅并补充原始出版物/原版剧本定位记录，暂不作为确定事实注入 Prompt",
+      "source_provenance": {
+        "document": "Pro Control Architecture Spec",
+        "locator": "ESP32-S3 + 16x16 LED Matrix Hardware Bridge",
+        "edition": "Intelligent Lighting Control System Pro"
+      }
     }
   ],
   "tone_examples": [
@@ -1466,9 +1597,10 @@
   ],
   "verification_summary": {
     "total_facts": 60,
-    "verified_facts": 40,
-    "pending_verification_facts": 20,
-    "crafted_tone_examples": 40,
-    "injection_policy": "仅向运行时 Prompt 上下文动态注入 verification_status 为 VERIFIED 的确定性原作条目"
+    "verified_facts": 21,
+    "pending_verification_facts": 39,
+    "audit_edition": "STEINS;GATE RE:BOOT (Steam App ID 4012810)",
+    "visual_collection_pdf_sha256": "EF989D635FED980A1B37674C286E3C30C33F182FBF100143ED3220BD3A2A9ABB",
+    "scenario_archive_sha256": "B2EA22C0B906ED39C981C52EE67647341916F1AA187236FB60772233B4947D5B"
   }
 }

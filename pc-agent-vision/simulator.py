@@ -258,8 +258,39 @@ class SilentVoice:
         self.last_translation_error = None
         self.last_tts_error = None
 
-    def speak(self, text, block=True):
+    def speak(self, text, block=True, to_board=True):
+        bundle = self.synthesize_speech_bundle(text)
+        if not bundle:
+            return None
         return None
+
+    def synthesize_speech_bundle(self, text):
+        self.last_tts_error = None
+        self.last_translation_error = None
+        if not text or not text.strip():
+            return None
+
+        zh_text, ja_text = self._split_zh_ja(text)
+        if not zh_text and not ja_text:
+            self.last_tts_error = "清洗后无可播报有效文本"
+            return None
+
+        if zh_text and not ja_text:
+            ja_text = self._translate_zh_to_ja_kurisu(zh_text)
+            if not ja_text:
+                self.last_tts_error = (
+                    self.last_translation_error or "动态日文翻译失败，已保持静音（未使用固定台词替代）"
+                )
+                return None
+        elif zh_text and ja_text:
+            from bilingual_guard import validate_bilingual_alignment
+            ok, reason = validate_bilingual_alignment(zh_text, ja_text)
+            if not ok:
+                self.last_translation_error = reason
+                self.last_tts_error = f"现成双语未通过等义校验（{reason}），已保持静音"
+                return None
+
+        return (b"", b"")
 
     def _split_zh_ja(self, text):
         from bilingual_guard import split_bilingual_text, clean_production_prose

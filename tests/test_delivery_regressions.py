@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import types
 import unittest
 from unittest.mock import patch
@@ -63,7 +64,8 @@ class DeliveryTests(unittest.TestCase):
 
     def test_generated_wake_keywords_use_task_cache(self):
         import wake_detector
-        output = Path(os.environ['KURISU_TEST_TMP']) / ('wake-' + uuid.uuid4().hex)
+        tmp_base = os.environ.get('KURISU_TEST_TMP') or tempfile.gettempdir()
+        output = Path(tmp_base) / ('wake-' + uuid.uuid4().hex)
         captured = {}
         fake_sherpa = types.SimpleNamespace(KeywordSpotter=lambda **kw: captured.update(kw))
         with patch.dict(os.environ, {'KURISU_CACHE_DIR': str(output)}), \

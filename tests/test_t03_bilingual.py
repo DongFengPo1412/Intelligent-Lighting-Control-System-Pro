@@ -320,8 +320,100 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             validate_bilingual_alignment(zh, "もうシルバーホワイトは好きじゃないって覚えているわ。")[0]
         )
         self.assertFalse(
-            validate_bilingual_alignment(zh, "今でもシルバーホワイトが大好きなのよね。")[0]
+            validate_bilingual_alignment(zh, "今でもシルバーホワイトが大喜欢的のよね。")[0]
         )
+
+    def test_n11_number_unit_conflict_seconds_vs_minutes(self):
+        zh = "倒计时已设为60秒。"
+        # 60 seconds vs 60 minutes must strictly fail
+        ok, reason = validate_bilingual_alignment(zh, "60分のカウントダウンを設定したわ。")
+        self.assertFalse(ok)
+        self.assertIn("单位不匹配", reason)
+
+        # 60 seconds vs 1 minute is a valid conversion -> passes
+        ok, _ = validate_bilingual_alignment(zh, "1分のカウントダウンを設定したわ。")
+        self.assertTrue(ok)
+
+        # 60 seconds vs 60 seconds -> passes
+        ok, _ = validate_bilingual_alignment(zh, "60秒のカウントダウンを設定したわ。")
+        self.assertTrue(ok)
+
+        # 2 minutes vs 2 seconds must fail
+        zh_min = "实验预热还需要2分钟。"
+        ok_min, reason_min = validate_bilingual_alignment(zh_min, "実験の予熱にはあと2秒必要よ。")
+        self.assertFalse(ok_min)
+        self.assertIn("单位不匹配", reason_min)
+
+        # 2 minutes vs 120 seconds -> passes
+        ok_conv, _ = validate_bilingual_alignment(zh_min, "実験の予熱にはあと120秒必要よ。")
+        self.assertTrue(ok_conv)
+
+    def test_n12_operation_negation_polarity_blue_light(self):
+        zh = "不要开蓝灯。"
+        # Affirmative action execution or promise in JA must fail
+        for bad_ja in (
+            "青いライトに切り替えたわ。",
+            "青いライトを点灯したわ。",
+            "青いライトをつけるわ。",
+            "青いライトをつけてあげるわ。",
+        ):
+            ok, reason = validate_bilingual_alignment(zh, bad_ja)
+            self.assertFalse(ok, bad_ja)
+            self.assertTrue("不要操作硬件" in reason or "硬件执行承诺" in reason, reason)
+
+        # Negative action in JA -> passes
+        for good_ja in (
+            "青いライトは点灯しないわ。",
+            "青いライトをつけたりしないわ。",
+            "青いライトには切り替えないわ。",
+        ):
+            ok, reason = validate_bilingual_alignment(zh, good_ja)
+            self.assertTrue(ok, f"{good_ja}: {reason}")
+
+    def test_n13_preference_polarity_blue_color_and_revocation(self):
+        zh_pos = "我喜欢蓝色。"
+        # Negative preference in JA for liked entity must fail
+        ok, reason = validate_bilingual_alignment(zh_pos, "青色が好きじゃないわ。")
+        self.assertFalse(ok)
+        self.assertIn("肯定喜好", reason)
+
+        # Positive preference in JA -> passes
+        ok, _ = validate_bilingual_alignment(zh_pos, "青色が好きよ。")
+        self.assertTrue(ok)
+
+        zh_neg = "我不喜欢蓝色。"
+        # Positive preference in JA for disliked entity must fail
+        ok, reason = validate_bilingual_alignment(zh_neg, "青色が好きよ。")
+        self.assertFalse(ok)
+        self.assertIn("否定喜好", reason)
+
+        # Negative preference in JA -> passes
+        ok, _ = validate_bilingual_alignment(zh_neg, "青色は好きじゃないわ。")
+        self.assertTrue(ok)
+
+    def test_n14_perspective_direction_alignment(self):
+        zh_otukare = "辛苦了。"
+        # Misinterpreting addressee fatigue acknowledgment as speaker fatigue must fail
+        ok, reason = validate_bilingual_alignment(zh_otukare, "疲れたわ。")
+        self.assertFalse(ok)
+        self.assertIn("慰劳", reason)
+
+        # Proper addressee acknowledgment -> passes
+        ok, _ = validate_bilingual_alignment(zh_otukare, "お疲れ様。")
+        self.assertTrue(ok)
+
+        zh_tired = "我累了。"
+        # Misinterpreting speaker fatigue as addressee acknowledgment must fail
+        ok, reason = validate_bilingual_alignment(zh_tired, "お疲れ様。")
+        self.assertFalse(ok)
+        self.assertIn("说话者自己疲倦", reason)
+
+        # Address orientation: speaker calling listener vs listener calling speaker
+        zh_addr = "既然你指定了，我现在叫你冈伦。"
+        ok_rev, reason_rev = validate_bilingual_alignment(zh_addr, "指定されたんだから、今は私をオカリンって呼んで。")
+        self.assertFalse(ok_rev)
+        self.assertIn("翻反", reason_rev)
+
 
     # =========================================================================
     # Group C: 10 Long Chunking, Mixed Names, & Failure/Cache Isolation (F01 - F10)
@@ -587,6 +679,57 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
                 self.assertEqual(eng.played_pcm, [])
                 self.assertIsNotNone(eng.last_tts_error)
                 self.assertEqual(len(list(voice_cache.glob("*.wav"))), 1)
+
+    def test_f11_synthesis_entry_point_rejects_unaligned_bilingual_input_and_fails_silently(self):
+        with _temp_dir() as tmp:
+            data_root = Path(tmp) / "data"
+            voice_cache = data_root / "cache" / "voice"
+            calls = []
+
+            def record_tts(req):
+                calls.append(req["text"])
+                t = np.arange(3200) / 32000.0
+                yield 32000, (np.sin(2 * np.pi * 260 * t) * 0.3).astype(np.float32)
+
+            eng = self._build_stub_voice_engine(data_root, tts_fn=record_tts)
+            with patch.dict(os.environ, {"KURISU_DATA_DIR": str(data_root), "KURISU_CACHE_DIR": str(data_root / "cache")}), patch(
+                "light_controller.get_light_controller", return_value=eng.fake_ctrl
+            ):
+                # Pre-existing bilingual text where Japanese commits an unrequested operation
+                bad_pair = "不要开蓝灯。\n青いライトに切り替えたわ。"
+                bundle = eng.synthesize_speech_bundle(bad_pair)
+                self.assertIsNone(bundle)
+                self.assertIn("未通过等义校验", eng.last_tts_error)
+                self.assertIsNotNone(eng.last_translation_error)
+                self.assertEqual(calls, [])  # Never called TTS
+
+                # Speak entry point must also fail-silent without board traffic or sound
+                eng.played_pcm.clear()
+                eng.speak(bad_pair, block=True, to_board=True)
+                self.assertEqual(eng.played_pcm, [])
+                self.assertEqual(list(voice_cache.glob("*.wav")) if voice_cache.exists() else [], [])
+
+    def test_f12_silent_voice_synthesize_speech_bundle_and_speak_fail_silent(self):
+        voice = SilentVoice()
+        # Mismatched unit in pre-existing bilingual input
+        bad_pair = "倒计时已设为60秒。\n60分のカウントダウンを設定したわ。"
+        bundle = voice.synthesize_speech_bundle(bad_pair)
+        self.assertIsNone(bundle)
+        self.assertIn("未通过等义校验", voice.last_tts_error)
+        self.assertIn("单位不匹配", voice.last_translation_error)
+
+        # Mismatched preference in pre-existing bilingual input
+        bad_pref = "我喜欢蓝色。\n青色が好きじゃないわ。"
+        voice.speak(bad_pref)
+        self.assertIn("未通过等义校验", voice.last_tts_error)
+        self.assertIn("肯定喜好", voice.last_translation_error)
+
+        # Valid bilingual input passes
+        good_pair = "已开始60秒倒计时。\n60秒のカウントダウンを始めたわ。"
+        bundle_good = voice.synthesize_speech_bundle(good_pair)
+        self.assertIsNotNone(bundle_good)
+        self.assertIsNone(voice.last_tts_error)
+
 
 
 class T03WebStatusErrorContractTests(unittest.IsolatedAsyncioTestCase):
