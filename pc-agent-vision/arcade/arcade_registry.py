@@ -26,6 +26,7 @@ from .game_020_artillery import Game020Artillery
 from .game_021_dig_dug import Game021DigDug
 from .game_022_galaga import Game022Galaga
 from .game_023_donkey_kong import Game023DonkeyKong
+from .game_024_lode_runner import Game024LodeRunner
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -84,3 +85,4 @@ ArcadeRegistry.register(Game020Artillery)
 ArcadeRegistry.register(Game021DigDug)
 ArcadeRegistry.register(Game022Galaga)
 ArcadeRegistry.register(Game023DonkeyKong)
+ArcadeRegistry.register(Game024LodeRunner)
