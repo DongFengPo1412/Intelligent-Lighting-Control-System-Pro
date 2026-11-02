@@ -42,6 +42,7 @@ from .game_036_missile_command import Game036MissileCommand
 from .game_037_sprint_racer import Game037SprintRacer
 from .game_038_ice_climber import Game038IceClimber
 from .game_039_legend_of_kage import Game039LegendOfKage
+from .game_040_dodgeball import Game040Dodgeball
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -116,3 +117,4 @@ ArcadeRegistry.register(Game036MissileCommand)
 ArcadeRegistry.register(Game037SprintRacer)
 ArcadeRegistry.register(Game038IceClimber)
 ArcadeRegistry.register(Game039LegendOfKage)
+ArcadeRegistry.register(Game040Dodgeball)
