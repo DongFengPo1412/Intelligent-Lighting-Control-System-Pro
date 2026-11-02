@@ -113,6 +113,7 @@ from .game_107_xevious import Game107Xevious
 from .game_108_pinball import Game108Pinball
 from .game_109_spaceharrier import Game109SpaceHarrier
 from .game_110_devilworld import Game110DevilWorld
+from .game_111_leaguebowling import Game111LeagueBowling
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -258,3 +259,4 @@ ArcadeRegistry.register(Game107Xevious)
 ArcadeRegistry.register(Game108Pinball)
 ArcadeRegistry.register(Game109SpaceHarrier)
 ArcadeRegistry.register(Game110DevilWorld)
+ArcadeRegistry.register(Game111LeagueBowling)
