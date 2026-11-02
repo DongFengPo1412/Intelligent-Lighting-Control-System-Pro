@@ -37,6 +37,7 @@ from .game_031_rally_x import Game031RallyX
 from .game_032_crossy_road import Game032CrossyRoad
 from .game_033_clay_shooting import Game033ClayShooting
 from .game_034_pipe_dream import Game034PipeDream
+from .game_035_othello import Game035Othello
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -106,3 +107,4 @@ ArcadeRegistry.register(Game031RallyX)
 ArcadeRegistry.register(Game032CrossyRoad)
 ArcadeRegistry.register(Game033ClayShooting)
 ArcadeRegistry.register(Game034PipeDream)
+ArcadeRegistry.register(Game035Othello)
