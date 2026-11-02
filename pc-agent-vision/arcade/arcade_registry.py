@@ -48,6 +48,7 @@ from .game_042_mario_bros import Game042MarioBros
 from .game_043_centipede import Game043Centipede
 from .game_044_excitebike import Game044Excitebike
 from .game_045_side_pocket import Game045SidePocket
+from .game_046_city_connection import Game046CityConnection
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -128,3 +129,4 @@ ArcadeRegistry.register(Game042MarioBros)
 ArcadeRegistry.register(Game043Centipede)
 ArcadeRegistry.register(Game044Excitebike)
 ArcadeRegistry.register(Game045SidePocket)
+ArcadeRegistry.register(Game046CityConnection)
