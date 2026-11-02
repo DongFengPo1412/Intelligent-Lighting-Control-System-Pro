@@ -103,6 +103,7 @@ from .game_097_tapper import Game097Tapper
 from .game_098_mappy import Game098Mappy
 from .game_099_joust import Game099Joust
 from .game_100_timepilot import Game100TimePilot
+from .game_101_spyhunter import Game101SpyHunter
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -238,3 +239,4 @@ ArcadeRegistry.register(Game097Tapper)
 ArcadeRegistry.register(Game098Mappy)
 ArcadeRegistry.register(Game099Joust)
 ArcadeRegistry.register(Game100TimePilot)
+ArcadeRegistry.register(Game101SpyHunter)
