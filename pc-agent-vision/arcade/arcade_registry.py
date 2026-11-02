@@ -115,6 +115,7 @@ from .game_109_spaceharrier import Game109SpaceHarrier
 from .game_110_devilworld import Game110DevilWorld
 from .game_111_leaguebowling import Game111LeagueBowling
 from .game_112_defender import Game112Defender
+from .game_113_asteroids import Game113Asteroids
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -262,3 +263,4 @@ ArcadeRegistry.register(Game109SpaceHarrier)
 ArcadeRegistry.register(Game110DevilWorld)
 ArcadeRegistry.register(Game111LeagueBowling)
 ArcadeRegistry.register(Game112Defender)
+ArcadeRegistry.register(Game113Asteroids)
