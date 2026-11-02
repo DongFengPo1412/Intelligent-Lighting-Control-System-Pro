@@ -117,6 +117,7 @@ from .game_111_leaguebowling import Game111LeagueBowling
 from .game_112_defender import Game112Defender
 from .game_113_asteroids import Game113Asteroids
 from .game_114_berzerk import Game114Berzerk
+from .game_115_tempest import Game115Tempest
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -266,3 +267,4 @@ ArcadeRegistry.register(Game111LeagueBowling)
 ArcadeRegistry.register(Game112Defender)
 ArcadeRegistry.register(Game113Asteroids)
 ArcadeRegistry.register(Game114Berzerk)
+ArcadeRegistry.register(Game115Tempest)
