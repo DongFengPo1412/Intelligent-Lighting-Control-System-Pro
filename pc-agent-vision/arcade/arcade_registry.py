@@ -68,6 +68,7 @@ from .game_062_shadowwarriors import Game062ShadowWarriors
 from .game_063_rampart import Game063Rampart
 from .game_064_inthehunt import Game064InTheHunt
 from .game_065_punchout import Game065PunchOut
+from .game_066_twinbee import Game066TwinBee
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -168,3 +169,4 @@ ArcadeRegistry.register(Game062ShadowWarriors)
 ArcadeRegistry.register(Game063Rampart)
 ArcadeRegistry.register(Game064InTheHunt)
 ArcadeRegistry.register(Game065PunchOut)
+ArcadeRegistry.register(Game066TwinBee)
