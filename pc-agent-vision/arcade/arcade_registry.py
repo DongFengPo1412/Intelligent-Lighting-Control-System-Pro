@@ -23,6 +23,7 @@ from .game_017_piano_tiles import Game017PianoTiles
 from .game_018_minesweeper import Game018Minesweeper
 from .game_019_puzzle_bobble import Game019PuzzleBobble
 from .game_020_artillery import Game020Artillery
+from .game_021_dig_dug import Game021DigDug
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -78,3 +79,4 @@ ArcadeRegistry.register(Game017PianoTiles)
 ArcadeRegistry.register(Game018Minesweeper)
 ArcadeRegistry.register(Game019PuzzleBobble)
 ArcadeRegistry.register(Game020Artillery)
+ArcadeRegistry.register(Game021DigDug)
