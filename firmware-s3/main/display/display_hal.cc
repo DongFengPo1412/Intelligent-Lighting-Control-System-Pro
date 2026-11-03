@@ -132,13 +132,41 @@ esp_err_t DisplayHAL::Show(uint8_t brightness_percent, bool srgb_image)
     // Optional per-frame uniform dimming; retain original RGB values in buffer_.
     if (brightness_percent > 100) brightness_percent = 100;
     const uint16_t brightness = (base_brightness_ * brightness_percent) / 100;
+
+    // 第一阶段：计算基础 PWM 亮度并累加全屏总能量 (R+G+B 总和)
+    uint8_t pwm_r[TOTAL_LEDS];
+    uint8_t pwm_g[TOTAL_LEDS];
+    uint8_t pwm_b[TOTAL_LEDS];
+    uint32_t total_energy = 0;
+
     for (int i = 0; i < TOTAL_LEDS; i++) {
         // Decode image RGB before dimming; legacy effects retain their exact path.
         uint16_t r = (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(buffer_[i].r, brightness) : (buffer_[i].r * brightness) / 255;
         uint16_t g = (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(buffer_[i].g, brightness) : (buffer_[i].g * brightness) / 255;
         uint16_t b = (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(buffer_[i].b, brightness) : (buffer_[i].b * brightness) / 255;
 
-        led_strip_set_pixel(led_strip_, i, (uint32_t)r, (uint32_t)g, (uint32_t)b);
+        pwm_r[i] = (r > 255) ? 255 : (uint8_t)r;
+        pwm_g[i] = (g > 255) ? 255 : (uint8_t)g;
+        pwm_b[i] = (b > 255) ? 255 : (uint8_t)b;
+        total_energy += (uint32_t)pwm_r[i] + pwm_g[i] + pwm_b[i];
+    }
+    last_frame_energy_ = total_energy;
+
+    // 第二阶段：软件动态总功耗限制器 (若超出阈值则等比例无损平滑限幅，防止电流过大拉塌 5V 稳压)
+    if (max_energy_limit_ > 0 && total_energy > max_energy_limit_) {
+        for (int i = 0; i < TOTAL_LEDS; i++) {
+            uint32_t scaled_r = ((uint32_t)pwm_r[i] * max_energy_limit_) / total_energy;
+            uint32_t scaled_g = ((uint32_t)pwm_g[i] * max_energy_limit_) / total_energy;
+            uint32_t scaled_b = ((uint32_t)pwm_b[i] * max_energy_limit_) / total_energy;
+            pwm_r[i] = (uint8_t)scaled_r;
+            pwm_g[i] = (uint8_t)scaled_g;
+            pwm_b[i] = (uint8_t)scaled_b;
+            led_strip_set_pixel(led_strip_, i, pwm_r[i], pwm_g[i], pwm_b[i]);
+        }
+    } else {
+        for (int i = 0; i < TOTAL_LEDS; i++) {
+            led_strip_set_pixel(led_strip_, i, pwm_r[i], pwm_g[i], pwm_b[i]);
+        }
     }
 
     // 保留已验证的尾端时序裕量：整板末尾附加 2 颗虚拟黑色灯珠数据。
@@ -149,11 +177,7 @@ esp_err_t DisplayHAL::Show(uint8_t brightness_percent, bool srgb_image)
     esp_err_t result = led_strip_refresh(led_strip_);
     if (result == ESP_OK) {
         for (int i = 0; i < TOTAL_LEDS; ++i) {
-            const auto c = buffer_[i];
-            front_buffer_[i] = ColorRGB(
-                (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(c.r, brightness) : c.r * brightness / 255,
-                (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(c.g, brightness) : c.g * brightness / 255,
-                (srgb_image || gamma_enabled_) ? DisplayColor::SrgbToPwm(c.b, brightness) : c.b * brightness / 255);
+            front_buffer_[i] = ColorRGB(pwm_r[i], pwm_g[i], pwm_b[i]);
         }
         ++frame_id_;
     }

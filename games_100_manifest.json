@@ -8,12 +8,12 @@
     "control_type": "左右移动、A跳跃。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/mario_game.cpp",
-    "simulator_source": "pc-agent-vision/mario_runner.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_001_mario.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_001_mario.py",
     "legacy_source": "#001 超级马里奥兄弟 (Super Mario Bros.)",
     "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_mario_game.py)",
-    "adaptation_notes": "复用独立马里奥引擎 (firmware-s3/main/display/mario_game.cpp, pc-agent-vision/mario_runner.py)，横向卷轴与平台跳跃完备"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_001_mario.py & tests/test_continuous_simulation.py)",
+    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，多帧连续起跳腾空落地动态仿真验证通过"
   },
   {
     "id": "002",
@@ -520,12 +520,12 @@
     "control_type": "方向键。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_029_slither_arena.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_029_slither_arena.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_033_snake.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_033_snake.py",
     "legacy_source": "#029 蛇蛇大作战 (Slither Arena 2016)",
     "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_029_slither_arena.py)",
-    "adaptation_notes": "复用固件原生Snake (game_engine.cc) 与Game #029，网格移动进食完备"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_033_snake.py & tests/test_continuous_simulation.py)",
+    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，多帧连续爬行、进食生长与自噬检测动态仿真验证通过"
   },
   {
     "id": "034",
@@ -648,12 +648,12 @@
     "control_type": "左右、A旋转、B快速下落。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/game_engine.cc",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_041_tetris.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_041_tetris.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_041_tetris.py",
     "legacy_source": "固件原生Tetris (firmware-s3/main/display/game_engine.cc)",
     "status": "implemented",
-    "test_status": "C++固件引擎已实现，待封装标准Cartridge并补写Python模拟器",
-    "adaptation_notes": "复用固件原生Tetris引擎 (firmware-s3/main/display/game_engine.cc: InitTetris/RunTetris)，标准七种四联方块旋转消行完备 (已彻底剔除错误的Game #102 Columns映射)"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_041_tetris.py & tests/test_continuous_simulation.py)",
+    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，标准七种四联方块旋转、下落堆叠与消行动态仿真验证通过"
   },
   {
     "id": "042",

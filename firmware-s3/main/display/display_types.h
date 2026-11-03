@@ -43,11 +43,12 @@ enum class DisplayMode : int {
     WORLDLINE = 28,
     PIXEL_CANVAS = 29,
     MUSIC_FLUID = 30,
-    AMBIENT = 31
+    AMBIENT = 31,
+    ARCADE_GAME = 32
 };
 
 constexpr bool IsDirectDisplayMode(int n) {
-    return n >= 0 && n <= 31 && n != 18 && n != 25;
+    return n >= 0 && n <= 32 && n != 18 && n != 25;
 }
 
 struct ColorRGB {

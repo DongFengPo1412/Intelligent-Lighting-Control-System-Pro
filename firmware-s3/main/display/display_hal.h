@@ -24,6 +24,11 @@ public:
     void SetGlobalBrightness(uint8_t brightness);
     uint8_t GetGlobalBrightness() const { return base_brightness_; }
 
+    // 软件动态总功耗/能量限制器 (基于全屏 RGB 像素累加值平滑限流，防止瞬间过流拉塌电源)
+    void SetMaxEnergyLimit(uint32_t max_energy) { max_energy_limit_ = max_energy; }
+    uint32_t GetMaxEnergyLimit() const { return max_energy_limit_; }
+    uint32_t GetLastFrameEnergy() const { return last_frame_energy_; }
+
     // 将显存数据推送到物理矩阵屏
     // sRGB conversion is opt-in for image content; existing effects keep raw RGB.
     esp_err_t Show(uint8_t brightness_percent = 100, bool srgb_image = false);
@@ -53,4 +58,6 @@ private:
     bool gamma_enabled_ = false;
     uint8_t base_brightness_;
     bool is_initialized_;
+    uint32_t max_energy_limit_ = 15000;
+    uint32_t last_frame_energy_ = 0;
 };

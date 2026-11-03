@@ -416,6 +416,37 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
         cJSON_Delete(root);
         return true;
     }
+    // {"cmd":"arcade", "action":"select"|"input"|"start"|"pause"|"resume"|"reset"|"exit"}
+    else if (strcasecmp(cmd, "arcade") == 0) {
+        cJSON* act_item = cJSON_GetObjectItem(root, "action");
+        if (cJSON_IsString(act_item)) {
+            const char* act = act_item->valuestring;
+            if (strcasecmp(act, "select") == 0) {
+                cJSON* gid_item = cJSON_GetObjectItem(root, "game_id");
+                if (cJSON_IsNumber(gid_item)) {
+                    dm.ArcadeSelectGame((uint8_t)gid_item->valueint);
+                }
+            } else if (strcasecmp(act, "input") == 0) {
+                cJSON* down_item = cJSON_GetObjectItem(root, "down");
+                cJSON* press_item = cJSON_GetObjectItem(root, "pressed");
+                uint16_t down = (down_item && cJSON_IsNumber(down_item)) ? (uint16_t)down_item->valueint : 0;
+                uint16_t press = (press_item && cJSON_IsNumber(press_item)) ? (uint16_t)press_item->valueint : 0;
+                dm.ArcadeInput(down, press);
+            } else if (strcasecmp(act, "start") == 0) {
+                dm.ArcadeStart();
+            } else if (strcasecmp(act, "pause") == 0) {
+                dm.ArcadePause();
+            } else if (strcasecmp(act, "resume") == 0) {
+                dm.ArcadeResume();
+            } else if (strcasecmp(act, "reset") == 0) {
+                dm.ArcadeReset();
+            } else if (strcasecmp(act, "exit") == 0) {
+                dm.ArcadeExit();
+            }
+        }
+        cJSON_Delete(root);
+        return true;
+    }
     // {"cmd":"mode", "val":4}
     else if (strcasecmp(cmd, "mode") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");

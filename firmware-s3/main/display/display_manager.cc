@@ -1,6 +1,7 @@
 #include "display_manager.h"
 #include "board_led.h"
 #include "audio_hal.h"
+#include "arcade/arcade_manager.h"
 #include <esp_log.h>
 
 namespace {
@@ -181,6 +182,19 @@ void DisplayManager::DisplayTaskLoop()
                 case DisplayMode::AUDIO_SPECTRUM:
                     delay_ms = spectrum_engine_.RenderFrame();
                     break;
+
+                case DisplayMode::ARCADE_GAME: {
+                    arcade::ArcadeManager& am = arcade::ArcadeManager::GetInstance();
+                    am.Update(0.033f);
+                    uint8_t raw_rgb[TOTAL_LEDS * 3];
+                    am.Render(raw_rgb);
+                    for (int i = 0; i < TOTAL_LEDS; i++) {
+                        hal_.SetPixelByIndex(i, ColorRGB(raw_rgb[i * 3], raw_rgb[i * 3 + 1], raw_rgb[i * 3 + 2]));
+                    }
+                    hal_.Show();
+                    delay_ms = 33;
+                    break;
+                }
 
                 case DisplayMode::COUNTDOWN_TIMER:
                     delay_ms = RenderCountdownTimer();
@@ -446,4 +460,51 @@ uint32_t DisplayManager::RenderCountdownTimer()
 
     hal_.Show();
     return 33; // 约 30 FPS 高帧率渲染
+}
+
+bool DisplayManager::ArcadeSelectGame(uint8_t game_id)
+{
+    DisplayLock lock(mutex_);
+    bool ok = arcade::ArcadeManager::GetInstance().SelectGame(game_id);
+    if (ok) {
+        current_mode_ = DisplayMode::ARCADE_GAME;
+    }
+    return ok;
+}
+
+void DisplayManager::ArcadeInput(uint16_t down, uint16_t pressed)
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().HandleInput(down, pressed);
+}
+
+void DisplayManager::ArcadeStart()
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().Start();
+}
+
+void DisplayManager::ArcadePause()
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().Pause();
+}
+
+void DisplayManager::ArcadeResume()
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().Resume();
+}
+
+void DisplayManager::ArcadeReset()
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().Reset();
+}
+
+void DisplayManager::ArcadeExit()
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().Exit();
+    current_mode_ = DisplayMode::OFF;
 }

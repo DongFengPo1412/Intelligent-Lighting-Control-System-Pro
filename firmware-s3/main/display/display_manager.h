@@ -58,6 +58,15 @@ public:
     bool IsCountdownActive() const;
     uint32_t GetCountdownRemainingSeconds() const;
 
+    // 统一街机系统交互
+    bool ArcadeSelectGame(uint8_t game_id);
+    void ArcadeInput(uint16_t down, uint16_t pressed);
+    void ArcadeStart();
+    void ArcadePause();
+    void ArcadeResume();
+    void ArcadeReset();
+    void ArcadeExit();
+
     // 获取底层组件 (高级扩展用)
     DisplayHAL& GetHAL() { return hal_; }
     EffectEngine& GetEffectEngine() { return effect_engine_; }

@@ -23,6 +23,11 @@ idf_component_register(
         "display/interaction_engine.cc"
         "display/display_manager.cc"
         "display/board_led.cc"
+        "display/mario_game.cpp"
+        "display/arcade/arcade_manager.cpp"
+        "display/arcade/game_001_mario.cpp"
+        "display/arcade/game_033_snake.cpp"
+        "display/arcade/game_041_tetris.cpp"
         "protocol/command_dispatcher.cc"
         "protocol/interaction_commands.cc"
         "protocol/network_audio.cc"
@@ -31,6 +36,7 @@ idf_component_register(
     INCLUDE_DIRS
         "."
         "display"
+        "display/arcade"
         "protocol"
         "audio"
     REQUIRES
