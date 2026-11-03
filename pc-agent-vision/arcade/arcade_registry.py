@@ -190,6 +190,7 @@ from .game_184_commando import Game184Commando
 from .game_185_congobongo import Game185CongoBongo
 from .game_186_championbaseball import Game186ChampionBaseball
 from .game_187_returnoftheinvaders import Game187ReturnOfTheInvaders
+from .game_188_moneypuzzleexchanger import Game188MoneyPuzzleExchanger
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -412,3 +413,4 @@ ArcadeRegistry.register(Game184Commando)
 ArcadeRegistry.register(Game185CongoBongo)
 ArcadeRegistry.register(Game186ChampionBaseball)
 ArcadeRegistry.register(Game187ReturnOfTheInvaders)
+ArcadeRegistry.register(Game188MoneyPuzzleExchanger)
