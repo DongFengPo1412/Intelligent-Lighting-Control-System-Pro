@@ -177,6 +177,7 @@ from .game_171_ladybug import Game171LadyBug
 from .game_172_timber import Game172Timber
 from .game_173_gorf import Game173Gorf
 from .game_174_mr_do import Game174MrDo
+from .game_175_discsoftron import Game175DiscsOfTron
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -386,3 +387,4 @@ ArcadeRegistry.register(Game171LadyBug)
 ArcadeRegistry.register(Game172Timber)
 ArcadeRegistry.register(Game173Gorf)
 ArcadeRegistry.register(Game174MrDo)
+ArcadeRegistry.register(Game175DiscsOfTron)
