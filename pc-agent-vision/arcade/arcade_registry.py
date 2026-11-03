@@ -122,6 +122,7 @@ from .game_116_lunarlander import Game116LunarLander
 from .game_117_superoffroad import Game117SuperOffRoad
 from .game_118_yiearkungfu import Game118YieArKungFu
 from .game_119_pitfall2 import Game119Pitfall2
+from .game_120_goldminer import Game120GoldMiner
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -276,3 +277,4 @@ ArcadeRegistry.register(Game116LunarLander)
 ArcadeRegistry.register(Game117SuperOffRoad)
 ArcadeRegistry.register(Game118YieArKungFu)
 ArcadeRegistry.register(Game119Pitfall2)
+ArcadeRegistry.register(Game120GoldMiner)
