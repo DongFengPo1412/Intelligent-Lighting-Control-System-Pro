@@ -134,6 +134,7 @@ from .game_128_seawolf import Game128SeaWolf
 from .game_129_starcastle import Game129StarCastle
 from .game_130_junglehunt import Game130JungleHunt
 from .game_131_solarfox import Game131SolarFox
+from .game_132_babypacman import Game132BabyPacman
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -300,3 +301,4 @@ ArcadeRegistry.register(Game128SeaWolf)
 ArcadeRegistry.register(Game129StarCastle)
 ArcadeRegistry.register(Game130JungleHunt)
 ArcadeRegistry.register(Game131SolarFox)
+ArcadeRegistry.register(Game132BabyPacman)
