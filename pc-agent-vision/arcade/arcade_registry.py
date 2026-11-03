@@ -152,6 +152,7 @@ from .game_146_butasan import Game146Butasan
 from .game_147_crazyballoon import Game147CrazyBalloon
 from .game_148_wreckingcrew import Game148WreckingCrew
 from .game_149_gaplus import Game149Gaplus
+from .game_150_tagteamwrestling import Game150TagTeamWrestling
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -336,3 +337,4 @@ ArcadeRegistry.register(Game146Butasan)
 ArcadeRegistry.register(Game147CrazyBalloon)
 ArcadeRegistry.register(Game148WreckingCrew)
 ArcadeRegistry.register(Game149Gaplus)
+ArcadeRegistry.register(Game150TagTeamWrestling)
