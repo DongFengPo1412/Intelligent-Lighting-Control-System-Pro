@@ -169,6 +169,7 @@ from .game_163_aliensyndrome import Game163AlienSyndrome
 from .game_164_robotron import Game164Robotron
 from .game_165_foodfight import Game165FoodFight
 from .game_166_wizardofwor import Game166WizardOfWor
+from .game_167_crystalcastles import Game167CrystalCastles
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -370,3 +371,4 @@ ArcadeRegistry.register(Game163AlienSyndrome)
 ArcadeRegistry.register(Game164Robotron)
 ArcadeRegistry.register(Game165FoodFight)
 ArcadeRegistry.register(Game166WizardOfWor)
+ArcadeRegistry.register(Game167CrystalCastles)
