@@ -136,6 +136,7 @@ from .game_130_junglehunt import Game130JungleHunt
 from .game_131_solarfox import Game131SolarFox
 from .game_132_babypacman import Game132BabyPacman
 from .game_133_kangaroo import Game133Kangaroo
+from .game_134_zookeeper import Game134ZooKeeper
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -304,3 +305,4 @@ ArcadeRegistry.register(Game130JungleHunt)
 ArcadeRegistry.register(Game131SolarFox)
 ArcadeRegistry.register(Game132BabyPacman)
 ArcadeRegistry.register(Game133Kangaroo)
+ArcadeRegistry.register(Game134ZooKeeper)
