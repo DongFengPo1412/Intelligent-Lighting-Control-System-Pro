@@ -424,8 +424,12 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
             if (strcasecmp(act, "select") == 0) {
                 cJSON* gid_item = cJSON_GetObjectItem(root, "game_id");
                 if (cJSON_IsNumber(gid_item)) {
-                    dm.ArcadeSelectGame((uint8_t)gid_item->valueint);
+                    bool ok = dm.ArcadeSelectGame((uint8_t)gid_item->valueint);
+                    cJSON_Delete(root);
+                    return ok;
                 }
+                cJSON_Delete(root);
+                return false;
             } else if (strcasecmp(act, "input") == 0) {
                 cJSON* down_item = cJSON_GetObjectItem(root, "down");
                 cJSON* press_item = cJSON_GetObjectItem(root, "pressed");

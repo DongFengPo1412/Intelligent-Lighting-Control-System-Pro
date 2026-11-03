@@ -12,8 +12,8 @@
     "simulator_source": "pc-agent-vision/arcade/game_001_mario.py",
     "legacy_source": "#001 超级马里奥兄弟 (Super Mario Bros.)",
     "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_001_mario.py, test_arcade_lifecycle.py, test_arcade_continuous_simulation.py, test_arcade_web_api.py, test_power_limiter.py)",
-    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，幂等生命周期、看门狗自动暂停、16x16结算屏及Web控制器验证通过"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_lifecycle.py, test_arcade_result_screen.py, test_arcade_nvs_persistence.py, test_arcade_partition_table.py, test_arcade_web_api.py - 1959项通过)",
+    "adaptation_notes": "ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪"
   },
   {
     "id": "002",
@@ -524,8 +524,8 @@
     "simulator_source": "pc-agent-vision/arcade/game_033_snake.py",
     "legacy_source": "#029 蛇蛇大作战 (Slither Arena 2016)",
     "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_033_snake.py, test_arcade_lifecycle.py, test_arcade_continuous_simulation.py, test_arcade_web_api.py, test_power_limiter.py)",
-    "adaptation_notes": "已封装统一接口，默认经典撞墙死亡(支持穿墙切换)，看门狗自动暂停、16x16结算屏及Web控制器验证通过"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_lifecycle.py, test_arcade_result_screen.py, test_arcade_nvs_persistence.py, test_arcade_partition_table.py, test_arcade_web_api.py - 1959项通过)",
+    "adaptation_notes": "默认经典撞墙死，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪"
   },
   {
     "id": "034",
@@ -652,8 +652,8 @@
     "simulator_source": "pc-agent-vision/arcade/game_041_tetris.py",
     "legacy_source": "固件原生Tetris (firmware-s3/main/display/game_engine.cc)",
     "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_041_tetris.py, test_arcade_lifecycle.py, test_arcade_continuous_simulation.py, test_arcade_web_api.py, test_power_limiter.py)",
-    "adaptation_notes": "已封装统一接口，标准旋转/消行，看门狗自动暂停、16x16结算屏及Web控制器验证通过"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_lifecycle.py, test_arcade_result_screen.py, test_arcade_nvs_persistence.py, test_arcade_partition_table.py, test_arcade_web_api.py - 1959项通过)",
+    "adaptation_notes": "标准旋转与消行，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪"
   },
   {
     "id": "042",

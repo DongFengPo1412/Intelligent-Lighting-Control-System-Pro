@@ -29,6 +29,7 @@ public:
 private:
     mario16::Game game_;
     uint32_t high_score_ = 0;
+    float anim_timer_ = 0.0f;
 };
 
 } // namespace arcade

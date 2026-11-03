@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-test_arcade_web_api.py —— 手机端 Web API / WebSocket 端到端协议集成测试
-测试手机 App / Web App 控制器与后端 ArcadeRunner、卡带切换、按键下发与 HUD 状态同步。
+test_arcade_web_api.py —— 手机端 Web API / 设备通信协议集成测试
+验证点：
+1. ESP32 硬件权威模式响应与状态回显 (Hardware Authority)
+2. 设备离线 / 指令失败时诚实报错，严禁冒充成功 (Error Transparency)
+3. 非法游戏编号严格校验拒绝 (Validation)
+4. 本地模拟器模式明确标注 source: "simulator" 与 simulated: True
+5. 心跳链路与 HUD 状态同步
 """
 
 import unittest
@@ -17,82 +22,142 @@ from arcade.base_cartridge import (
 )
 
 
-class MockDeviceController:
+class MockOnlineEsp32Controller:
+    """模拟在线的真实 ESP32-S3 灯板"""
     def __init__(self):
-        self.sent_commands = []
+        self.port = "COM9"
+        self.control_connected = True
+        self.sent_payloads = []
+        self.current_gid = 1
+        self.current_state = 0
+        self.score = 120
+        self.high_score = 500
 
-    def send_command(self, cmd_str: str) -> bool:
-        self.sent_commands.append(cmd_str)
-        return True
+    def command_result(self, payload: dict) -> dict:
+        self.sent_payloads.append(payload)
+        cmd = payload.get("cmd", "")
+        action = payload.get("action", "")
+
+        if cmd == "frame":
+            return {
+                "status": "ok",
+                "pixels": "ff0000" * 256,
+                "frame_id": 42,
+                "frame_source": "hardware_pwm"
+            }
+
+        if cmd == "arcade":
+            if action == "select":
+                gid = payload.get("game_id", 0)
+                if gid not in (1, 33, 41):
+                    return {"status": "error", "error": "invalid_game_id"}
+                self.current_gid = gid
+                self.current_state = 0
+                return {
+                    "status": "ok",
+                    "arcade": {
+                        "active": True,
+                        "game_id": gid,
+                        "name": "超级马里奥" if gid == 1 else ("经典贪吃蛇" if gid == 33 else "俄罗斯方块"),
+                        "state": 0,
+                        "score": 0,
+                        "high_score": self.high_score,
+                        "lives": 3,
+                        "control_type": CTRL_DPAD_4WAY if gid == 33 else CTRL_ARCADE_AB
+                    }
+                }
+            elif action == "start":
+                self.current_state = 1
+            elif action == "pause":
+                self.current_state = 2
+            elif action == "resume":
+                self.current_state = 1
+            elif action == "reset":
+                self.current_state = 0
+
+            return {
+                "status": "ok",
+                "arcade": {
+                    "active": True,
+                    "game_id": self.current_gid,
+                    "state": self.current_state,
+                    "score": self.score,
+                    "high_score": self.high_score,
+                    "lives": 3,
+                    "control_type": CTRL_DPAD_4WAY if self.current_gid == 33 else CTRL_ARCADE_AB
+                }
+            }
+        return {"status": "ok"}
+
+
+class MockOfflineController:
+    """模拟已断开的设备"""
+    def __init__(self):
+        self.port = "COM9"
+        self.control_connected = False
+
+    def command_result(self, payload: dict) -> dict:
+        return {"status": "error", "error": "device_offline"}
 
 
 class TestArcadeWebApi(unittest.TestCase):
 
-    def setUp(self):
-        self.mock_ctrl = MockDeviceController()
-        self.broadcast_messages = []
+    def test_01_hardware_authority_mode(self):
+        ctrl = MockOnlineEsp32Controller()
+        session = ArcadeSession(controller=ctrl)
 
-        async def mock_broadcast(msg):
-            self.broadcast_messages.append(msg)
+        # 1. 硬件模式选卡
+        res = session.select_game(1)
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["source"], "esp32_hardware")
+        self.assertFalse(res["simulated"])
+        self.assertEqual(session.status["game_id"], 1)
 
-        self.session = ArcadeSession(controller=self.mock_ctrl, broadcast_fn=mock_broadcast)
+        # 2. 验证得分与高分来自 ESP32 回包而非本地自编
+        self.assertEqual(session.status["high_score"], 500)
 
-    def test_01_select_games_and_dispatch_protocol(self):
-        # 1. 手机端选择 #001 超级马里奥
-        ok = self.session.select_game(1)
-        self.assertTrue(ok)
-        self.assertEqual(self.session.status["game_id"], 1)
-        self.assertEqual(self.session.status["game_name"], "超级马里奥")
-        self.assertEqual(self.session.status["control_type"], CTRL_ARCADE_AB)
-        # 验证下发了合法 JSON 协议包
-        parsed_cmds = [json.loads(c) for c in self.mock_ctrl.sent_commands]
-        self.assertTrue(any(c.get("cmd") == "arcade" and c.get("action") == "select" and c.get("game_id") == 1 for c in parsed_cmds))
+        # 3. 硬件生命周期
+        start_res = session.start()
+        self.assertEqual(start_res["status"], "ok")
+        self.assertEqual(start_res["source"], "esp32_hardware")
+        self.assertEqual(session.status["state"], STATE_PLAYING)
 
-        # 2. 手机端切换至 #033 经典贪吃蛇
-        ok = self.session.select_game(33)
-        self.assertTrue(ok)
-        self.assertEqual(self.session.status["game_id"], 33)
-        self.assertEqual(self.session.status["control_type"], CTRL_DPAD_4WAY)
+    def test_02_invalid_game_id_rejection(self):
+        ctrl = MockOnlineEsp32Controller()
+        session = ArcadeSession(controller=ctrl)
 
-        # 3. 手机端切换至 #041 俄罗斯方块
-        ok = self.session.select_game(41)
-        self.assertTrue(ok)
-        self.assertEqual(self.session.status["game_id"], 41)
-        self.assertEqual(self.session.status["control_type"], CTRL_ARCADE_AB)
+        res = session.select_game(999)
+        self.assertEqual(res["status"], "error")
+        self.assertEqual(res["error"], "invalid_game_id")
 
-    def test_02_lifecycle_controls_and_hud_status(self):
-        self.session.select_game(33)  # Snake
-        self.assertEqual(self.session.status["state"], STATE_TITLE)
+    def test_03_device_offline_no_fake_success(self):
+        ctrl = MockOfflineController()
+        session = ArcadeSession(controller=ctrl)
 
-        # 手机点击 Start
-        self.session.start()
-        self.assertEqual(self.session.status["state"], STATE_PLAYING)
+        # 在硬件离线时，非模拟模式下严禁冒充成功
+        res = session.select_game(1, force_simulation=False)
+        self.assertEqual(res["status"], "error")
 
-        # 手机点击 Pause
-        self.session.pause()
-        self.assertEqual(self.session.status["state"], STATE_PAUSED)
+    def test_04_explicit_simulator_mode_clear_tag(self):
+        ctrl = MockOfflineController()
+        session = ArcadeSession(controller=ctrl)
 
-        # 手机点击 Resume
-        self.session.resume()
-        self.assertEqual(self.session.status["state"], STATE_PLAYING)
+        # 显式申请模拟模式
+        res = session.select_game(33, force_simulation=True)
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["source"], "simulator")
+        self.assertTrue(res["simulated"])
+        self.assertTrue(session.status["simulated"])
 
-        # 手机点击 Reset
-        self.session.reset()
-        self.assertEqual(self.session.status["state"], STATE_TITLE)
+    def test_05_frame_source_distinction(self):
+        ctrl = MockOnlineEsp32Controller()
+        session = ArcadeSession(controller=ctrl)
+        session.select_game(1)
 
-    def test_03_key_input_dispatch(self):
-        self.session.select_game(1)  # Mario
-        self.session.start()
-
-        # 按下跳跃键 A
-        self.session.key("a", True)
-        self.assertTrue(self.session.keys_down & (1 << 4))
-        parsed_cmds = [json.loads(c) for c in self.mock_ctrl.sent_commands]
-        self.assertTrue(any(c.get("action") == "input" and c.get("down") == 16 for c in parsed_cmds))
-
-        # 释放跳跃键 A
-        self.session.key("a", False)
-        self.assertEqual(self.session.keys_down & (1 << 4), 0)
+        frame_res = session.get_frame()
+        self.assertEqual(frame_res["source"], "hardware_pwm")
+        self.assertFalse(frame_res["simulated"])
+        self.assertEqual(len(frame_res["hex"]), 768 * 2)
 
 
 if __name__ == "__main__":

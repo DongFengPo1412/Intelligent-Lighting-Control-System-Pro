@@ -1,6 +1,7 @@
 // game_041_tetris.cpp —— 俄罗斯方块 (Tetris)
 #include "game_041_tetris.h"
 #include "arcade_result_screen.h"
+#include "arcade_score_store.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -37,7 +38,7 @@ static const uint8_t kPieceColors[7][3] = {
 
 Game041Tetris::Game041Tetris()
 {
-    high_score_ = 0;
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Init();
 }
 
@@ -106,7 +107,7 @@ void Game041Tetris::SpawnPiece()
 
     if (CheckCollision(piece_type_, piece_rot_, piece_x_, piece_y_)) {
         state_ = STATE_GAMEOVER;
-        if (score_ > high_score_) high_score_ = score_;
+        if (score_ > high_score_) { high_score_ = score_; ArcadeScoreStore::SaveHighScore(GetId(), high_score_); }
     }
 }
 

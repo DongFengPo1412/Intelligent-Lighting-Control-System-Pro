@@ -955,35 +955,197 @@
     }
   }
 
-  async function launchMarioGame() {
-    state.game = "mario";
-    if ($("gameState")) $("gameState").textContent = "超级马里奥";
-    if ($("marioContainer")) {
-      $("marioContainer").style.display = "flex";
-      try {
-        $("marioContainer").scrollIntoView({ behavior: "smooth", block: "nearest" });
-      } catch (_) {}
-    }
-    if ($("gamepad")) $("gamepad").style.display = "none";
-    $$("[data-game]").forEach((btn) => btn.classList.toggle("active", btn.dataset.game === "mario"));
-    
-    // 初始化抬头显示器为准备状态
-    updateMarioHud({ state: 0, score: 0, lives: 3, coins: 0, progress: 0 });
+    // =========================================================================
+  // 统一 100 款点阵街机游戏核心控制器 (ESP32 唯一权威来源，全链路响应式联动)
+  // =========================================================================
+  let arcadeHeartbeatTimer = null;
 
-    try {
-      const res = await api("/api/game", { game: "mario", action: "start" });
-      if (res && res.hex && $("marioCanvas")) drawMarioFrame($("marioCanvas"), res.hex);
-      if (res && res.game_status) updateMarioHud(res.game_status);
-    } catch (e) {
-      console.warn("Mario start fallback:", e);
-      notice("已进入马里奥游戏界面");
+  function updateArcadeHud(status) {
+    if (!status) return;
+    const stateLabels = {
+      0: "TITLE 待机",
+      1: "PLAYING 游玩中",
+      2: "PAUSED 已暂停",
+      3: "GAMEOVER 结算",
+      4: "VICTORY 胜利",
+    };
+    const stateColors = {
+      0: "#64748b",
+      1: "#22c55e",
+      2: "#eab308",
+      3: "#ef4444",
+      4: "#f59e0b",
+    };
+    const stCode = Number(status.state !== undefined ? status.state : 0);
+    const tag = $("marioStateTag");
+    if (tag) {
+      tag.textContent = status.state_name || stateLabels[stCode] || "待机";
+      tag.style.backgroundColor = stateColors[stCode] || "#64748b";
+    }
+
+    if ($("marioScoreStat")) {
+      const s = String(status.score || 0).padStart(5, "0");
+      $("marioScoreStat").textContent = `得分: ${s}`;
+    }
+    if ($("arcadeHighScoreStat")) {
+      const hs = String(status.high_score || 0).padStart(5, "0");
+      $("arcadeHighScoreStat").textContent = `最高: ${hs}`;
+    }
+    if ($("marioLivesStat")) {
+      const lives = status.lives !== undefined ? status.lives : 3;
+      $("marioLivesStat").textContent = `❤️ ×${lives}`;
+    }
+    if ($("marioProgressStat")) {
+      $("marioProgressStat").textContent = `🏁 ${status.progress || 0}%`;
+    }
+    if ($("marioProgFill")) {
+      $("marioProgFill").style.width = `${Math.min(100, Math.max(0, status.progress || 0))}%`;
+    }
+    if ($("arcadeControlStat")) {
+      const cType = Number(status.control_type || 3);
+      $("arcadeControlStat").textContent = cType === 2 ? "CTRL_DPAD_4WAY" : "CTRL_ARCADE_AB";
+    }
+
+    // 动态手柄布局适配：四向十字键卡带(如贪吃蛇)自动隐藏 A/B 操作按键；动作卡带动态挂载提示
+    const actionStage = document.querySelector(".mario-actions");
+    if (actionStage) {
+      if (Number(status.control_type) === 2 || state.arcadeGid === 33) {
+        actionStage.style.display = "none";
+      } else {
+        actionStage.style.display = "flex";
+        const btnA_sub = document.querySelector("#marioKeyA .btn-sub");
+        const btnB_sub = document.querySelector("#marioKeyB .btn-sub");
+        if (state.arcadeGid === 41) {
+          if (btnA_sub) btnA_sub.textContent = "旋转";
+          if (btnB_sub) btnB_sub.textContent = "软降";
+        } else {
+          if (btnA_sub) btnA_sub.textContent = "跳跃";
+          if (btnB_sub) btnB_sub.textContent = "加速";
+        }
+      }
+    }
+
+    // 暂停按钮文本动态更新
+    if ($("arcadePauseBtn")) {
+      $("arcadePauseBtn").textContent = stCode === 2 ? "▶ 继续游戏" : "⏸ 暂停游戏";
     }
   }
+
+  async function launchArcadeGame(gameId) {
+    const idMap = {
+      mario: 1, snake: 33, tetris: 41,
+      "001": 1, "033": 33, "041": 41,
+      1: 1, 33: 33, 41: 41
+    };
+    const gid = idMap[gameId] || parseInt(gameId, 10);
+    if (!gid) {
+      notice("未知的街机游戏编号");
+      return;
+    }
+
+    const titleMap = {
+      1: "[#001] 超级马里奥 (Super Mario Bros.)",
+      33: "[#033] 经典贪吃蛇 (Classic Snake)",
+      41: "[#041] 俄罗斯方块 (Tetris)",
+    };
+
+    if ($("arcadeGameTitle")) $("arcadeGameTitle").textContent = titleMap[gid] || `街机游戏 #${gid}`;
+    if ($("gameState")) $("gameState").textContent = titleMap[gid] || `街机 #${gid}`;
+
+    // 展现统一街机容器
+    if ($("marioContainer")) {
+      $("marioContainer").style.display = "flex";
+      try { $("marioContainer").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
+    }
+    if ($("gamepad")) $("gamepad").style.display = "none";
+
+    // 选卡按钮高亮
+    $$("[data-arcade-id]").forEach((btn) => {
+      btn.classList.toggle("active", parseInt(btn.dataset.arcadeId, 10) === gid);
+    });
+    $$("[data-game]").forEach((btn) => {
+      btn.classList.toggle("active", idMap[btn.dataset.game] === gid);
+    });
+
+    try {
+      const res = await api("/api/arcade", { action: "select", game_id: gid });
+      if (res && res.status === "ok") {
+        state.arcadeActive = true;
+        state.arcadeGid = gid;
+        state.game = "arcade";
+
+        const badge = $("marioSyncBadge");
+        if (badge) {
+          if (res.source === "esp32_hardware") {
+            badge.textContent = "🟢 ESP32 硬件模式 (唯一权威)";
+            badge.style.backgroundColor = "rgba(34, 197, 94, 0.2)";
+            badge.style.color = "#22c55e";
+          } else {
+            badge.textContent = "🟡 本地模拟器测试模式";
+            badge.style.backgroundColor = "rgba(234, 179, 8, 0.2)";
+            badge.style.color = "#eab308";
+          }
+        }
+        updateArcadeHud(res.game_status);
+        startArcadeHeartbeat();
+        notice(`已成功载入街机卡带 #${String(gid).padStart(3, "0")}`);
+      } else {
+        throw new Error(res?.message || res?.error || "载入游戏失败");
+      }
+    } catch (e) {
+      notice(`街机选卡失败: ${e.message}`);
+      const badge = $("marioSyncBadge");
+      if (badge) {
+        badge.textContent = "🔴 设备离线 / 选卡失败";
+        badge.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
+        badge.style.color = "#ef4444";
+      }
+    }
+  }
+
+  function startArcadeHeartbeat() {
+    if (arcadeHeartbeatTimer) clearInterval(arcadeHeartbeatTimer);
+    arcadeHeartbeatTimer = setInterval(async () => {
+      if (!state.arcadeActive) {
+        clearInterval(arcadeHeartbeatTimer);
+        return;
+      }
+      try {
+        const hb = await api("/api/arcade", { action: "heartbeat" });
+        if (hb && hb.game_status) {
+          updateArcadeHud(hb.game_status);
+        }
+      } catch (err) {
+        const badge = $("marioSyncBadge");
+        if (badge && state.arcadeActive) {
+          badge.textContent = "⚠️ 连接抖动 / 自动安全暂停";
+          badge.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
+          badge.style.color = "#ef4444";
+        }
+      }
+    }, 300);
+  }
+
+  // 绑定专属街机选卡按钮
+  $$("[data-arcade-id]").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      launchArcadeGame(btn.dataset.arcadeId);
+    };
+  });
+
+  // 兼容旧版 data-game 选择按钮
+  $$("[data-game]").forEach((b) => {
+    b.onclick = (e) => {
+      e.preventDefault();
+      launchArcadeGame(b.dataset.game);
+    };
+  });
 
   if ($("btnMarioGame")) {
     $("btnMarioGame").onclick = (e) => {
       e.preventDefault();
-      launchMarioGame();
+      launchArcadeGame("001");
     };
   }
 
@@ -991,91 +1153,12 @@
     $("heroPlayMario").onclick = (e) => {
       e.preventDefault();
       navigate("interaction");
-      launchMarioGame();
+      launchArcadeGame("001");
     };
   }
 
-  $$("[data-game]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        try {
-          if (b.dataset.game === "mario") {
-            await launchMarioGame();
-            return;
-          }
-          if (state.game === "mario") {
-            await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
-            if ($("marioContainer")) $("marioContainer").style.display = "none";
-            if ($("gamepad")) $("gamepad").style.display = "flex";
-          }
-          await api("/api/mode", {
-            mode: b.dataset.game === "snake" ? 19 : 21,
-          });
-          state.game = b.dataset.game;
-          $("gamepad").focus({ preventScroll: true });
-          lastPro = 0;
-        } catch (e) {
-          notice(e.message);
-        }
-      }),
-  );
-
-  async function gameMove(direction) {
-    if (state.game === "mario") {
-      await api("/api/game", { game: "mario", action: "key", key: direction, down: true });
-      setTimeout(() => {
-        api("/api/game", { game: "mario", action: "key", key: direction, down: false }).catch(() => {});
-      }, 120);
-      return;
-    }
-    if (!state.board) throw Error("灯板未连接");
-    if (!state.game) throw Error("请先选择游戏");
-    if (state.game === "snake") {
-      const vectors = {
-        up: [0, -1],
-        down: [0, 1],
-        left: [-1, 0],
-        right: [1, 0],
-      };
-      const [dx, dy] = vectors[direction];
-      await api("/api/game", { game: "snake", dx, dy });
-    } else
-      await api("/api/game", {
-        game: "tetris",
-        action: { up: "rot", down: "drop", left: "left", right: "right" }[
-          direction
-        ],
-      });
-  }
-  $$("[data-direction]").forEach(
-    (b) =>
-      (b.onclick = () =>
-        gameMove(b.dataset.direction).catch((e) => notice(e.message))),
-  );
-  $$("[data-game-action]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (state.game === "mario") {
-          const k = b.dataset.gameAction === "rot" ? "a" : "b";
-          api("/api/game", { game: "mario", action: "key", key: k, down: true });
-          setTimeout(() => {
-            api("/api/game", { game: "mario", action: "key", key: k, down: false }).catch(() => {});
-          }, 150);
-          return;
-        }
-        if (state.game !== "tetris") {
-          notice("A / B 按键用于俄罗斯方块和马里奥，请使用方向键控制贪吃蛇");
-          return;
-        }
-        api("/api/game", {
-          game: "tetris",
-          action: b.dataset.gameAction,
-        }).catch((e) => notice(e.message));
-      }),
-  );
-
-  // 手机触控虚拟手柄按键事件绑定 (touchstart / touchend / mousedown / mouseup)
-  function bindMarioTouchKey(btn, keyName) {
+  // 手机触屏手柄按键绑定
+  function bindArcadeTouchKey(btn, keyName) {
     if (!btn) return;
     let isPressed = false;
 
@@ -1087,9 +1170,7 @@
       if (navigator.vibrate) {
         try { navigator.vibrate(10); } catch (_) {}
       }
-      api("/api/arcade", { action: "key", key: keyName, down: true }).catch(() => {
-        api("/api/game", { game: "mario", action: "key", key: keyName, down: true }).catch(() => {});
-      });
+      api("/api/arcade", { action: "key", key: keyName, down: true }).catch(() => {});
     };
 
     const release = (e) => {
@@ -1097,9 +1178,7 @@
       if (!isPressed) return;
       isPressed = false;
       btn.classList.remove("pressed", "active");
-      api("/api/arcade", { action: "key", key: keyName, down: false }).catch(() => {
-        api("/api/game", { game: "mario", action: "key", key: keyName, down: false }).catch(() => {});
-      });
+      api("/api/arcade", { action: "key", key: keyName, down: false }).catch(() => {});
     };
 
     btn.addEventListener("touchstart", press, { passive: false });
@@ -1111,16 +1190,52 @@
   }
 
   $$("[data-mario-key]").forEach((btn) => {
-    bindMarioTouchKey(btn, btn.dataset.marioKey);
+    bindArcadeTouchKey(btn, btn.dataset.marioKey);
   });
 
-  if ($("marioResetBtn")) {
-    $("marioResetBtn").onclick = (e) => {
+  // 顶部与操作栏功能按键
+  if ($("marioStartBtn")) {
+    $("marioStartBtn").onclick = async (e) => {
       e.preventDefault();
       if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
-      api("/api/arcade", { action: "reset" })
-        .then(() => notice("街机游戏已重新开局"))
-        .catch(() => api("/api/game", { game: "mario", action: "reset" }).catch((e) => notice(e.message)));
+      try {
+        const res = await api("/api/arcade", { action: "start" });
+        if (res && res.game_status) updateArcadeHud(res.game_status);
+        notice("街机已开始游玩");
+      } catch (err) {
+        notice(`启动失败: ${err.message}`);
+      }
+    };
+  }
+
+  if ($("arcadePauseBtn")) {
+    $("arcadePauseBtn").onclick = async (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      try {
+        const curTag = $("marioStateTag")?.textContent || "";
+        const isPaused = curTag.includes("PAUSED") || curTag.includes("暂停");
+        const act = isPaused ? "resume" : "pause";
+        const res = await api("/api/arcade", { action: act });
+        if (res && res.game_status) updateArcadeHud(res.game_status);
+        notice(isPaused ? "游戏已恢复继续" : "游戏已暂停");
+      } catch (err) {
+        notice(`操作失败: ${err.message}`);
+      }
+    };
+  }
+
+  if ($("marioResetBtn")) {
+    $("marioResetBtn").onclick = async (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      try {
+        const res = await api("/api/arcade", { action: "reset" });
+        if (res && res.game_status) updateArcadeHud(res.game_status);
+        notice("街机已重新开局");
+      } catch (err) {
+        notice(`重开失败: ${err.message}`);
+      }
     };
   }
 
@@ -1128,79 +1243,78 @@
     $("marioStopBtn").onclick = async (e) => {
       e.preventDefault();
       if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (arcadeHeartbeatTimer) clearInterval(arcadeHeartbeatTimer);
       await api("/api/arcade", { action: "stop" }).catch(() => {});
-      await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
-      state.game = null;
       state.arcadeActive = false;
-      $("gameState").textContent = "选择游戏开始";
+      state.game = null;
+      if ($("gameState")) $("gameState").textContent = "选择游戏开始";
       if ($("marioContainer")) $("marioContainer").style.display = "none";
       if ($("gamepad")) $("gamepad").style.display = "flex";
+      $$("[data-arcade-id]").forEach((btn) => btn.classList.remove("active"));
       $$("[data-game]").forEach((btn) => btn.classList.remove("active"));
-      notice("已退出街机");
+      notice("已安全退出街机系统");
     };
   }
 
+  // 键盘事件全局适配 (WASD / 十字键 / 空格 / Shift / Enter / R)
   window.addEventListener("keydown", (e) => {
-    if (state.game !== "mario" || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+    if (!state.arcadeActive || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
     const keyMap = {
       ArrowLeft: "left", a: "left", A: "left",
       ArrowRight: "right", d: "right", D: "right",
-      ArrowUp: "a", w: "a", W: "a", " ": "a", j: "a", J: "a",
+      ArrowUp: "up", w: "up", W: "up",
       ArrowDown: "down", s: "down", S: "down",
+      " ": "a", j: "a", J: "a",
       Shift: "b", k: "b", K: "b",
       Enter: "start",
-      r: "reset", R: "reset"
+      r: "reset", R: "reset",
+      p: "pause", P: "pause"
     };
     const k = keyMap[e.key];
     if (k) {
       e.preventDefault();
       if (k === "reset") {
-        api("/api/game", { game: "mario", action: "reset" }).catch(() => {});
+        api("/api/arcade", { action: "reset" }).catch(() => {});
+      } else if (k === "pause") {
+        api("/api/arcade", { action: "pause" }).catch(() => {});
+      } else if (k === "start") {
+        api("/api/arcade", { action: "start" }).catch(() => {});
       } else {
-        api("/api/game", { game: "mario", action: "key", key: k, down: true }).catch(() => {});
+        api("/api/arcade", { action: "key", key: k, down: true }).catch(() => {});
       }
     }
   });
 
   window.addEventListener("keyup", (e) => {
-    if (state.game !== "mario" || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+    if (!state.arcadeActive || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
     const keyMap = {
       ArrowLeft: "left", a: "left", A: "left",
       ArrowRight: "right", d: "right", D: "right",
-      ArrowUp: "a", w: "a", W: "a", " ": "a", j: "a", J: "a",
+      ArrowUp: "up", w: "up", W: "up",
       ArrowDown: "down", s: "down", S: "down",
-      Shift: "b", k: "b", K: "b",
-      Enter: "start"
+      " ": "a", j: "a", J: "a",
+      Shift: "b", k: "b", K: "b"
     };
     const k = keyMap[e.key];
-    if (k && k !== "reset") {
-      api("/api/game", { game: "mario", action: "key", key: k, down: false }).catch(() => {});
+    if (k) {
+      api("/api/arcade", { action: "key", key: k, down: false }).catch(() => {});
     }
   });
 
+  // 15 FPS 实时画布回读与 HUD 同步 (严密对齐硬件帧源)
   setInterval(async () => {
-    if ((state.arcadeActive || state.game === "mario") && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
+    if (state.arcadeActive && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
       try {
-        const res = await api("/api/arcade/frame", undefined, "GET", 1500).catch(() =>
-          api("/api/game/mario/frame", undefined, "GET", 1500)
-        );
-        if (res && res.hex) drawMarioFrame($("marioCanvas"), res.hex);
-        if (res && res.status) updateMarioHud(res.status);
+        const res = await api("/api/arcade/frame", undefined, "GET", 1500);
+        if (res && res.hex && $("marioCanvas")) {
+          drawMarioFrame($("marioCanvas"), res.hex);
+        }
+        if (res && res.status) {
+          updateArcadeHud(res.status);
+        }
       } catch (_) {}
     }
   }, 66);
-  $("gamepad").onkeydown = (e) => {
-    const key = {
-      ArrowUp: "up",
-      ArrowDown: "down",
-      ArrowLeft: "left",
-      ArrowRight: "right",
-    }[e.key];
-    if (key && !e.repeat) {
-      e.preventDefault();
-      gameMove(key).catch((e) => notice(e.message));
-    }
-  };
   $("difficulty").oninput = () => {
     $("difficultyValue").textContent =
       Number($("difficulty").value) < 0.35

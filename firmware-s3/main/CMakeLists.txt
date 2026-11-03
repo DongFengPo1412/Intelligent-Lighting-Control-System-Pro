@@ -26,6 +26,7 @@ idf_component_register(
         "display/mario_game.cpp"
         "display/arcade/arcade_manager.cpp"
         "display/arcade/arcade_result_screen.cpp"
+        "display/arcade/arcade_score_store.cpp"
         "display/arcade/game_001_mario.cpp"
         "display/arcade/game_033_snake.cpp"
         "display/arcade/game_041_tetris.cpp"

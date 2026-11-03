@@ -1,6 +1,7 @@
 // game_033_snake.cpp —— 经典贪吃蛇 (Classic Snake)
 #include "game_033_snake.h"
 #include "arcade_result_screen.h"
+#include "arcade_score_store.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -8,7 +9,7 @@ namespace arcade {
 
 Game033Snake::Game033Snake()
 {
-    high_score_ = 0;
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     wrap_walls_ = false; // 默认经典致命死墙
     Init();
 }
@@ -74,6 +75,7 @@ void Game033Snake::Reset()
     next_dir_y_ = 0;
 
     score_ = 0;
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE; // 初始处于待命/标题状态，需触发 Start 进入
     tick_timer_ = 0.0f;
     anim_timer_ = 0.0f;
@@ -170,7 +172,7 @@ void Game033Snake::Step()
         // 原汁原味经典街机硬死墙碰撞检测
         if (new_hx < 0 || new_hx >= 16 || new_hy < 0 || new_hy >= 16) {
             state_ = STATE_GAMEOVER;
-            if (score_ > high_score_) high_score_ = score_;
+            if (score_ > high_score_) { high_score_ = score_; ArcadeScoreStore::SaveHighScore(GetId(), high_score_); }
             return;
         }
     }
@@ -179,7 +181,7 @@ void Game033Snake::Step()
     for (int i = 1; i < snake_len_; ++i) {
         if (snake_x_[i] == new_hx && snake_y_[i] == new_hy) {
             state_ = STATE_GAMEOVER;
-            if (score_ > high_score_) high_score_ = score_;
+            if (score_ > high_score_) { high_score_ = score_; ArcadeScoreStore::SaveHighScore(GetId(), high_score_); }
             return;
         }
     }

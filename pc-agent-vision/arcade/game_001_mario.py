@@ -8,6 +8,7 @@ game_001_mario.py —— 街机游戏 #001: 超级马里奥 (Super Mario Bros. 1
 import ctypes
 from pathlib import Path
 from typing import Dict, Any
+from arcade.arcade_result_screen import render_result_screen
 from arcade.base_cartridge import (
     BaseCartridge,
     CTRL_ARCADE_AB,
@@ -45,6 +46,8 @@ class Game001Mario(BaseCartridge):
         }
         self._fallback_mode = False
         self._fallback_timer = 0.0
+        self._high_score = 0
+        self._anim_timer = 0.0
         self._init_engine()
 
     def _init_engine(self):
@@ -156,6 +159,7 @@ class Game001Mario(BaseCartridge):
                 "progress": 0,
             }
             self._fallback_timer = 0.0
+        self._anim_timer = 0.0
 
     def start(self) -> None:
         """从待命或结算状态启动游戏 (幂等)"""
@@ -211,8 +215,13 @@ class Game001Mario(BaseCartridge):
             else:
                 mapped_st = STATE_PLAYING
 
+            if score.value > self._high_score:
+                self._high_score = score.value
+            if mapped_st in (STATE_GAMEOVER, STATE_VICTORY):
+                self._anim_timer += dt
             self._status = {
                 "score": score.value,
+                "high_score": self._high_score,
                 "lives": lives.value,
                 "coins": coins.value,
                 "state": mapped_st,
@@ -260,4 +269,6 @@ class Game001Mario(BaseCartridge):
             return buf
 
     def get_status(self) -> Dict[str, Any]:
-        return dict(self._status)
+        st = dict(self._status)
+        st["high_score"] = self._high_score
+        return st

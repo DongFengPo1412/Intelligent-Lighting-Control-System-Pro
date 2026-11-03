@@ -496,18 +496,20 @@
               <h2>掌上街机</h2>
               <span class="subtle-badge" id="gameState">选择游戏开始</span>
             </div>
-            <div class="game-selection">
-              <button class="secondary" data-game="snake" data-hardware>
-                贪吃蛇</button><button class="secondary" data-game="tetris" data-hardware>
-                俄罗斯方块</button><button class="secondary" data-game="mario" id="btnMarioGame">
-                超级马里奥
+            <div class="game-selection" role="group" aria-label="100款点阵街机游戏选择">
+              <button class="secondary" data-arcade-id="001" data-game="mario" id="btnArcade001">
+                #001 超级马里奥
+              </button><button class="secondary" data-arcade-id="033" data-game="snake" id="btnArcade033">
+                #033 经典贪吃蛇
+              </button><button class="secondary" data-arcade-id="041" data-game="tetris" id="btnArcade041">
+                #041 俄罗斯方块
               </button>
             </div>
             <!-- 马里奥专属实时手机触屏街机交互界面 -->
             <div class="mario-container" id="marioContainer" style="display:none;">
               <div class="mario-header">
-                <span>🎮 MARIO 16 · 触屏街机</span>
-                <span id="marioSyncBadge" class="mario-sync-pill">🟢 实时同步中 (静音)</span>
+                <span id="arcadeGameTitle">🎮 街机游戏 · 16×16 点阵屏</span>
+                <span id="marioSyncBadge" class="mario-sync-pill">🟢 ESP32 硬件模式</span>
               </div>
               <div class="mario-screen-housing">
                 <canvas id="marioCanvas" width="320" height="320" aria-label="16×16 马里奥游戏画面"></canvas>
@@ -517,13 +519,15 @@
               </div>
               <div class="mario-hud-panel">
                 <div class="mario-hud-row">
-                  <span id="marioStateTag" class="mario-state-badge">标题画面</span>
+                  <span id="marioStateTag" class="mario-state-badge">TITLE 待机</span>
                   <span id="marioScoreStat" style="color:#ffd23f;font-weight:bold;">得分: 00000</span>
+                  <span id="arcadeHighScoreStat" style="color:#f59e0b;font-weight:bold;">最高: 00000</span>
                 </div>
                 <div class="mario-hud-row" style="color:#94a3b8;">
                   <span id="marioLivesStat">❤️ ×3</span>
-                  <span id="marioCoinsStat">🪙 ×00</span>
+                  <span id="marioCoinsStat">🪙/⚡ ×00</span>
                   <span id="marioProgressStat">🏁 0%</span>
+                  <span id="arcadeControlStat" class="subtle-badge">CTRL_ARCADE_AB</span>
                 </div>
               </div>
 
@@ -531,13 +535,16 @@
               <div class="mario-gamepad-controls" id="marioGamepadControls">
                 <div class="mario-mid-btns">
                   <button type="button" class="mario-ctrl-btn primary" id="marioStartBtn" data-mario-key="start">
-                    ▶ 点击开始游戏
+                    ▶ 开始游戏
+                  </button>
+                  <button type="button" class="mario-ctrl-btn secondary" id="arcadePauseBtn" data-arcade-action="pause">
+                    ⏸ 暂停 / 继续
                   </button>
                   <button type="button" class="mario-ctrl-btn secondary" id="marioResetBtn" data-mario-action="reset">
                     ↺ 重新开局
                   </button>
                   <button type="button" class="mario-ctrl-btn quiet" id="marioStopBtn" data-mario-action="stop">
-                    ✕ 退出游戏
+                    ✕ 退出街机
                   </button>
                 </div>
 

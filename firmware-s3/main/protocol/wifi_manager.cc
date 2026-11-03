@@ -11,6 +11,7 @@
 #include <cJSON.h>
 #include "command_dispatcher.h"
 #include "display_manager.h"
+#include "arcade_manager.h"
 #include "board_led.h"
 #include "audio_hal.h"
 
@@ -355,6 +356,7 @@ void WifiManager::UdpServerTaskLoop()
                      (unsigned)dispatcher.AudioReceived(), (unsigned)dispatcher.AudioPlayed(),
                      (unsigned)dispatcher.AudioDropped(), (unsigned)dispatcher.AudioErrors(),
                      (unsigned)dispatcher.AudioStackFree());
+            bool arcade_cmd = cJSON_IsString(parsed_name) && !strcasecmp(parsed_name->valuestring, "arcade");
             if(ok&&frame_query) {
                 static char hex[1537],frame_ack[2304];
                 uint32_t frame_id=dm.SnapshotFrame(hex,sizeof(hex));
@@ -365,6 +367,33 @@ void WifiManager::UdpServerTaskLoop()
                 if(cJSON_PrintPreallocated(frame,frame_ack,sizeof(frame_ack),false))
                     sendto(sock,frame_ack,strlen(frame_ack),0,(struct sockaddr*)&source_addr,sizeof(source_addr));
                 cJSON_Delete(frame);cJSON_Delete(envelope);continue;
+            }
+            if (arcade_cmd) {
+                auto& am = arcade::ArcadeManager::GetInstance();
+                auto st = am.GetCurrentStatus();
+                cJSON* ack_json = cJSON_Parse(ack);
+                if (ack_json) {
+                    cJSON* arc_obj = cJSON_CreateObject();
+                    cJSON_AddBoolToObject(arc_obj, "active", am.IsActive());
+                    cJSON_AddNumberToObject(arc_obj, "game_id", am.GetCurrentGameId());
+                    cJSON_AddStringToObject(arc_obj, "name", am.GetCurrentGameName() ? am.GetCurrentGameName() : "");
+                    cJSON_AddNumberToObject(arc_obj, "state", st.state);
+                    cJSON_AddNumberToObject(arc_obj, "score", st.score);
+                    cJSON_AddNumberToObject(arc_obj, "high_score", st.high_score);
+                    cJSON_AddNumberToObject(arc_obj, "lives", st.lives);
+                    cJSON_AddNumberToObject(arc_obj, "progress", st.progress);
+                    cJSON_AddNumberToObject(arc_obj, "control_type", (int)am.GetCurrentControlType());
+                    cJSON_AddItemToObject(ack_json, "arcade", arc_obj);
+
+                    static char arcade_ack[1024];
+                    if (cJSON_PrintPreallocated(ack_json, arcade_ack, sizeof(arcade_ack), false)) {
+                        sendto(sock, arcade_ack, strlen(arcade_ack), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+                        cJSON_Delete(ack_json);
+                        cJSON_Delete(envelope);
+                        continue;
+                    }
+                    cJSON_Delete(ack_json);
+                }
             }
             if (wrapped && valid_envelope && !conflict) {
                 auto& entry = recent[next_reply++ % 16];

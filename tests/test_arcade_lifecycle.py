@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-test_arcade_lifecycle.py —— 街机游戏生命周期与幂等性专用测试
-针对 Start / Pause / Resume / Reset / GameOver 严格验证状态机幂等转换
-杜绝任何“发送 start 导致暂停”或“重复调用翻转状态”的缺陷。
+test_arcade_lifecycle.py —— 街机游戏生命周期与状态同步验证
+验证点：
+1. Start / Pause / Resume / Reset 幂等性
+2. 断线重连语义：重连后保持 PAUSED，绝不自动继续
+3. 延迟/重复控制包拦截：暂停状态下收到常规方向键不误恢复游戏
+4. 游戏切换清理：切换游戏彻底清除旧游戏的长按与按键缓冲区
 """
 
 import unittest
@@ -15,7 +18,15 @@ from arcade.base_cartridge import (
     STATE_PAUSED,
     STATE_GAMEOVER,
     STATE_VICTORY,
+    KEY_LEFT,
+    KEY_RIGHT,
+    KEY_UP,
+    KEY_DOWN,
+    KEY_A,
+    KEY_B,
+    KEY_START,
 )
+from arcade_runner import ArcadeSession
 
 
 class TestArcadeLifecycle(unittest.TestCase):
@@ -96,31 +107,59 @@ class TestArcadeLifecycle(unittest.TestCase):
         mario = Game001Mario()
         mario.init()
 
-        # 1. 初始 TITLE
         self.assertEqual(mario.get_status()["state"], STATE_TITLE)
-
-        # 2. start()
         mario.start()
-        # 推进动画进入 PLAYING
         for _ in range(100):
             mario.update(0.02, 0, 0)
         self.assertEqual(mario.get_status()["state"], STATE_PLAYING)
 
-        # 3. 幂等 start()
         mario.start()
         self.assertEqual(mario.get_status()["state"], STATE_PLAYING)
 
-        # 4. pause()
         mario.pause()
         self.assertEqual(mario.get_status()["state"], STATE_PAUSED)
 
-        # 5. 幂等 pause()
         mario.pause()
         self.assertEqual(mario.get_status()["state"], STATE_PAUSED)
 
-        # 6. resume()
         mario.resume()
         self.assertEqual(mario.get_status()["state"], STATE_PLAYING)
+
+    def test_04_paused_ignores_delayed_and_duplicate_input(self):
+        """暂停状态下收到延迟、重复的方向键包，不得误恢复游戏"""
+        snake = Game033Snake()
+        snake.init()
+        snake.start()
+        self.assertEqual(snake.get_status()["state"], STATE_PLAYING)
+
+        snake.pause()
+        self.assertEqual(snake.get_status()["state"], STATE_PAUSED)
+
+        # 发送重复的左、右、上按键包
+        snake.update(0.1, KEY_LEFT, KEY_LEFT)
+        snake.update(0.1, KEY_RIGHT, KEY_RIGHT)
+        snake.update(0.1, KEY_UP, KEY_UP)
+
+        # 必须依旧严格处于 PAUSED 状态
+        self.assertEqual(snake.get_status()["state"], STATE_PAUSED)
+
+        # 只有显式 resume() 才能恢复
+        snake.resume()
+        self.assertEqual(snake.get_status()["state"], STATE_PLAYING)
+
+    def test_05_session_game_switch_clears_keys(self):
+        """测试 ArcadeSession 在游戏切换时彻底重置按键长按状态"""
+        session = ArcadeSession()
+        session.select_game(1, force_simulation=True)
+        session.key("right", is_down=True)
+        self.assertEqual(session.keys_down, KEY_RIGHT)
+
+        # 切换到贪吃蛇
+        session.select_game(33, force_simulation=True)
+        # 验证旧键长按已被彻底清除
+        self.assertEqual(session.keys_down, 0)
+        self.assertEqual(session.keys_pressed, 0)
+        self.assertEqual(session.status["game_id"], 33)
 
 
 if __name__ == "__main__":

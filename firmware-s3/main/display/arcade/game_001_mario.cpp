@@ -1,6 +1,7 @@
 // game_001_mario.cpp —— 超级马里奥 (Super Mario Bros. 16)
 #include "game_001_mario.h"
 #include "arcade_result_screen.h"
+#include "arcade_score_store.h"
 
 namespace arcade {
 
@@ -12,12 +13,15 @@ Game001Mario::Game001Mario()
 void Game001Mario::Init()
 {
     game_.begin();
-    high_score_ = 0;
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
+    anim_timer_ = 0.0f;
 }
 
 void Game001Mario::Reset()
 {
     game_.resetAll();
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
+    anim_timer_ = 0.0f;
 }
 
 void Game001Mario::Start()
@@ -57,13 +61,27 @@ void Game001Mario::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
     game_.update(dt, in);
 
     auto s = game_.status();
-    if (s.score > high_score_) {
-        high_score_ = s.score;
+    if (s.state == mario16::ST_GAMEOVER || s.state == mario16::ST_DEAD || s.state == mario16::ST_WIN) {
+        anim_timer_ += dt;
+        if (s.score > high_score_) {
+            high_score_ = s.score;
+            ArcadeScoreStore::SaveHighScore(GetId(), high_score_);
+        }
+    } else {
+        if (s.score > high_score_) {
+            high_score_ = s.score;
+        }
     }
 }
 
 void Game001Mario::Render(uint8_t* fb_rgb24)
 {
+    auto s = game_.status();
+    if (s.state == mario16::ST_GAMEOVER || s.state == mario16::ST_DEAD || s.state == mario16::ST_WIN) {
+        bool is_victory = (s.state == mario16::ST_WIN);
+        ArcadeResultScreen::RenderResult(fb_rgb24, is_victory, s.score, high_score_, anim_timer_);
+        return;
+    }
     game_.render(fb_rgb24);
 }
 
