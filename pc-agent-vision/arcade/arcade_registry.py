@@ -172,6 +172,7 @@ from .game_166_wizardofwor import Game166WizardOfWor
 from .game_167_crystalcastles import Game167CrystalCastles
 from .game_168_bagman import Game168Bagman
 from .game_169_warlords import Game169Warlords
+from .game_170_battlezone import Game170Battlezone
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -376,3 +377,4 @@ ArcadeRegistry.register(Game166WizardOfWor)
 ArcadeRegistry.register(Game167CrystalCastles)
 ArcadeRegistry.register(Game168Bagman)
 ArcadeRegistry.register(Game169Warlords)
+ArcadeRegistry.register(Game170Battlezone)
