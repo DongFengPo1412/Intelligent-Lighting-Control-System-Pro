@@ -162,6 +162,7 @@ from .game_156_sonson import Game156SonSon
 from .game_157_tapper import Game157Tapper
 from .game_158_qix import Game158Qix
 from .game_159_spyvsspy import Game159SpyVsSpy
+from .game_160_ripoff import Game160RipOff
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -356,3 +357,4 @@ ArcadeRegistry.register(Game156SonSon)
 ArcadeRegistry.register(Game157Tapper)
 ArcadeRegistry.register(Game158Qix)
 ArcadeRegistry.register(Game159SpyVsSpy)
+ArcadeRegistry.register(Game160RipOff)
