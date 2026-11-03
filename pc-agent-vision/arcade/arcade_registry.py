@@ -144,6 +144,7 @@ from .game_138_rocnrope import Game138RocnRope
 from .game_139_amidar import Game139Amidar
 from .game_140_sinistar import Game140Sinistar
 from .game_141_firetruck import Game141FireTruck
+from .game_142_mariner import Game142Mariner
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -320,3 +321,4 @@ ArcadeRegistry.register(Game138RocnRope)
 ArcadeRegistry.register(Game139Amidar)
 ArcadeRegistry.register(Game140Sinistar)
 ArcadeRegistry.register(Game141FireTruck)
+ArcadeRegistry.register(Game142Mariner)
