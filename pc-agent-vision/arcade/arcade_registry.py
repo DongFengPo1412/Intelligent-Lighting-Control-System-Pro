@@ -130,6 +130,7 @@ from .game_124_carnival import Game124Carnival
 from .game_125_bumpingbuggies import Game125BumpingBuggies
 from .game_126_gyruss import Game126Gyruss
 from .game_127_choplifter import Game127Choplifter
+from .game_128_seawolf import Game128SeaWolf
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -292,3 +293,4 @@ ArcadeRegistry.register(Game124Carnival)
 ArcadeRegistry.register(Game125BumpingBuggies)
 ArcadeRegistry.register(Game126Gyruss)
 ArcadeRegistry.register(Game127Choplifter)
+ArcadeRegistry.register(Game128SeaWolf)
