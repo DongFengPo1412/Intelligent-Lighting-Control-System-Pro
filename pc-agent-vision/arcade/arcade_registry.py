@@ -146,6 +146,7 @@ from .game_140_sinistar import Game140Sinistar
 from .game_141_firetruck import Game141FireTruck
 from .game_142_mariner import Game142Mariner
 from .game_143_plotting import Game143Plotting
+from .game_144_moonpatrol import Game144MoonPatrol
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -324,3 +325,4 @@ ArcadeRegistry.register(Game140Sinistar)
 ArcadeRegistry.register(Game141FireTruck)
 ArcadeRegistry.register(Game142Mariner)
 ArcadeRegistry.register(Game143Plotting)
+ArcadeRegistry.register(Game144MoonPatrol)
