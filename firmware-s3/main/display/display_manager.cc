@@ -508,3 +508,9 @@ void DisplayManager::ArcadeExit()
     arcade::ArcadeManager::GetInstance().Exit();
     current_mode_ = DisplayMode::OFF;
 }
+
+void DisplayManager::ArcadeHeartbeat()
+{
+    DisplayLock lock(mutex_);
+    arcade::ArcadeManager::GetInstance().FeedHeartbeat();
+}

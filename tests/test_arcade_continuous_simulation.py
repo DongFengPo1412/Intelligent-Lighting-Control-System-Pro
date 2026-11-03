@@ -75,8 +75,9 @@ class TestContinuousSimulation(unittest.TestCase):
 
     def test_02_snake_continuous_crawling_and_eating(self):
         """贪吃蛇连续爬行、直角转向、进食生长与画面动态演进"""
-        snake = Game033Snake()
+        snake = Game033Snake(wrap_walls=True)
         snake.init()
+        snake.start()
 
         frames = []
         # 1. 爬行 4 步向右
@@ -109,6 +110,7 @@ class TestContinuousSimulation(unittest.TestCase):
         """俄罗斯方块连续下落、旋转、触底固定与新方块生成演进"""
         tetris = Game041Tetris()
         tetris.init()
+        tetris.start()
 
         # 固定测试方块为 L 型
         tetris._piece_type = 3  # L 型

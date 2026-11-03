@@ -21,6 +21,9 @@ public:
 
     void Init() override;
     void Reset() override;
+    void Start() override;
+    void Pause() override;
+    void Resume() override;
     void Update(float dt, uint16_t keys_down, uint16_t keys_pressed) override;
     void Render(uint8_t* fb_rgb24) override;
     CartridgeStatus GetStatus() const override;
@@ -42,7 +45,9 @@ private:
 
     float drop_timer_;
     float drop_interval_;
+    float anim_timer_;
     uint32_t score_;
+    uint32_t high_score_;
     uint16_t lines_cleared_;
     CartridgeState state_;
 };

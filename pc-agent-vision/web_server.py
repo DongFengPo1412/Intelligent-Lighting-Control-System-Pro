@@ -501,6 +501,64 @@ async def handle_mario_frame(request: web.Request):
         "hex": mario.current_hex
     })
 
+async def handle_arcade(request: web.Request):
+    """统一街机卡带系统 API 接口"""
+    try:
+        data = await request.json()
+        action = data.get("action", "")
+        from arcade_runner import get_arcade_session
+        arcade = get_arcade_session(controller, broadcast_ws)
+
+        if action == "select":
+            gid = int(data.get("game_id", 1))
+            ok = arcade.select_game(gid)
+            if not ok:
+                return web.json_response({"error": f"Invalid game_id {gid}"}, status=400)
+            if not arcade.is_running:
+                arcade.task = asyncio.create_task(arcade.run_loop())
+        elif action == "start":
+            if not arcade.is_running:
+                arcade.task = asyncio.create_task(arcade.run_loop())
+            arcade.start()
+        elif action == "pause":
+            arcade.pause()
+        elif action == "resume":
+            arcade.resume()
+        elif action == "reset":
+            arcade.reset()
+        elif action == "stop":
+            arcade.stop()
+        elif action == "key":
+            k = data.get("key", "")
+            down = bool(data.get("down", True))
+            arcade.key(k, down)
+        elif action == "heartbeat":
+            if arcade.controller and hasattr(arcade.controller, "send_command"):
+                import json
+                try:
+                    arcade.controller.send_command(json.dumps({"cmd": "arcade", "action": "heartbeat"}))
+                except Exception:
+                    pass
+
+        return web.json_response({
+            "status": "ok",
+            "running": arcade.is_running,
+            "game_status": arcade.status,
+            "hex": arcade.current_hex
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def handle_arcade_frame(request: web.Request):
+    """获取街机卡带实时帧与 HUD 状态"""
+    from arcade_runner import get_arcade_session
+    arcade = get_arcade_session(controller, broadcast_ws)
+    return web.json_response({
+        "running": arcade.is_running,
+        "status": arcade.status,
+        "hex": arcade.current_hex
+    })
+
 async def handle_retry_warmup(request: web.Request):
     """手动触发模型预热重试（用于重试耗尽后用户恢复 Ollama 后的重新连接）"""
     if globals().get('shutting_down', False):
@@ -1183,6 +1241,8 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     app.router.add_post("/api/cmd", handle_cmd)
     app.router.add_post("/api/game", handle_game)
     app.router.add_get("/api/game/mario/frame", handle_mario_frame)
+    app.router.add_post("/api/arcade", handle_arcade)
+    app.router.add_get("/api/arcade/frame", handle_arcade_frame)
     app.router.add_get("/api/status", handle_status)
     app.router.add_get("/ws", handle_ws)
     from advanced_api import register

@@ -140,6 +140,7 @@ class Game001Mario(BaseCartridge):
 
             self._status = {
                 "score": score.value,
+                "high_score": max(self._status.get("high_score", 0), score.value),
                 "lives": lives.value,
                 "coins": coins.value,
                 "state": mapped_st,
@@ -148,12 +149,33 @@ class Game001Mario(BaseCartridge):
         else:
             self._status = {
                 "score": 0,
+                "high_score": self._status.get("high_score", 0),
                 "lives": 3,
                 "coins": 0,
                 "state": STATE_TITLE,
                 "progress": 0,
             }
             self._fallback_timer = 0.0
+
+    def start(self) -> None:
+        """从待命或结算状态启动游戏 (幂等)"""
+        st = self._status["state"]
+        if st in (STATE_TITLE, STATE_GAMEOVER):
+            if st == STATE_GAMEOVER:
+                self.reset()
+            self.update(0.02, KEY_A, KEY_A)
+        elif st == STATE_PAUSED:
+            self.resume()
+
+    def pause(self) -> None:
+        """安全暂停 (幂等)"""
+        if self._status["state"] == STATE_PLAYING:
+            self._status["state"] = STATE_PAUSED
+
+    def resume(self) -> None:
+        """从暂停恢复游玩 (幂等)"""
+        if self._status["state"] == STATE_PAUSED:
+            self._status["state"] = STATE_PLAYING
 
     def update(self, dt: float, keys_down: int, keys_pressed: int) -> None:
         if self._dll and self._game_handle:

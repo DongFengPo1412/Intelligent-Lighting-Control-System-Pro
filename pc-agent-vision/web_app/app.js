@@ -1087,7 +1087,9 @@
       if (navigator.vibrate) {
         try { navigator.vibrate(10); } catch (_) {}
       }
-      api("/api/game", { game: "mario", action: "key", key: keyName, down: true }).catch(() => {});
+      api("/api/arcade", { action: "key", key: keyName, down: true }).catch(() => {
+        api("/api/game", { game: "mario", action: "key", key: keyName, down: true }).catch(() => {});
+      });
     };
 
     const release = (e) => {
@@ -1095,7 +1097,9 @@
       if (!isPressed) return;
       isPressed = false;
       btn.classList.remove("pressed", "active");
-      api("/api/game", { game: "mario", action: "key", key: keyName, down: false }).catch(() => {});
+      api("/api/arcade", { action: "key", key: keyName, down: false }).catch(() => {
+        api("/api/game", { game: "mario", action: "key", key: keyName, down: false }).catch(() => {});
+      });
     };
 
     btn.addEventListener("touchstart", press, { passive: false });
@@ -1114,9 +1118,9 @@
     $("marioResetBtn").onclick = (e) => {
       e.preventDefault();
       if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
-      api("/api/game", { game: "mario", action: "reset" })
-        .then(() => notice("马里奥已重新开局"))
-        .catch((e) => notice(e.message));
+      api("/api/arcade", { action: "reset" })
+        .then(() => notice("街机游戏已重新开局"))
+        .catch(() => api("/api/game", { game: "mario", action: "reset" }).catch((e) => notice(e.message)));
     };
   }
 
@@ -1124,13 +1128,15 @@
     $("marioStopBtn").onclick = async (e) => {
       e.preventDefault();
       if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      await api("/api/arcade", { action: "stop" }).catch(() => {});
       await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
       state.game = null;
+      state.arcadeActive = false;
       $("gameState").textContent = "选择游戏开始";
       if ($("marioContainer")) $("marioContainer").style.display = "none";
       if ($("gamepad")) $("gamepad").style.display = "flex";
       $$("[data-game]").forEach((btn) => btn.classList.remove("active"));
-      notice("已退出马里奥");
+      notice("已退出街机");
     };
   }
 
@@ -1173,11 +1179,13 @@
   });
 
   setInterval(async () => {
-    if (state.game === "mario" && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
+    if ((state.arcadeActive || state.game === "mario") && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
       try {
-        const res = await api("/api/game/mario/frame", undefined, "GET", 1500);
-        if (res.hex) drawMarioFrame($("marioCanvas"), res.hex);
-        if (res.status) updateMarioHud(res.status);
+        const res = await api("/api/arcade/frame", undefined, "GET", 1500).catch(() =>
+          api("/api/game/mario/frame", undefined, "GET", 1500)
+        );
+        if (res && res.hex) drawMarioFrame($("marioCanvas"), res.hex);
+        if (res && res.status) updateMarioHud(res.status);
       } catch (_) {}
     }
   }, 66);

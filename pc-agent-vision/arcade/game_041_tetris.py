@@ -23,6 +23,7 @@ from arcade.base_cartridge import (
     KEY_B,
     KEY_START,
 )
+from arcade.arcade_result_screen import render_result_screen
 
 # 7 种俄罗斯方块的 4 种旋转姿态定义 (7, 4, 4, 2)
 TETRIS_SHAPES = (
@@ -67,9 +68,11 @@ class Game041Tetris(BaseCartridge):
         self._piece_y = 0
         self._drop_timer = 0.0
         self._drop_interval = 0.60
+        self._anim_timer = 0.0
         self._score = 0
+        self._high_score = 0
         self._lines_cleared = 0
-        self._state = STATE_PLAYING
+        self._state = STATE_TITLE
         self.reset()
 
     @property
@@ -105,8 +108,28 @@ class Game041Tetris(BaseCartridge):
         self._lines_cleared = 0
         self._drop_interval = 0.60
         self._drop_timer = 0.0
-        self._state = STATE_PLAYING
+        self._anim_timer = 0.0
+        self._state = STATE_TITLE
         self._spawn_piece()
+
+    def start(self) -> None:
+        """从待命或结算状态启动游戏 (幂等)"""
+        if self._state in (STATE_TITLE, STATE_GAMEOVER):
+            if self._state == STATE_GAMEOVER:
+                self.reset()
+            self._state = STATE_PLAYING
+        elif self._state == STATE_PAUSED:
+            self.resume()
+
+    def pause(self) -> None:
+        """安全暂停 (幂等)"""
+        if self._state == STATE_PLAYING:
+            self._state = STATE_PAUSED
+
+    def resume(self) -> None:
+        """从暂停恢复游玩 (幂等)"""
+        if self._state == STATE_PAUSED:
+            self._state = STATE_PLAYING
 
     def _check_collision(self, piece_type: int, rot: int, x: int, y: int) -> bool:
         for ox, oy in TETRIS_SHAPES[piece_type][rot]:
@@ -126,6 +149,8 @@ class Game041Tetris(BaseCartridge):
 
         if self._check_collision(self._piece_type, self._piece_rot, self._piece_x, self._piece_y):
             self._state = STATE_GAMEOVER
+            if self._score > self._high_score:
+                self._high_score = self._score
 
     def _lock_piece(self) -> None:
         for ox, oy in TETRIS_SHAPES[self._piece_type][self._piece_rot]:
@@ -154,16 +179,28 @@ class Game041Tetris(BaseCartridge):
         if cleared > 0:
             self._lines_cleared += cleared
             self._score += cleared * cleared * 100
+            if self._score > self._high_score:
+                self._high_score = self._score
             self._drop_interval = max(0.10, 0.60 - self._lines_cleared * 0.03)
 
     def update(self, dt: float, keys_down: int, keys_pressed: int) -> None:
+        self._anim_timer += dt
+
+        if self._state == STATE_TITLE:
+            if keys_pressed & (KEY_A | KEY_START):
+                self.start()
+            return
+
         if self._state == STATE_GAMEOVER:
             if keys_pressed & (KEY_A | KEY_START):
-                self.reset()
+                self.start()
             return
 
         if keys_pressed & KEY_START:
-            self._state = STATE_PAUSED if self._state == STATE_PLAYING else STATE_PLAYING
+            if self._state == STATE_PLAYING:
+                self.pause()
+            elif self._state == STATE_PAUSED:
+                self.resume()
             return
 
         if self._state == STATE_PAUSED:
@@ -201,11 +238,17 @@ class Game041Tetris(BaseCartridge):
                 self._piece_y += 1
                 if keys_down & (KEY_DOWN | KEY_B):
                     self._score += 1
+                    if self._score > self._high_score:
+                        self._high_score = self._score
             else:
                 self._lock_piece()
 
     def render(self) -> bytearray:
         buf = bytearray(16 * 16 * 3)
+
+        if self._state == STATE_GAMEOVER:
+            render_result_screen(buf, False, self._score, self._high_score, self._anim_timer)
+            return buf
 
         # 左右边界线 (灰冷色)
         for y in range(16):
@@ -224,20 +267,21 @@ class Game041Tetris(BaseCartridge):
                     buf[idx : idx + 3] = bytearray([r, g, b])
 
         # 下落方块
-        if self._state != STATE_GAMEOVER:
-            r, g, b = PIECE_COLORS[self._piece_type]
-            for ox, oy in TETRIS_SHAPES[self._piece_type][self._piece_rot]:
-                px = self._piece_x + ox
-                py = self._piece_y + oy
-                if 0 <= py < 16 and 0 <= px < 16:
-                    idx = (py * 16 + px) * 3
-                    buf[idx : idx + 3] = bytearray([r, g, b])
+        r, g, b = PIECE_COLORS[self._piece_type]
+        for ox, oy in TETRIS_SHAPES[self._piece_type][self._piece_rot]:
+            px = self._piece_x + ox
+            py = self._piece_y + oy
+            if 0 <= py < 16 and 0 <= px < 16:
+                idx = (py * 16 + px) * 3
+                buf[idx : idx + 3] = bytearray([r, g, b])
 
         return buf
 
     def get_status(self) -> Dict[str, Any]:
         return {
             "score": self._score,
+            "high_score": self._high_score,
+            "lines": self._lines_cleared,
             "lives": 0 if self._state == STATE_GAMEOVER else 1,
             "state": self._state,
             "progress": min(100, self._lines_cleared * 10),

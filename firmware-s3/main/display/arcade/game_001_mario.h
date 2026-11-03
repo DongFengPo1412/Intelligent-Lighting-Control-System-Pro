@@ -1,5 +1,4 @@
 // game_001_mario.h —— 超级马里奥 (Super Mario Bros. 16)
-// 编号: #001 | 机制: 横向平台跳跃与动力学冲刺
 #pragma once
 
 #include "arcade_cartridge.h"
@@ -20,12 +19,16 @@ public:
 
     void Init() override;
     void Reset() override;
+    void Start() override;
+    void Pause() override;
+    void Resume() override;
     void Update(float dt, uint16_t keys_down, uint16_t keys_pressed) override;
     void Render(uint8_t* fb_rgb24) override;
     CartridgeStatus GetStatus() const override;
 
 private:
     mario16::Game game_;
+    uint32_t high_score_ = 0;
 };
 
 } // namespace arcade

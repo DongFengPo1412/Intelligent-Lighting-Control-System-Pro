@@ -31,7 +31,9 @@ void ArcadeManager::Init()
     current_game_ = nullptr;
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
-    last_input_time_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
+    last_heartbeat_time_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
+    is_network_disconnected_ = false;
+    watchdog_enabled_ = true;
 }
 
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
@@ -48,7 +50,7 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
 {
     Cartridge* cart = FindCartridge(game_id);
     if (!cart) {
-        ESP_LOGW(TAG, "Cartridge ID #%u not found or not yet registered", game_id);
+        ESP_LOGW(TAG, "Cartridge ID #%u not found", game_id);
         return false;
     }
 
@@ -56,6 +58,7 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
     current_game_->Reset();
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
+    is_network_disconnected_ = false;
     FeedHeartbeat();
 
     ESP_LOGI(TAG, "Selected Cartridge #%03u: %s (%s)",
@@ -66,22 +69,21 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
 void ArcadeManager::Start()
 {
     if (current_game_) {
-        // 模拟按下 START / A 启动游戏
-        current_game_->Update(0.016f, KEY_START, KEY_START);
+        current_game_->Start();
     }
 }
 
 void ArcadeManager::Pause()
 {
     if (current_game_) {
-        current_game_->Update(0.016f, KEY_START, KEY_START);
+        current_game_->Pause();
     }
 }
 
 void ArcadeManager::Resume()
 {
     if (current_game_) {
-        current_game_->Update(0.016f, KEY_START, KEY_START);
+        current_game_->Resume();
     }
 }
 
@@ -96,22 +98,33 @@ void ArcadeManager::Reset()
 
 void ArcadeManager::Exit()
 {
+    if (current_game_) {
+        current_game_->Pause();
+    }
     current_game_ = nullptr;
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
+    is_network_disconnected_ = false;
     ESP_LOGI(TAG, "ArcadeManager exited to system menu");
 }
 
 void ArcadeManager::HandleInput(uint16_t keys_down, uint16_t keys_pressed)
 {
+    FeedHeartbeat();
     current_keys_down_ = keys_down;
     current_keys_pressed_ |= keys_pressed;
-    FeedHeartbeat();
 }
 
 void ArcadeManager::FeedHeartbeat()
 {
-    last_input_time_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
+    last_heartbeat_time_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
+    if (is_network_disconnected_) {
+        // 重连事件：恢复连接标志，但绝不自动开火或乱跑，必须保持 PAUSED
+        is_network_disconnected_ = false;
+        current_keys_down_ = 0;
+        current_keys_pressed_ = 0;
+        ESP_LOGI(TAG, "Wi-Fi control connection restored, game remains safely PAUSED until user resumes");
+    }
 }
 
 void ArcadeManager::Update(float dt)
@@ -119,9 +132,22 @@ void ArcadeManager::Update(float dt)
     if (!current_game_) return;
 
     uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
-    // 安全断连看门狗机制：若超过 500ms 未收到手机端心跳/输入数据，自动释放长按键，防止失控冲撞
-    if (watchdog_enabled_ && (now - last_input_time_ms_ > 500)) {
-        current_keys_down_ = 0;
+    uint32_t elapsed_since_hb = now - last_heartbeat_time_ms_;
+
+    if (watchdog_enabled_) {
+        // 第一阶段安全阈值 (500ms)：释放长按键，防止因偶发丢包导致小人持续前冲
+        if (elapsed_since_hb > 500) {
+            current_keys_down_ = 0;
+        }
+
+        // 第二阶段安全阈值 (1000ms)：确认 Wi-Fi 控制链路断开，强制进入安全暂停
+        if (elapsed_since_hb > 1000 && !is_network_disconnected_) {
+            is_network_disconnected_ = true;
+            if (current_game_->GetStatus().state == STATE_PLAYING) {
+                current_game_->Pause();
+                ESP_LOGW(TAG, "Wi-Fi control timed out (>1000ms)! Game automatically entered SAFE PAUSE");
+            }
+        }
     }
 
     uint16_t pressed = current_keys_pressed_;
@@ -154,7 +180,13 @@ CartridgeStatus ArcadeManager::GetCurrentStatus() const
     if (current_game_) {
         return current_game_->GetStatus();
     }
-    return CartridgeStatus{0, 0, STATE_TITLE, 0};
+    CartridgeStatus st;
+    st.score = 0;
+    st.high_score = 0;
+    st.lives = 0;
+    st.state = STATE_TITLE;
+    st.progress = 0;
+    return st;
 }
 
 const char* ArcadeManager::GetCurrentGameName() const

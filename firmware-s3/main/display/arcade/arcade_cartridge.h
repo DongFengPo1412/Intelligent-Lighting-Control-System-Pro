@@ -44,10 +44,11 @@ enum CartridgeState : uint8_t {
 
 // 游戏 HUD 状态回读
 struct CartridgeStatus {
-    uint32_t score;
-    uint8_t lives;
-    uint8_t state;
-    uint8_t progress;
+    uint32_t score = 0;
+    uint32_t high_score = 0;
+    uint8_t lives = 1;
+    uint8_t state = 0;
+    uint8_t progress = 0;
 };
 
 // 抽象卡带接口
@@ -63,6 +64,9 @@ public:
 
     virtual void Init() = 0;
     virtual void Reset() = 0;
+    virtual void Start() = 0;
+    virtual void Pause() = 0;
+    virtual void Resume() = 0;
     virtual void Update(float dt, uint16_t keys_down, uint16_t keys_pressed) = 0;
     virtual void Render(uint8_t* fb_rgb24) = 0;
     virtual CartridgeStatus GetStatus() const = 0;

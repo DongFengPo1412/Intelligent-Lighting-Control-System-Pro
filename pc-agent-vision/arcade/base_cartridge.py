@@ -74,6 +74,18 @@ class BaseCartridge(ABC):
     def reset(self) -> None:
         pass
 
+    def start(self) -> None:
+        """从待命或结算状态启动游戏 (幂等)"""
+        pass
+
+    def pause(self) -> None:
+        """进入暂停状态 (幂等)"""
+        pass
+
+    def resume(self) -> None:
+        """从暂停恢复游玩 (幂等)"""
+        pass
+
     @abstractmethod
     def update(self, dt: float, keys_down: int, keys_pressed: int) -> None:
         pass

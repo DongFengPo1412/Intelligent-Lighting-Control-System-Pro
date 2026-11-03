@@ -1,5 +1,6 @@
 // game_041_tetris.cpp —— 俄罗斯方块 (Tetris)
 #include "game_041_tetris.h"
+#include "arcade_result_screen.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -36,6 +37,7 @@ static const uint8_t kPieceColors[7][3] = {
 
 Game041Tetris::Game041Tetris()
 {
+    high_score_ = 0;
     Init();
 }
 
@@ -51,8 +53,33 @@ void Game041Tetris::Reset()
     lines_cleared_ = 0;
     drop_interval_ = 0.60f;
     drop_timer_ = 0.0f;
-    state_ = STATE_PLAYING;
+    anim_timer_ = 0.0f;
+    state_ = STATE_TITLE; // 初始待命，通过 Start() 或按 A/START 激活
     SpawnPiece();
+}
+
+void Game041Tetris::Start()
+{
+    if (state_ == STATE_TITLE || state_ == STATE_GAMEOVER) {
+        Reset();
+        state_ = STATE_PLAYING;
+    } else if (state_ == STATE_PAUSED) {
+        Resume();
+    }
+}
+
+void Game041Tetris::Pause()
+{
+    if (state_ == STATE_PLAYING) {
+        state_ = STATE_PAUSED;
+    }
+}
+
+void Game041Tetris::Resume()
+{
+    if (state_ == STATE_PAUSED) {
+        state_ = STATE_PLAYING;
+    }
 }
 
 bool Game041Tetris::CheckCollision(int type, int rot, int x, int y)
@@ -79,6 +106,7 @@ void Game041Tetris::SpawnPiece()
 
     if (CheckCollision(piece_type_, piece_rot_, piece_x_, piece_y_)) {
         state_ = STATE_GAMEOVER;
+        if (score_ > high_score_) high_score_ = score_;
     }
 }
 
@@ -123,7 +151,7 @@ void Game041Tetris::ClearLines()
     if (cleared > 0) {
         lines_cleared_ += cleared;
         score_ += (cleared * cleared * 100);
-        // 动态提升下落速度
+        if (score_ > high_score_) high_score_ = score_;
         drop_interval_ = 0.60f - lines_cleared_ * 0.03f;
         if (drop_interval_ < 0.10f) drop_interval_ = 0.10f;
     }
@@ -131,15 +159,28 @@ void Game041Tetris::ClearLines()
 
 void Game041Tetris::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
 {
+    anim_timer_ += dt;
+
+    if (state_ == STATE_TITLE) {
+        if (keys_pressed & (KEY_A | KEY_START)) {
+            Start();
+        }
+        return;
+    }
+
     if (state_ == STATE_GAMEOVER) {
         if (keys_pressed & (KEY_A | KEY_START)) {
-            Reset();
+            Start();
         }
         return;
     }
 
     if (keys_pressed & KEY_START) {
-        state_ = (state_ == STATE_PLAYING) ? STATE_PAUSED : STATE_PLAYING;
+        if (state_ == STATE_PLAYING) {
+            Pause();
+        } else if (state_ == STATE_PAUSED) {
+            Resume();
+        }
         return;
     }
 
@@ -158,7 +199,7 @@ void Game041Tetris::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
         int next_rot = (piece_rot_ + 1) % 4;
         if (!CheckCollision(piece_type_, next_rot, piece_x_, piece_y_)) {
             piece_rot_ = next_rot;
-        } else if (!CheckCollision(piece_type_, next_rot, piece_x_ - 1, piece_y_)) { // 简易踢墙
+        } else if (!CheckCollision(piece_type_, next_rot, piece_x_ - 1, piece_y_)) { // 踢墙
             piece_x_--;
             piece_rot_ = next_rot;
         } else if (!CheckCollision(piece_type_, next_rot, piece_x_ + 1, piece_y_)) {
@@ -175,7 +216,7 @@ void Game041Tetris::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
         drop_timer_ = 0.0f;
         if (!CheckCollision(piece_type_, piece_rot_, piece_x_, piece_y_ + 1)) {
             piece_y_++;
-            if (keys_down & (KEY_DOWN | KEY_B)) score_ += 1; // 软降微奖励
+            if (keys_down & (KEY_DOWN | KEY_B)) score_ += 1;
         } else {
             LockPiece();
         }
@@ -184,6 +225,11 @@ void Game041Tetris::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
 
 void Game041Tetris::Render(uint8_t* fb_rgb24)
 {
+    if (state_ == STATE_GAMEOVER) {
+        ArcadeResultScreen::RenderResult(fb_rgb24, false, score_, high_score_, anim_timer_);
+        return;
+    }
+
     memset(fb_rgb24, 0, kFrameBufferSize);
 
     // 绘制左右边界线 (深灰冷色)
@@ -208,16 +254,14 @@ void Game041Tetris::Render(uint8_t* fb_rgb24)
     }
 
     // 绘制当前下落方块
-    if (state_ != STATE_GAMEOVER) {
-        for (int i = 0; i < 4; i++) {
-            int px = piece_x_ + kTetrisShapes[piece_type_][piece_rot_][i][0];
-            int py = piece_y_ + kTetrisShapes[piece_type_][piece_rot_][i][1];
-            if (py >= 0 && py < 16 && px >= 0 && px < 16) {
-                int idx = (py * 16 + px) * 3;
-                fb_rgb24[idx + 0] = kPieceColors[piece_type_][0];
-                fb_rgb24[idx + 1] = kPieceColors[piece_type_][1];
-                fb_rgb24[idx + 2] = kPieceColors[piece_type_][2];
-            }
+    for (int i = 0; i < 4; i++) {
+        int px = piece_x_ + kTetrisShapes[piece_type_][piece_rot_][i][0];
+        int py = piece_y_ + kTetrisShapes[piece_type_][piece_rot_][i][1];
+        if (py >= 0 && py < 16 && px >= 0 && px < 16) {
+            int idx = (py * 16 + px) * 3;
+            fb_rgb24[idx + 0] = kPieceColors[piece_type_][0];
+            fb_rgb24[idx + 1] = kPieceColors[piece_type_][1];
+            fb_rgb24[idx + 2] = kPieceColors[piece_type_][2];
         }
     }
 }
@@ -226,6 +270,7 @@ CartridgeStatus Game041Tetris::GetStatus() const
 {
     CartridgeStatus st;
     st.score = score_;
+    st.high_score = high_score_;
     st.lives = (state_ == STATE_GAMEOVER) ? 0 : 1;
     st.state = state_;
     st.progress = (lines_cleared_ * 10 > 100) ? 100 : (lines_cleared_ * 10);

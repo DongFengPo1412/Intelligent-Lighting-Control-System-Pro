@@ -12,8 +12,8 @@
     "simulator_source": "pc-agent-vision/arcade/game_001_mario.py",
     "legacy_source": "#001 超级马里奥兄弟 (Super Mario Bros.)",
     "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_001_mario.py & tests/test_continuous_simulation.py)",
-    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，多帧连续起跳腾空落地动态仿真验证通过"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_001_mario.py, test_arcade_lifecycle.py, test_arcade_continuous_simulation.py, test_arcade_web_api.py, test_power_limiter.py)",
+    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，幂等生命周期、看门狗自动暂停、16x16结算屏及Web控制器验证通过"
   },
   {
     "id": "002",
@@ -524,8 +524,8 @@
     "simulator_source": "pc-agent-vision/arcade/game_033_snake.py",
     "legacy_source": "#029 蛇蛇大作战 (Slither Arena 2016)",
     "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_033_snake.py & tests/test_continuous_simulation.py)",
-    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，多帧连续爬行、进食生长与自噬检测动态仿真验证通过"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_033_snake.py, test_arcade_lifecycle.py, test_arcade_continuous_simulation.py, test_arcade_web_api.py, test_power_limiter.py)",
+    "adaptation_notes": "已封装统一接口，默认经典撞墙死亡(支持穿墙切换)，看门狗自动暂停、16x16结算屏及Web控制器验证通过"
   },
   {
     "id": "034",
@@ -652,8 +652,8 @@
     "simulator_source": "pc-agent-vision/arcade/game_041_tetris.py",
     "legacy_source": "固件原生Tetris (firmware-s3/main/display/game_engine.cc)",
     "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_041_tetris.py & tests/test_continuous_simulation.py)",
-    "adaptation_notes": "已封装统一 arcade::Cartridge 与 BaseCartridge，标准七种四联方块旋转、下落堆叠与消行动态仿真验证通过"
+    "test_status": "SIMULATOR_PASSED (tests/test_arcade_041_tetris.py, test_arcade_lifecycle.py, test_arcade_continuous_simulation.py, test_arcade_web_api.py, test_power_limiter.py)",
+    "adaptation_notes": "已封装统一接口，标准旋转/消行，看门狗自动暂停、16x16结算屏及Web控制器验证通过"
   },
   {
     "id": "042",

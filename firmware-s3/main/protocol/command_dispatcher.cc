@@ -442,6 +442,8 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
                 dm.ArcadeReset();
             } else if (strcasecmp(act, "exit") == 0) {
                 dm.ArcadeExit();
+            } else if (strcasecmp(act, "heartbeat") == 0) {
+                dm.ArcadeHeartbeat();
             }
         }
         cJSON_Delete(root);

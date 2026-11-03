@@ -66,6 +66,7 @@ public:
     void ArcadeResume();
     void ArcadeReset();
     void ArcadeExit();
+    void ArcadeHeartbeat();
 
     // 获取底层组件 (高级扩展用)
     DisplayHAL& GetHAL() { return hal_; }

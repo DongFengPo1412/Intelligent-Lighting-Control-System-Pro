@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 game_033_snake.py —— 街机游戏 #033: 经典贪吃蛇 (Classic Snake)
-力学动词: 网格转向、进食生长与自噬检测
+力学动词: 网格转向、进食生长与自噬/死墙检测 (默认原汁原味街机硬死墙，可选循环穿墙)
 与 ESP32-S3 C++ arcade::Game033Snake 规范 1:1 对齐
 """
 
@@ -22,20 +22,24 @@ from arcade.base_cartridge import (
     KEY_A,
     KEY_START,
 )
+from arcade.arcade_result_screen import render_result_screen
 
 
 class Game033Snake(BaseCartridge):
     """经典贪吃蛇 16x16 标准卡带封装"""
 
-    def __init__(self):
+    def __init__(self, wrap_walls: bool = False):
         self._snake = []
         self._dir = (1, 0)
         self._next_dir = (1, 0)
         self._food = (0, 0)
         self._score = 0
-        self._state = STATE_PLAYING
+        self._high_score = 0
+        self._state = STATE_TITLE
         self._tick_timer = 0.0
         self._tick_interval = 0.35
+        self._anim_timer = 0.0
+        self._wrap_walls = wrap_walls  # 默认死墙，符合原版街机挑战
         self.reset()
 
     @property
@@ -62,6 +66,14 @@ class Game033Snake(BaseCartridge):
     def core_mechanic(self) -> str:
         return "网格转向、进食生长与自噬检测"
 
+    @property
+    def wrap_walls(self) -> bool:
+        return self._wrap_walls
+
+    @wrap_walls.setter
+    def wrap_walls(self, val: bool) -> None:
+        self._wrap_walls = bool(val)
+
     def init(self) -> None:
         self.reset()
 
@@ -70,10 +82,30 @@ class Game033Snake(BaseCartridge):
         self._dir = (1, 0)
         self._next_dir = (1, 0)
         self._score = 0
-        self._state = STATE_PLAYING
+        self._state = STATE_TITLE
         self._tick_timer = 0.0
+        self._anim_timer = 0.0
         self._tick_interval = 0.35
         self._place_food()
+
+    def start(self) -> None:
+        """从待命或结算状态启动游戏 (幂等)"""
+        if self._state in (STATE_TITLE, STATE_GAMEOVER):
+            if self._state == STATE_GAMEOVER:
+                self.reset()
+            self._state = STATE_PLAYING
+        elif self._state == STATE_PAUSED:
+            self.resume()
+
+    def pause(self) -> None:
+        """安全暂停 (幂等)"""
+        if self._state == STATE_PLAYING:
+            self._state = STATE_PAUSED
+
+    def resume(self) -> None:
+        """从暂停恢复游玩 (幂等)"""
+        if self._state == STATE_PAUSED:
+            self._state = STATE_PLAYING
 
     def _place_food(self) -> None:
         free_cells = [
@@ -86,13 +118,23 @@ class Game033Snake(BaseCartridge):
             self._food = random.choice(free_cells)
 
     def update(self, dt: float, keys_down: int, keys_pressed: int) -> None:
+        self._anim_timer += dt
+
+        if self._state == STATE_TITLE:
+            if keys_pressed & (KEY_A | KEY_START):
+                self.start()
+            return
+
         if self._state == STATE_GAMEOVER:
             if keys_pressed & (KEY_A | KEY_START):
-                self.reset()
+                self.start()
             return
 
         if keys_pressed & KEY_START:
-            self._state = STATE_PAUSED if self._state == STATE_PLAYING else STATE_PLAYING
+            if self._state == STATE_PLAYING:
+                self.pause()
+            elif self._state == STATE_PAUSED:
+                self.resume()
             return
 
         if self._state == STATE_PAUSED:
@@ -118,12 +160,25 @@ class Game033Snake(BaseCartridge):
         self._dir = self._next_dir
         hx, hy = self._snake[0]
         dx, dy = self._dir
-        new_hx = (hx + dx) % 16
-        new_hy = (hy + dy) % 16
+        new_hx = hx + dx
+        new_hy = hy + dy
+
+        # 边界碰撞检测
+        if self._wrap_walls:
+            new_hx = (new_hx + 16) % 16
+            new_hy = (new_hy + 16) % 16
+        else:
+            if new_hx < 0 or new_hx >= 16 or new_hy < 0 or new_hy >= 16:
+                self._state = STATE_GAMEOVER
+                if self._score > self._high_score:
+                    self._high_score = self._score
+                return
 
         # 自噬碰撞检测
         if (new_hx, new_hy) in self._snake[1:]:
             self._state = STATE_GAMEOVER
+            if self._score > self._high_score:
+                self._high_score = self._score
             return
 
         # 移动蛇身
@@ -132,7 +187,8 @@ class Game033Snake(BaseCartridge):
         # 进食检测
         if (new_hx, new_hy) == self._food:
             self._score += 10
-            # 动态难度提速
+            if self._score > self._high_score:
+                self._high_score = self._score
             self._tick_interval = max(0.08, 0.35 - (len(self._snake) - 3) * 0.012)
             self._place_food()
         else:
@@ -140,6 +196,10 @@ class Game033Snake(BaseCartridge):
 
     def render(self) -> bytearray:
         buf = bytearray(16 * 16 * 3)
+
+        if self._state == STATE_GAMEOVER:
+            render_result_screen(buf, False, self._score, self._high_score, self._anim_timer)
+            return buf
 
         # 绘制食物 (红色)
         fx, fy = self._food
@@ -152,7 +212,6 @@ class Game033Snake(BaseCartridge):
         for i, (sx, sy) in enumerate(self._snake):
             idx = (sy * 16 + sx) * 3
             if i == 0:
-                # 蛇头高亮
                 buf[idx + 0] = 30
                 buf[idx + 1] = 255
                 buf[idx + 2] = 80
@@ -166,6 +225,7 @@ class Game033Snake(BaseCartridge):
     def get_status(self) -> Dict[str, Any]:
         return {
             "score": self._score,
+            "high_score": self._high_score,
             "lives": 0 if self._state == STATE_GAMEOVER else 1,
             "state": self._state,
             "progress": min(100, (len(self._snake) * 100) // 64),

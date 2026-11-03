@@ -3,6 +3,7 @@ import unittest
 from arcade.game_041_tetris import Game041Tetris, BOARD_LEFT, BOARD_RIGHT
 from arcade.base_cartridge import (
     CTRL_ARCADE_AB,
+    STATE_TITLE,
     STATE_PLAYING,
     STATE_PAUSED,
     STATE_GAMEOVER,
@@ -20,6 +21,7 @@ class TestArcade041Tetris(unittest.TestCase):
     def setUp(self):
         self.game = Game041Tetris()
         self.game.init()
+        self.game.start()
 
     def test_01_metadata(self):
         self.assertEqual(self.game.game_id, 41)
@@ -46,7 +48,6 @@ class TestArcade041Tetris(unittest.TestCase):
             self.assertEqual((fb[r_idx], fb[r_idx+1], fb[r_idx+2]), (40, 40, 50))
 
     def test_03_move_and_rotation(self):
-        # Force piece to O type (no rotation change) or T type
         self.game._piece_type = 2  # T type
         self.game._piece_x = 6
         self.game._piece_y = 5
@@ -74,31 +75,25 @@ class TestArcade041Tetris(unittest.TestCase):
         self.game.update(0.06, KEY_DOWN, 0)
         self.assertEqual(self.game._piece_y, 14)
 
-        # Next drop should lock piece at y=14 (py=14, 15)
+        # Next drop should lock piece at y=14
         self.game.update(0.06, KEY_DOWN, 0)
-        # Piece locked into field
         self.assertGreater(self.game._field[14][6], 0)
         self.assertGreater(self.game._field[15][6], 0)
 
     def test_05_line_clear_and_scoring(self):
-        # Fill row 15 except column 6
         for x in range(BOARD_LEFT, BOARD_RIGHT + 1):
             if x != 6:
                 self.game._field[15][x] = 1
 
-        # Spawn a piece with a block at (6, 15) to trigger line clear
-        self.game._piece_type = 0  # 2x2 block at x=6, y=14
+        self.game._piece_type = 0
         self.game._piece_x = 6
         self.game._piece_y = 14
         self.game._lock_piece()
 
-        # Row 15 should have been cleared
-        # Score should increase
         st = self.game.get_status()
         self.assertGreater(st["score"], 0)
 
-    def test_06_game_over_on_top_collision(self):
-        # Fill top rows
+    def test_06_game_over_and_result_screen(self):
         for x in range(BOARD_LEFT, BOARD_RIGHT + 1):
             self.game._field[0][x] = 1
             self.game._field[1][x] = 1
@@ -106,6 +101,11 @@ class TestArcade041Tetris(unittest.TestCase):
         self.game._spawn_piece()
         st = self.game.get_status()
         self.assertEqual(st["state"], STATE_GAMEOVER)
+
+        # Verify result screen renders
+        fb = self.game.render()
+        self.assertEqual(len(fb), 768)
+        self.assertTrue(any(b > 0 for b in fb), "Result screen must be rendered on Game Over")
 
 
 if __name__ == "__main__":
