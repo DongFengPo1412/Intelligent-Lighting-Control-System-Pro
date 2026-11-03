@@ -1,101 +1,101 @@
 ﻿target_id,target_name,target_category,target_core_mechanic,legacy_ids,legacy_names,action,code_reuse_source,adaptation_notes
-001,超级马里奥（Super Mario Bros.）——已实现,A. 平台跳跃与空间移动（8款）,横向平台跳跃、躲避敌人、收集物品、到达终点。,"001, 042","超级马里奥兄弟, 水管兄弟",KEEP,firmware-s3/main/display/mario_game.cpp,复用超级马里奥引擎 (mario_game.cpp)，平台跑跳、怪兽与终点通关完备
-002,涂鸦跳跃（Doodle Jump）,A. 平台跳跃与空间移动（8款）,角色不断自动向上弹跳，玩家控制左右移动，寻找下一个落脚平台。,004,涂鸦跳跃,KEEP,firmware-s3/main/display/arcade/game_004_doodle_jump.cpp,复用Game #004 (Doodle Jump 16)，弹跳物理、穿屏与平台生成完备
-003,Celeste式空中冲刺,A. 平台跳跃与空间移动（8款）,普通移动和跳跃之外，能够进行短距离定向冲刺。,NONE,无匹配旧代码,MISSING,全新实现,Celeste空中冲刺，需实现单屏关卡、冲刺重置与尖刺判定
-004,VVVVVV重力翻转,A. 平台跳跃与空间移动（8款）,通过反转重力在地面和天花板之间切换。,NONE,无匹配旧代码,MISSING,全新实现,VVVVVV重力翻转，需实现重力反转天花板切换与尖刺规避
-005,Lode Runner挖洞夺金,A. 平台跳跃与空间移动（8款）,挖掘临时陷阱、躲避敌人、收集全部金币。,"024, 161","淘金者, 矿工2049",KEEP,firmware-s3/main/display/arcade/game_024_lode_runner.cpp,复用Game #024 (Lode Runner)，挖洞活埋警卫与全金币收集机制
-006,Bubble Bobble泡泡捕敌,A. 平台跳跃与空间移动（8款）,发射泡泡困住敌人，再触碰泡泡消灭敌人。,"025, 145","经典泡泡龙打怪, 吸尘器大冒险",REWORK,firmware-s3/main/display/arcade/game_025_bubble_bobble.cpp,复用Game #025 (Bubble Bobble)，优化泡泡包裹与戳破消灭，区分三消
-007,Downwell向下射击,A. 平台跳跃与空间移动（8款）,向下坠落时利用向下射击消灭敌人并调整运动。,NONE,无匹配旧代码,MISSING,全新实现,Downwell向下射击，需实现坠落开火减速、弹药落地重装与踩怪
-008,Jump King蓄力跳跃,A. 平台跳跃与空间移动（8款）,通过长按蓄力决定跳跃距离和高度。,038,敲冰块,REWORK,firmware-s3/main/display/arcade/game_038_ice_climber.cpp,基于Game #038 (Ice Climber) 重构长按蓄力跳跃与跌落高度判定
-009,Flappy Bird,B. 单键与时机挑战（6款）,单键振翅获得向上速度，角色受重力下降，穿过不断出现的管道空隙。,005,飞翔小鸟,KEEP,firmware-s3/main/display/arcade/game_005_flappy_bird.cpp,复用Game #005 (Flappy Bird 16)，重力下坠与单键跳跃穿管成熟
-010,Stack精准堆叠,B. 单键与时机挑战（6款）,移动方块左右往返，玩家按键放下，未重叠区域被裁剪。,006,堆叠大师,KEEP,firmware-s3/main/display/arcade/game_006_stack.cpp,复用Game #006 (Stack It Up 16)，方块移动、单键下落裁剪与收缩
-011,Chrome恐龙跑酷,B. 单键与时机挑战（6款）,自动前进，跳过地面障碍。,054,南极探险,MISSING,全新实现,Chrome恐龙跑酷，需实现自动奔跑、单键跳跃躲避仙人掌
-012,Knife Hit旋盘投刀,B. 单键与时机挑战（6款）,向旋转目标投射刀具，避开已经插入的刀。,NONE,无匹配旧代码,MISSING,全新实现,Knife Hit旋盘投刀，需实现旋转圆木靶与飞刀插靶防撞判定
-013,摆锤投球,B. 单键与时机挑战（6款）,观察周期性摆动，选择正确时机释放小球，使其进入目标区域。,180,小丑跷跷板,REWORK,firmware-s3/main/display/arcade/game_180_clowns.cpp,基于Game #180 (Clowns) 改造周期摆锤单键释放小球落点判定
-014,轨道跃迁,B. 单键与时机挑战（6款）,角色沿轨道自动运动，在轨道交会处跳入其他轨道。,126,旋风巡航者,REWORK,firmware-s3/main/display/arcade/game_126_gyruss.cpp,基于Game #126 (Gyruss) 环形轨道改造轨道节点切换跃迁
-015,Simon闪灯记忆,C. 反应、观察与记忆（5款）,记住并复现不断增长的颜色序列。,NONE,无匹配旧代码,MISSING,全新实现,Simon闪灯记忆，需实现四色灯序列生成、演示播放与玩家复现输入
-016,打地鼠,C. 反应、观察与记忆（5款）,随机目标出现，玩家必须在目标消失前准确击中。,026,像素打地鼠,KEEP,firmware-s3/main/display/arcade/game_026_whack_a_mole.cpp,复用Game #026 (Whack-A-Mole)，3x3九宫格地鼠探头与定点挥锤
-017,四轨节奏,C. 反应、观察与记忆（5款）,按照音乐节拍，在音符到达判定线时按下对应按钮。,017,别踩白块儿,KEEP,firmware-s3/main/display/arcade/game_017_piano_tiles.cpp,复用Game #017 (Piano Tiles)，四轨乐符下落与底线节拍按键判定
-018,红灯绿灯,C. 反应、观察与记忆（5款）,绿灯可以前进，红灯必须停止。,NONE,无匹配旧代码,MISSING,全新实现,红灯绿灯，需实现信号灯相位切换、前进探测与越界惩罚
-019,猜球杯,C. 反应、观察与记忆（5款）,记住球被放进哪个杯子，跟踪杯子交换位置，最终猜测。,NONE,无匹配旧代码,MISSING,全新实现,猜球杯，需实现三杯洗牌交换动画与盲猜交互
-020,Pong,D. 弹球与碰撞物理（6款）,控制挡板反弹小球，与对手竞争得分。,007,双人乒乓,KEEP,firmware-s3/main/display/arcade/game_007_pong.cpp,复用Game #007 (Pong 1972)，双向挡板碰撞与回合角速度递增
-021,Breakout打砖块,D. 弹球与碰撞物理（6款）,用底部挡板控制反弹小球，清除顶部砖块。,"008, 105","经典打砖块, 破坏者",KEEP,firmware-s3/main/display/arcade/game_008_breakout.cpp,复用Game #008 (Breakout 1976)，砖块阵列碰撞粉碎与反弹机制
-022,迷你弹珠台,D. 弹球与碰撞物理（6款）,利用左右拨杆击打小球，避免小球掉落，击中目标计分。,"108, 132","街机弹珠台, 幼年吃豆人弹珠台",KEEP,firmware-s3/main/display/arcade/game_108_pinball.cpp,复用Game #108 (Pinball)，双挡板弹射、撞针计分与重力回卷
-023,空气曲棍球,D. 弹球与碰撞物理（6款）,二维移动球拍，把球击入对方球门。,077,泡泡飞盘,REWORK,firmware-s3/main/display/arcade/game_077_windjammers.cpp,基于Game #077 (Windjammers) 飞盘对垒改造气垫球拍防守反击
-024,Peggle弹珠撞靶,D. 弹球与碰撞物理（6款）,选择发射方向，让小球通过碰撞击中有限目标。,NONE,无匹配旧代码,MISSING,全新实现,Peggle弹珠撞靶，需实现定角度发射弹珠与多钉碰撞消靶
-025,滚珠平衡迷宫,D. 弹球与碰撞物理（6款）,控制虚拟重力，让具有惯性的滚珠通过障碍迷宫。,060,极速疯狂弹球,KEEP,firmware-s3/main/display/arcade/game_060_marblemadness.cpp,复用Game #060 (Marble Madness)，轨迹球重力滚珠与弯道平衡
-026,Space Invaders太空侵略者,E. 射击与防御（7款）,底部炮台射击逐渐下降的敌人阵列。,"009, 187","太空侵略者, 侵略者归来",KEEP,firmware-s3/main/display/arcade/game_009_space_invaders.cpp,复用Game #009 (Space Invaders 1978)，阵列编队下压与垂直阻击
-027,Asteroids小行星,E. 射击与防御（7款）,飞船旋转、推进、射击漂浮的小行星。,113,小行星,KEEP,firmware-s3/main/display/arcade/game_113_asteroids.cpp,复用Game #113 (Asteroids 1979)，牛顿惯性漂移与分裂小行星射击
-028,Missile Command导弹指挥官,E. 射击与防御（7款）,选择拦截位置，引爆范围攻击阻止导弹到达地面。,036,导弹防线,KEEP,firmware-s3/main/display/arcade/game_036_missile_command.cpp,复用Game #036 (Missile Command 1980)，准星制导扩散爆风拦截
-029,Centipede蜈蚣,E. 射击与防御（7款）,射击由多个身体节段组成、遇到障碍会转向的蜈蚣。,043,蜈蚣大战,KEEP,firmware-s3/main/display/arcade/game_043_centipede.cpp,复用Game #043 (Centipede 1980)，多节蜈蚣穿梭蘑菇阵与分裂转向
-030,Duck Hunt打鸭子,E. 射击与防御（7款）,瞄准移动目标，在有限弹药和时间内完成射击。,033,经典打飞碟,KEEP,firmware-s3/main/display/arcade/game_033_clay_shooting.cpp,复用Game #033 (Clay Shooting 1978)，飞靶抛物线引前量射击
-031,Robotron双向射击,E. 射击与防御（7款）,角色在二维场地移动，并主动选择不同方向射击，抵御敌群。,164,机器人大战2084,KEEP,firmware-s3/main/display/arcade/game_164_robotron.cpp,复用Game #164 (Robotron: 2084)，双向移动独立射击与敌群围剿
-032,Defender横向防卫,E. 射击与防御（7款）,横向巡逻、射击敌人、保护地面目标。,112,防卫者,KEEP,firmware-s3/main/display/arcade/game_112_defender.cpp,复用Game #112 (Defender 1981)，雷达扫瞄、巡逻折返与防卫人类
-033,贪吃蛇——已实现,F. 迷宫、追逐与探索（8款）,移动、吃食物、身体增长、避免自撞。,029,蛇蛇大作战,KEEP,firmware-s3/main/display/arcade/game_029_slither_arena.cpp,复用Game #029 (Slither) 与固件Snake，网格进食伸长与自撞判定
-034,Pac-Man吃豆人,F. 迷宫、追逐与探索（8款）,在迷宫收集豆子，同时躲避幽灵。,010,像素吃豆人,KEEP,firmware-s3/main/display/arcade/game_010_pacman.cpp,复用Game #010 (Pac-Man 1980)，迷宫吞豆、四色幽灵与能量反噬
-035,Boulder Dash落石夺宝,F. 迷宫、追逐与探索（8款）,挖掘地形、收集宝石、躲避会下落的石头。,168,矿坑逃犯,REWORK,firmware-s3/main/display/arcade/game_168_bagman.cpp,基于Game #168 (Bagman) 改造地底落石塌方与矿石收集
-036,Dig Dug地下充气战,F. 迷宫、追逐与探索（8款）,挖出通道，并通过持续充气消灭敌人。,"021, 104","掘地打气人, 挖金者二代",KEEP,firmware-s3/main/display/arcade/game_021_dig_dug.cpp,复用Game #021 (Dig Dug 1982)，隧道挖掘与打气泵充气爆破
-037,Q*bert染色跳格,F. 迷宫、追逐与探索（8款）,在立体投影的格子之间跳跃，改变所有目标格子的颜色。,069,疯狂跳球,KEEP,firmware-s3/main/display/arcade/game_069_qbert.cpp,复用Game #069 (Q*bert 1982)，等轴金字塔跳跃与阶梯翻色
-038,Bomberman炸弹人,F. 迷宫、追逐与探索（8款）,放置定时炸弹，利用墙体遮挡爆炸，击败敌人。,013,像素炸弹人,KEEP,firmware-s3/main/display/arcade/game_013_bomberman.cpp,复用Game #013 (Bomberman 1983)，十字烈焰炸弹与障碍物爆破
-039,迷雾探索迷宫,F. 迷宫、追逐与探索（8款）,地图大部分不可见，只显示角色附近区域，依靠探索和记忆寻找出口。,166,沃之巫师,REWORK,firmware-s3/main/display/arcade/game_166_wizardofwor.cpp,基于Game #166 (Wizard of Wor) 地牢探索改造战争迷雾单向脱逃
-040,镜像双人迷宫,F. 迷宫、追逐与探索（8款）,一次输入同时驱动两个镜像角色，让两个角色抵达各自目标。,NONE,无匹配旧代码,MISSING,全新实现,镜像双人迷宫，需实现单手柄输入驱动双镜像角色同步避障
-041,俄罗斯方块——已实现,G. 方块、合并与消除（8款）,方块下落、旋转、堆叠、消行。,102,宝石方块,KEEP,固件Tetris引擎,复用固件Tetris引擎 (game_engine.h)，标准四联方块旋转消行
-042,Puyo Puyo彩球连锁,G. 方块、合并与消除（8款）,同色彩球达到4个连通后消除，可触发连锁反应。,083,魔法气泡,KEEP,firmware-s3/main/display/arcade/game_083_puyopuyo.cpp,复用Game #083 (Puyo Puyo 1991)，双联气泡旋转下落与四连同色消除
-043,2048,G. 方块、合并与消除（8款）,滑动整个棋盘，将相同数值的方块合并。,016,霓虹 2048,KEEP,firmware-s3/main/display/arcade/game_016_neon_2048.cpp,复用Game #016 (Neon 2048)，4x4网格滑移对撞合并与数值翻倍
-044,Bejeweled宝石迷阵,G. 方块、合并与消除（8款）,交换相邻宝石，使三个或以上同色宝石形成连续排列。,188,钱币交换机,REWORK,firmware-s3/main/display/arcade/game_188_moneypuzzleexchanger.cpp,基于Game #188 (Money Puzzle Exchanger) 改造相邻三消交换换位
-045,SameGame,G. 方块、合并与消除（8款）,选择相邻的同色连通块，整组清除。,143,翻转方块,REWORK,firmware-s3/main/display/arcade/game_143_plotting.cpp,基于Game #143 (Plotting) 改造同色连通色块整组消除 (SameGame)
-046,合成大西瓜 Suika,G. 方块、合并与消除（8款）,投放圆球，相同等级圆球碰撞后合并成更大等级。,NONE,无匹配旧代码,MISSING,全新实现,合成大西瓜 (Suika)，需实现球体下落、同级碰撞合并进阶升级
-047,Blockudoku,G. 方块、合并与消除（8款）,自由摆放不同形状的格块，填满行、列或区域即可消除。,NONE,无匹配旧代码,MISSING,全新实现,Blockudoku，需实现多异形方块自由摆放与行列九宫格消除
-048,Triple Town三合镇,G. 方块、合并与消除（8款）,三个相邻同级物体合成升级，合理规划有限空间。,NONE,无匹配旧代码,MISSING,全新实现,Triple Town三合镇，需实现三合一相邻建筑升级与空间规划
-049,Lights Out灭灯,H. 逻辑解谜（5款）,点击格子会翻转该格及上下左右邻格状态，目标是全部熄灭。,NONE,无匹配旧代码,MISSING,全新实现,Lights Out灭灯，需实现点击网格翻转十字邻格状态解谜
-050,四色迷你数独,H. 逻辑解谜（5款）,在行、列、小宫格中填入不重复的四种颜色。,NONE,无匹配旧代码,MISSING,全新实现,四色迷你数独，需实现4x4网格行列与小宫格唯一填色校验
-051,Flow Free连线,H. 逻辑解谜（5款）,连接相同颜色的两个端点，所有路径不能相互交叉。,NONE,无匹配旧代码,MISSING,全新实现,Flow Free连线，需实现同色两端点管道连线且不交叉
-052,管道旋转接水,H. 逻辑解谜（5款）,旋转不同方向的管道，将水源连接至终点。,034,疯狂水管工,KEEP,firmware-s3/main/display/arcade/game_034_pipe_dream.cpp,复用Game #034 (Pipe Dream 1989)，管道旋转拼接与水流贯通导流
-053,汉诺塔,H. 逻辑解谜（5款）,在不能把大盘放到小盘上的规则下完成圆盘搬运。,NONE,无匹配旧代码,MISSING,全新实现,汉诺塔，需实现三柱圆盘大小层叠约束与合法搬迁判定
-054,Sokoban推箱子,I. 机关与路径规划（7款）,推动箱子到指定目标，箱子不能直接拉动。,014,经典推箱子,KEEP,firmware-s3/main/display/arcade/game_014_sokoban.cpp,复用Game #014 (Sokoban 1982)，经典推箱子到位检测与死锁逻辑
-055,镜面激光,I. 机关与路径规划（7款）,旋转镜子，改变激光反射方向，使光束命中目标。,NONE,无匹配旧代码,MISSING,全新实现,镜面激光，需实现旋转反射镜折射激光光路命中目标靶标
-056,数字华容道,I. 机关与路径规划（7款）,滑动空格周围的方块，使所有方块恢复正确排列。,NONE,无匹配旧代码,MISSING,全新实现,数字华容道，需实现4x4或3x3滑动拼图空位移动复原
-057,Rush Hour堵车,I. 机关与路径规划（7款）,汽车只能沿车身方向滑动，需要清出目标车辆的出口。,NONE,无匹配旧代码,MISSING,全新实现,Rush Hour堵车，需实现车辆轴向移动限制与出口疏导解谜
-058,编程机器人,I. 机关与路径规划（7款）,提前排列移动指令，使机器人自动执行并抵达终点。,NONE,无匹配旧代码,MISSING,全新实现,编程机器人，需实现指令队列顺序编排与步进批处理执行
-059,Cut the Rope割绳子,I. 机关与路径规划（7款）,切断绳子，利用重力和摆动让目标物体到达指定位置。,NONE,无匹配旧代码,MISSING,全新实现,Cut the Rope割绳子，需实现摆线切割惯性摆荡落点判定
-060,传送门谜题,I. 机关与路径规划（7款）,使用两个传送门改变移动路径，解决地图机关。,NONE,无匹配旧代码,MISSING,全新实现,传送门谜题，需实现双色虫洞瞬移与空间路径解谜
-061,四子棋 Connect Four,J. 棋盘对弈（7款）,棋子从指定列落下，率先形成四子连线获胜。,NONE,无匹配旧代码,MISSING,全新实现,四子棋 (Connect Four)，需实现重力垂直落子与四子连珠判定
-062,黑白棋 Reversi,J. 棋盘对弈（7款）,落子夹住对方棋子并翻转颜色。,035,极简黑白棋,KEEP,firmware-s3/main/display/arcade/game_035_othello.cpp,复用Game #035 (Othello 1980)，黑白棋八向夹吃翻转与权值AI
-063,五子棋 Gomoku,J. 棋盘对弈（7款）,横、竖、斜方向先形成五子连线获胜。,NONE,无匹配旧代码,MISSING,全新实现,五子棋 (Gomoku)，需实现15x15棋盘五子连线胜负判定与人机
-064,西洋跳棋 Checkers,J. 棋盘对弈（7款）,斜向移动、跳吃对方棋子、升王。,NONE,无匹配旧代码,MISSING,全新实现,西洋跳棋 (Checkers)，需实现斜向移动、连跳吃子与升王规则
-065,Dots and Boxes点格棋,J. 棋盘对弈（7款）,轮流连接线段，完成一个方格即可得分。,NONE,无匹配旧代码,MISSING,全新实现,Dots and Boxes点格棋，需实现点阵画线合围方格抢分博弈
-066,Battleship海战棋,J. 棋盘对弈（7款）,隐藏舰船位置，轮流猜测对方舰船所在格子。,128,潜艇潜望镜猎杀,REWORK,firmware-s3/main/display/arcade/game_128_seawolf.cpp,基于Game #128 (Sea Wolf) 改造海战棋迷雾猜测击沉玩法
-067,Quoridor围墙棋,J. 棋盘对弈（7款）,在移动棋子和放置墙体之间决策，争先到达棋盘对边。,NONE,无匹配旧代码,MISSING,全新实现,Quoridor围墙棋，需实现走子与摆挡板封堵路径博弈
-068,Mastermind颜色密码,K. 数字与桌面益智（6款）,猜测隐藏颜色排列，根据颜色及位置匹配反馈不断修正。,NONE,无匹配旧代码,MISSING,全新实现,Mastermind颜色密码，需实现猜色比对黑白提示反馈解密
-069,Nim取石子,K. 数字与桌面益智（6款）,轮流从若干石堆取石，利用策略决定胜负。,NONE,无匹配旧代码,MISSING,全新实现,Nim取石子，需实现多堆石子按规则拿取必胜异或博弈
-070,Flood-It连通染色,K. 数字与桌面益智（6款）,每次改变起始区域颜色，吞并相邻的同色区域。,NONE,无匹配旧代码,MISSING,全新实现,Flood-It连通染色，需实现改变基色邻域泛洪吞噬最大化
-071,Peg Solitaire单人孔明棋,K. 数字与桌面益智（6款）,一颗棋子跳过另一颗棋子并将其移除，争取最后只剩一颗。,NONE,无匹配旧代码,MISSING,全新实现,Peg Solitaire单人孔明棋，需实现十字棋盘跳吃移除留一子
-072,Hex连通棋,K. 数字与桌面益智（6款）,双方争取把各自对应的两条边连接起来。,NONE,无匹配旧代码,MISSING,全新实现,Hex连通棋，需实现六角网格两端边框优先贯通对弈
-073,Ludo飞行棋,K. 数字与桌面益智（6款）,掷骰子、推进棋子、撞回对手棋子并率先到达终点。,NONE,无匹配旧代码,MISSING,全新实现,Ludo飞行棋，需实现骰子点数推进与起飞撞回基地规则
-074,变道赛车,L. 竞速与体育（6款）,在不断前进的道路上切换车道，避让其他车辆并超车。,"012, 155","极速变道赛车, 公路争霸",KEEP,firmware-s3/main/display/arcade/game_012_highway_racer.cpp,复用Game #012 (Highway Racer 1982)，三车道超车与弯道避障
-075,滑雪绕旗,L. 竞速与体育（6款）,沿雪道左右转向，依次绕过旗门。,176,高山滑雪,KEEP,firmware-s3/main/display/arcade/game_176_alpineski.cpp,复用Game #176 (Alpine Ski 1982)，高山速降绕红蓝旗门与飞跃断崖
-076,迷你高尔夫,L. 竞速与体育（6款）,控制击球角度和力度，以尽可能少的杆数入洞。,NONE,无匹配旧代码,MISSING,全新实现,迷你高尔夫，需实现瞄准角度、击球蓄力与果岭进洞判定
-077,保龄球,L. 竞速与体育（6款）,控制球路，争取击倒更多球瓶。,111,街机保龄球,KEEP,firmware-s3/main/display/arcade/game_111_leaguebowling.cpp,复用Game #111 (League Bowling 1990)，球道横移瞄准与击瓶碰撞
-078,棒球击打,L. 竞速与体育（6款）,判断球到达的时间，控制击球方向及力度。,"186, 091","冠军棒球, 棒球杀手",KEEP,firmware-s3/main/display/arcade/game_186_championbaseball.cpp,复用Game #186 (Champion Baseball 1983)，投打对决时机挥棒全垒打
-079,足球点球,L. 竞速与体育（6款）,选择射门方向和力度，争取突破守门员。,NONE,无匹配旧代码,MISSING,全新实现,足球点球，需实现射门角度蓄力与守门员扑救博弈
-080,Tron光线摩托,M. 领地、战术与生存（6款）,玩家移动时留下永久轨迹，不能碰到已有轨迹。,"015, 175","创战纪光轮摩托, 创战纪飞盘决斗",KEEP,firmware-s3/main/display/arcade/game_015_tron.cpp,复用Game #015 (Tron Light Cycles 1982)，实体光痕堵截与竞技碰撞
-081,Qix圈地,M. 领地、战术与生存（6款）,从安全边界出发画线，闭合区域后将其占为领地，同时躲避敌人。,"158, 139","划线天蚕变, 阿米达格网",KEEP,firmware-s3/main/display/arcade/game_158_qix.cpp,复用Game #158 (Qix 1981)，闭合划线圈地与避开漫游光束
-082,坦克抛物线对轰,M. 领地、战术与生存（6款）,双方回合制选择发射角度和力度，通过弹道击中敌方坦克。,"020, 170","像素百战天虫, 矢量坦克战",KEEP,firmware-s3/main/display/arcade/game_020_artillery.cpp,复用Game #020 (Artillery 1980)，仰角风偏抛物线弹道对决
-083,路径塔防,M. 领地、战术与生存（6款）,部署防御塔，阻止敌人沿道路抵达终点。,063,绝地要塞,REWORK,firmware-s3/main/display/arcade/game_063_rampart.cpp,基于Game #063 (Rampart) 改造沿路径部署炮塔消灭波次敌兵
-084,节点征服,M. 领地、战术与生存（6款）,在不同节点间调配兵力，占领中立或敌方据点。,NONE,无匹配旧代码,MISSING,全新实现,节点征服 (Galcon)，需实现星系节点兵力产出、连线派兵与占领
-085,Lemmings旅鼠拯救,M. 领地、战术与生存（6款）,自动移动的小人遇到障碍时，由玩家分配技能，帮助他们安全抵达出口。,NONE,无匹配旧代码,MISSING,全新实现,Lemmings旅鼠拯救，需实现自动移动小人分配技能引导入出口
-086,小农场,N. 微型经营与管理（5款）,播种、浇水、等待作物成熟、收获，并规划有限土地。,NONE,无匹配旧代码,MISSING,全新实现,小农场，需实现土地耕作、播种浇水成熟与限时收获循环
-087,交通灯管理,N. 微型经营与管理（5款）,控制交叉路口交通信号，减少拥堵和碰撞。,NONE,无匹配旧代码,MISSING,全新实现,交通灯管理，需实现十字路口红绿灯切换与车流防追尾保畅通
-088,机场降落引导,N. 微型经营与管理（5款）,为不同方向进入的飞机安排安全降落路线和顺序。,NONE,无匹配旧代码,MISSING,全新实现,机场降落引导，需实现多机入港航线指派与跑道降落防撞
-089,消防灭火,N. 微型经营与管理（5款）,控制消防力量，阻止火势蔓延，保护目标区域。,141,消防云梯车,REWORK,firmware-s3/main/display/arcade/game_141_firetruck.cpp,基于Game #141 (Fire Truck) 改造水枪射流扑灭蔓延火势
-090,传送带工厂,N. 微型经营与管理（5款）,旋转传送带，让不同颜色的物品到达正确出口。,NONE,无匹配旧代码,MISSING,全新实现,传送带工厂，需实现转辙道岔旋转引导多色货物分流入库
-091,电线迷宫,O. 触控技巧与特殊运动（6款）,沿狭窄通道移动光点，碰到边界就失败。,147,疯狂气球,REWORK,firmware-s3/main/display/arcade/game_147_crazyballoon.cpp,基于Game #147 (Crazy Balloon) 改造极细通道电流急急棒
-092,水果忍者 Fruit Ninja,O. 触控技巧与特殊运动（6款）,通过划线切开水果，避开炸弹。,NONE,无匹配旧代码,MISSING,全新实现,水果忍者 (Fruit Ninja)，需实现飞出水果触控滑动切割与避弹
-093,Hole.io黑洞吞噬,O. 触控技巧与特殊运动（6款）,吞噬比自己小的物体并逐渐扩大半径，再吞噬更大的物体。,NONE,无匹配旧代码,MISSING,全新实现,Hole.io黑洞吞噬，需实现移动黑洞吞小物增半径进而吞大物
-094,钩爪摆荡,O. 触控技巧与特殊运动（6款）,发射钩绳连接锚点，利用摆荡惯性穿越障碍。,"138, 154","索道探险家, 魔法泡泡破裂者",KEEP,firmware-s3/main/display/arcade/game_138_rocnrope.cpp,复用Game #138 (Roc'n Rope 1983)，发射锚索斜拉攀登绝壁
-095,Super Hexagon,O. 触控技巧与特殊运动（6款）,围绕中心旋转，躲避不断向中心收缩的障碍墙。,NONE,无匹配旧代码,MISSING,全新实现,Super Hexagon，需实现环形旋转自转与向心收缩六边形裂缝闪避
-096,冰面滑行迷宫,O. 触控技巧与特殊运动（6款）,选择方向后，角色会一直滑到障碍前才停下。,093,企鹅推冰块,REWORK,firmware-s3/main/display/arcade/game_093_pengo.cpp,基于Game #093 (Pengo) 改造冰面滑行撞墙才停迷宫解谜
-097,Frogger青蛙过河,P. 新增四款（4款）,穿越多排车流，再利用移动浮木渡河，到达指定位置。,011,青蛙过河,KEEP,firmware-s3/main/display/arcade/game_011_frogger.cpp,复用Game #011 (Frogger 1981)，穿越车流与踩浮木过河进穴
-098,Lunar Lander月球着陆,P. 新增四款（4款）,通过喷气推力和姿态调整控制飞船下降，避免速度过快导致坠毁。,116,月球着陆器,KEEP,firmware-s3/main/display/arcade/game_116_lunarlander.cpp,复用Game #116 (Lunar Lander 1979)，反冲推力微调与月面软着陆
-099,怪奇旅伴式自动攻击生存,P. 新增四款（4款）,玩家主要控制角色移动，武器自动攻击附近敌人，收集经验升级，选择不同能力形成构筑。,179,圣铠传说,REWORK,firmware-s3/main/display/arcade/game_179_gauntlet.cpp,基于Game #179 (Gauntlet) 改造走位躲避与自动索敌升级构筑
-100,Memory Match翻牌配对,P. 新增四款（4款）,翻开隐藏卡片，记住图案位置，在尽可能少的次数内找到所有配对。,NONE,无匹配旧代码,MISSING,全新实现,Memory Match翻牌配对，需实现4x4网格隐藏图案翻看成对匹配消除
+001,超级马里奥（Super Mario Bros.）——已实现,A. 平台跳跃与空间移动（8款）,横向平台跳跃、躲避敌人、收集物品、到达终点。,"001, 042","超级马里奥兄弟, 水管兄弟",KEEP,firmware-s3/main/display/mario_game.cpp,"复用独立马里奥引擎 (firmware-s3/main/display/mario_game.cpp, pc-agent-vision/mario_runner.py)，横向卷轴与平台跳跃完备"
+002,涂鸦跳跃（Doodle Jump）,A. 平台跳跃与空间移动（8款）,角色不断自动向上弹跳，玩家控制左右移动，寻找下一个落脚平台。,004,涂鸦跳跃,KEEP,firmware-s3/main/display/arcade/game_004_doodle_jump.cpp,复用Game #004 (game_004_doodle_jump.cpp/.py)，刚体反弹起跳与穿屏完备
+003,Celeste式空中冲刺,A. 平台跳跃与空间移动（8款）,普通移动和跳跃之外，能够进行短距离定向冲刺。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Celeste式空中冲刺，旧代码库无短关卡空中Dash机制，待全新实现
+004,VVVVVV重力翻转,A. 平台跳跃与空间移动（8款）,通过反转重力在地面和天花板之间切换。,NONE,无匹配旧代码,MISSING,无 (需全新开发),VVVVVV重力翻转，旧代码库无反转重力上下跳跃机制，待全新实现
+005,Lode Runner挖洞夺金,A. 平台跳跃与空间移动（8款）,挖掘临时陷阱、躲避敌人、收集全部金币。,"024, 161","淘金者, 矿工2049",KEEP,firmware-s3/main/display/arcade/game_024_lode_runner.cpp,复用Game #024 (game_024_lode_runner.cpp/.py)，挖洞陷阱与全金币收集完备
+006,Bubble Bobble泡泡捕敌,A. 平台跳跃与空间移动（8款）,发射泡泡困住敌人，再触碰泡泡消灭敌人。,"025, 145","经典泡泡龙打怪, 吸尘器大冒险",REWORK,firmware-s3/main/display/arcade/game_025_bubble_bobble.cpp,复用Game #025 (game_025_bubble_bobble.cpp/.py)，需改造为纯泡泡捕敌戳破机制，严格区分三消
+007,Downwell向下射击,A. 平台跳跃与空间移动（8款）,向下坠落时利用向下射击消灭敌人并调整运动。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Downwell向下射击，旧代码库无下坠射击漂浮与踩怪装弹机制，待全新实现
+008,Jump King蓄力跳跃,A. 平台跳跃与空间移动（8款）,通过长按蓄力决定跳跃距离和高度。,038,敲冰块,REWORK,firmware-s3/main/display/arcade/game_038_ice_climber.cpp,基于Game #038 (game_038_ice_climber.cpp/.py) 垂直攀登结构，改造为长按蓄力跳跃手感
+009,Flappy Bird,B. 单键与时机挑战（6款）,单键振翅获得向上速度，角色受重力下降，穿过不断出现的管道空隙。,005,飞翔小鸟,KEEP,firmware-s3/main/display/arcade/game_005_flappy_bird.cpp,复用Game #005 (game_005_flappy_bird.cpp/.py)，单键轻触扑翼穿管完备
+010,Stack精准堆叠,B. 单键与时机挑战（6款）,移动方块左右往返，玩家按键放下，未重叠区域被裁剪。,006,堆叠大师,KEEP,firmware-s3/main/display/arcade/game_006_stack.cpp,复用Game #006 (game_006_stack.cpp/.py)，方块往返裁剪堆叠完备
+011,Chrome恐龙跑酷,B. 单键与时机挑战（6款）,自动前进，跳过地面障碍。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Chrome恐龙跑酷，旧代码库无该单键跳跃跑酷，待全新实现
+012,Knife Hit旋盘投刀,B. 单键与时机挑战（6款）,向旋转目标投射刀具，避开已经插入的刀。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Knife Hit旋盘投刀，旧代码库无旋转圆盘飞刀插靶机制，待全新实现
+013,摆锤投球,B. 单键与时机挑战（6款）,观察周期性摆动，选择正确时机释放小球，使其进入目标区域。,NONE,无匹配旧代码,MISSING,无 (需全新开发),摆锤投球，旧代码库无周期单键释放进筐机制，待全新实现
+014,轨道跃迁,B. 单键与时机挑战（6款）,角色沿轨道自动运动，在轨道交会处跳入其他轨道。,NONE,无匹配旧代码,MISSING,无 (需全新开发),轨道跃迁，旧代码库无轨道交会点跳轨机制，待全新实现
+015,Simon闪灯记忆,C. 反应、观察与记忆（5款）,记住并复现不断增长的颜色序列。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Simon闪灯记忆，旧代码库无四色记忆序列复现机制，待全新实现
+016,打地鼠,C. 反应、观察与记忆（5款）,随机目标出现，玩家必须在目标消失前准确击中。,026,像素打地鼠,KEEP,firmware-s3/main/display/arcade/game_026_whack_a_mole.cpp,复用Game #026 (game_026_whack_a_mole.cpp/.py)，九宫格地鼠探头与定点打击完备
+017,四轨节奏,C. 反应、观察与记忆（5款）,按照音乐节拍，在音符到达判定线时按下对应按钮。,017,别踩白块儿,KEEP,firmware-s3/main/display/arcade/game_017_piano_tiles.cpp,复用Game #017 (game_017_piano_tiles.cpp/.py)，四轨节拍下落判定完备
+018,红灯绿灯,C. 反应、观察与记忆（5款）,绿灯可以前进，红灯必须停止。,NONE,无匹配旧代码,MISSING,无 (需全新开发),红灯绿灯，旧代码库无相位观察走停机制，待全新实现
+019,猜球杯,C. 反应、观察与记忆（5款）,记住球被放进哪个杯子，跟踪杯子交换位置，最终猜测。,NONE,无匹配旧代码,MISSING,无 (需全新开发),猜球杯，旧代码库无三杯洗牌换位追踪机制，待全新实现
+020,Pong,D. 弹球与碰撞物理（6款）,控制挡板反弹小球，与对手竞争得分。,007,双人乒乓,KEEP,firmware-s3/main/display/arcade/game_007_pong.cpp,复用Game #007 (game_007_pong.cpp/.py)，双向挡板碰撞反弹完备
+021,Breakout打砖块,D. 弹球与碰撞物理（6款）,用底部挡板控制反弹小球，清除顶部砖块。,"008, 105","经典打砖块, 破坏者",KEEP,firmware-s3/main/display/arcade/game_008_breakout.cpp,复用Game #008 (game_008_breakout.cpp/.py)，打砖块阵列敲击碎裂完备
+022,迷你弹珠台,D. 弹球与碰撞物理（6款）,利用左右拨杆击打小球，避免小球掉落，击中目标计分。,"108, 132","街机弹珠台, 幼年吃豆人弹珠台",KEEP,firmware-s3/main/display/arcade/game_108_pinball.cpp,复用Game #108 (game_108_pinball.cpp/.py)，双拨杆击球弹珠台完备
+023,空气曲棍球,D. 弹球与碰撞物理（6款）,二维移动球拍，把球击入对方球门。,NONE,无匹配旧代码,MISSING,无 (需全新开发),空气曲棍球，旧代码库无2D球拍推球进门物理机制，待全新实现
+024,Peggle弹珠撞靶,D. 弹球与碰撞物理（6款）,选择发射方向，让小球通过碰撞击中有限目标。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Peggle弹珠撞靶，旧代码库无有限弹珠撞靶消除机制，待全新实现
+025,滚珠平衡迷宫,D. 弹球与碰撞物理（6款）,控制虚拟重力，让具有惯性的滚珠通过障碍迷宫。,060,极速疯狂弹球,REWORK,firmware-s3/main/display/arcade/game_060_marblemadness.cpp,基于Game #060 (game_060_marblemadness.cpp/.py) 滚球动力学，改造为重力平衡迷宫
+026,Space Invaders太空侵略者,E. 射击与防御（7款）,底部炮台射击逐渐下降的敌人阵列。,"009, 187","太空侵略者, 侵略者归来",KEEP,firmware-s3/main/display/arcade/game_009_space_invaders.cpp,复用Game #009 (game_009_space_invaders.cpp/.py)，外星阵列下压与垂直阻击完备
+027,Asteroids小行星,E. 射击与防御（7款）,飞船旋转、推进、射击漂浮的小行星。,113,小行星,KEEP,firmware-s3/main/display/arcade/game_113_asteroids.cpp,复用Game #113 (game_113_asteroids.cpp/.py)，小行星漂移与分裂射击完备 (已纠正此前错误匹配#053)
+028,Missile Command导弹指挥官,E. 射击与防御（7款）,选择拦截位置，引爆范围攻击阻止导弹到达地面。,036,导弹防线,KEEP,firmware-s3/main/display/arcade/game_036_missile_command.cpp,复用Game #036 (game_036_missile_command.cpp/.py)，准星防空拦截完备
+029,Centipede蜈蚣,E. 射击与防御（7款）,射击由多个身体节段组成、遇到障碍会转向的蜈蚣。,043,蜈蚣大战,KEEP,firmware-s3/main/display/arcade/game_043_centipede.cpp,复用Game #043 (game_043_centipede.cpp/.py)，多节蜈蚣穿梭转向与蘑菇阵完备
+030,Duck Hunt打鸭子,E. 射击与防御（7款）,瞄准移动目标，在有限弹药和时间内完成射击。,033,经典打飞碟,REWORK,firmware-s3/main/display/arcade/game_033_clay_shooting.cpp,基于Game #033 (game_033_clay_shooting.cpp/.py) 飞靶射击，改造为飞鸭瞄准射击
+031,Robotron双向射击,E. 射击与防御（7款）,角色在二维场地移动，并主动选择不同方向射击，抵御敌群。,164,机器人大战2084,KEEP,firmware-s3/main/display/arcade/game_164_robotron.cpp,复用Game #164 (game_164_robotron.cpp/.py)，双向独立移动与射击完备
+032,Defender横向防卫,E. 射击与防御（7款）,横向巡逻、射击敌人、保护地面目标。,112,防卫者,KEEP,firmware-s3/main/display/arcade/game_112_defender.cpp,复用Game #112 (game_112_defender.cpp/.py)，横向巡逻与防卫人类完备 (已纠正此前错误匹配#081)
+033,贪吃蛇——已实现,F. 迷宫、追逐与探索（8款）,移动、吃食物、身体增长、避免自撞。,029,蛇蛇大作战,KEEP,firmware-s3/main/display/arcade/game_029_slither_arena.cpp,复用固件原生Snake (game_engine.cc) 与Game #029，网格移动进食完备
+034,Pac-Man吃豆人,F. 迷宫、追逐与探索（8款）,在迷宫收集豆子，同时躲避幽灵。,010,像素吃豆人,KEEP,firmware-s3/main/display/arcade/game_010_pacman.cpp,复用Game #010 (game_010_pacman.cpp/.py)，迷宫吃豆与幽灵反噬逃跑完备
+035,Boulder Dash落石夺宝,F. 迷宫、追逐与探索（8款）,挖掘地形、收集宝石、躲避会下落的石头。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Boulder Dash落石夺宝，旧代码库无挖土落石塌方机制，待全新实现
+036,Dig Dug地下充气战,F. 迷宫、追逐与探索（8款）,挖出通道，并通过持续充气消灭敌人。,"021, 104","掘地打气人, 挖金者二代",KEEP,firmware-s3/main/display/arcade/game_021_dig_dug.cpp,复用Game #021 (game_021_dig_dug.cpp/.py)，地道挖掘与打气充气爆破完备
+037,Q*bert染色跳格,F. 迷宫、追逐与探索（8款）,在立体投影的格子之间跳跃，改变所有目标格子的颜色。,069,疯狂跳球,REWORK,firmware-s3/main/display/arcade/game_069_qbert.cpp,复用Game #069 (game_069_qbert.cpp/.py)，需针对16x16调优3层阶梯视差与翻色判定
+038,Bomberman炸弹人,F. 迷宫、追逐与探索（8款）,放置定时炸弹，利用墙体遮挡爆炸，击败敌人。,013,像素炸弹人,KEEP,firmware-s3/main/display/arcade/game_013_bomberman.cpp,复用Game #013 (game_013_bomberman.cpp/.py)，定时炸弹十字烈焰爆破完备
+039,迷雾探索迷宫,F. 迷宫、追逐与探索（8款）,地图大部分不可见，只显示角色附近区域，依靠探索和记忆寻找出口。,NONE,无匹配旧代码,MISSING,无 (需全新开发),迷雾探索迷宫，旧代码库无战争迷雾单向寻路机制，待全新实现
+040,镜像双人迷宫,F. 迷宫、追逐与探索（8款）,一次输入同时驱动两个镜像角色，让两个角色抵达各自目标。,NONE,无匹配旧代码,MISSING,无 (需全新开发),镜像双人迷宫，旧代码库无双角色镜像联动操控机制，待全新实现
+041,俄罗斯方块——已实现,G. 方块、合并与消除（8款）,方块下落、旋转、堆叠、消行。,FW_TETRIS,固件内置俄罗斯方块 (firmware-s3/main/display/game_engine.cc),KEEP,firmware-s3/main/display/game_engine.cc,复用固件原生Tetris引擎 (firmware-s3/main/display/game_engine.cc: InitTetris/RunTetris)，标准七种四联方块旋转消行完备 (已彻底剔除错误的Game #102 Columns映射)
+042,Puyo Puyo彩球连锁,G. 方块、合并与消除（8款）,同色彩球达到4个连通后消除，可触发连锁反应。,083,魔法气泡,KEEP,firmware-s3/main/display/arcade/game_083_puyopuyo.cpp,复用Game #083 (game_083_puyopuyo.cpp/.py)，双联气泡旋转与四连消除完备
+043,2048,G. 方块、合并与消除（8款）,滑动整个棋盘，将相同数值的方块合并。,016,霓虹 2048,KEEP,firmware-s3/main/display/arcade/game_016_neon_2048.cpp,复用Game #016 (game_016_neon_2048.cpp/.py)，4x4滑移合并升阶完备
+044,Bejeweled宝石迷阵,G. 方块、合并与消除（8款）,交换相邻宝石，使三个或以上同色宝石形成连续排列。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Bejeweled宝石迷阵，旧代码库无相邻两格交换三消机制，待全新实现
+045,SameGame,G. 方块、合并与消除（8款）,选择相邻的同色连通块，整组清除。,NONE,无匹配旧代码,MISSING,无 (需全新开发),SameGame，旧代码库无同色连通色块点击整组消除机制，待全新实现
+046,合成大西瓜 Suika,G. 方块、合并与消除（8款）,投放圆球，相同等级圆球碰撞后合并成更大等级。,NONE,无匹配旧代码,MISSING,无 (需全新开发),合成大西瓜 Suika，旧代码库无球体下落碰撞合并进阶机制，待全新实现
+047,Blockudoku,G. 方块、合并与消除（8款）,自由摆放不同形状的格块，填满行、列或区域即可消除。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Blockudoku，旧代码库无多异形方块自由放置九宫消行机制，待全新实现
+048,Triple Town三合镇,G. 方块、合并与消除（8款）,三个相邻同级物体合成升级，合理规划有限空间。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Triple Town三合镇，旧代码库无三合一相邻建筑升级机制，待全新实现
+049,Lights Out灭灯,H. 逻辑解谜（5款）,点击格子会翻转该格及上下左右邻格状态，目标是全部熄灭。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Lights Out灭灯，旧代码库无十字邻域状态翻转解谜机制，待全新实现
+050,四色迷你数独,H. 逻辑解谜（5款）,在行、列、小宫格中填入不重复的四种颜色。,NONE,无匹配旧代码,MISSING,无 (需全新开发),四色迷你数独，旧代码库无4x4唯一填色校验机制，待全新实现
+051,Flow Free连线,H. 逻辑解谜（5款）,连接相同颜色的两个端点，所有路径不能相互交叉。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Flow Free连线，旧代码库无同色端点不交叉布线机制，待全新实现
+052,管道旋转接水,H. 逻辑解谜（5款）,旋转不同方向的管道，将水源连接至终点。,034,疯狂水管工,KEEP,firmware-s3/main/display/arcade/game_034_pipe_dream.cpp,复用Game #034 (game_034_pipe_dream.cpp/.py)，管道旋转拼接与水流贯通完备
+053,汉诺塔,H. 逻辑解谜（5款）,在不能把大盘放到小盘上的规则下完成圆盘搬运。,NONE,无匹配旧代码,MISSING,无 (需全新开发),汉诺塔，旧代码库无三柱圆盘大小层叠转移机制，待全新实现
+054,Sokoban推箱子,I. 机关与路径规划（7款）,推动箱子到指定目标，箱子不能直接拉动。,014,经典推箱子,KEEP,firmware-s3/main/display/arcade/game_014_sokoban.cpp,复用Game #014 (game_014_sokoban.cpp/.py)，推箱子到位检测与死锁闭环完备
+055,镜面激光,I. 机关与路径规划（7款）,旋转镜子，改变激光反射方向，使光束命中目标。,NONE,无匹配旧代码,MISSING,无 (需全新开发),镜面激光，旧代码库无旋转反射镜折射光路打靶机制，待全新实现
+056,数字华容道,I. 机关与路径规划（7款）,滑动空格周围的方块，使所有方块恢复正确排列。,NONE,无匹配旧代码,MISSING,无 (需全新开发),数字华容道，旧代码库无滑块拼图空位移动复位机制，待全新实现
+057,Rush Hour堵车,I. 机关与路径规划（7款）,汽车只能沿车身方向滑动，需要清出目标车辆的出口。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Rush Hour堵车，旧代码库无汽车轴向滑移疏解堵塞机制，待全新实现
+058,编程机器人,I. 机关与路径规划（7款）,提前排列移动指令，使机器人自动执行并抵达终点。,NONE,无匹配旧代码,MISSING,无 (需全新开发),编程机器人，旧代码库无指令队列顺序编排执行机制，待全新实现
+059,Cut the Rope割绳子,I. 机关与路径规划（7款）,切断绳子，利用重力和摆动让目标物体到达指定位置。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Cut the Rope割绳子，旧代码库无切绳摆动受力掉落机制，待全新实现
+060,传送门谜题,I. 机关与路径规划（7款）,使用两个传送门改变移动路径，解决地图机关。,NONE,无匹配旧代码,MISSING,无 (需全新开发),传送门谜题，旧代码库无双色传送门空间瞬移机制，待全新实现
+061,四子棋 Connect Four,J. 棋盘对弈（7款）,棋子从指定列落下，率先形成四子连线获胜。,NONE,无匹配旧代码,MISSING,无 (需全新开发),四子棋 Connect Four，旧代码库无重力垂直落子连线机制，待全新实现
+062,黑白棋 Reversi,J. 棋盘对弈（7款）,落子夹住对方棋子并翻转颜色。,035,极简黑白棋,KEEP,firmware-s3/main/display/arcade/game_035_othello.cpp,复用Game #035 (game_035_othello.cpp/.py)，黑白棋八向夹吃翻转与AI完备
+063,五子棋 Gomoku,J. 棋盘对弈（7款）,横、竖、斜方向先形成五子连线获胜。,NONE,无匹配旧代码,MISSING,无 (需全新开发),五子棋 Gomoku，旧代码库无五子连珠胜负与人机博弈，待全新实现
+064,西洋跳棋 Checkers,J. 棋盘对弈（7款）,斜向移动、跳吃对方棋子、升王。,NONE,无匹配旧代码,MISSING,无 (需全新开发),西洋跳棋 Checkers，旧代码库无斜向移动连跳吃子升王机制，待全新实现
+065,Dots and Boxes点格棋,J. 棋盘对弈（7款）,轮流连接线段，完成一个方格即可得分。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Dots and Boxes点格棋，旧代码库无点阵连线占格抢分机制，待全新实现
+066,Battleship海战棋,J. 棋盘对弈（7款）,隐藏舰船位置，轮流猜测对方舰船所在格子。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Battleship海战棋，旧代码库无双人迷雾坐标盲猜盲打机制，待全新实现
+067,Quoridor围墙棋,J. 棋盘对弈（7款）,在移动棋子和放置墙体之间决策，争先到达棋盘对边。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Quoridor围墙棋，旧代码库无行棋与放挡板路径封堵机制，待全新实现
+068,Mastermind颜色密码,K. 数字与桌面益智（6款）,猜测隐藏颜色排列，根据颜色及位置匹配反馈不断修正。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Mastermind颜色密码，旧代码库无猜色反馈解密机制，待全新实现
+069,Nim取石子,K. 数字与桌面益智（6款）,轮流从若干石堆取石，利用策略决定胜负。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Nim取石子，旧代码库无多堆石子拿取博弈机制，待全新实现
+070,Flood-It连通染色,K. 数字与桌面益智（6款）,每次改变起始区域颜色，吞并相邻的同色区域。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Flood-It连通染色，旧代码库无泛洪吞噬最大化染色机制，待全新实现
+071,Peg Solitaire单人孔明棋,K. 数字与桌面益智（6款）,一颗棋子跳过另一颗棋子并将其移除，争取最后只剩一颗。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Peg Solitaire单人孔明棋，旧代码库无跳吃移子留一机制，待全新实现
+072,Hex连通棋,K. 数字与桌面益智（6款）,双方争取把各自对应的两条边连接起来。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Hex连通棋，旧代码库无六角网格两端边框优先贯通机制，待全新实现
+073,Ludo飞行棋,K. 数字与桌面益智（6款）,掷骰子、推进棋子、撞回对手棋子并率先到达终点。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Ludo飞行棋，旧代码库无骰子推进与起飞撞回机制，待全新实现
+074,变道赛车,L. 竞速与体育（6款）,在不断前进的道路上切换车道，避让其他车辆并超车。,"012, 155","极速变道赛车, 公路争霸",KEEP,firmware-s3/main/display/arcade/game_012_highway_racer.cpp,复用Game #012 (game_012_highway_racer.cpp/.py)，三车道超车避障完备
+075,滑雪绕旗,L. 竞速与体育（6款）,沿雪道左右转向，依次绕过旗门。,176,高山滑雪,KEEP,firmware-s3/main/display/arcade/game_176_alpineski.cpp,复用Game #176 (game_176_alpineski.cpp/.py)，高山速降绕红蓝旗门完备
+076,迷你高尔夫,L. 竞速与体育（6款）,控制击球角度和力度，以尽可能少的杆数入洞。,NONE,无匹配旧代码,MISSING,无 (需全新开发),迷你高尔夫，旧代码库无击球角度蓄力果岭进洞机制，待全新实现
+077,保龄球,L. 竞速与体育（6款）,控制球路，争取击倒更多球瓶。,111,街机保龄球,KEEP,firmware-s3/main/display/arcade/game_111_leaguebowling.cpp,复用Game #111 (game_111_leaguebowling.cpp/.py)，球道瞄准横移与击瓶碰撞完备
+078,棒球击打,L. 竞速与体育（6款）,判断球到达的时间，控制击球方向及力度。,186,冠军棒球,KEEP,firmware-s3/main/display/arcade/game_186_championbaseball.cpp,复用Game #186 (game_186_championbaseball.cpp/.py)，投打时机挥棒全垒打完备
+079,足球点球,L. 竞速与体育（6款）,选择射门方向和力度，争取突破守门员。,NONE,无匹配旧代码,MISSING,无 (需全新开发),足球点球，旧代码库无射门角度与门将扑救猜拳博弈机制，待全新实现
+080,Tron光线摩托,M. 领地、战术与生存（6款）,玩家移动时留下永久轨迹，不能碰到已有轨迹。,"015, 175","创战纪光轮摩托, 创战纪飞盘决斗",KEEP,firmware-s3/main/display/arcade/game_015_tron.cpp,复用Game #015 (game_015_tron.cpp/.py)，实体光痕堵路与对决完备
+081,Qix圈地,M. 领地、战术与生存（6款）,从安全边界出发画线，闭合区域后将其占为领地，同时躲避敌人。,"158, 139","划线天蚕变, 阿米达格网",KEEP,firmware-s3/main/display/arcade/game_158_qix.cpp,复用Game #158 (game_158_qix.cpp/.py)，划线圈地与避开漫游光束完备
+082,坦克抛物线对轰,M. 领地、战术与生存（6款）,双方回合制选择发射角度和力度，通过弹道击中敌方坦克。,"020, 170","像素百战天虫, 矢量坦克战",KEEP,firmware-s3/main/display/arcade/game_020_artillery.cpp,复用Game #020 (game_020_artillery.cpp/.py)，仰角风偏抛物线对决完备
+083,路径塔防,M. 领地、战术与生存（6款）,部署防御塔，阻止敌人沿道路抵达终点。,NONE,无匹配旧代码,MISSING,无 (需全新开发),路径塔防，旧代码库无沿道路架设炮台消灭小怪机制，待全新实现
+084,节点征服,M. 领地、战术与生存（6款）,在不同节点间调配兵力，占领中立或敌方据点。,NONE,无匹配旧代码,MISSING,无 (需全新开发),节点征服 (Galcon)，旧代码库无星系产兵连线调配机制，待全新实现
+085,Lemmings旅鼠拯救,M. 领地、战术与生存（6款）,自动移动的小人遇到障碍时，由玩家分配技能，帮助他们安全抵达出口。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Lemmings旅鼠拯救，旧代码库无自动移动分配技能脱困机制，待全新实现
+086,小农场,N. 微型经营与管理（5款）,播种、浇水、等待作物成熟、收获，并规划有限土地。,NONE,无匹配旧代码,MISSING,无 (需全新开发),小农场，旧代码库无耕作播种浇水成熟收获循环，待全新实现
+087,交通灯管理,N. 微型经营与管理（5款）,控制交叉路口交通信号，减少拥堵和碰撞。,NONE,无匹配旧代码,MISSING,无 (需全新开发),交通灯管理，旧代码库无路口红绿灯疏导防追尾机制，待全新实现
+088,机场降落引导,N. 微型经营与管理（5款）,为不同方向进入的飞机安排安全降落路线和顺序。,NONE,无匹配旧代码,MISSING,无 (需全新开发),机场降落引导，旧代码库无航线指派与跑道降落防撞机制，待全新实现
+089,消防灭火,N. 微型经营与管理（5款）,控制消防力量，阻止火势蔓延，保护目标区域。,141,消防云梯车,REWORK,firmware-s3/main/display/arcade/game_141_firetruck.cpp,基于Game #141 (game_141_firetruck.cpp/.py) 车身控制，重构为水枪扑灭蔓延火势机制
+090,传送带工厂,N. 微型经营与管理（5款）,旋转传送带，让不同颜色的物品到达正确出口。,NONE,无匹配旧代码,MISSING,无 (需全新开发),传送带工厂，旧代码库无转辙道岔多色分流机制，待全新实现
+091,电线迷宫,O. 触控技巧与特殊运动（6款）,沿狭窄通道移动光点，碰到边界就失败。,147,疯狂气球,REWORK,firmware-s3/main/display/arcade/game_147_crazyballoon.cpp,基于Game #147 (game_147_crazyballoon.cpp/.py) 摆动穿刺，重构为急急棒狭道不碰壁机制
+092,水果忍者 Fruit Ninja,O. 触控技巧与特殊运动（6款）,通过划线切开水果，避开炸弹。,NONE,无匹配旧代码,MISSING,无 (需全新开发),水果忍者 Fruit Ninja，旧代码库无触控划线切水果避弹机制，待全新实现
+093,Hole.io黑洞吞噬,O. 触控技巧与特殊运动（6款）,吞噬比自己小的物体并逐渐扩大半径，再吞噬更大的物体。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Hole.io黑洞吞噬，旧代码库无黑洞吞小物增半径机制，待全新实现
+094,钩爪摆荡,O. 触控技巧与特殊运动（6款）,发射钩绳连接锚点，利用摆荡惯性穿越障碍。,"138, 154","索道探险家, 魔法泡泡破裂者",REWORK,firmware-s3/main/display/arcade/game_138_rocnrope.cpp,基于Game #138 (game_138_rocnrope.cpp/.py) 索道锚索，调优为锚点摆荡惯性机制
+095,Super Hexagon,O. 触控技巧与特殊运动（6款）,围绕中心旋转，躲避不断向中心收缩的障碍墙。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Super Hexagon，旧代码库无环形向心收缩多边形缝隙躲避机制，待全新实现
+096,冰面滑行迷宫,O. 触控技巧与特殊运动（6款）,选择方向后，角色会一直滑到障碍前才停下。,093,企鹅推冰块,REWORK,firmware-s3/main/display/arcade/game_093_pengo.cpp,基于Game #093 (game_093_pengo.cpp/.py) 冰块推动，改造为冰面滑行撞墙才停迷宫
+097,Frogger青蛙过河,P. 新增四款（4款）,穿越多排车流，再利用移动浮木渡河，到达指定位置。,011,青蛙过河,KEEP,firmware-s3/main/display/arcade/game_011_frogger.cpp,复用Game #011 (game_011_frogger.cpp/.py)，横渡公路与浮木过河完备
+098,Lunar Lander月球着陆,P. 新增四款（4款）,通过喷气推力和姿态调整控制飞船下降，避免速度过快导致坠毁。,116,月球着陆器,KEEP,firmware-s3/main/display/arcade/game_116_lunarlander.cpp,复用Game #116 (game_116_lunarlander.cpp/.py)，反冲推力微调与月面软着陆完备 (已纠正此前错误匹配#051)
+099,怪奇旅伴式自动攻击生存,P. 新增四款（4款）,玩家主要控制角色移动，武器自动攻击附近敌人，收集经验升级，选择不同能力形成构筑。,179,圣铠传说,REWORK,firmware-s3/main/display/arcade/game_179_gauntlet.cpp,基于Game #179 (game_179_gauntlet.cpp/.py) 地牢走位，重构为自动索敌与升级构筑
+100,Memory Match翻牌配对,P. 新增四款（4款）,翻开隐藏卡片，记住图案位置，在尽可能少的次数内找到所有配对。,NONE,无匹配旧代码,MISSING,无 (需全新开发),Memory Match翻牌配对，旧代码库无4x4翻开图案匹配消除机制，待全新开发
