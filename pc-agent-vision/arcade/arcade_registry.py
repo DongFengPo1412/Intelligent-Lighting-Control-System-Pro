@@ -192,6 +192,7 @@ from .game_186_championbaseball import Game186ChampionBaseball
 from .game_187_returnoftheinvaders import Game187ReturnOfTheInvaders
 from .game_188_moneypuzzleexchanger import Game188MoneyPuzzleExchanger
 from .game_189_raiden import Game189Raiden
+from .game_190_demolitionderby import Game190DemolitionDerby
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -416,3 +417,4 @@ ArcadeRegistry.register(Game186ChampionBaseball)
 ArcadeRegistry.register(Game187ReturnOfTheInvaders)
 ArcadeRegistry.register(Game188MoneyPuzzleExchanger)
 ArcadeRegistry.register(Game189Raiden)
+ArcadeRegistry.register(Game190DemolitionDerby)
