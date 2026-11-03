@@ -341,3 +341,4 @@ class Game121SpaceTaxi(BaseCartridge):
             "current_pad": self.passenger["current_pad"],
             "target_pad": self.passenger["target_pad"],
         }
+

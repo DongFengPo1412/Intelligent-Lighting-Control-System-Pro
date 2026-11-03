@@ -351,3 +351,4 @@ class Game120GoldMiner(BaseCartridge):
             "claw_y": self.claw_y,
             "hooked_item_idx": self.hooked_item_idx,
         }
+

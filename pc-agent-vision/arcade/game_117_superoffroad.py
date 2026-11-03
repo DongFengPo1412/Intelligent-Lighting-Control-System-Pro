@@ -371,3 +371,4 @@ class Game117SuperOffRoad(BaseCartridge):
             "is_airborne": self.player["is_airborne"],
             "laps_completed": self.player["laps_completed"],
         }
+

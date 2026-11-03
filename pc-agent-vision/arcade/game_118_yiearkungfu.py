@@ -416,3 +416,4 @@ class Game118YieArKungFu(BaseCartridge):
             "player_x": self.player["x"],
             "player_y": self.player["y"],
         }
+

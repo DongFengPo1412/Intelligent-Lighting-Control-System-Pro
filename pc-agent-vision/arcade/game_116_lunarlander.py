@@ -291,3 +291,4 @@ class Game116LunarLander(BaseCartridge):
             "vy": self.vy,
             "thrusting": self.thrusting,
         }
+
