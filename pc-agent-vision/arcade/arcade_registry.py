@@ -151,6 +151,7 @@ from .game_145_tumblepop import Game145Tumblepop
 from .game_146_butasan import Game146Butasan
 from .game_147_crazyballoon import Game147CrazyBalloon
 from .game_148_wreckingcrew import Game148WreckingCrew
+from .game_149_gaplus import Game149Gaplus
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -334,3 +335,4 @@ ArcadeRegistry.register(Game145Tumblepop)
 ArcadeRegistry.register(Game146Butasan)
 ArcadeRegistry.register(Game147CrazyBalloon)
 ArcadeRegistry.register(Game148WreckingCrew)
+ArcadeRegistry.register(Game149Gaplus)
