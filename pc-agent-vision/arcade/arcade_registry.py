@@ -148,6 +148,7 @@ from .game_142_mariner import Game142Mariner
 from .game_143_plotting import Game143Plotting
 from .game_144_moonpatrol import Game144MoonPatrol
 from .game_145_tumblepop import Game145Tumblepop
+from .game_146_butasan import Game146Butasan
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -328,3 +329,4 @@ ArcadeRegistry.register(Game142Mariner)
 ArcadeRegistry.register(Game143Plotting)
 ArcadeRegistry.register(Game144MoonPatrol)
 ArcadeRegistry.register(Game145Tumblepop)
+ArcadeRegistry.register(Game146Butasan)
