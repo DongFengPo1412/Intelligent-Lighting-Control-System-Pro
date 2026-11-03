@@ -164,6 +164,7 @@ from .game_158_qix import Game158Qix
 from .game_159_spyvsspy import Game159SpyVsSpy
 from .game_160_ripoff import Game160RipOff
 from .game_161_miner2049er import Game161Miner2049er
+from .game_162_1942 import Game162Roll1942
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -360,3 +361,4 @@ ArcadeRegistry.register(Game158Qix)
 ArcadeRegistry.register(Game159SpyVsSpy)
 ArcadeRegistry.register(Game160RipOff)
 ArcadeRegistry.register(Game161Miner2049er)
+ArcadeRegistry.register(Game162Roll1942)
