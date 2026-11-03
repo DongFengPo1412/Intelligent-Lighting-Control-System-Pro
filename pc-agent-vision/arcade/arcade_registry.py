@@ -158,6 +158,7 @@ from .game_152_flicky import Game152Flicky
 from .game_153_circuscharlie import Game153CircusCharlie
 from .game_154_pang import Game154Pang
 from .game_155_roadfighter import Game155RoadFighter
+from .game_156_sonson import Game156SonSon
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -348,3 +349,4 @@ ArcadeRegistry.register(Game152Flicky)
 ArcadeRegistry.register(Game153CircusCharlie)
 ArcadeRegistry.register(Game154Pang)
 ArcadeRegistry.register(Game155RoadFighter)
+ArcadeRegistry.register(Game156SonSon)
