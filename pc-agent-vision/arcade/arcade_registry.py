@@ -120,6 +120,7 @@ from .game_114_berzerk import Game114Berzerk
 from .game_115_tempest import Game115Tempest
 from .game_116_lunarlander import Game116LunarLander
 from .game_117_superoffroad import Game117SuperOffRoad
+from .game_118_yiearkungfu import Game118YieArKungFu
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -272,3 +273,4 @@ ArcadeRegistry.register(Game114Berzerk)
 ArcadeRegistry.register(Game115Tempest)
 ArcadeRegistry.register(Game116LunarLander)
 ArcadeRegistry.register(Game117SuperOffRoad)
+ArcadeRegistry.register(Game118YieArKungFu)
