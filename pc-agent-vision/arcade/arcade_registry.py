@@ -185,6 +185,7 @@ from .game_179_gauntlet import Game179Gauntlet
 from .game_180_clowns import Game180Clowns
 from .game_181_popeye import Game181Popeye
 from .game_182_magicaldrop import Game182MagicalDrop
+from .game_183_greenberet import Game183GreenBeret
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -402,3 +403,4 @@ ArcadeRegistry.register(Game179Gauntlet)
 ArcadeRegistry.register(Game180Clowns)
 ArcadeRegistry.register(Game181Popeye)
 ArcadeRegistry.register(Game182MagicalDrop)
+ArcadeRegistry.register(Game183GreenBeret)
