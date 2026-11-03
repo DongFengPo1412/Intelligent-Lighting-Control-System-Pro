@@ -174,6 +174,7 @@ from .game_168_bagman import Game168Bagman
 from .game_169_warlords import Game169Warlords
 from .game_170_battlezone import Game170Battlezone
 from .game_171_ladybug import Game171LadyBug
+from .game_172_timber import Game172Timber
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -380,3 +381,4 @@ ArcadeRegistry.register(Game168Bagman)
 ArcadeRegistry.register(Game169Warlords)
 ArcadeRegistry.register(Game170Battlezone)
 ArcadeRegistry.register(Game171LadyBug)
+ArcadeRegistry.register(Game172Timber)
