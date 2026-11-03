@@ -184,6 +184,7 @@ from .game_178_puzzloop import Game178PuzzLoop
 from .game_179_gauntlet import Game179Gauntlet
 from .game_180_clowns import Game180Clowns
 from .game_181_popeye import Game181Popeye
+from .game_182_magicaldrop import Game182MagicalDrop
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -400,3 +401,4 @@ ArcadeRegistry.register(Game178PuzzLoop)
 ArcadeRegistry.register(Game179Gauntlet)
 ArcadeRegistry.register(Game180Clowns)
 ArcadeRegistry.register(Game181Popeye)
+ArcadeRegistry.register(Game182MagicalDrop)
