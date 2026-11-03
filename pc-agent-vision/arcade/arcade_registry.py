@@ -181,6 +181,7 @@ from .game_175_discsoftron import Game175DiscsOfTron
 from .game_176_alpineski import Game176AlpineSki
 from .game_177_depthcharge import Game177Depthcharge
 from .game_178_puzzloop import Game178PuzzLoop
+from .game_179_gauntlet import Game179Gauntlet
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -394,3 +395,4 @@ ArcadeRegistry.register(Game175DiscsOfTron)
 ArcadeRegistry.register(Game176AlpineSki)
 ArcadeRegistry.register(Game177Depthcharge)
 ArcadeRegistry.register(Game178PuzzLoop)
+ArcadeRegistry.register(Game179Gauntlet)
