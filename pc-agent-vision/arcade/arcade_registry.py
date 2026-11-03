@@ -156,6 +156,7 @@ from .game_150_tagteamwrestling import Game150TagTeamWrestling
 from .game_151_spacedungeon import Game151SpaceDungeon
 from .game_152_flicky import Game152Flicky
 from .game_153_circuscharlie import Game153CircusCharlie
+from .game_154_pang import Game154Pang
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -344,3 +345,4 @@ ArcadeRegistry.register(Game150TagTeamWrestling)
 ArcadeRegistry.register(Game151SpaceDungeon)
 ArcadeRegistry.register(Game152Flicky)
 ArcadeRegistry.register(Game153CircusCharlie)
+ArcadeRegistry.register(Game154Pang)
