@@ -125,6 +125,7 @@ public class MainActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setUserAgentString(s.getUserAgentString() + " AmadeusAndroid/1.1");
         webView.setBackgroundColor(0xff111316);
+        webView.addJavascriptInterface(new NativeUdpBridge(), "AmadeusNative");
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return request.isForMainFrame() && navigate(view, request.getUrl());
@@ -197,4 +198,29 @@ public class MainActivity extends Activity {
     @Override protected void onResume() { super.onResume();if(webView!=null)webView.onResume(); }
     @Override protected void onDestroy() { stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
+
+    public class NativeUdpBridge {
+        @android.webkit.JavascriptInterface
+        public String sendUdp(String host, int port, String message, int timeoutMs) {
+            try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
+                socket.setSoTimeout(timeoutMs > 0 ? timeoutMs : 1000);
+                byte[] data = message.getBytes(StandardCharsets.UTF_8);
+                java.net.InetAddress addr = java.net.InetAddress.getByName(host);
+                java.net.DatagramPacket packet = new java.net.DatagramPacket(data, data.length, addr, port);
+                socket.send(packet);
+
+                byte[] rxBuf = new byte[2048];
+                java.net.DatagramPacket rxPacket = new java.net.DatagramPacket(rxBuf, rxBuf.length);
+                socket.receive(rxPacket);
+                return new String(rxPacket.getData(), 0, rxPacket.getLength(), StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                return "{\"status\":\"error\",\"error\":\"" + e.getMessage() + "\"}";
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean isNative() {
+            return true;
+        }
+    }
 }

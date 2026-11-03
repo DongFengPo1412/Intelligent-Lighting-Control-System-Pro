@@ -45,9 +45,13 @@ void ArcadeScoreStore::SaveHighScore(uint8_t game_id, uint32_t high_score)
     if (high_score > existing) {
         err = nvs_set_u32(handle, key, high_score);
         if (err == ESP_OK) {
-            nvs_commit(handle);
-            ESP_LOGI(TAG, "Persisted new high score for game #%03u: %u (previous: %u)",
-                     (unsigned int)game_id, (unsigned int)high_score, (unsigned int)existing);
+            esp_err_t commit_err = nvs_commit(handle);
+            if (commit_err == ESP_OK) {
+                ESP_LOGI(TAG, "Persisted new high score for game #%03u: %u (previous: %u)",
+                         (unsigned int)game_id, (unsigned int)high_score, (unsigned int)existing);
+            } else {
+                ESP_LOGE(TAG, "Failed to commit high score to NVS: %s", esp_err_to_name(commit_err));
+            }
         } else {
             ESP_LOGE(TAG, "Failed to write high score to NVS: %s", esp_err_to_name(err));
         }
@@ -56,3 +60,4 @@ void ArcadeScoreStore::SaveHighScore(uint8_t game_id, uint32_t high_score)
 }
 
 } // namespace arcade
+

@@ -87,8 +87,47 @@
     toastTimer = setTimeout(() => ($("toast").hidden = true), 6500);
   }
   async function api(path, data, method = "POST", timeout = 15000) {
-    if (location.protocol === "file:")
+    if (location.protocol === "file:") {
+      if (window.AmadeusNative && typeof window.AmadeusNative.sendUdp === "function" && path.startsWith("/api/arcade")) {
+        const host = localStorage.getItem("esp32_ip") || "192.168.4.1";
+        const port = 8888;
+        const reqId = "req_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+        let cmd = null;
+        if (path === "/api/arcade/select") {
+          cmd = { cmd: "arcade", action: "select", game_id: data.game_id };
+        } else if (path === "/api/arcade/start") {
+          cmd = { cmd: "arcade", action: "start" };
+        } else if (path === "/api/arcade/pause") {
+          cmd = { cmd: "arcade", action: "pause" };
+        } else if (path === "/api/arcade/resume") {
+          cmd = { cmd: "arcade", action: "resume" };
+        } else if (path === "/api/arcade/reset") {
+          cmd = { cmd: "arcade", action: "reset" };
+        } else if (path === "/api/arcade/stop") {
+          cmd = { cmd: "arcade", action: "exit" };
+        } else if (path === "/api/arcade/input") {
+          const KEY_BITS = { left: 1, right: 2, up: 4, down: 8, a: 16, b: 32, start: 64, select: 128 };
+          const mask = KEY_BITS[(data.key || "").toLowerCase()] || 0;
+          cmd = { cmd: "arcade", action: "input", down: data.is_down ? mask : 0, pressed: data.is_down ? mask : 0 };
+        } else if (path === "/api/arcade/status" || path === "/api/arcade/heartbeat") {
+          cmd = { cmd: "arcade", action: "heartbeat" };
+        } else if (path === "/api/arcade/frame") {
+          cmd = { cmd: "frame" };
+        }
+        if (cmd) {
+          const envelope = { request_id: reqId, command: JSON.stringify(cmd) };
+          const replyStr = window.AmadeusNative.sendUdp(host, port, JSON.stringify(envelope), 1500);
+          try {
+            const reply = JSON.parse(replyStr);
+            if (reply.status === "error") throw Error(reply.error || "ESP32 UDP 响应错误");
+            return reply;
+          } catch (err) {
+            throw Error("ESP32 UDP 响应解析失败: " + err.message);
+          }
+        }
+      }
       throw Error("尚未连接电脑服务，请打开连接设置");
+    }
     const abort = new AbortController(),
       timer = setTimeout(() => abort.abort(), timeout);
     try {
@@ -1045,8 +1084,18 @@
 
     const titleMap = {
       1: "[#001] 超级马里奥 (Super Mario Bros.)",
+      9: "[#009] 飞翔小鸟 (Flappy Bird 16)",
+      10: "[#010] 堆叠大师 (Stack Master)",
+      20: "[#020] 双人乒乓 (Pong 1972)",
+      21: "[#021] 经典打砖块 (Breakout 1976)",
+      26: "[#026] 太空侵略者 (Space Invaders 1978)",
       33: "[#033] 经典贪吃蛇 (Classic Snake)",
+      34: "[#034] 吃豆人 (Pac-Man 1980)",
+      38: "[#038] 炸弹人 (Bomberman 1983)",
       41: "[#041] 俄罗斯方块 (Tetris)",
+      54: "[#054] 推箱子 (Sokoban 1982)",
+      74: "[#074] 变道赛车 (Highway Racer 1979)",
+      97: "[#097] 青蛙过河 (Frogger 1981)",
     };
 
     if ($("arcadeGameTitle")) $("arcadeGameTitle").textContent = titleMap[gid] || `街机游戏 #${gid}`;

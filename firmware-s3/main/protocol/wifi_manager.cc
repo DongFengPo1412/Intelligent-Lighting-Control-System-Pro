@@ -207,7 +207,7 @@ void WifiManager::UdpServerTaskLoop()
         char id[65];
         uint32_t command_hash;
         TickType_t tick;
-        char response[512];
+        char response[1024];
     };
     static CachedReply recent[16] = {};
     size_t next_reply = 0;
@@ -342,10 +342,19 @@ void WifiManager::UdpServerTaskLoop()
             bool ok = valid_envelope && !conflict && CommandDispatcher::GetInstance().ProcessLine(command, false);
             auto& dm = DisplayManager::GetInstance();
             auto& dispatcher = CommandDispatcher::GetInstance();
-            cJSON* parsed_command=cJSON_Parse(command);
-            cJSON* parsed_name=parsed_command?cJSON_GetObjectItem(parsed_command,"cmd"):nullptr;
-            bool frame_query=cJSON_IsString(parsed_name)&&!strcmp(parsed_name->valuestring,"frame");
-            cJSON_Delete(parsed_command);
+
+            char cmd_name[32] = {0};
+            cJSON* parsed_command = cJSON_Parse(command);
+            if (parsed_command) {
+                cJSON* parsed_name = cJSON_GetObjectItem(parsed_command, "cmd");
+                if (cJSON_IsString(parsed_name) && parsed_name->valuestring) {
+                    strncpy(cmd_name, parsed_name->valuestring, sizeof(cmd_name) - 1);
+                }
+                cJSON_Delete(parsed_command);
+            }
+            bool frame_query = (strcmp(cmd_name, "frame") == 0);
+            bool arcade_cmd = (strcasecmp(cmd_name, "arcade") == 0);
+
             char ack[512];
             snprintf(ack, sizeof(ack),
                      "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u}\n",
@@ -356,19 +365,25 @@ void WifiManager::UdpServerTaskLoop()
                      (unsigned)dispatcher.AudioReceived(), (unsigned)dispatcher.AudioPlayed(),
                      (unsigned)dispatcher.AudioDropped(), (unsigned)dispatcher.AudioErrors(),
                      (unsigned)dispatcher.AudioStackFree());
-            bool arcade_cmd = cJSON_IsString(parsed_name) && !strcasecmp(parsed_name->valuestring, "arcade");
-            if(ok&&frame_query) {
-                static char hex[1537],frame_ack[2304];
-                uint32_t frame_id=dm.SnapshotFrame(hex,sizeof(hex));
-                cJSON* frame=cJSON_Parse(ack);
-                cJSON_AddStringToObject(frame,"pixels",hex);
-                cJSON_AddNumberToObject(frame,"frame_id",frame_id);
-                cJSON_AddStringToObject(frame,"frame_source","hardware_pwm");
-                if(cJSON_PrintPreallocated(frame,frame_ack,sizeof(frame_ack),false))
-                    sendto(sock,frame_ack,strlen(frame_ack),0,(struct sockaddr*)&source_addr,sizeof(source_addr));
-                cJSON_Delete(frame);cJSON_Delete(envelope);continue;
-            }
-            if (arcade_cmd) {
+
+            const char* send_buf = ack;
+            static char frame_ack[2304];
+            static char arcade_ack[1024];
+
+            if (ok && frame_query) {
+                static char hex[1537];
+                uint32_t frame_id = dm.SnapshotFrame(hex, sizeof(hex));
+                cJSON* frame = cJSON_Parse(ack);
+                if (frame) {
+                    cJSON_AddStringToObject(frame, "pixels", hex);
+                    cJSON_AddNumberToObject(frame, "frame_id", frame_id);
+                    cJSON_AddStringToObject(frame, "frame_source", "hardware_pwm");
+                    if (cJSON_PrintPreallocated(frame, frame_ack, sizeof(frame_ack), false)) {
+                        send_buf = frame_ack;
+                    }
+                    cJSON_Delete(frame);
+                }
+            } else if (arcade_cmd) {
                 auto& am = arcade::ArcadeManager::GetInstance();
                 auto st = am.GetCurrentStatus();
                 cJSON* ack_json = cJSON_Parse(ack);
@@ -385,25 +400,24 @@ void WifiManager::UdpServerTaskLoop()
                     cJSON_AddNumberToObject(arc_obj, "control_type", (int)am.GetCurrentControlType());
                     cJSON_AddItemToObject(ack_json, "arcade", arc_obj);
 
-                    static char arcade_ack[1024];
                     if (cJSON_PrintPreallocated(ack_json, arcade_ack, sizeof(arcade_ack), false)) {
-                        sendto(sock, arcade_ack, strlen(arcade_ack), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
-                        cJSON_Delete(ack_json);
-                        cJSON_Delete(envelope);
-                        continue;
+                        send_buf = arcade_ack;
                     }
                     cJSON_Delete(ack_json);
                 }
             }
+
             if (wrapped && valid_envelope && !conflict) {
                 auto& entry = recent[next_reply++ % 16];
                 entry.sender = source_addr.sin_addr.s_addr;
-                snprintf(entry.id, sizeof(entry.id), "%s", id);
+                strncpy(entry.id, id, sizeof(entry.id) - 1);
+                entry.id[sizeof(entry.id) - 1] = '\0';
                 entry.command_hash = hash;
                 entry.tick = xTaskGetTickCount();
-                snprintf(entry.response, sizeof(entry.response), "%s", ack);
+                strncpy(entry.response, send_buf, sizeof(entry.response) - 1);
+                entry.response[sizeof(entry.response) - 1] = '\0';
             }
-            sendto(sock, ack, strlen(ack), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+            sendto(sock, send_buf, strlen(send_buf), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
             cJSON_Delete(envelope);
         }
     }

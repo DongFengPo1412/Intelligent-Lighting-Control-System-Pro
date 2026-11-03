@@ -134,3 +134,16 @@ def render_result_screen(fb: bytearray, is_victory: bool, score: int, high_score
     draw_char_3x5(fb, 'A', 1, 11, 70, 70, 80)
     set_pixel(fb, 7, 14, 0, b_val, int(b_val * 0.8))
     set_pixel(fb, 8, 14, 0, b_val, int(b_val * 0.8))
+
+
+class ArcadeResultScreen:
+    @staticmethod
+    def render(is_victory: bool, score: int, high_score: int, anim_time: float = 0.0) -> bytearray:
+        fb = bytearray(768)
+        render_result_screen(fb, is_victory, score, high_score, anim_time)
+        return fb
+
+    @staticmethod
+    def render_into(fb: bytearray, is_victory: bool, score: int, high_score: int, anim_time: float = 0.0) -> None:
+        render_result_screen(fb, is_victory, score, high_score, anim_time)
+

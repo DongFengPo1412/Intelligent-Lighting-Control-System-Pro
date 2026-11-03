@@ -30,8 +30,18 @@ from arcade.base_cartridge import (
     KEY_SELECT,
 )
 from arcade.game_001_mario import Game001Mario
+from arcade.game_009_flappy_bird import Game009FlappyBird
+from arcade.game_010_stack import Game010Stack
+from arcade.game_020_pong import Game020Pong
+from arcade.game_021_breakout import Game021Breakout
+from arcade.game_026_space_invaders import Game026SpaceInvaders
 from arcade.game_033_snake import Game033Snake
+from arcade.game_034_pacman import Game034Pacman
+from arcade.game_038_bomberman import Game038Bomberman
 from arcade.game_041_tetris import Game041Tetris
+from arcade.game_054_sokoban import Game054Sokoban
+from arcade.game_074_highway_racer import Game074HighwayRacer
+from arcade.game_097_frogger import Game097Frogger
 
 KEY_MAP = {
     "left": KEY_LEFT,
@@ -61,8 +71,18 @@ class ArcadeSession:
         self.broadcast_fn = broadcast_fn
         self.cartridges: Dict[int, BaseCartridge] = {
             1: Game001Mario(),
+            9: Game009FlappyBird(),
+            10: Game010Stack(),
+            20: Game020Pong(),
+            21: Game021Breakout(),
+            26: Game026SpaceInvaders(),
             33: Game033Snake(),
+            34: Game034Pacman(),
+            38: Game038Bomberman(),
             41: Game041Tetris(),
+            54: Game054Sokoban(),
+            74: Game074HighwayRacer(),
+            97: Game097Frogger(),
         }
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
@@ -96,7 +116,7 @@ class ArcadeSession:
 
     def select_game(self, game_id: int, force_simulation: bool = False) -> Dict[str, Any]:
         """选择卡带：向 ESP32 下发正式指令或在显式离线模拟时切换本地卡带"""
-        valid_ids = [1, 33, 41]
+        valid_ids = [1, 9, 10, 20, 21, 26, 33, 34, 38, 41, 54, 74, 97]
         if game_id not in valid_ids:
             return {"status": "error", "error": "invalid_game_id", "message": f"不支持的街机编号: {game_id}"}
 
@@ -143,7 +163,9 @@ class ArcadeSession:
         }
 
     def start(self, force_simulation: bool = False) -> Dict[str, Any]:
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "start"})
             if res.get("status") == "ok":
                 self._update_status_from_hardware(res.get("arcade", {}))
@@ -157,7 +179,9 @@ class ArcadeSession:
         return {"status": "error", "error": "no_cartridge_selected"}
 
     def pause(self) -> Dict[str, Any]:
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "pause"})
             if res.get("status") == "ok":
                 self._update_status_from_hardware(res.get("arcade", {}))
@@ -171,7 +195,9 @@ class ArcadeSession:
         return {"status": "error", "error": "no_cartridge_selected"}
 
     def resume(self) -> Dict[str, Any]:
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "resume"})
             if res.get("status") == "ok":
                 self._update_status_from_hardware(res.get("arcade", {}))
@@ -187,7 +213,9 @@ class ArcadeSession:
     def reset(self) -> Dict[str, Any]:
         self.keys_down = 0
         self.keys_pressed = 0
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "reset"})
             if res.get("status") == "ok":
                 self._update_status_from_hardware(res.get("arcade", {}))
@@ -207,7 +235,9 @@ class ArcadeSession:
         if self.task and not self.task.done():
             self.task.cancel()
 
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "exit"})
             self.status["state"] = STATE_TITLE
             self.status["state_name"] = "TITLE"
@@ -231,7 +261,9 @@ class ArcadeSession:
         else:
             self.keys_down &= ~mask
 
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             cmd = {
                 "cmd": "arcade",
                 "action": "input",
@@ -256,7 +288,9 @@ class ArcadeSession:
 
     def heartbeat(self) -> Dict[str, Any]:
         """心跳保活与状态回传"""
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "heartbeat"})
             if res.get("status") == "ok":
                 self._update_status_from_hardware(res.get("arcade", {}))
@@ -268,7 +302,17 @@ class ArcadeSession:
 
     def get_frame(self) -> Dict[str, Any]:
         """获取当前帧缓冲与 HUD 状态"""
-        if not self.simulated_mode and self.is_hardware_available():
+        if not self.simulated_mode:
+            if not self.is_hardware_available():
+                return {
+                    "running": False,
+                    "status": self.status,
+                    "hex": "",
+                    "source": "hardware_offline",
+                    "frame_id": 0,
+                    "simulated": False,
+                    "error": "device_offline",
+                }
             # 从真实硬件快照帧缓冲 (hardware_pwm)
             res = self._send_esp32_command({"cmd": "frame"})
             if res.get("status") == "ok" and "pixels" in res:
@@ -298,8 +342,9 @@ class ArcadeSession:
         return {
             "running": False,
             "status": self.status,
-            "hex": "00" * 768,
+            "hex": "",
             "source": "none",
+            "frame_id": 0,
             "simulated": False,
         }
 

@@ -1,8 +1,18 @@
 // arcade_manager.cpp —— 统一街机游戏运行管理中枢
 #include "arcade_manager.h"
 #include "game_001_mario.h"
+#include "game_009_flappy_bird.h"
+#include "game_010_stack.h"
+#include "game_020_pong.h"
+#include "game_021_breakout.h"
+#include "game_026_space_invaders.h"
 #include "game_033_snake.h"
+#include "game_034_pacman.h"
+#include "game_038_bomberman.h"
 #include "game_041_tetris.h"
+#include "game_054_sokoban.h"
+#include "game_074_highway_racer.h"
+#include "game_097_frogger.h"
 #include <string.h>
 #include <esp_timer.h>
 #include <esp_log.h>
@@ -12,8 +22,18 @@ static const char* TAG = "ArcadeManager";
 namespace arcade {
 
 static Game001Mario s_mario;
+static Game009FlappyBird s_flappy_bird;
+static Game010Stack s_stack;
+static Game020Pong s_pong;
+static Game021Breakout s_breakout;
+static Game026SpaceInvaders s_space_invaders;
 static Game033Snake s_snake;
+static Game034Pacman s_pacman;
+static Game038Bomberman s_bomberman;
 static Game041Tetris s_tetris;
+static Game054Sokoban s_sokoban;
+static Game074HighwayRacer s_highway_racer;
+static Game097Frogger s_frogger;
 
 ArcadeManager& ArcadeManager::GetInstance()
 {
@@ -40,8 +60,18 @@ Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
 {
     switch (game_id) {
         case 1:  return &s_mario;
+        case 9:  return &s_flappy_bird;
+        case 10: return &s_stack;
+        case 20: return &s_pong;
+        case 21: return &s_breakout;
+        case 26: return &s_space_invaders;
         case 33: return &s_snake;
+        case 34: return &s_pacman;
+        case 38: return &s_bomberman;
         case 41: return &s_tetris;
+        case 54: return &s_sokoban;
+        case 74: return &s_highway_racer;
+        case 97: return &s_frogger;
         default: return nullptr;
     }
 }

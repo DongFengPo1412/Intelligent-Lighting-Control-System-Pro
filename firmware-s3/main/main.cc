@@ -8,6 +8,7 @@
 #include "command_dispatcher.h"
 #include "audio_hal.h"
 #include "wifi_manager.h"
+#include <nvs_flash.h>
 #if __has_include("wifi_config.private.h")
 #include "wifi_config.private.h"
 #else
@@ -28,6 +29,14 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "===============================================================");
 
     // 1. 初始化显示引擎 (挂载至 GPIO 17，优先获取 RMT Channel 0 与硬件 GDMA)
+    // 0. 初始化 NVS 非易失性存储 (街机最高分持久化与 Wi-Fi 凭据)
+    esp_err_t nvs_ret = nvs_flash_init();
+    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        nvs_ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(nvs_ret);
+
     DisplayManager& display = DisplayManager::GetInstance();
     ESP_ERROR_CHECK(display.Init(GPIO_NUM_17));
 
