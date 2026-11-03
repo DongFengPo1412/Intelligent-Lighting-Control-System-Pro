@@ -183,6 +183,7 @@ from .game_177_depthcharge import Game177Depthcharge
 from .game_178_puzzloop import Game178PuzzLoop
 from .game_179_gauntlet import Game179Gauntlet
 from .game_180_clowns import Game180Clowns
+from .game_181_popeye import Game181Popeye
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -398,3 +399,4 @@ ArcadeRegistry.register(Game177Depthcharge)
 ArcadeRegistry.register(Game178PuzzLoop)
 ArcadeRegistry.register(Game179Gauntlet)
 ArcadeRegistry.register(Game180Clowns)
+ArcadeRegistry.register(Game181Popeye)
