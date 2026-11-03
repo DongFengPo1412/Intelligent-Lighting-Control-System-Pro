@@ -331,3 +331,4 @@ class Game178PuzzLoop(BaseCartridge):
             "next_color": self.next_color,
             "bullet_active": self.bullet["active"],
         }
+

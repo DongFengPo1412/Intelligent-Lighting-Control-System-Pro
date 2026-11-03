@@ -380,3 +380,4 @@ void Game189Raiden::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

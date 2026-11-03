@@ -322,3 +322,4 @@ class Game177Depthcharge(BaseCartridge):
             "torpedoes_count": len(self.torpedoes),
             "subs_alive": sum(1 for s in self.subs if s["alive"]),
         }
+

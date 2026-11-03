@@ -270,3 +270,4 @@ void Game143Plotting::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

@@ -364,3 +364,4 @@ class Game157Tapper(BaseCartridge):
             "mugs_count": len(self.mugs),
             "patrons_active": sum(1 for p in self.patrons if p["active"]),
         }
+

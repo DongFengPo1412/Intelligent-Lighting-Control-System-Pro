@@ -316,3 +316,4 @@ void Game185CongoBongo::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

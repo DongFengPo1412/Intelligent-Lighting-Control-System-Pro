@@ -364,3 +364,4 @@ class Game165FoodFight(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

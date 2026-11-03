@@ -284,3 +284,4 @@ void Game161Miner2049er::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

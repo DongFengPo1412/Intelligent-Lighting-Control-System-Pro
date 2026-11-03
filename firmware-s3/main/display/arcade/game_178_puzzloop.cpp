@@ -266,3 +266,4 @@ void Game178PuzzLoop::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

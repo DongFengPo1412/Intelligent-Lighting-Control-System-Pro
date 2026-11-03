@@ -414,3 +414,4 @@ class Game146Butasan(BaseCartridge):
             "bombs_count": len(self.bombs),
             "explosions_count": len(self.explosions),
         }
+

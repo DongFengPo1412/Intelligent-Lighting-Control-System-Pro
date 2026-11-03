@@ -353,3 +353,4 @@ class Game148WreckingCrew(BaseCartridge):
             "walls_count": len(self.walls),
             "dynamite_count": sum(1 for d in self.dynamite if d["active"]),
         }
+

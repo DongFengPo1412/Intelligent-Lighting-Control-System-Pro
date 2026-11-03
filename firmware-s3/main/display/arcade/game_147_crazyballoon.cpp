@@ -257,3 +257,4 @@ void Game147CrazyBalloon::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

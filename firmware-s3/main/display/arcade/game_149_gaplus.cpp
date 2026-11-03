@@ -345,3 +345,4 @@ void Game149Gaplus::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

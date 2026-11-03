@@ -430,3 +430,4 @@ class Game179Gauntlet(BaseCartridge):
             "monsters_alive": len([m for m in self.monsters if m["alive"]]),
             "generators_alive": len([g for g in self.generators if g["hp"] > 0]),
         }
+

@@ -308,3 +308,4 @@ void Game172Timber::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

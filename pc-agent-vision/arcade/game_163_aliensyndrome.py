@@ -403,3 +403,4 @@ class Game163AlienSyndrome(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

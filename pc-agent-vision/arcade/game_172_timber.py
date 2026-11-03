@@ -388,3 +388,4 @@ class Game172Timber(BaseCartridge):
             "bear_alive": self.bear_alive,
             "bee_alive": self.bee_alive,
         }
+

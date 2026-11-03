@@ -377,3 +377,4 @@ void Game187ReturnOfTheInvaders::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

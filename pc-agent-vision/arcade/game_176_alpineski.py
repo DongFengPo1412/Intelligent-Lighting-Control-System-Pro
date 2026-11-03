@@ -331,3 +331,4 @@ class Game176AlpineSki(BaseCartridge):
             "distance": self.distance,
             "in_air": self.in_air,
         }
+

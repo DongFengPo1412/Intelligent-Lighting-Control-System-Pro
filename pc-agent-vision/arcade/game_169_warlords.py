@@ -331,3 +331,4 @@ class Game169Warlords(BaseCartridge):
             "ball_x": self.ball["x"],
             "ball_y": self.ball["y"],
         }
+

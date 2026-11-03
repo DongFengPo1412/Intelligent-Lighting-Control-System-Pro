@@ -368,3 +368,4 @@ class Game186ChampionBaseball(BaseCartridge):
             "bases": self.bases[:],
             "ball_active": self.ball_active,
         }
+

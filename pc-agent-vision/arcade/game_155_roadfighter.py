@@ -382,3 +382,4 @@ class Game155RoadFighter(BaseCartridge):
             "fuel": self.fuel,
             "is_slipping": self.is_slipping,
         }
+

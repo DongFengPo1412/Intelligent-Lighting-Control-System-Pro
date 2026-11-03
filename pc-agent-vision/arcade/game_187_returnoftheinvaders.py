@@ -431,3 +431,4 @@ class Game187ReturnOfTheInvaders(BaseCartridge):
             "alive_aliens": len([a for a in self.aliens if a["alive"]]),
             "ufo_active": self.ufo_active,
         }
+

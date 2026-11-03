@@ -373,3 +373,4 @@ class Game185CongoBongo(BaseCartridge):
             "bongo_asleep": self.bongo_asleep,
             "tail_ignited": self.tail_ignited,
         }
+

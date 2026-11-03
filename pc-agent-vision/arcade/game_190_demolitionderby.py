@@ -376,3 +376,4 @@ class Game190DemolitionDerby(BaseCartridge):
             "speed": self.speed,
             "alive_rivals": len([r for r in self.rivals if r["alive"]]),
         }
+

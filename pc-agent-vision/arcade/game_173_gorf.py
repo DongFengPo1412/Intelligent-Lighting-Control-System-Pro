@@ -443,3 +443,4 @@ class Game173Gorf(BaseCartridge):
             "shield_bits": bin(self.shield_bits),
             "flagship_core_hp": self.flagship_core_hp,
         }
+

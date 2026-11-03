@@ -400,3 +400,4 @@ class Game152Flicky(BaseCartridge):
             "rescued_count": self.rescued_count,
             "following_count": sum(1 for c in self.chicks if c["state"] == "following"),
         }
+

@@ -297,3 +297,4 @@ void Game186ChampionBaseball::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

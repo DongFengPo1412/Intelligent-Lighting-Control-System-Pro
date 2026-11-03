@@ -356,3 +356,4 @@ class Game161Miner2049er(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

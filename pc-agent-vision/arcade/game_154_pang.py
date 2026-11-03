@@ -337,3 +337,4 @@ class Game154Pang(BaseCartridge):
             "harpoon_active": self.harpoon_active,
             "balls_count": len(self.balls),
         }
+

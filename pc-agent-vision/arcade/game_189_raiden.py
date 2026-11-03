@@ -430,3 +430,4 @@ class Game189Raiden(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

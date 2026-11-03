@@ -402,3 +402,4 @@ class Game184Commando(BaseCartridge):
             "distance": self.distance,
             "gate_breached": self.gate_breached,
         }
+

@@ -364,3 +364,4 @@ class Game167CrystalCastles(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

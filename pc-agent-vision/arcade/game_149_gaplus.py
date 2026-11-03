@@ -408,3 +408,4 @@ class Game149Gaplus(BaseCartridge):
             "beam_energy": self.beam_energy,
             "enemies_count": sum(1 for e in self.enemies if e["alive"]),
         }
+

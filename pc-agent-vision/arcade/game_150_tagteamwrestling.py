@@ -427,3 +427,4 @@ class Game150TagTeamWrestling(BaseCartridge):
             "grapple_meter": self.grapple_meter,
             "pin_count": self.pin_count,
         }
+

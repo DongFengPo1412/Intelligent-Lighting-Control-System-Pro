@@ -297,3 +297,4 @@ class Game153CircusCharlie(BaseCartridge):
             "y": self.y,
             "is_jumping": self.is_jumping,
         }
+

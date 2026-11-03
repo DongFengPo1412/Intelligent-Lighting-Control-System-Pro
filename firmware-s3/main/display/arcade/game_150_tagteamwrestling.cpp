@@ -316,3 +316,4 @@ void Game150TagTeamWrestling::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

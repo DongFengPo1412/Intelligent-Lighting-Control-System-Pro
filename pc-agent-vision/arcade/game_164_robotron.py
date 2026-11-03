@@ -383,3 +383,4 @@ class Game164Robotron(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

@@ -297,3 +297,4 @@ void Game157Tapper::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

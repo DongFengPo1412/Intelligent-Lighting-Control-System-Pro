@@ -409,3 +409,4 @@ class Game142Mariner(BaseCartridge):
             "torpedoes_count": len(self.torpedoes),
             "missiles_count": len(self.vertical_missiles),
         }
+

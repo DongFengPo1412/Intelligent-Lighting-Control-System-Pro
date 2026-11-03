@@ -340,3 +340,4 @@ class Game139Amidar(BaseCartridge):
             "is_jumping": self.jump_timer > 0.0,
             "boxes_cleared": sum(sum(1 for b in row if b) for row in self.boxes),
         }
+

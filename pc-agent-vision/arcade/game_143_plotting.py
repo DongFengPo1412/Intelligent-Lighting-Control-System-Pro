@@ -337,3 +337,4 @@ class Game143Plotting(BaseCartridge):
             "hand_block": self.hand_block,
             "wildcards": self.wildcards_left,
         }
+

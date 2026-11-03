@@ -385,3 +385,4 @@ class Game158Qix(BaseCartridge):
             "is_drawing": self.is_drawing,
             "percent_claimed": self.percent_claimed,
         }
+

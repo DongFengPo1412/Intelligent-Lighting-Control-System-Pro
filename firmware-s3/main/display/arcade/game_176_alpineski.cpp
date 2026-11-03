@@ -256,3 +256,4 @@ void Game176AlpineSki::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

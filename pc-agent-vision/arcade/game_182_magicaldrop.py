@@ -336,3 +336,4 @@ class Game182MagicalDrop(BaseCartridge):
             "bubbles_cleared": self.bubbles_cleared,
             "drop_timer": self.drop_timer,
         }
+

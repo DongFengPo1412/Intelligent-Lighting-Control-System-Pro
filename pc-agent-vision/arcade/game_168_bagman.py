@@ -383,3 +383,4 @@ class Game168Bagman(BaseCartridge):
             "px": self.px,
             "py": self.py,
         }
+

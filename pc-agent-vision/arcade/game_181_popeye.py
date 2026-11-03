@@ -357,3 +357,4 @@ class Game181Popeye(BaseCartridge):
             "hearts_collected": self.hearts_collected,
             "hearts_on_screen": len(self.hearts),
         }
+

@@ -433,3 +433,4 @@ void Game136Vanguard::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

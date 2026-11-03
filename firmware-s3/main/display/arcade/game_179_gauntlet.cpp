@@ -339,3 +339,4 @@ void Game179Gauntlet::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

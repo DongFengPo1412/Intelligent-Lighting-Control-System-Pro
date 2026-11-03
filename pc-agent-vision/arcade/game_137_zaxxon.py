@@ -397,3 +397,4 @@ class Game137Zaxxon(BaseCartridge):
             "boss_active": self.boss_active,
             "boss_hp": self.boss_hp,
         }
+

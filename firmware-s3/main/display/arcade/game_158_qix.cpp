@@ -316,3 +316,4 @@ void Game158Qix::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

@@ -338,3 +338,4 @@ class Game147CrazyBalloon(BaseCartridge):
             "swing_amp": self.swing_amp,
             "hazards_count": len(self.hazards),
         }
+

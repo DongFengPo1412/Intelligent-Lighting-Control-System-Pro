@@ -255,3 +255,4 @@ void Game182MagicalDrop::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

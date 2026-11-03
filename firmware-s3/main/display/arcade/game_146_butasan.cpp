@@ -353,3 +353,4 @@ void Game146Butasan::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

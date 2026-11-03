@@ -376,3 +376,4 @@ class Game145Tumblepop(BaseCartridge):
             "is_vacuuming": self.is_vacuuming,
             "ball_active": self.rolling_ball is not None,
         }
+

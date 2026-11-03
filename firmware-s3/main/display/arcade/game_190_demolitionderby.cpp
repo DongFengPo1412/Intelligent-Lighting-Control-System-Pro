@@ -246,3 +246,4 @@ void Game190DemolitionDerby::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

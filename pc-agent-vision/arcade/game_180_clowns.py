@@ -280,3 +280,4 @@ class Game180Clowns(BaseCartridge):
             "balloons_left": len(self.balloons),
             "seesaw_tilt": self.seesaw_tilt,
         }
+

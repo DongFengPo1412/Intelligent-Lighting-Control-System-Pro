@@ -367,3 +367,4 @@ class Game170Battlezone(BaseCartridge):
             "py": self.py,
             "angle": self.angle,
         }
+

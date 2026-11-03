@@ -356,3 +356,4 @@ class Game175DiscsOfTron(BaseCartridge):
             "shield_active": self.shield_active,
             "discs_count": len(self.discs),
         }
+

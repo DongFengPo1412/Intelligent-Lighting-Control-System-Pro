@@ -401,3 +401,4 @@ class Game159SpyVsSpy(BaseCartridge):
             "has_briefcase": self.has_briefcase,
             "items_count": len(self.items_found),
         }
+

@@ -292,3 +292,4 @@ void Game168Bagman::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

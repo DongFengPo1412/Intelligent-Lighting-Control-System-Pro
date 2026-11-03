@@ -447,3 +447,4 @@ class Game151SpaceDungeon(BaseCartridge):
             "treasures_carried": self.treasures_carried,
             "treasures_banked": self.treasures_banked,
         }
+

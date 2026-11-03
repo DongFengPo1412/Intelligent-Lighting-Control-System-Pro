@@ -449,3 +449,4 @@ class Game136Vanguard(BaseCartridge):
             "invulnerable": self.invulnerable_timer > 0.0,
             "gond_hp": self.gond_hp,
         }
+

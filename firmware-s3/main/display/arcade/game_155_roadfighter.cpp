@@ -300,3 +300,4 @@ void Game155RoadFighter::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+

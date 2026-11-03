@@ -287,3 +287,4 @@ void Game139Amidar::Render(uint8_t* fb) {
 }
 
 } // namespace arcade
+
