@@ -127,6 +127,7 @@ from .game_121_spacetaxi import Game121SpaceTaxi
 from .game_122_bosconian import Game122Bosconian
 from .game_123_targ import Game123Targ
 from .game_124_carnival import Game124Carnival
+from .game_125_bumpingbuggies import Game125BumpingBuggies
 
 class ArcadeRegistry:
     """街机游戏注册与元数据管理器"""
@@ -286,3 +287,4 @@ ArcadeRegistry.register(Game121SpaceTaxi)
 ArcadeRegistry.register(Game122Bosconian)
 ArcadeRegistry.register(Game123Targ)
 ArcadeRegistry.register(Game124Carnival)
+ArcadeRegistry.register(Game125BumpingBuggies)
