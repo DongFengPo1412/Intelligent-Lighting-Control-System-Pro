@@ -53,6 +53,7 @@ private:
     uint32_t last_heartbeat_time_ms_ = 0;
     bool is_network_disconnected_ = false;
     bool watchdog_enabled_ = true;
+    CartridgeState last_state_ = STATE_TITLE;  // 用于检测"离开 PLAYING"事件并触发最高分落盘
 };
 
 } // namespace arcade

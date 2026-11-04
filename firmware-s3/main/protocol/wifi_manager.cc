@@ -376,13 +376,16 @@ void WifiManager::UdpServerTaskLoop()
                 cJSON* frame = cJSON_Parse(ack);
                 if (frame) {
                     cJSON_AddStringToObject(frame, "pixels", hex);
+                    cJSON_AddStringToObject(frame, "hex", hex);
                     cJSON_AddNumberToObject(frame, "frame_id", frame_id);
                     cJSON_AddStringToObject(frame, "frame_source", "hardware_pwm");
                     if (cJSON_PrintPreallocated(frame, frame_ack, sizeof(frame_ack), false)) {
-                        send_buf = frame_ack;
+                        sendto(sock, frame_ack, strlen(frame_ack), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
                     }
                     cJSON_Delete(frame);
                 }
+                cJSON_Delete(envelope);
+                continue;
             } else if (arcade_cmd) {
                 auto& am = arcade::ArcadeManager::GetInstance();
                 auto st = am.GetCurrentStatus();

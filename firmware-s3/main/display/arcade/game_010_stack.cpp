@@ -39,7 +39,6 @@ Game010Stack::Game010Stack()
       perfect_flash_(0.0f),
       state_timer_(0.0f),
       anim_timer_(0.0f) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     for (int i = 0; i < kMaxDebris; ++i) {
         debris_[i].active = false;
     }
@@ -51,11 +50,11 @@ void Game010Stack::GetLayerColor(int layer_idx, uint8_t& r, uint8_t& g, uint8_t&
 }
 
 void Game010Stack::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game010Stack::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     perfect_combo_ = 0;
@@ -368,3 +367,4 @@ CartridgeStatus Game010Stack::GetStatus() const {
 }
 
 } // namespace arcade
+

@@ -19,7 +19,6 @@ Game038Bomberman::Game038Bomberman()
       anim_timer_(0.0f),
       flame_count_(0),
       remaining_enemies_(kNumEnemies) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     bomb_.active = false;
 }
 
@@ -31,11 +30,11 @@ void Game038Bomberman::ResetPlayer() {
 }
 
 void Game038Bomberman::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game038Bomberman::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     lives_ = 3;
@@ -185,6 +184,10 @@ void Game038Bomberman::ExplodeBomb() {
         }
     }
 
+    ApplyFlameDamage();
+}
+
+void Game038Bomberman::ApplyFlameDamage() {
     for (int f = 0; f < flame_count_; ++f) {
         int fx = flames_[f].x;
         int fy = flames_[f].y;
@@ -211,7 +214,7 @@ void Game038Bomberman::ExplodeBomb() {
         if ((int)roundf(player_x_) == fx && (int)roundf(player_y_) == fy) {
             if (lives_ > 1) {
                 lives_--;
-                ResetPlayer();
+                ResetPlayer();  // 清空火焰并回到出生点, 本帧不再重复判定
             } else {
                 lives_ = 0;
                 state_ = STATE_GAMEOVER;
@@ -220,8 +223,8 @@ void Game038Bomberman::ExplodeBomb() {
                     high_score_ = score_;
                     ArcadeScoreStore::SaveHighScore(GetId(), high_score_);
                 }
-                return;
             }
+            return;
         }
     }
 }
@@ -340,6 +343,10 @@ void Game038Bomberman::Update(float dt, uint16_t keys_down, uint16_t keys_presse
             }
         }
         flame_count_ = active_f;
+        if (flame_count_ > 0) {
+            ApplyFlameDamage();
+            if (state_ != STATE_PLAYING) return;
+        }
 
         for (int i = 0; i < kNumEnemies; ++i) {
             if (enemies_[i].alive) {
@@ -449,3 +456,4 @@ CartridgeStatus Game038Bomberman::GetStatus() const {
 }
 
 } // namespace arcade
+

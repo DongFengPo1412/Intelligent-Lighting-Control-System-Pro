@@ -24,7 +24,6 @@ Game074HighwayRacer::Game074HighwayRacer()
       anim_timer_(0.0f),
       spawn_timer_(0.0f),
       crash_anim_timer_(0.0f) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     for (int i = 0; i < kMaxTraffic; ++i) {
         traffic_[i].active = false;
     }
@@ -48,6 +47,7 @@ void Game074HighwayRacer::Init() {
 }
 
 void Game074HighwayRacer::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     lives_ = 3;
@@ -341,3 +341,4 @@ CartridgeStatus Game074HighwayRacer::GetStatus() const {
 }
 
 } // namespace arcade
+

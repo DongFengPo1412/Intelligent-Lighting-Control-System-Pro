@@ -59,6 +59,7 @@ public:
 private:
     void ResetPlayer();
     void ExplodeBomb();
+    void ApplyFlameDamage();  // 火焰存续期间持续致命 (爆炸瞬间 + 每帧)
     void MoveEnemy(BomberEnemy& e, float dt);
     bool IsWalkable(int gx, int gy, bool allow_bomb) const;
 
@@ -85,3 +86,4 @@ private:
 };
 
 } // namespace arcade
+

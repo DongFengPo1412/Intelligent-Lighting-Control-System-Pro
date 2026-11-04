@@ -43,7 +43,6 @@ Game034Pacman::Game034Pacman()
       high_score_(0),
       state_timer_(0.0f),
       anim_timer_(0.0f) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
 }
 
 bool Game034Pacman::IsWall(int x, int y) const {
@@ -76,11 +75,11 @@ void Game034Pacman::ResetPositions() {
 }
 
 void Game034Pacman::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game034Pacman::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     lives_ = 3;

@@ -48,6 +48,7 @@ private:
     CartridgeState state_;
     float frog_x_;
     int frog_y_;
+    int best_row_;  // 本条命到达过的最远行, 仅刷新纪录时加分 (防止上下来回刷分)
     uint8_t lives_;
     uint32_t score_;
     uint32_t high_score_;
@@ -64,3 +65,4 @@ private:
 };
 
 } // namespace arcade
+

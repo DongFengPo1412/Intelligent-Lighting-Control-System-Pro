@@ -87,43 +87,146 @@
     toastTimer = setTimeout(() => ($("toast").hidden = true), 6500);
   }
   async function api(path, data, method = "POST", timeout = 15000) {
+  let activeKeyMask = 0;
+
+  function dispatchNativeUdp(host, port, message, timeoutMs) {
+    if (window.AmadeusNative && typeof window.AmadeusNative.sendUdpAsync === "function") {
+      return new Promise((resolve, reject) => {
+        const cbId = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
+        if (!window.__amadeusUdpCallbacks) window.__amadeusUdpCallbacks = {};
+        const timer = setTimeout(() => {
+          delete window.__amadeusUdpCallbacks[cbId];
+          reject(new Error("ESP32 UDP 响应超时 (1500ms)"));
+        }, timeoutMs + 300);
+        window.__amadeusUdpCallbacks[cbId] = (replyStr) => {
+          clearTimeout(timer);
+          try {
+            const parsed = JSON.parse(replyStr);
+            resolve(parsed);
+          } catch (e) {
+            reject(new Error("ESP32 UDP 报文解析失败: " + e.message));
+          }
+        };
+        try {
+          window.AmadeusNative.sendUdpAsync(host, port, message, timeoutMs, cbId);
+        } catch (e) {
+          clearTimeout(timer);
+          delete window.__amadeusUdpCallbacks[cbId];
+          reject(e);
+        }
+      });
+    } else if (window.AmadeusNative && typeof window.AmadeusNative.sendUdp === "function") {
+      return new Promise((resolve, reject) => {
+        try {
+          const replyStr = window.AmadeusNative.sendUdp(host, port, message, timeoutMs);
+          const parsed = JSON.parse(replyStr);
+          resolve(parsed);
+        } catch (e) {
+          reject(new Error("ESP32 UDP 同步请求失败: " + e.message));
+        }
+      });
+    }
+    return Promise.reject(new Error("未检测到原生 UDP 支持"));
+  }
+
+  async function api(path, data, method = "POST", timeout = 15000) {
     if (location.protocol === "file:") {
-      if (window.AmadeusNative && typeof window.AmadeusNative.sendUdp === "function" && path.startsWith("/api/arcade")) {
+      if (window.AmadeusNative && path.startsWith("/api/arcade")) {
         const host = localStorage.getItem("esp32_ip") || "192.168.4.1";
         const port = 8888;
         const reqId = "req_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
         let cmd = null;
-        if (path === "/api/arcade/select") {
-          cmd = { cmd: "arcade", action: "select", game_id: data.game_id };
-        } else if (path === "/api/arcade/start") {
+
+        // 统一解析 path-based 与 action-based 请求
+        let action = "";
+        let gameId = undefined;
+        let keyName = undefined;
+        let isDown = false;
+
+        if (path === "/api/arcade" && data && data.action) {
+          action = String(data.action).toLowerCase();
+          gameId = data.game_id;
+          keyName = data.key;
+          isDown = data.down !== undefined ? Boolean(data.down) : Boolean(data.is_down);
+        } else if (path.startsWith("/api/arcade/")) {
+          action = path.replace("/api/arcade/", "").toLowerCase();
+          if (data) {
+            gameId = data.game_id;
+            keyName = data.key;
+            isDown = data.down !== undefined ? Boolean(data.down) : Boolean(data.is_down);
+          }
+        }
+
+        if (action === "select") {
+          cmd = { cmd: "arcade", action: "select", game_id: Number(gameId) };
+        } else if (action === "start") {
           cmd = { cmd: "arcade", action: "start" };
-        } else if (path === "/api/arcade/pause") {
+        } else if (action === "pause") {
           cmd = { cmd: "arcade", action: "pause" };
-        } else if (path === "/api/arcade/resume") {
+        } else if (action === "resume") {
           cmd = { cmd: "arcade", action: "resume" };
-        } else if (path === "/api/arcade/reset") {
+        } else if (action === "reset") {
           cmd = { cmd: "arcade", action: "reset" };
-        } else if (path === "/api/arcade/stop") {
+        } else if (action === "stop" || action === "exit") {
+          activeKeyMask = 0;
           cmd = { cmd: "arcade", action: "exit" };
-        } else if (path === "/api/arcade/input") {
+        } else if (action === "key" || action === "input") {
           const KEY_BITS = { left: 1, right: 2, up: 4, down: 8, a: 16, b: 32, start: 64, select: 128 };
-          const mask = KEY_BITS[(data.key || "").toLowerCase()] || 0;
-          cmd = { cmd: "arcade", action: "input", down: data.is_down ? mask : 0, pressed: data.is_down ? mask : 0 };
-        } else if (path === "/api/arcade/status" || path === "/api/arcade/heartbeat") {
+          const mask = KEY_BITS[(keyName || "").toLowerCase()] || 0;
+          if (isDown) {
+            activeKeyMask |= mask;
+          } else {
+            activeKeyMask &= ~mask;
+          }
+          cmd = { cmd: "arcade", action: "input", down: activeKeyMask, pressed: isDown ? mask : 0 };
+        } else if (action === "heartbeat" || action === "status") {
           cmd = { cmd: "arcade", action: "heartbeat" };
-        } else if (path === "/api/arcade/frame") {
+        } else if (action === "frame") {
           cmd = { cmd: "frame" };
         }
+
         if (cmd) {
           const envelope = { request_id: reqId, command: JSON.stringify(cmd) };
-          const replyStr = window.AmadeusNative.sendUdp(host, port, JSON.stringify(envelope), 1500);
-          try {
-            const reply = JSON.parse(replyStr);
-            if (reply.status === "error") throw Error(reply.error || "ESP32 UDP 响应错误");
-            return reply;
-          } catch (err) {
-            throw Error("ESP32 UDP 响应解析失败: " + err.message);
+          const rawReply = await dispatchNativeUdp(host, port, JSON.stringify(envelope), 1500);
+
+          if (!rawReply || typeof rawReply !== "object") {
+            throw new Error("ESP32 UDP 返回了空数据或非 JSON 格式");
           }
+          if (rawReply.status === "error") {
+            throw new Error(rawReply.error || "ESP32 硬件响应错误");
+          }
+
+          // 结构转换：使 Web 界面 HUD 和渲染引擎真实获取 ESP32 状态
+          const result = {
+            status: "ok",
+            source: "esp32_hardware",
+            request_id: rawReply.request_id || reqId,
+            mode: rawReply.mode,
+          };
+
+          if (rawReply.arcade) {
+            result.game_status = {
+              active: Boolean(rawReply.arcade.active),
+              game_id: Number(rawReply.arcade.game_id),
+              name: String(rawReply.arcade.name || ""),
+              state: Number(rawReply.arcade.state),
+              score: Number(rawReply.arcade.score),
+              high_score: Number(rawReply.arcade.high_score),
+              lives: Number(rawReply.arcade.lives),
+              progress: Number(rawReply.arcade.progress),
+              control_type: Number(rawReply.arcade.control_type),
+            };
+            result.arcade = rawReply.arcade;
+          }
+
+          if (rawReply.pixels || rawReply.hex) {
+            result.hex = rawReply.hex || rawReply.pixels;
+            result.pixels = rawReply.pixels || rawReply.hex;
+            result.frame_id = rawReply.frame_id;
+            result.source = rawReply.frame_source || "esp32_hardware";
+          }
+
+          return result;
         }
       }
       throw Error("尚未连接电脑服务，请打开连接设置");
@@ -999,6 +1102,73 @@
   // =========================================================================
   let arcadeHeartbeatTimer = null;
 
+  function updateGamepadLayout(controlType, gid) {
+    const tapStage = $("arcadeTapStage");
+    const dpad = $("arcadeDpad");
+    const actions = $("arcadeActions");
+    const versus = $("arcadeVersusStage");
+    const keyUp = $("marioKeyUp");
+    const keyDown = $("marioKeyDown");
+    const keyLeft = $("marioKeyLeft");
+    const keyRight = $("marioKeyRight");
+    const keyB = $("marioKeyB");
+    const btnA_sub = document.querySelector("#marioKeyA .btn-sub");
+    const btnB_sub = document.querySelector("#marioKeyB .btn-sub");
+    const tapBtn = $("arcadeTapBig");
+
+    // 重置所有区域可见性
+    if (tapStage) tapStage.style.display = "none";
+    if (dpad) dpad.style.display = "grid";
+    if (actions) actions.style.display = "flex";
+    if (versus) versus.style.display = "none";
+    if (keyUp) keyUp.style.visibility = "visible";
+    if (keyDown) keyDown.style.visibility = "visible";
+    if (keyLeft) keyLeft.style.visibility = "visible";
+    if (keyRight) keyRight.style.visibility = "visible";
+    if (keyB) keyB.style.display = "inline-flex";
+
+    const ct = Number(controlType !== undefined ? controlType : 3);
+    const gNum = Number(gid || state.arcadeGid || 1);
+
+    if (ct === 0) {
+      // CTRL_TAP_SINGLE (Flappy Bird #009, Stack #010)
+      if (tapStage) tapStage.style.display = "flex";
+      if (dpad) dpad.style.display = "none";
+      if (actions) actions.style.display = "none";
+      if (tapBtn) {
+        tapBtn.textContent = gNum === 9 ? "🕊️ 拍翅轻点 (TAP)" : "🧱 切削放置 (TAP)";
+      }
+    } else if (ct === 1) {
+      // CTRL_TWO_BUTTON (Breakout #021, Highway Racer #074, Doodle Jump #002)
+      if (keyUp) keyUp.style.visibility = "hidden";
+      if (keyDown) keyDown.style.visibility = "hidden";
+      if (actions) actions.style.display = "none";
+    } else if (ct === 2) {
+      // CTRL_DPAD_4WAY (Snake #033, Pacman #034, Sokoban #054, Frogger #097)
+      if (actions) actions.style.display = "none";
+    } else if (ct === 3) {
+      // CTRL_ARCADE_AB (Mario #001, Space Invaders #026, Bomberman #038, Tetris #041)
+      if (gNum === 41) {
+        if (btnA_sub) btnA_sub.textContent = "旋转";
+        if (btnB_sub) btnB_sub.textContent = "软降";
+      } else if (gNum === 38) {
+        if (btnA_sub) btnA_sub.textContent = "炸弹";
+        if (btnB_sub) btnB_sub.textContent = "引爆";
+      } else if (gNum === 26) {
+        if (btnA_sub) btnA_sub.textContent = "激光";
+        if (btnB_sub) btnB_sub.textContent = "防御";
+      } else {
+        if (btnA_sub) btnA_sub.textContent = "跳跃";
+        if (btnB_sub) btnB_sub.textContent = "冲刺";
+      }
+    } else if (ct === 5) {
+      // CTRL_VERSUS_DUAL (Pong #020)
+      if (dpad) dpad.style.display = "none";
+      if (actions) actions.style.display = "none";
+      if (versus) versus.style.display = "flex";
+    }
+  }
+
   function updateArcadeHud(status) {
     if (!status) return;
     const stateLabels = {
@@ -1042,27 +1212,12 @@
     }
     if ($("arcadeControlStat")) {
       const cType = Number(status.control_type || 3);
-      $("arcadeControlStat").textContent = cType === 2 ? "CTRL_DPAD_4WAY" : "CTRL_ARCADE_AB";
+      const ctNames = { 0: "CTRL_TAP_SINGLE", 1: "CTRL_TWO_BUTTON", 2: "CTRL_DPAD_4WAY", 3: "CTRL_ARCADE_AB", 5: "CTRL_VERSUS_DUAL" };
+      $("arcadeControlStat").textContent = ctNames[cType] || `TYPE_${cType}`;
     }
 
-    // 动态手柄布局适配：四向十字键卡带(如贪吃蛇)自动隐藏 A/B 操作按键；动作卡带动态挂载提示
-    const actionStage = document.querySelector(".mario-actions");
-    if (actionStage) {
-      if (Number(status.control_type) === 2 || state.arcadeGid === 33) {
-        actionStage.style.display = "none";
-      } else {
-        actionStage.style.display = "flex";
-        const btnA_sub = document.querySelector("#marioKeyA .btn-sub");
-        const btnB_sub = document.querySelector("#marioKeyB .btn-sub");
-        if (state.arcadeGid === 41) {
-          if (btnA_sub) btnA_sub.textContent = "旋转";
-          if (btnB_sub) btnB_sub.textContent = "软降";
-        } else {
-          if (btnA_sub) btnA_sub.textContent = "跳跃";
-          if (btnB_sub) btnB_sub.textContent = "加速";
-        }
-      }
-    }
+    // 专属动态手柄布局适配
+    updateGamepadLayout(status.control_type, status.game_id || state.arcadeGid);
 
     // 暂停按钮文本动态更新
     if ($("arcadePauseBtn")) {
@@ -1241,6 +1396,19 @@
   $$("[data-mario-key]").forEach((btn) => {
     bindArcadeTouchKey(btn, btn.dataset.marioKey);
   });
+
+  if ($("pongAiToggleBtn")) {
+    $("pongAiToggleBtn").onclick = async (e) => {
+      e.preventDefault();
+      try {
+        await api("/api/arcade", { action: "key", key: "start", down: true });
+        setTimeout(() => api("/api/arcade", { action: "key", key: "start", down: false }).catch(() => {}), 80);
+        notice("已切换 Pong 对战模式 (单人 AI / 本地双人)");
+      } catch (err) {
+        notice("Pong 模式切换失败: " + err.message);
+      }
+    };
+  }
 
   // 顶部与操作栏功能按键
   if ($("marioStartBtn")) {

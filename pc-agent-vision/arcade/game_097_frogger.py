@@ -110,6 +110,7 @@ class Game097Frogger(BaseCartridge):
     def _reset_frog(self):
         self.frog_x = 7.0
         self.frog_y = 14
+        self.best_row = 14  # 本条命到达过的最远行; 仅刷新纪录时加分, 防止上下来回刷分
         self.round_timer = 30.0
 
     def reset(self):
@@ -186,9 +187,11 @@ class Game097Frogger(BaseCartridge):
             if keys_pressed & KEY_UP:
                 if self.frog_y > 0:
                     self.frog_y -= 1
-                    self._score += 10
-                    if self._score > self._high_score:
-                        self._high_score = self._score
+                    if self.frog_y < self.best_row:
+                        self.best_row = self.frog_y
+                        self._score += 10
+                        if self._score > self._high_score:
+                            self._high_score = self._score
             elif keys_pressed & KEY_DOWN:
                 if self.frog_y < 14:
                     self.frog_y += 1

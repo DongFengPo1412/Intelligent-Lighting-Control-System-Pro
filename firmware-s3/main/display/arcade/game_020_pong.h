@@ -48,6 +48,14 @@ private:
     float state_timer_;
     float anim_timer_;
     uint32_t high_score_;
+
+    // AI 瞄准误差: 每次 P1 回球/发球时重新抽取, 保证单人模式可被击败 (与 Python 同一 LCG)
+    float AiRandError();
+    static constexpr float kAiSpeed = 6.0f;
+    static constexpr float kAiMaxError = 1.8f;
+    uint32_t ai_seed_ = 0x1972;
+    float ai_error_ = 0.0f;
 };
 
 } // namespace arcade
+

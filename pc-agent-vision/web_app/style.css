@@ -2442,3 +2442,57 @@ dialog p {
     font-size: 19px;
   }
 }
+
+
+/* 专属动态街机手柄样式 */
+.arcade-tap-stage {
+  display: none;
+  width: 100%;
+  justify-content: center;
+  padding: 6px 0;
+}
+.arcade-tap-btn {
+  width: 100%;
+  max-width: 380px;
+  height: 96px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border: 2px solid #60a5fa;
+  border-radius: 16px;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+.arcade-tap-btn:active, .arcade-tap-btn.pressed {
+  transform: scale(0.96);
+  filter: brightness(1.2);
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+}
+.arcade-versus-stage {
+  display: none;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.pong-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pong-col .mario-dbtn {
+  width: 64px;
+  height: 52px;
+  font-size: 14px;
+}
+.pong-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}

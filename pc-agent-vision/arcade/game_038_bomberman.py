@@ -205,7 +205,11 @@ class Game038Bomberman(BaseCartridge):
                     break
                 self.flames.append(Flame(tx, ty))
 
-        for fl in self.flames:
+        self._apply_flame_damage()
+
+    def _apply_flame_damage(self):
+        """火焰存续期间(0.45s)持续致命: 走进残留火焰的玩家/敌人同样会被消灭。"""
+        for fl in list(self.flames):
             for e in self.enemies:
                 if e.alive and int(round(e.x)) == fl.x and int(round(e.y)) == fl.y:
                     e.alive = False
@@ -221,12 +225,12 @@ class Game038Bomberman(BaseCartridge):
             if int(round(self.player_x)) == fl.x and int(round(self.player_y)) == fl.y:
                 if self.lives > 1:
                     self.lives -= 1
-                    self._reset_player()
+                    self._reset_player()  # 清空火焰并回到出生点, 本帧不再重复判定
                 else:
                     self.lives = 0
                     self._state = STATE_GAMEOVER
                     self.state_timer = 0.0
-                    return
+                return
 
     def _move_enemy(self, e: Enemy, dt: float):
         move_step = e.speed * dt
@@ -306,6 +310,10 @@ class Game038Bomberman(BaseCartridge):
             for fl in self.flames:
                 fl.timer -= dt
             self.flames = [fl for fl in self.flames if fl.timer > 0.0]
+            if self.flames:
+                self._apply_flame_damage()
+                if self._state != STATE_PLAYING:
+                    return
 
             for e in self.enemies:
                 if e.alive:

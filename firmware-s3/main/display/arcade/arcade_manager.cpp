@@ -13,6 +13,7 @@
 #include "game_054_sokoban.h"
 #include "game_074_highway_racer.h"
 #include "game_097_frogger.h"
+#include "arcade_score_store.h"
 #include <string.h>
 #include <esp_timer.h>
 #include <esp_log.h>
@@ -85,7 +86,9 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
     }
 
     current_game_ = cart;
-    current_game_->Reset();
+    current_game_->Init(); // 重新加载 NVS 最高分并初始化游戏状态
+    ArcadeScoreStore::Flush(); // 落盘上一款游戏尚未保存的最高分
+    last_state_ = (CartridgeState)current_game_->GetStatus().state;
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
     is_network_disconnected_ = false;
@@ -120,9 +123,11 @@ void ArcadeManager::Resume()
 void ArcadeManager::Reset()
 {
     if (current_game_) {
+        ArcadeScoreStore::Flush();
         current_game_->Reset();
         current_keys_down_ = 0;
         current_keys_pressed_ = 0;
+        last_state_ = (CartridgeState)current_game_->GetStatus().state;
     }
 }
 
@@ -131,6 +136,7 @@ void ArcadeManager::Exit()
     if (current_game_) {
         current_game_->Pause();
     }
+    ArcadeScoreStore::Flush();
     current_game_ = nullptr;
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
@@ -184,6 +190,13 @@ void ArcadeManager::Update(float dt)
     current_keys_pressed_ = 0; // 消费单次触发键
 
     current_game_->Update(dt, current_keys_down_, pressed);
+
+    // 离开 PLAYING (结算/胜利/暂停) 时才把本局最高分写入 Flash, 游戏帧内绝不擦写 Flash
+    CartridgeState st = (CartridgeState)current_game_->GetStatus().state;
+    if (last_state_ == STATE_PLAYING && st != STATE_PLAYING) {
+        ArcadeScoreStore::Flush();
+    }
+    last_state_ = st;
 }
 
 void ArcadeManager::Render(uint8_t* fb_rgb24)

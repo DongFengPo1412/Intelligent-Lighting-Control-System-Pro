@@ -23,7 +23,6 @@ Game026SpaceInvaders::Game026SpaceInvaders()
       fleet_step_interval_(0.6f),
       remaining_aliens_(12),
       fleet_anim_frame_(false) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     for (int i = 0; i < kMaxBullets; ++i) {
         bullets_[i].active = false;
     }
@@ -54,11 +53,11 @@ void Game026SpaceInvaders::ResetFleet() {
 }
 
 void Game026SpaceInvaders::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game026SpaceInvaders::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     lives_ = 3;
@@ -381,3 +380,4 @@ CartridgeStatus Game026SpaceInvaders::GetStatus() const {
 }
 
 } // namespace arcade
+

@@ -13,6 +13,7 @@ Game097Frogger::Game097Frogger()
     : state_(STATE_TITLE),
       frog_x_(7.0f),
       frog_y_(14),
+      best_row_(14),
       lives_(3),
       score_(0),
       high_score_(0),
@@ -20,7 +21,6 @@ Game097Frogger::Game097Frogger()
       state_timer_(0.0f),
       anim_timer_(0.0f),
       homes_occupied_(0) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     for (int i = 0; i < kNumHomes; ++i) {
         homes_[i] = false;
     }
@@ -29,6 +29,7 @@ Game097Frogger::Game097Frogger()
 void Game097Frogger::ResetFrogPosition() {
     frog_x_ = 7.0f;
     frog_y_ = 14;
+    best_row_ = 14;
     round_timer_ = 30.0f;
 }
 
@@ -90,6 +91,7 @@ void Game097Frogger::Init() {
 }
 
 void Game097Frogger::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     lives_ = 3;
@@ -179,10 +181,13 @@ void Game097Frogger::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
         if (keys_pressed & KEY_UP) {
             if (frog_y_ > 0) {
                 frog_y_--;
-                score_ += 10;
-                if (score_ > high_score_) {
-                    high_score_ = score_;
-                    ArcadeScoreStore::SaveHighScore(GetId(), high_score_);
+                if (frog_y_ < best_row_) {
+                    best_row_ = frog_y_;
+                    score_ += 10;
+                    if (score_ > high_score_) {
+                        high_score_ = score_;
+                        ArcadeScoreStore::SaveHighScore(GetId(), high_score_);
+                    }
                 }
             }
         } else if (keys_pressed & KEY_DOWN) {
@@ -370,3 +375,4 @@ CartridgeStatus Game097Frogger::GetStatus() const {
 }
 
 } // namespace arcade
+

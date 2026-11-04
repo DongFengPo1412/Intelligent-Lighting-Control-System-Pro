@@ -8,6 +8,7 @@
 #include "command_dispatcher.h"
 #include "audio_hal.h"
 #include "wifi_manager.h"
+#include "arcade_manager.h"
 #include <nvs_flash.h>
 #if __has_include("wifi_config.private.h")
 #include "wifi_config.private.h"
@@ -36,6 +37,9 @@ extern "C" void app_main(void)
         nvs_ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvs_ret);
+
+    // 显式在 NVS 就绪后初始化统一街机管理器
+    arcade::ArcadeManager::GetInstance().Init();
 
     DisplayManager& display = DisplayManager::GetInstance();
     ESP_ERROR_CHECK(display.Init(GPIO_NUM_17));

@@ -568,9 +568,14 @@
                   </button>
                 </div>
 
-                <div class="mario-touch-stage">
+                <div class="mario-touch-stage" id="marioTouchStage">
+                  <!-- 单键大触控区 (Tap Single) -->
+                  <div class="arcade-tap-stage" id="arcadeTapStage">
+                    <button type="button" class="arcade-tap-btn" id="arcadeTapBig" data-mario-key="a">👆 轻点按键 (TAP)</button>
+                  </div>
+
                   <!-- 左侧十字方向键 -->
-                  <div class="mario-dpad" role="group" aria-label="移动控制十字键">
+                  <div class="mario-dpad" id="arcadeDpad" role="group" aria-label="移动控制十字键">
                     <button type="button" class="mario-dbtn" id="marioKeyUp" data-mario-key="up" aria-label="向上跳跃">▲</button>
                     <button type="button" class="mario-dbtn" id="marioKeyLeft" data-mario-key="left" aria-label="向左走">◀</button>
                     <div class="mario-dpad-center"></div>
@@ -579,7 +584,7 @@
                   </div>
 
                   <!-- 右侧 A / B 动作键 (大圆触控键，按住 A 跳更高，按 B 加速冲刺) -->
-                  <div class="mario-actions" role="group" aria-label="动作按键">
+                  <div class="mario-actions" id="arcadeActions" role="group" aria-label="动作按键">
                     <button type="button" class="mario-abtn btn-b" id="marioKeyB" data-mario-key="b" aria-label="冲刺加速">
                       <span class="btn-letter">B</span>
                       <small class="btn-sub">加速</small>
@@ -588,6 +593,21 @@
                       <span class="btn-letter">A</span>
                       <small class="btn-sub">跳跃</small>
                     </button>
+                  </div>
+
+                  <!-- 双人对战分栏 (Pong 等专属) -->
+                  <div class="arcade-versus-stage" id="arcadeVersusStage">
+                    <div class="pong-col">
+                      <button type="button" class="mario-dbtn" id="pongP1Up" data-mario-key="up">▲ P1</button>
+                      <button type="button" class="mario-dbtn" id="pongP1Down" data-mario-key="down">▼ P1</button>
+                    </div>
+                    <div class="pong-mid">
+                      <button type="button" class="mario-ctrl-btn secondary" id="pongAiToggleBtn">🤖 切换 AI/双人</button>
+                    </div>
+                    <div class="pong-col">
+                      <button type="button" class="mario-dbtn" id="pongP2Up" data-mario-key="a">▲ P2</button>
+                      <button type="button" class="mario-dbtn" id="pongP2Down" data-mario-key="b">▼ P2</button>
+                    </div>
                   </div>
                 </div>
 

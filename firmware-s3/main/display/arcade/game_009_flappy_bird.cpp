@@ -26,7 +26,6 @@ Game009FlappyBird::Game009FlappyBird()
       ground_scroll_(0.0f),
       state_timer_(0.0f),
       anim_timer_(0.0f) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
 }
 
 void Game009FlappyBird::SpawnPipe(PipeObstacle& pipe, float start_x) {
@@ -39,11 +38,11 @@ void Game009FlappyBird::SpawnPipe(PipeObstacle& pipe, float start_x) {
 }
 
 void Game009FlappyBird::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game009FlappyBird::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     bird_x_ = 3.0f;
     bird_y_ = 6.0f;

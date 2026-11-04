@@ -199,9 +199,64 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() { stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
 
+    private final java.util.concurrent.ExecutorService udpExecutor = java.util.concurrent.Executors.newCachedThreadPool();
+
     public class NativeUdpBridge {
+        private boolean isOriginAndTargetSafe(String host, int port) {
+            String currentUrl = webView != null ? webView.getUrl() : null;
+            if (currentUrl != null && !currentUrl.startsWith("file://") &&
+                !currentUrl.startsWith("http://localhost") &&
+                !currentUrl.startsWith("http://127.0.0.1") &&
+                !currentUrl.startsWith("http://192.168.")) {
+                return false;
+            }
+            if (port != 8888) return false;
+            if (host == null) return false;
+            return host.equals("192.168.4.1") || host.startsWith("192.168.") || host.equals("127.0.0.1");
+        }
+
+        @android.webkit.JavascriptInterface
+        public void sendUdpAsync(final String host, final int port, final String message, final int timeoutMs, final String callbackId) {
+            if (!isOriginAndTargetSafe(host, port)) {
+                dispatchResult(callbackId, "{\"status\":\"error\",\"error\":\"forbidden_target\"}");
+                return;
+            }
+            udpExecutor.execute(() -> {
+                String result;
+                try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
+                    socket.setSoTimeout(timeoutMs > 0 ? timeoutMs : 1000);
+                    byte[] data = message.getBytes(StandardCharsets.UTF_8);
+                    java.net.InetAddress addr = java.net.InetAddress.getByName(host);
+                    java.net.DatagramPacket packet = new java.net.DatagramPacket(data, data.length, addr, port);
+                    socket.send(packet);
+
+                    byte[] rxBuf = new byte[4096];
+                    java.net.DatagramPacket rxPacket = new java.net.DatagramPacket(rxBuf, rxBuf.length);
+                    socket.receive(rxPacket);
+                    result = new String(rxPacket.getData(), 0, rxPacket.getLength(), StandardCharsets.UTF_8);
+                } catch (Exception e) {
+                    result = "{\"status\":\"error\",\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
+                }
+                dispatchResult(callbackId, result);
+            });
+        }
+
+        private void dispatchResult(final String callbackId, final String rawJson) {
+            if (webView == null || callbackId == null) return;
+            webView.post(() -> {
+                String safeJson = rawJson.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "").replace("\r", "");
+                String js = "if (window.__amadeusUdpCallbacks && window.__amadeusUdpCallbacks['" + callbackId + "']) { "
+                          + "window.__amadeusUdpCallbacks['" + callbackId + "']('" + safeJson + "'); "
+                          + "delete window.__amadeusUdpCallbacks['" + callbackId + "']; }";
+                webView.evaluateJavascript(js, null);
+            });
+        }
+
         @android.webkit.JavascriptInterface
         public String sendUdp(String host, int port, String message, int timeoutMs) {
+            if (!isOriginAndTargetSafe(host, port)) {
+                return "{\"status\":\"error\",\"error\":\"forbidden_target\"}";
+            }
             try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
                 socket.setSoTimeout(timeoutMs > 0 ? timeoutMs : 1000);
                 byte[] data = message.getBytes(StandardCharsets.UTF_8);
@@ -209,7 +264,7 @@ public class MainActivity extends Activity {
                 java.net.DatagramPacket packet = new java.net.DatagramPacket(data, data.length, addr, port);
                 socket.send(packet);
 
-                byte[] rxBuf = new byte[2048];
+                byte[] rxBuf = new byte[4096];
                 java.net.DatagramPacket rxPacket = new java.net.DatagramPacket(rxBuf, rxBuf.length);
                 socket.receive(rxPacket);
                 return new String(rxPacket.getData(), 0, rxPacket.getLength(), StandardCharsets.UTF_8);

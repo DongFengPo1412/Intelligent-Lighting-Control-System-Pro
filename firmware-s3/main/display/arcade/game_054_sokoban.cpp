@@ -16,7 +16,6 @@ Game054Sokoban::Game054Sokoban()
       state_timer_(0.0f),
       anim_timer_(0.0f),
       boxes_on_goal_(0) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
 }
 
 int Game054Sokoban::FindBoxAt(int x, int y) const {
@@ -81,6 +80,7 @@ void Game054Sokoban::Init() {
 }
 
 void Game054Sokoban::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     state_timer_ = 0.0f;
@@ -259,3 +259,4 @@ CartridgeStatus Game054Sokoban::GetStatus() const {
 }
 
 } // namespace arcade
+

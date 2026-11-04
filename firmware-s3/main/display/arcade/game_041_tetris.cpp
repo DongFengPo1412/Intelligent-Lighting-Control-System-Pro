@@ -37,9 +37,14 @@ static const uint8_t kPieceColors[7][3] = {
 };
 
 Game041Tetris::Game041Tetris()
+    : drop_timer_(0.0f),
+      drop_interval_(0.60f),
+      anim_timer_(0.0f),
+      score_(0),
+      high_score_(0),
+      lines_cleared_(0),
+      state_(STATE_TITLE)
 {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
-    Init();
 }
 
 void Game041Tetris::Init()
@@ -49,6 +54,7 @@ void Game041Tetris::Init()
 
 void Game041Tetris::Reset()
 {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     memset(field_, 0, sizeof(field_));
     score_ = 0;
     lines_cleared_ = 0;

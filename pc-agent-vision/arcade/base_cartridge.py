@@ -36,6 +36,22 @@ class BaseCartridge(ABC):
     """所有街机卡带必须继承的标准基类"""
 
     @property
+    def state(self) -> int:
+        return getattr(self, "_state", STATE_TITLE)
+
+    @state.setter
+    def state(self, val: int) -> None:
+        self._state = val
+
+    @property
+    def score(self) -> int:
+        return getattr(self, "_score", 0)
+
+    @score.setter
+    def score(self, val: int) -> None:
+        self._score = val
+
+    @property
     @abstractmethod
     def game_id(self) -> int:
         pass

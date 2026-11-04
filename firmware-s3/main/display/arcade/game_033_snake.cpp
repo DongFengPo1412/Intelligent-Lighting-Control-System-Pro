@@ -9,9 +9,8 @@ namespace arcade {
 
 Game033Snake::Game033Snake()
 {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
+    high_score_ = 0;
     wrap_walls_ = false; // 默认经典致命死墙
-    Init();
 }
 
 void Game033Snake::Init()
@@ -61,6 +60,7 @@ void Game033Snake::PlaceFood()
 
 void Game033Snake::Reset()
 {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     memset(snake_x_, 0, sizeof(snake_x_));
     memset(snake_y_, 0, sizeof(snake_y_));
 

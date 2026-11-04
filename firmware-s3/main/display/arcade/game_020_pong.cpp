@@ -23,7 +23,12 @@ Game020Pong::Game020Pong()
       state_timer_(0.0f),
       anim_timer_(0.0f),
       high_score_(0) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
+}
+
+float Game020Pong::AiRandError() {
+    ai_seed_ = ai_seed_ * 1103515245u + 12345u;
+    float r = (float)((ai_seed_ >> 16) & 0x7FFF) / 32767.0f;  // 0..1
+    return (r * 2.0f - 1.0f) * kAiMaxError;
 }
 
 void Game020Pong::ResetBall(bool serve_to_right) {
@@ -33,14 +38,15 @@ void Game020Pong::ResetBall(bool serve_to_right) {
     ball_vx_ = serve_to_right ? base_speed : -base_speed;
     ball_vy_ = ((ball_y_ > 7.5f) ? -2.5f : 2.5f);
     serve_delay_ = 0.6f;
+    ai_error_ = AiRandError();
 }
 
 void Game020Pong::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game020Pong::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     p1_y_ = 6.0f;
     p2_y_ = 6.0f;
@@ -137,10 +143,18 @@ void Game020Pong::Update(float dt, uint16_t keys_down, uint16_t keys_pressed) {
             p2_is_ai_ = false;
             p2_y_ += paddle_speed * dt;
         } else if (p2_is_ai_) {
-            float ai_target_y = ball_y_ - (paddle_h_ * 0.5f);
-            float ai_speed = 7.0f * dt;
-            if (p2_y_ < ai_target_y - 0.5f) p2_y_ += ai_speed;
-            else if (p2_y_ > ai_target_y + 0.5f) p2_y_ -= ai_speed;
+            // 只有球朝 AI 飞来时才追球, 否则缓慢回中; 追球目标带有随机误差
+            float ai_target_y;
+            float ai_speed;
+            if (ball_vx_ > 0.0f) {
+                ai_target_y = ball_y_ - (paddle_h_ * 0.5f) + ai_error_;
+                ai_speed = kAiSpeed * dt;
+            } else {
+                ai_target_y = 8.0f - (paddle_h_ * 0.5f);
+                ai_speed = kAiSpeed * 0.5f * dt;
+            }
+            if (p2_y_ < ai_target_y - 0.3f) p2_y_ += ai_speed;
+            else if (p2_y_ > ai_target_y + 0.3f) p2_y_ -= ai_speed;
         }
         if (p2_y_ < 0.0f) p2_y_ = 0.0f;
         if (p2_y_ > 16.0f - paddle_h_) p2_y_ = 16.0f - paddle_h_;
@@ -170,6 +184,7 @@ void Game020Pong::Update(float dt, uint16_t keys_down, uint16_t keys_pressed) {
 
                 float hit_offset = (ball_y_ - (p1_y_ + paddle_h_ * 0.5f)) / (paddle_h_ * 0.5f);
                 ball_vy_ = hit_offset * 7.5f;
+                ai_error_ = AiRandError();
             }
         }
 
@@ -289,3 +304,4 @@ CartridgeStatus Game020Pong::GetStatus() const {
 }
 
 } // namespace arcade
+

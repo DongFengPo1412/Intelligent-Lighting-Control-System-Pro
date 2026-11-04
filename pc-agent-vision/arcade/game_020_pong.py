@@ -40,7 +40,19 @@ class Game020Pong(BaseCartridge):
         self.serve_delay = 0.0
         self.state_timer = 0.0
         self.anim_timer = 0.0
+        # AI 瞄准误差: 每次 P1 回球时重新抽取, 让单人模式可以被击败 (与 C++ 同一 LCG)
+        self._ai_seed = 0x1972
+        self.ai_error = 0.0
         self.reset()
+
+    # AI 参数 (与 C++ kAiSpeed / kAiMaxError 对齐)
+    AI_SPEED = 6.0
+    AI_MAX_ERROR = 1.8
+
+    def _ai_rand_error(self) -> float:
+        self._ai_seed = (self._ai_seed * 1103515245 + 12345) & 0xFFFFFFFF
+        r = ((self._ai_seed >> 16) & 0x7FFF) / 32767.0  # 0..1
+        return (r * 2.0 - 1.0) * self.AI_MAX_ERROR
 
     @property
     def game_id(self) -> int:
@@ -76,6 +88,7 @@ class Game020Pong(BaseCartridge):
         self.ball_vx = base_speed if serve_to_right else -base_speed
         self.ball_vy = -2.5 if self.ball_y > 7.5 else 2.5
         self.serve_delay = 0.6
+        self.ai_error = self._ai_rand_error()
 
     def reset(self):
         self._state = STATE_TITLE
@@ -170,11 +183,16 @@ class Game020Pong(BaseCartridge):
                 self.p2_is_ai = False
                 self.p2_y += paddle_speed * dt
             elif self.p2_is_ai:
-                ai_target_y = self.ball_y - (self.paddle_h * 0.5)
-                ai_speed = 7.0 * dt
-                if self.p2_y < ai_target_y - 0.5:
+                # 只有球朝 AI 飞来时才追球, 否则缓慢回中; 追球目标带有随机误差
+                if self.ball_vx > 0.0:
+                    ai_target_y = self.ball_y - (self.paddle_h * 0.5) + self.ai_error
+                    ai_speed = self.AI_SPEED * dt
+                else:
+                    ai_target_y = 8.0 - (self.paddle_h * 0.5)
+                    ai_speed = self.AI_SPEED * 0.5 * dt
+                if self.p2_y < ai_target_y - 0.3:
                     self.p2_y += ai_speed
-                elif self.p2_y > ai_target_y + 0.5:
+                elif self.p2_y > ai_target_y + 0.3:
                     self.p2_y -= ai_speed
             self.p2_y = max(0.0, min(16.0 - self.paddle_h, self.p2_y))
 
@@ -199,6 +217,7 @@ class Game020Pong(BaseCartridge):
                     self.ball_vx = speed
                     hit_offset = (self.ball_y - (self.p1_y + self.paddle_h * 0.5)) / (self.paddle_h * 0.5)
                     self.ball_vy = hit_offset * 7.5
+                    self.ai_error = self._ai_rand_error()
 
             if self.ball_vx > 0.0 and 13.2 <= self.ball_x <= 14.8:
                 if (self.p2_y - 0.5) <= self.ball_y <= (self.p2_y + self.paddle_h + 0.5):

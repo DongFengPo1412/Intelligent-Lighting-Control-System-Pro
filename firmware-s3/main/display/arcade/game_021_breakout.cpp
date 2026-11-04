@@ -22,7 +22,6 @@ Game021Breakout::Game021Breakout()
       high_score_(0),
       state_timer_(0.0f),
       anim_timer_(0.0f) {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
 }
 
 void Game021Breakout::ResetBallAndPaddle() {
@@ -36,11 +35,11 @@ void Game021Breakout::ResetBallAndPaddle() {
 }
 
 void Game021Breakout::Init() {
-    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     Reset();
 }
 
 void Game021Breakout::Reset() {
+    high_score_ = ArcadeScoreStore::LoadHighScore(GetId());
     state_ = STATE_TITLE;
     score_ = 0;
     lives_ = 3;
@@ -305,3 +304,4 @@ CartridgeStatus Game021Breakout::GetStatus() const {
 }
 
 } // namespace arcade
+
