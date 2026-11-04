@@ -1,3 +1,9 @@
+#include "game_056_sliding_puzzle.h"
+#include "game_050_mini_sudoku.h"
+#include "game_049_lights_out.h"
+#include "game_048_triple_town.h"
+#include "game_047_blockudoku.h"
+#include "game_046_suika.h"
 #include "game_039_fog_maze.h"
 #include "game_037_qbert.h"
 #include "game_036_dig_dug.h"
@@ -175,6 +181,18 @@ static Game037Qbert s_game_037;
 
 static Game039FogMaze s_game_039;
 
+static Game046Suika s_game_046;
+
+static Game047Blockudoku s_game_047;
+
+static Game048TripleTown s_game_048;
+
+static Game049LightsOut s_game_049;
+
+static Game050MiniSudoku s_game_050;
+
+static Game056SlidingPuzzle s_game_056;
+
 ArcadeManager& ArcadeManager::GetInstance()
 {
     static ArcadeManager instance;
@@ -199,6 +217,12 @@ void ArcadeManager::Init()
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
 {
     switch (game_id) {
+        case 56: return &s_game_056;
+        case 50: return &s_game_050;
+        case 49: return &s_game_049;
+        case 48: return &s_game_048;
+        case 47: return &s_game_047;
+        case 46: return &s_game_046;
         case 39: return &s_game_039;
         case 37: return &s_game_037;
         case 36: return &s_game_036;

@@ -160,7 +160,10 @@
     "lives": [
       "max(0,self.balls)",
       "std::max(0,balls)"
-    ]
+    ],
+    "help": "左右瞄准，A 发射重力弹珠。清除全部橙色目标，弹数有限，碰撞会改变弹道。",
+    "a": "发射",
+    "b": ""
   },
   "25": {
     "id": 25,
@@ -176,7 +179,10 @@
       "vy"
     ],
     "control": 3,
-    "lives": null
+    "lives": null,
+    "help": "方向键改变虚拟重力，滚珠具有惯性，A 刹车。穿过墙壁缺口避开红色陷阱，低速进入绿色终点。",
+    "a": "刹车",
+    "b": ""
   },
   "32": {
     "id": 32,
@@ -204,7 +210,10 @@
     "lives": [
       "max(0,self.hp)",
       "std::max(0,hp)"
-    ]
+    ],
+    "help": "方向键水平环绕飞行并升降，A 激光；保护地面绿色人类，阻止红色敌人掳走他们。消灭四个敌人且仍有人类存活获胜。",
+    "a": "激光",
+    "b": ""
   },
   "36": {
     "id": 36,
@@ -231,7 +240,10 @@
     "lives": [
       "max(0,self.hp)",
       "std::max(0,hp)"
-    ]
+    ],
+    "help": "方向键挖掘移动，按住 A 并朝向同一直线上的怪物持续充气；攻击中不能移动。松开后怪物会消气并继续追赶。消灭三个怪物。",
+    "a": "持续充气",
+    "b": ""
   },
   "37": {
     "id": 37,
@@ -252,7 +264,10 @@
     "lives": [
       "max(0,self.hp)",
       "std::max(0,hp)"
-    ]
+    ],
+    "help": "←向左下跳、↓向右下跳、↑向左上跳、→向右上跳。染亮全部15块，防止掉落并提防红色追兵。",
+    "a": "跳格",
+    "b": ""
   },
   "39": {
     "id": 39,
@@ -267,6 +282,137 @@
       "moves",
       "explored",
       "layout_hash"
+    ],
+    "control": 2,
+    "lives": null,
+    "help": "方向键穿过未知迷宫，视野外只有模糊的探索记忆；找出绿色出口。三档视野半径依次为3/2/1，限时也不同。",
+    "a": "移动",
+    "b": ""
+  },
+  "46": {
+    "id": 46,
+    "slug": "suika",
+    "cls": "Game046Suika",
+    "name": "合成大西瓜",
+    "en": "Suika",
+    "core": "Drop circles under gravity; equal levels merge on contact, different levels collide and a high stack overflows.",
+    "keys": [
+      "aim",
+      "best",
+      "drops",
+      "active_count",
+      "bx[0]",
+      "by[0]"
+    ],
+    "control": 3,
+    "lives": null
+  },
+  "47": {
+    "id": 47,
+    "slug": "blockudoku",
+    "cls": "Game047Blockudoku",
+    "name": "自由方块消除",
+    "en": "Blockudoku",
+    "core": "Place a three-piece rack freely on a 6x6 board; clear full rows, columns or 3x3 regions.",
+    "keys": [
+      "board",
+      "x",
+      "y",
+      "selected",
+      "rack",
+      "placed",
+      "cleared"
+    ],
+    "control": 3,
+    "lives": null
+  },
+  "48": {
+    "id": 48,
+    "slug": "triple_town",
+    "cls": "Game048TripleTown",
+    "name": "三合镇",
+    "en": "Triple Town",
+    "core": "Place grass; three connected equal objects merge at the placed cell and can cascade into a house.",
+    "keys": [
+      "x",
+      "y",
+      "moves",
+      "best",
+      "board_hash"
+    ],
+    "control": 3,
+    "lives": null
+  },
+  "49": {
+    "id": 49,
+    "slug": "lights_out",
+    "cls": "Game049LightsOut",
+    "name": "灭灯",
+    "en": "Lights Out",
+    "core": "Toggle a lamp and its orthogonal neighbours on a solvable 5x5 board; turn every light off within a move budget.",
+    "keys": [
+      "mask",
+      "x",
+      "y",
+      "moves"
+    ],
+    "control": 3,
+    "lives": null
+  },
+  "50": {
+    "id": 50,
+    "slug": "mini_sudoku",
+    "cls": "Game050MiniSudoku",
+    "name": "四色迷你数独",
+    "en": "Mini Sudoku",
+    "core": "Fill four colours under row, column and 2x2 box constraints; checking a conflicting or incomplete board costs an attempt.",
+    "keys": [
+      "x",
+      "y",
+      "attempts",
+      "edits",
+      "board[0]",
+      "board[1]",
+      "board[2]",
+      "board[3]",
+      "board[4]",
+      "board[5]",
+      "board[6]",
+      "board[7]",
+      "board[8]",
+      "board[9]",
+      "board[10]",
+      "board[11]",
+      "board[12]",
+      "board[13]",
+      "board[14]",
+      "board[15]"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,self.attempts)",
+      "std::max(0,attempts)"
+    ]
+  },
+  "56": {
+    "id": 56,
+    "slug": "sliding_puzzle",
+    "cls": "Game056SlidingPuzzle",
+    "name": "数字华容道",
+    "en": "Sliding Puzzle",
+    "core": "Slide the empty cell of a legally scrambled 3x3 numbered board back into ordered 1 through 8.",
+    "keys": [
+      "blank",
+      "moves",
+      "board[0]",
+      "board[1]",
+      "board[2]",
+      "board[3]",
+      "board[4]",
+      "board[5]",
+      "board[6]",
+      "board[7]",
+      "board[8]"
     ],
     "control": 2,
     "lives": null

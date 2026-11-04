@@ -11,6 +11,12 @@
 #include "game_036_dig_dug.h"
 #include "game_037_qbert.h"
 #include "game_039_fog_maze.h"
+#include "game_046_suika.h"
+#include "game_047_blockudoku.h"
+#include "game_048_triple_town.h"
+#include "game_049_lights_out.h"
+#include "game_050_mini_sudoku.h"
+#include "game_056_sliding_puzzle.h"
 #include <vector>
 namespace arcade {
 struct B3Probe {
@@ -78,6 +84,40 @@ struct B3Probe {
             const auto &g = *static_cast<const Game039FogMaze *>(game);
             return {double(g.x), double(g.y), double(g.moves), double(g.explored),
                     double(g.layout_hash)};
+        }
+        case 46: {
+            const auto &g = *static_cast<const Game046Suika *>(game);
+            return {double(g.aim),          double(g.best),  double(g.drops),
+                    double(g.active_count), double(g.bx[0]), double(g.by[0])};
+        }
+        case 47: {
+            const auto &g = *static_cast<const Game047Blockudoku *>(game);
+            return {double(g.board), double(g.x),      double(g.y),      double(g.selected),
+                    double(g.rack),  double(g.placed), double(g.cleared)};
+        }
+        case 48: {
+            const auto &g = *static_cast<const Game048TripleTown *>(game);
+            return {double(g.x), double(g.y), double(g.moves), double(g.best),
+                    double(g.board_hash)};
+        }
+        case 49: {
+            const auto &g = *static_cast<const Game049LightsOut *>(game);
+            return {double(g.mask), double(g.x), double(g.y), double(g.moves)};
+        }
+        case 50: {
+            const auto &g = *static_cast<const Game050MiniSudoku *>(game);
+            return {
+                double(g.x),         double(g.y),         double(g.attempts),  double(g.edits),
+                double(g.board[0]),  double(g.board[1]),  double(g.board[2]),  double(g.board[3]),
+                double(g.board[4]),  double(g.board[5]),  double(g.board[6]),  double(g.board[7]),
+                double(g.board[8]),  double(g.board[9]),  double(g.board[10]), double(g.board[11]),
+                double(g.board[12]), double(g.board[13]), double(g.board[14]), double(g.board[15])};
+        }
+        case 56: {
+            const auto &g = *static_cast<const Game056SlidingPuzzle *>(game);
+            return {double(g.blank),    double(g.moves),    double(g.board[0]), double(g.board[1]),
+                    double(g.board[2]), double(g.board[3]), double(g.board[4]), double(g.board[5]),
+                    double(g.board[6]), double(g.board[7]), double(g.board[8])};
         }
         default:
             return {};

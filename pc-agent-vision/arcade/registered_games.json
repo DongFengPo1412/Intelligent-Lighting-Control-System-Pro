@@ -225,6 +225,31 @@
     "class": "Game045SameGame"
   },
   {
+    "id": 46,
+    "module": "game_046_suika",
+    "class": "Game046Suika"
+  },
+  {
+    "id": 47,
+    "module": "game_047_blockudoku",
+    "class": "Game047Blockudoku"
+  },
+  {
+    "id": 48,
+    "module": "game_048_triple_town",
+    "class": "Game048TripleTown"
+  },
+  {
+    "id": 49,
+    "module": "game_049_lights_out",
+    "class": "Game049LightsOut"
+  },
+  {
+    "id": 50,
+    "module": "game_050_mini_sudoku",
+    "class": "Game050MiniSudoku"
+  },
+  {
     "id": 51,
     "module": "game_051_flow_free",
     "class": "Game051FlowFree"
@@ -248,6 +273,11 @@
     "id": 55,
     "module": "game_055_mirror_laser",
     "class": "Game055MirrorLaser"
+  },
+  {
+    "id": 56,
+    "module": "game_056_sliding_puzzle",
+    "class": "Game056SlidingPuzzle"
   },
   {
     "id": 57,
