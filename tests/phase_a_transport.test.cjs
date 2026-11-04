@@ -28,10 +28,45 @@ test("NACK blocks queued input/heartbeat until explicit resume",async()=>{
   const t=new ArcadeTransport(async c=>{sent.push(c);if(fail)throw Error("offline");return ok;});
   const a=t.call("/api/arcade",{action:"key",key:"right",down:true});
   const b=t.call("/api/arcade",{action:"key",key:"a",down:true});
-  await Promise.allSettled([a,b]);assert.equal(t.down,0);assert.equal(sent.length,1);
+  await Promise.allSettled([a,b]);await t.tail;assert.equal(t.down,0);assert.equal(sent.length,3);
+  assert.deepEqual(sent.slice(-2),[{cmd:"arcade",action:"input",down:0,pressed:0},{cmd:"arcade",action:"pause"}]);
   await assert.rejects(t.call("/api/arcade",{action:"heartbeat"}));
   fail=false;await t.call("/api/arcade",{action:"resume"});
   await t.call("/api/arcade",{action:"key",key:"a",down:true});assert.equal(sent.at(-1).down,16);
+});
+
+test("slow/dropped frame is disposable and never delays right+jump or held heartbeat",async()=>{
+  let drop;const sent=[];
+  const t=new ArcadeTransport(c=>{sent.push(c);return c.cmd==="frame"?new Promise((_,r)=>drop=r):Promise.resolve(ok);});
+  const frame=t.call("/api/arcade/frame");const outcome=frame.catch(e=>e.message);
+  await turn();
+  await t.call("/api/arcade",{action:"key",key:"right",down:true});
+  await t.call("/api/arcade",{action:"key",key:"a",down:true});
+  await assert.rejects(t.call("/api/arcade/frame"),/telemetry_busy/);
+  drop(Error("lost_frame"));assert.equal(await outcome,"lost_frame");
+  assert.equal(t.down,18);assert.equal(t.blocked,false);
+  await t.call("/api/arcade",{action:"heartbeat"});assert.equal(sent.at(-1).down,18);
+  await t.call("/api/arcade",{action:"key",key:"a",down:false});assert.equal(sent.at(-1).down,2);
+});
+test("late readbacks cannot overwrite a newer control result",async()=>{
+  let release;const t=new ArcadeTransport(c=>c.cmd==="frame"?new Promise(r=>release=r):Promise.resolve(ok));
+  const frame=t.call("/api/arcade/frame");const outcome=frame.catch(e=>e.message);await turn();
+  await t.call("/api/arcade",{action:"select",game_id:20});release(ok);
+  assert.equal(await outcome,"stale_reply");assert.equal(t.blocked,false);
+});
+test("Pong player selection is an explicit validated command and clears held keys",async()=>{
+  const sent=[];const t=new ArcadeTransport(async c=>{sent.push(c);return ok;});
+  await t.call("/api/arcade",{action:"key",key:"right",down:true});
+  await t.call("/api/arcade",{action:"players",count:2});
+  assert.equal(t.down,0);assert.deepEqual(sent.at(-1),{cmd:"arcade",action:"players",count:2});
+  await assert.rejects(t.call("/api/arcade",{action:"players",count:"2"}));
+});
+test("a frame begun behind a pending control cannot overwrite its ACK",async()=>{
+  let controlDone,frameDone;
+  const t=new ArcadeTransport(c=>new Promise(r=>{if(c.cmd==="frame")frameDone=r;else controlDone=r;}));
+  const input=t.call("/api/arcade",{action:"key",key:"right",down:true});await turn();
+  const frame=t.call("/api/arcade/frame");const outcome=frame.catch(e=>e.message);await turn();
+  controlDone(ok);await input;frameDone(ok);assert.equal(await outcome,"stale_reply");
 });
 test("switch discards stale input/replies and clears held keys",async()=>{
   let release;const sent=[];

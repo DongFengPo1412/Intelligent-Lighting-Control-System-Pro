@@ -7,11 +7,13 @@
 #include <iostream>
 #include <thread>
 #include <atomic>
+#include <vector>
 #include "nvs.h"
 #include "arcade_score_store.h"
 #define private public
 #include "arcade_manager.h"
 #include "game_001_mario.h"
+#include "game_020_pong.h"
 #undef private
 #include "arcade_protocol.h"
 #include "udp_request_guard.h"
@@ -59,7 +61,7 @@ static void test_replay() {
 static void test_protocol() {
     const char* bad[]={"{\"action\":\"select\",\"game_id\":257}","{\"action\":\"select\",\"game_id\":-255}",
         "{\"action\":\"select\",\"game_id\":1.5}","{\"action\":\"select\",\"game_id\":true}",
-        "{\"action\":\"select\",\"game_id\":2}","{\"action\":\"unknown\"}","{}",
+        "{\"action\":\"select\",\"game_id\":100}","{\"action\":\"unknown\"}","{}",
         "{\"action\":\"input\",\"down\":-1,\"pressed\":0}","{\"action\":\"input\",\"down\":256,\"pressed\":0}",
         "{\"action\":\"input\",\"down\":2,\"pressed\":\"16\"}"};
     for(auto text:bad){auto json=cJSON_Parse(text);assert(!arcade_protocol::Valid(json));cJSON_Delete(json);}
@@ -93,12 +95,41 @@ int main(int argc,char** argv) {
     std::thread producer([]{for(unsigned i=1;i<=500;++i)Store::SaveHighScore(97,i);});
     for(int i=0;i<30;++i)Store::Flush();producer.join();Store::Flush();assert(durable["hs_097"]==500);
     auto& manager=arcade::ArcadeManager::GetInstance();manager.Init();
-    const int ids[]={1,9,10,20,21,26,33,34,38,41,54,74,97};
-    for(auto id:ids){assert(manager.SelectGame(id));assert(manager.GetCurrentGameId()==id);}
-    assert(manager.SelectGame(1));manager.Start();manager.HandleInput(18,16);
+    const int ids[]={1,2,3,4,5,6,9,10,14,15,16,17,18,19,20,21,22,26,27,28,29,30,31,33,34,38,40,41,42,43,44,45,51,52,53,54,55,62,63,64,65,66,67,72,73,74,75,76,83,84,85,86,87,88,92,93,94,95,97};
+    for(auto id:ids){
+        assert(manager.SelectGame(id));assert(manager.GetCurrentGameId()==id);manager.Start();
+        std::vector<uint8_t> guarded(800,0xa5);
+        for(int frame=0;frame<1800;++frame) {
+            tick_ms+=16;unsigned bit=1u<<((frame/9)%6);
+            manager.HandleInput(frame%11?bit:0,frame%9==0?bit:0);manager.Update(.016f);
+            manager.Render(guarded.data()+16);
+            for(int i=0;i<16;++i)assert(guarded[i]==0xa5 && guarded[784+i]==0xa5);
+        }
+        manager.Reset();assert(manager.GetCurrentStatus().state==arcade::STATE_TITLE);
+    }
+    assert(manager.SelectGame(20));assert(manager.SetPlayerCount(2));
+    assert(manager.GetCurrentStatus().player_count==2);manager.Start();
+    auto* pong=static_cast<arcade::Game020Pong*>(manager.current_game_);
+    float p1=pong->p1_y_,p2=pong->p2_y_;
+    manager.HandleInput(arcade::KEY_UP|arcade::KEY_B,0);manager.Update(.016f);
+    assert(pong->p1_y_<p1 && pong->p2_y_>p2);
+    manager.Pause();assert(manager.SetPlayerCount(1));
+    assert(manager.GetCurrentStatus().state==arcade::STATE_PAUSED);
+    assert(manager.current_keys_down_==0);manager.Resume();manager.Reset();manager.Start();
+    assert(manager.GetCurrentStatus().player_count==1);
+    assert(!manager.SetPlayerCount(3));
+    assert(manager.SelectGame(20));manager.Start();
+    for(int i=0;i<20;++i)assert(manager.HandleInput(0,arcade::KEY_A));
+    assert(manager.input_count_==20);
+    for(int i=0;i<20;++i){manager.Update(.016f);assert(manager.input_count_==19u-i);}
+    for(unsigned i=0;i<manager.kInputEvents;++i)assert(manager.HandleInput(0,arcade::KEY_A));
+    assert(!manager.HandleInput(0,arcade::KEY_A));
+    assert(manager.input_count_==0 && manager.GetCurrentStatus().state==arcade::STATE_PAUSED);
+    tick_ms=0;assert(manager.SelectGame(1));manager.Start();manager.HandleInput(18,16);
     auto* mario=static_cast<arcade::Game001Mario*>(manager.current_game_);
-    mario->game_.score_=120;manager.Update(.001f);
-    assert(Store::LoadHighScore(1)==120); // Record in active play is queued in RAM.
+    auto new_score=Store::LoadHighScore(1)+120;
+    mario->game_.score_=new_score;manager.Update(.001f);
+    assert(Store::LoadHighScore(1)==new_score); // Record in active play is queued in RAM.
     assert(manager.current_keys_down_==18);tick_ms=501;manager.Update(.033f);
     assert(manager.current_keys_down_==0 && manager.current_keys_pressed_==0);
     tick_ms=1001;manager.Update(.033f);assert(manager.GetCurrentStatus().state==arcade::STATE_PAUSED);

@@ -118,6 +118,7 @@ class UdpIntegrationTests(unittest.TestCase):
         gateway.control_token=self.key;gateway.boot_id=None;gateway.client_id='c'*32;gateway._sequence=1
         gateway.board_sta_ip='127.0.0.1';gateway.board_ap_ip='192.168.4.1';gateway.last_seen=0;gateway.last_mode=None
         gateway.last_result={};gateway._pending={};gateway._pending_lock=threading.Lock();gateway._send_lock=threading.RLock()
+        gateway._read_lock=threading.Lock();gateway._read_sequence=1;gateway._read_boot=None
         gateway._state_path=Path(self.temp.name)/'device-state.json'
         gateway._receiver=threading.Thread(target=gateway._receiver_loop,daemon=True);gateway._receiver.start()
         self.gateway=gateway
@@ -138,6 +139,9 @@ class UdpIntegrationTests(unittest.TestCase):
                 reply={'request_id':rid,'status':'error','error':'pairing_required'}
             else:
                 self.wire.append(raw)
+                if getattr(self,'drop_frames',False) and json.loads(value['command']).get('cmd')=='frame':
+                    self.frame_started.set()
+                    continue
                 if rid not in self.cache:
                     self.executions[rid]+=1
                     self.cache[rid]={'request_id':rid,'status':'ok','pixels':'ab'*768,'frame_id':1}
@@ -162,6 +166,23 @@ class UdpIntegrationTests(unittest.TestCase):
         self.assertFalse(self.gateway.send_command('{"cmd":"arcade","action":"start"}',timeout=.1,retries=0))
         self.assertEqual(self.gateway.last_result['error'],'pairing_required');self.assertFalse(self.gateway.is_online())
         self.assertFalse(self.executions)
+
+    def test_dropped_frame_does_not_hold_control_lock_or_share_replay_identity(self):
+        self.drop=False;self.drop_frames=True;self.frame_started=threading.Event()
+        result=[]
+        reader=threading.Thread(target=lambda:result.append(self.gateway.request('{"cmd":"frame"}')))
+        reader.start()
+        try:
+            self.assertTrue(self.frame_started.wait(1))
+            control=self.gateway.request('{"cmd":"arcade","action":"input","down":18,"pressed":16}')
+            self.assertEqual(control['status'],'ok')
+            self.assertTrue(reader.is_alive(), 'control must finish while readback is still waiting')
+            reader.join(1)
+            self.assertEqual(result[0]['error'],'ack_timeout')
+            ids={json.loads(w)['client_id'] for w in self.wire}
+            self.assertEqual(len(ids),2)
+        finally:
+            reader.join(2)
 
 
 class ArcadeFailureTests(unittest.TestCase):

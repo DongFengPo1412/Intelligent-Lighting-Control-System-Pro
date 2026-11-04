@@ -45,6 +45,7 @@ class Game001Mario(BaseCartridge):
             "progress": 0,
         }
         self._fallback_mode = False
+        self._paused = False
         self._fallback_timer = 0.0
         self._high_score = 0
         self._anim_timer = 0.0
@@ -114,6 +115,7 @@ class Game001Mario(BaseCartridge):
         self.reset()
 
     def reset(self) -> None:
+        self._paused = False
         if self._dll and self._game_handle:
             self._dll.mario_reset(self._game_handle)
             score = ctypes.c_uint16()
@@ -174,14 +176,18 @@ class Game001Mario(BaseCartridge):
     def pause(self) -> None:
         """安全暂停 (幂等)"""
         if self._status["state"] == STATE_PLAYING:
+            self._paused = True
             self._status["state"] = STATE_PAUSED
 
     def resume(self) -> None:
         """从暂停恢复游玩 (幂等)"""
         if self._status["state"] == STATE_PAUSED:
+            self._paused = False
             self._status["state"] = STATE_PLAYING
 
     def update(self, dt: float, keys_down: int, keys_pressed: int) -> None:
+        if self._paused:
+            return # Keep the actual native world frozen until explicit Resume.
         if self._dll and self._game_handle:
             self._dll.mario_update(
                 self._game_handle,

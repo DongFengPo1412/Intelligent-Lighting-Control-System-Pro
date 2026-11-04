@@ -11,9 +11,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_001_mario.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_001_mario.py",
     "legacy_source": "#001 超级马里奥兄弟 (Super Mario Bros.)",
-    "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_lifecycle.py, test_arcade_result_screen.py, test_arcade_nvs_persistence.py, test_arcade_partition_table.py, test_arcade_web_api.py - 1959项通过)",
-    "adaptation_notes": "ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "002",
@@ -24,12 +26,16 @@
     "control_type": "左右。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_004_doodle_jump.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_004_doodle_jump.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_002_doodle_jump.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_002_doodle_jump.py",
     "legacy_source": "#004 涂鸦跳跃 (Doodle Jump 16)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_004_doodle_jump.py)",
-    "adaptation_notes": "复用Game #004 (game_004_doodle_jump.cpp/.py)，刚体反弹起跳与穿屏完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #004 (game_004_doodle_jump.cpp/.py)，刚体反弹起跳与穿屏完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_004_doodle_jump.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_004_doodle_jump.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "003",
@@ -40,12 +46,16 @@
     "control_type": "方向键、A跳跃、B冲刺。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_003.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_003.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_003_celeste_dash.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_003_celeste_dash.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Celeste式空中冲刺，旧代码库无短关卡空中Dash机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Celeste式空中冲刺，旧代码库无短关卡空中Dash机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_003.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_003.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "004",
@@ -56,12 +66,16 @@
     "control_type": "左右、A切换重力。\n\n\n\n不允许变成普通跳跃游戏。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_004.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_004.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_004_gravity_flip.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_004_gravity_flip.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "VVVVVV重力翻转，旧代码库无反转重力上下跳跃机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "VVVVVV重力翻转，旧代码库无反转重力上下跳跃机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_004.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_004.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "005",
@@ -72,12 +86,16 @@
     "control_type": "方向键、A/B挖洞。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_024_lode_runner.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_024_lode_runner.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_005_lode_runner.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_005_lode_runner.py",
     "legacy_source": "#024 淘金者 (Lode Runner 1983)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_024_lode_runner.py)",
-    "adaptation_notes": "复用Game #024 (game_024_lode_runner.cpp/.py)，挖洞陷阱与全金币收集完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #024 (game_024_lode_runner.cpp/.py)，挖洞陷阱与全金币收集完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_024_lode_runner.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_024_lode_runner.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "006",
@@ -88,12 +106,16 @@
     "control_type": "左右、A跳跃、B发射泡泡。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_025_bubble_bobble.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_025_bubble_bobble.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_006_bubble_bobble.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_006_bubble_bobble.py",
     "legacy_source": "#025 经典泡泡龙打怪 (Bubble Bobble 1986)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_025_bubble_bobble.py)，待按新规格重构验证",
-    "adaptation_notes": "复用Game #025 (game_025_bubble_bobble.cpp/.py)，需改造为纯泡泡捕敌戳破机制，严格区分三消"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #025 (game_025_bubble_bobble.cpp/.py)，需改造为纯泡泡捕敌戳破机制，严格区分三消",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_025_bubble_bobble.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_025_bubble_bobble.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "007",
@@ -107,9 +129,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_007.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_007.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Downwell向下射击，旧代码库无下坠射击漂浮与踩怪装弹机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Downwell向下射击，旧代码库无下坠射击漂浮与踩怪装弹机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "008",
@@ -123,9 +147,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_038_ice_climber.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_038_ice_climber.py",
     "legacy_source": "#038 敲冰块 (Ice Climber 1985)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_038_ice_climber.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #038 (game_038_ice_climber.cpp/.py) 垂直攀登结构，改造为长按蓄力跳跃手感"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "基于Game #038 (game_038_ice_climber.cpp/.py) 垂直攀登结构，改造为长按蓄力跳跃手感",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "009",
@@ -139,9 +165,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_009_flappy_bird.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_009_flappy_bird.py",
     "legacy_source": "#005 飞翔小鸟 (Flappy Bird 16)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "重力拍翅、管道空隙穿越、死屏与结算滚动，ESP32固件与Python模拟器双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "重力拍翅、管道空隙穿越、死屏与结算滚动，ESP32固件与Python模拟器双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "010",
@@ -155,9 +183,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_010_stack.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_010_stack.py",
     "legacy_source": "#006 堆叠大师 (Stack It Up 16)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "单键切削堆叠、悬空断块坠落物理、HSV彩虹色环递进，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "单键切削堆叠、悬空断块坠落物理、HSV彩虹色环递进，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "011",
@@ -171,9 +201,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_011.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_011.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Chrome恐龙跑酷，旧代码库无该单键跳跃跑酷，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Chrome恐龙跑酷，旧代码库无该单键跳跃跑酷，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "012",
@@ -187,9 +219,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_012.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_012.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Knife Hit旋盘投刀，旧代码库无旋转圆盘飞刀插靶机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Knife Hit旋盘投刀，旧代码库无旋转圆盘飞刀插靶机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "013",
@@ -203,9 +237,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_013.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_013.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "摆锤投球，旧代码库无周期单键释放进筐机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "摆锤投球，旧代码库无周期单键释放进筐机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "014",
@@ -216,12 +252,16 @@
     "control_type": "A。\n\n\n\n必须保留轨道切换，而不是改成普通障碍跳跃。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_014.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_014.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_014_orbit_hop.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_014_orbit_hop.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "轨道跃迁，旧代码库无轨道交会点跳轨机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "轨道跃迁，旧代码库无轨道交会点跳轨机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_014.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_014.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "015",
@@ -232,12 +272,16 @@
     "control_type": "四个对应按钮。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_015.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_015.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_015_simon_memory.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_015_simon_memory.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Simon闪灯记忆，旧代码库无四色记忆序列复现机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Simon闪灯记忆，旧代码库无四色记忆序列复现机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_015.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_015.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "016",
@@ -248,12 +292,16 @@
     "control_type": "方向键、A。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_026_whack_a_mole.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_026_whack_a_mole.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_016_whack_a_mole.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_016_whack_a_mole.py",
     "legacy_source": "#026 像素打地鼠 (Whack-A-Mole 1976)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_026_whack_a_mole.py)",
-    "adaptation_notes": "复用Game #026 (game_026_whack_a_mole.cpp/.py)，九宫格地鼠探头与定点打击完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #026 (game_026_whack_a_mole.cpp/.py)，九宫格地鼠探头与定点打击完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_026_whack_a_mole.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_026_whack_a_mole.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "017",
@@ -264,12 +312,16 @@
     "control_type": "四个轨道按钮。\n\n\n\n音效与判定使用统一节拍时钟。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_017_piano_tiles.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_017_piano_tiles.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_017_rhythm_lanes.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_017_rhythm_lanes.py",
     "legacy_source": "#017 别踩白块儿 (Piano Tiles 2014)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_017_piano_tiles.py)",
-    "adaptation_notes": "复用Game #017 (game_017_piano_tiles.cpp/.py)，四轨节拍下落判定完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #017 (game_017_piano_tiles.cpp/.py)，四轨节拍下落判定完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_017_piano_tiles.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_017_piano_tiles.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "018",
@@ -280,12 +332,16 @@
     "control_type": "按住A前进，松开停止。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_018.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_018.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_018_red_green_light.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_018_red_green_light.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "红灯绿灯，旧代码库无相位观察走停机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "红灯绿灯，旧代码库无相位观察走停机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_018.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_018.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "019",
@@ -296,12 +352,16 @@
     "control_type": "左右选择、A确认。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_019.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_019.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_019_shell_game.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_019_shell_game.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "猜球杯，旧代码库无三杯洗牌换位追踪机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "猜球杯，旧代码库无三杯洗牌换位追踪机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_019.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_019.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "020",
@@ -315,9 +375,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_020_pong.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_020_pong.py",
     "legacy_source": "#007 双人乒乓 (Pong 1972)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "双向挡板碰撞反弹、智能AI对手/双人同屏对战、5分决胜机制，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "双向挡板碰撞反弹、智能AI对手/双人同屏对战、5分决胜机制，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "021",
@@ -331,9 +393,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_021_breakout.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_021_breakout.py",
     "legacy_source": "#008 经典打砖块 (Breakout 1976)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "底部挡板可调反弹角、4行32块耐久砖阵列、3命清屏，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "底部挡板可调反弹角、4行32块耐久砖阵列、3命清屏，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "022",
@@ -344,12 +408,16 @@
     "control_type": "A控制左拨杆，B控制右拨杆。\n\n\n\n物理模拟可以简化，但必须保留拨杆操作。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_108_pinball.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_108_pinball.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_022_pinball.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_022_pinball.py",
     "legacy_source": "#108 街机弹珠台 (Pinball)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_108_pinball.py)",
-    "adaptation_notes": "复用Game #108 (game_108_pinball.cpp/.py)，双拨杆击球弹珠台完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #108 (game_108_pinball.cpp/.py)，双拨杆击球弹珠台完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_108_pinball.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_108_pinball.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "023",
@@ -363,9 +431,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_023.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_023.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "空气曲棍球，旧代码库无2D球拍推球进门物理机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "空气曲棍球，旧代码库无2D球拍推球进门物理机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "024",
@@ -379,9 +449,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_024.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_024.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Peggle弹珠撞靶，旧代码库无有限弹珠撞靶消除机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Peggle弹珠撞靶，旧代码库无有限弹珠撞靶消除机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "025",
@@ -395,9 +467,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_060_marblemadness.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_060_marblemadness.py",
     "legacy_source": "#060 极速疯狂弹球 (Marble Madness)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_060_marblemadness.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #060 (game_060_marblemadness.cpp/.py) 滚球动力学，改造为重力平衡迷宫"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "基于Game #060 (game_060_marblemadness.cpp/.py) 滚球动力学，改造为重力平衡迷宫",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "026",
@@ -411,9 +485,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_026_space_invaders.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_026_space_invaders.py",
     "legacy_source": "#009 太空侵略者 (Space Invaders 1978)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "外星编队下压、阵亡动态加速步进、火炮反击与掩体拦截，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "外星编队下压、阵亡动态加速步进、火炮反击与掩体拦截，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "027",
@@ -424,12 +500,16 @@
     "control_type": "左右旋转、A推进、B射击。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_113_asteroids.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_113_asteroids.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_027_asteroids.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_027_asteroids.py",
     "legacy_source": "#113 小行星 (Asteroids)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_113_asteroids.py)",
-    "adaptation_notes": "复用Game #113 (game_113_asteroids.cpp/.py)，小行星漂移与分裂射击完备 (已纠正此前错误匹配#053)"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #113 (game_113_asteroids.cpp/.py)，小行星漂移与分裂射击完备 (已纠正此前错误匹配#053)",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_113_asteroids.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_113_asteroids.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "028",
@@ -440,12 +520,16 @@
     "control_type": "方向键、A发射。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_036_missile_command.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_036_missile_command.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_028_missile_command.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_028_missile_command.py",
     "legacy_source": "#036 导弹防线 (Missile Command 1980)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_036_missile_command.py)",
-    "adaptation_notes": "复用Game #036 (game_036_missile_command.cpp/.py)，准星防空拦截完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #036 (game_036_missile_command.cpp/.py)，准星防空拦截完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_036_missile_command.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_036_missile_command.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "029",
@@ -456,12 +540,16 @@
     "control_type": "左右、A射击。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_043_centipede.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_043_centipede.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_029_centipede.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_029_centipede.py",
     "legacy_source": "#043 蜈蚣大战 (Centipede (1980))",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_043_centipede.py)",
-    "adaptation_notes": "复用Game #043 (game_043_centipede.cpp/.py)，多节蜈蚣穿梭转向与蘑菇阵完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #043 (game_043_centipede.cpp/.py)，多节蜈蚣穿梭转向与蘑菇阵完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_043_centipede.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_043_centipede.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "030",
@@ -472,12 +560,16 @@
     "control_type": "方向键移动准星、A射击。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_033_clay_shooting.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_033_clay_shooting.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_030_duck_hunt.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_030_duck_hunt.py",
     "legacy_source": "#033 经典打飞碟 (Clay Shooting 1978)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_033_clay_shooting.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #033 (game_033_clay_shooting.cpp/.py) 飞靶射击，改造为飞鸭瞄准射击"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "基于Game #033 (game_033_clay_shooting.cpp/.py) 飞靶射击，改造为飞鸭瞄准射击",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_033_clay_shooting.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_033_clay_shooting.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "031",
@@ -488,12 +580,16 @@
     "control_type": "方向键移动、独立射击方向键。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_164_robotron.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_164_robotron.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_031_robotron.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_031_robotron.py",
     "legacy_source": "#164 机器人大战2084 (Robotron: 2084)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_164_robotron.py)",
-    "adaptation_notes": "复用Game #164 (game_164_robotron.cpp/.py)，双向独立移动与射击完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #164 (game_164_robotron.cpp/.py)，双向独立移动与射击完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_164_robotron.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_164_robotron.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "032",
@@ -507,9 +603,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_112_defender.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_112_defender.py",
     "legacy_source": "#112 防卫者 (Defender)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_112_defender.py)",
-    "adaptation_notes": "复用Game #112 (game_112_defender.cpp/.py)，横向巡逻与防卫人类完备 (已纠正此前错误匹配#081)"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #112 (game_112_defender.cpp/.py)，横向巡逻与防卫人类完备 (已纠正此前错误匹配#081)",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "033",
@@ -523,9 +621,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_033_snake.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_033_snake.py",
     "legacy_source": "#029 蛇蛇大作战 (Slither Arena 2016)",
-    "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_lifecycle.py, test_arcade_result_screen.py, test_arcade_nvs_persistence.py, test_arcade_partition_table.py, test_arcade_web_api.py - 1959项通过)",
-    "adaptation_notes": "默认经典撞墙死，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "默认经典撞墙死，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "034",
@@ -539,9 +639,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_034_pacman.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_034_pacman.py",
     "legacy_source": "#010 像素吃豆人 (Pac-Man 1980)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "16x16迷宫全豆漫游、左右穿梭隧道、三色巡逻幽灵与能量豆反噬，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "16x16迷宫全豆漫游、左右穿梭隧道、三色巡逻幽灵与能量豆反噬，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "035",
@@ -555,9 +657,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_035.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_035.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Boulder Dash落石夺宝，旧代码库无挖土落石塌方机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Boulder Dash落石夺宝，旧代码库无挖土落石塌方机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "036",
@@ -571,9 +675,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_021_dig_dug.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_021_dig_dug.py",
     "legacy_source": "#021 掘地打气人 (Dig Dug 1982)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_021_dig_dug.py)",
-    "adaptation_notes": "复用Game #021 (game_021_dig_dug.cpp/.py)，地道挖掘与打气充气爆破完备"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #021 (game_021_dig_dug.cpp/.py)，地道挖掘与打气充气爆破完备",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "037",
@@ -587,9 +693,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_069_qbert.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_069_qbert.py",
     "legacy_source": "#069 疯狂跳球 (Q*bert)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_069_qbert.py)，待按新规格重构验证",
-    "adaptation_notes": "复用Game #069 (game_069_qbert.cpp/.py)，需针对16x16调优3层阶梯视差与翻色判定"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #069 (game_069_qbert.cpp/.py)，需针对16x16调优3层阶梯视差与翻色判定",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "038",
@@ -603,9 +711,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_038_bomberman.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_038_bomberman.py",
     "legacy_source": "#013 像素炸弹人 (Bomberman 1983)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "定时炸弹布置、十字烈焰冲击波、软砖爆破碎裂与巡逻怪消灭，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "定时炸弹布置、十字烈焰冲击波、软砖爆破碎裂与巡逻怪消灭，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "039",
@@ -619,9 +729,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_039.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_039.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "迷雾探索迷宫，旧代码库无战争迷雾单向寻路机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "迷雾探索迷宫，旧代码库无战争迷雾单向寻路机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "040",
@@ -632,12 +744,16 @@
     "control_type": "方向键。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_040.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_040.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_040_mirror_maze.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_040_mirror_maze.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "镜像双人迷宫，旧代码库无双角色镜像联动操控机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "镜像双人迷宫，旧代码库无双角色镜像联动操控机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_040.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_040.py",
+    "full_round_status": "SIMULATOR_PASSED (all authored levels)"
   },
   {
     "id": "041",
@@ -651,9 +767,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_041_tetris.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_041_tetris.py",
     "legacy_source": "固件原生Tetris (firmware-s3/main/display/game_engine.cc)",
-    "status": "implemented",
-    "test_status": "SIMULATOR_PASSED (tests/test_arcade_lifecycle.py, test_arcade_result_screen.py, test_arcade_nvs_persistence.py, test_arcade_partition_table.py, test_arcade_web_api.py - 1959项通过)",
-    "adaptation_notes": "标准旋转与消行，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "标准旋转与消行，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "042",
@@ -664,12 +782,16 @@
     "control_type": "左右、旋转、快速下落。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_083_puyopuyo.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_083_puyopuyo.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_042_puyo_puyo.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_042_puyo_puyo.py",
     "legacy_source": "#083 魔法气泡 (Puyo Puyo)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_083_puyopuyo.py)",
-    "adaptation_notes": "复用Game #083 (game_083_puyopuyo.cpp/.py)，双联气泡旋转与四连消除完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #083 (game_083_puyopuyo.cpp/.py)，双联气泡旋转与四连消除完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_083_puyopuyo.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_083_puyopuyo.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "043",
@@ -680,12 +802,16 @@
     "control_type": "方向键。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_016_neon_2048.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_016_neon_2048.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_043_merge_2048.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_043_merge_2048.py",
     "legacy_source": "#016 霓虹 2048 (Neon 2048 2014)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_016_neon_2048.py)",
-    "adaptation_notes": "复用Game #016 (game_016_neon_2048.cpp/.py)，4x4滑移合并升阶完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #016 (game_016_neon_2048.cpp/.py)，4x4滑移合并升阶完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_016_neon_2048.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_016_neon_2048.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "044",
@@ -696,12 +822,16 @@
     "control_type": "方向键、A选择及交换。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_044.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_044.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_044_bejeweled.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_044_bejeweled.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Bejeweled宝石迷阵，旧代码库无相邻两格交换三消机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Bejeweled宝石迷阵，旧代码库无相邻两格交换三消机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_044.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_044.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "045",
@@ -712,12 +842,16 @@
     "control_type": "方向键、A。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_045.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_045.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_045_samegame.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_045_samegame.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "SameGame，旧代码库无同色连通色块点击整组消除机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "SameGame，旧代码库无同色连通色块点击整组消除机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_045.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_045.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "046",
@@ -731,9 +865,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_046.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_046.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "合成大西瓜 Suika，旧代码库无球体下落碰撞合并进阶机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "合成大西瓜 Suika，旧代码库无球体下落碰撞合并进阶机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "047",
@@ -747,9 +883,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_047.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_047.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Blockudoku，旧代码库无多异形方块自由放置九宫消行机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Blockudoku，旧代码库无多异形方块自由放置九宫消行机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "048",
@@ -763,9 +901,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_048.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_048.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Triple Town三合镇，旧代码库无三合一相邻建筑升级机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Triple Town三合镇，旧代码库无三合一相邻建筑升级机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "049",
@@ -779,9 +919,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_049.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_049.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Lights Out灭灯，旧代码库无十字邻域状态翻转解谜机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Lights Out灭灯，旧代码库无十字邻域状态翻转解谜机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "050",
@@ -795,9 +937,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_050.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_050.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "四色迷你数独，旧代码库无4x4唯一填色校验机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "四色迷你数独，旧代码库无4x4唯一填色校验机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "051",
@@ -808,12 +952,16 @@
     "control_type": "方向键、A选择及延伸路径。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_051.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_051.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_051_flow_free.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_051_flow_free.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Flow Free连线，旧代码库无同色端点不交叉布线机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Flow Free连线，旧代码库无同色端点不交叉布线机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_051.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_051.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "052",
@@ -824,12 +972,16 @@
     "control_type": "方向键、A旋转。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_034_pipe_dream.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_034_pipe_dream.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_052_pipe_connect.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_052_pipe_connect.py",
     "legacy_source": "#034 疯狂水管工 (Pipe Dream 1989)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_034_pipe_dream.py)",
-    "adaptation_notes": "复用Game #034 (game_034_pipe_dream.cpp/.py)，管道旋转拼接与水流贯通完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #034 (game_034_pipe_dream.cpp/.py)，管道旋转拼接与水流贯通完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_034_pipe_dream.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_034_pipe_dream.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "053",
@@ -840,12 +992,16 @@
     "control_type": "左右、A选择、B放下。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_053.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_053.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_053_tower_of_hanoi.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_053_tower_of_hanoi.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "汉诺塔，旧代码库无三柱圆盘大小层叠转移机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "汉诺塔，旧代码库无三柱圆盘大小层叠转移机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_053.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_053.py",
+    "full_round_status": "SIMULATOR_PASSED (all authored levels)"
   },
   {
     "id": "054",
@@ -859,9 +1015,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_054_sokoban.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_054_sokoban.py",
     "legacy_source": "#014 经典推箱子 (Sokoban 1982)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "不可拉动单向推移、空间槽位逻辑归位、死锁与全箱入槽通关检测，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "不可拉动单向推移、空间槽位逻辑归位、死锁与全箱入槽通关检测，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "055",
@@ -872,12 +1030,16 @@
     "control_type": "方向键、A旋转。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_055.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_055.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_055_mirror_laser.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_055_mirror_laser.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "镜面激光，旧代码库无旋转反射镜折射光路打靶机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "镜面激光，旧代码库无旋转反射镜折射光路打靶机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_055.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_055.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "056",
@@ -891,9 +1053,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_056.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_056.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "数字华容道，旧代码库无滑块拼图空位移动复位机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "数字华容道，旧代码库无滑块拼图空位移动复位机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "057",
@@ -907,9 +1071,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_057.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_057.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Rush Hour堵车，旧代码库无汽车轴向滑移疏解堵塞机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Rush Hour堵车，旧代码库无汽车轴向滑移疏解堵塞机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "058",
@@ -923,9 +1089,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_058.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_058.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "编程机器人，旧代码库无指令队列顺序编排执行机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "编程机器人，旧代码库无指令队列顺序编排执行机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "059",
@@ -939,9 +1107,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_059.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_059.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Cut the Rope割绳子，旧代码库无切绳摆动受力掉落机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Cut the Rope割绳子，旧代码库无切绳摆动受力掉落机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "060",
@@ -955,9 +1125,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_060.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_060.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "传送门谜题，旧代码库无双色传送门空间瞬移机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "传送门谜题，旧代码库无双色传送门空间瞬移机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "061",
@@ -971,9 +1143,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_061.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_061.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "四子棋 Connect Four，旧代码库无重力垂直落子连线机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "四子棋 Connect Four，旧代码库无重力垂直落子连线机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "062",
@@ -984,12 +1158,16 @@
     "control_type": "方向键、A落子。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_035_othello.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_035_othello.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_062_reversi.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_062_reversi.py",
     "legacy_source": "#035 极简黑白棋 (Othello 1980)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_035_othello.py)",
-    "adaptation_notes": "复用Game #035 (game_035_othello.cpp/.py)，黑白棋八向夹吃翻转与AI完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #035 (game_035_othello.cpp/.py)，黑白棋八向夹吃翻转与AI完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_035_othello.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_035_othello.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "063",
@@ -1000,12 +1178,16 @@
     "control_type": "方向键、A落子。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_063.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_063.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_063_gomoku.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_063_gomoku.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "五子棋 Gomoku，旧代码库无五子连珠胜负与人机博弈，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "五子棋 Gomoku，旧代码库无五子连珠胜负与人机博弈，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_063.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_063.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "064",
@@ -1016,12 +1198,16 @@
     "control_type": "方向键、A选择及落子。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_064.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_064.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_064_checkers.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_064_checkers.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "西洋跳棋 Checkers，旧代码库无斜向移动连跳吃子升王机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "西洋跳棋 Checkers，旧代码库无斜向移动连跳吃子升王机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_064.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_064.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "065",
@@ -1032,12 +1218,16 @@
     "control_type": "方向键、A画边。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_065.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_065.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_065_dots_and_boxes.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_065_dots_and_boxes.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Dots and Boxes点格棋，旧代码库无点阵连线占格抢分机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Dots and Boxes点格棋，旧代码库无点阵连线占格抢分机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_065.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_065.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "066",
@@ -1048,12 +1238,16 @@
     "control_type": "方向键、A确认。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_066.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_066.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_066_battleship.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_066_battleship.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Battleship海战棋，旧代码库无双人迷雾坐标盲猜盲打机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Battleship海战棋，旧代码库无双人迷雾坐标盲猜盲打机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_066.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_066.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "067",
@@ -1064,12 +1258,16 @@
     "control_type": "方向键、A移动、B放墙。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_067.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_067.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_067_quoridor.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_067_quoridor.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Quoridor围墙棋，旧代码库无行棋与放挡板路径封堵机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Quoridor围墙棋，旧代码库无行棋与放挡板路径封堵机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_067.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_067.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "068",
@@ -1083,9 +1281,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_068.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_068.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Mastermind颜色密码，旧代码库无猜色反馈解密机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Mastermind颜色密码，旧代码库无猜色反馈解密机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "069",
@@ -1099,9 +1299,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_069.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_069.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Nim取石子，旧代码库无多堆石子拿取博弈机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Nim取石子，旧代码库无多堆石子拿取博弈机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "070",
@@ -1115,9 +1317,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_070.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_070.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Flood-It连通染色，旧代码库无泛洪吞噬最大化染色机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Flood-It连通染色，旧代码库无泛洪吞噬最大化染色机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "071",
@@ -1131,9 +1335,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_071.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_071.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Peg Solitaire单人孔明棋，旧代码库无跳吃移子留一机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Peg Solitaire单人孔明棋，旧代码库无跳吃移子留一机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "072",
@@ -1144,12 +1350,16 @@
     "control_type": "方向键、A落子。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_072.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_072.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_072_hex_board.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_072_hex_board.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Hex连通棋，旧代码库无六角网格两端边框优先贯通机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Hex连通棋，旧代码库无六角网格两端边框优先贯通机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_072.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_072.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "073",
@@ -1160,12 +1370,16 @@
     "control_type": "方向键、A确认。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_073.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_073.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_073_ludo_race.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_073_ludo_race.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Ludo飞行棋，旧代码库无骰子推进与起飞撞回机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Ludo飞行棋，旧代码库无骰子推进与起飞撞回机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_073.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_073.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "074",
@@ -1179,9 +1393,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_074_highway_racer.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_074_highway_racer.py",
     "legacy_source": "#012 极速变道赛车 (Highway Racer 1982)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "三车道高速逆向慢车冲刷、左右变道闪避与1000m里程冲刺，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "三车道高速逆向慢车冲刷、左右变道闪避与1000m里程冲刺，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "075",
@@ -1192,12 +1408,16 @@
     "control_type": "左右。\n\n\n\n与赛车保持操作和过门判定上的区别。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_176_alpineski.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_176_alpineski.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_075_slalom_ski.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_075_slalom_ski.py",
     "legacy_source": "#176 高山滑雪 (Alpine Ski)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_176_alpineski.py)",
-    "adaptation_notes": "复用Game #176 (game_176_alpineski.cpp/.py)，高山速降绕红蓝旗门完备"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "复用Game #176 (game_176_alpineski.cpp/.py)，高山速降绕红蓝旗门完备",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_176_alpineski.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_176_alpineski.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "076",
@@ -1208,12 +1428,16 @@
     "control_type": "方向键、A/B调整和击球。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_076.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_076.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_076_mini_golf.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_076_mini_golf.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "迷你高尔夫，旧代码库无击球角度蓄力果岭进洞机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "迷你高尔夫，旧代码库无击球角度蓄力果岭进洞机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_076.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_076.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "077",
@@ -1227,9 +1451,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_111_leaguebowling.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_111_leaguebowling.py",
     "legacy_source": "#111 街机保龄球 (League Bowling)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_111_leaguebowling.py)",
-    "adaptation_notes": "复用Game #111 (game_111_leaguebowling.cpp/.py)，球道瞄准横移与击瓶碰撞完备"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #111 (game_111_leaguebowling.cpp/.py)，球道瞄准横移与击瓶碰撞完备",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "078",
@@ -1243,9 +1469,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_186_championbaseball.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_186_championbaseball.py",
     "legacy_source": "#186 冠军棒球 (Champion Baseball)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_186_championbaseball.py)",
-    "adaptation_notes": "复用Game #186 (game_186_championbaseball.cpp/.py)，投打时机挥棒全垒打完备"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #186 (game_186_championbaseball.cpp/.py)，投打时机挥棒全垒打完备",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "079",
@@ -1259,9 +1487,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_079.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_079.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "足球点球，旧代码库无射门角度与门将扑救猜拳博弈机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "足球点球，旧代码库无射门角度与门将扑救猜拳博弈机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "080",
@@ -1275,9 +1505,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_015_tron.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_015_tron.py",
     "legacy_source": "#015 创战纪光轮摩托 (Tron Light Cycles 1982)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_015_tron.py)",
-    "adaptation_notes": "复用Game #015 (game_015_tron.cpp/.py)，实体光痕堵路与对决完备"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #015 (game_015_tron.cpp/.py)，实体光痕堵路与对决完备",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "081",
@@ -1291,9 +1523,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_158_qix.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_158_qix.py",
     "legacy_source": "#158 划线天蚕变 (Qix)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_158_qix.py)",
-    "adaptation_notes": "复用Game #158 (game_158_qix.cpp/.py)，划线圈地与避开漫游光束完备"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #158 (game_158_qix.cpp/.py)，划线圈地与避开漫游光束完备",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "082",
@@ -1307,9 +1541,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_020_artillery.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_020_artillery.py",
     "legacy_source": "#020 像素百战天虫 (Artillery 1980)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_020_artillery.py)",
-    "adaptation_notes": "复用Game #020 (game_020_artillery.cpp/.py)，仰角风偏抛物线对决完备"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #020 (game_020_artillery.cpp/.py)，仰角风偏抛物线对决完备",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "083",
@@ -1320,12 +1556,16 @@
     "control_type": "方向键、A建造、B切换塔。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_083.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_083.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_083_tower_defense.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_083_tower_defense.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "路径塔防，旧代码库无沿道路架设炮台消灭小怪机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "路径塔防，旧代码库无沿道路架设炮台消灭小怪机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_083.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_083.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "084",
@@ -1336,12 +1576,16 @@
     "control_type": "方向键、A/B分兵。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_084.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_084.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_084_node_conquest.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_084_node_conquest.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "节点征服 (Galcon)，旧代码库无星系产兵连线调配机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "节点征服 (Galcon)，旧代码库无星系产兵连线调配机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_084.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_084.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "085",
@@ -1352,12 +1596,16 @@
     "control_type": "方向键选择角色、A/B分配技能。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_085.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_085.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_085_lemmings_rescue.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_085_lemmings_rescue.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Lemmings旅鼠拯救，旧代码库无自动移动分配技能脱困机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Lemmings旅鼠拯救，旧代码库无自动移动分配技能脱困机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_085.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_085.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "086",
@@ -1368,12 +1616,16 @@
     "control_type": "方向键、A/B操作。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_086.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_086.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_086_tiny_farm.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_086_tiny_farm.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "小农场，旧代码库无耕作播种浇水成熟收获循环，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "小农场，旧代码库无耕作播种浇水成熟收获循环，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_086.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_086.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "087",
@@ -1384,12 +1636,16 @@
     "control_type": "A/B切换交通灯。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_087.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_087.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_087_traffic_control.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_087_traffic_control.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "交通灯管理，旧代码库无路口红绿灯疏导防追尾机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "交通灯管理，旧代码库无路口红绿灯疏导防追尾机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_087.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_087.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "088",
@@ -1400,12 +1656,16 @@
     "control_type": "方向键选择飞机、A/B设置降落。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_088.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_088.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_088_atc_landing.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_088_atc_landing.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "机场降落引导，旧代码库无航线指派与跑道降落防撞机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "机场降落引导，旧代码库无航线指派与跑道降落防撞机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_088.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_088.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "089",
@@ -1419,9 +1679,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_141_firetruck.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_141_firetruck.py",
     "legacy_source": "#141 消防云梯车 (Fire Truck)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_141_firetruck.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #141 (game_141_firetruck.cpp/.py) 车身控制，重构为水枪扑灭蔓延火势机制"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "基于Game #141 (game_141_firetruck.cpp/.py) 车身控制，重构为水枪扑灭蔓延火势机制",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "090",
@@ -1435,9 +1697,11 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_090.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_090.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "传送带工厂，旧代码库无转辙道岔多色分流机制，待全新实现"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "传送带工厂，旧代码库无转辙道岔多色分流机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "091",
@@ -1451,9 +1715,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_147_crazyballoon.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_147_crazyballoon.py",
     "legacy_source": "#147 疯狂气球 (Crazy Balloon)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_147_crazyballoon.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #147 (game_147_crazyballoon.cpp/.py) 摆动穿刺，重构为急急棒狭道不碰壁机制"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "基于Game #147 (game_147_crazyballoon.cpp/.py) 摆动穿刺，重构为急急棒狭道不碰壁机制",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "092",
@@ -1464,12 +1730,16 @@
     "control_type": "手机滑动。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_092.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_092.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_092_fruit_slice.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_092_fruit_slice.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "水果忍者 Fruit Ninja，旧代码库无触控划线切水果避弹机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "水果忍者 Fruit Ninja，旧代码库无触控划线切水果避弹机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_092.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_092.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "093",
@@ -1480,12 +1750,16 @@
     "control_type": "方向键。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_093.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_093.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_093_black_hole.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_093_black_hole.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Hole.io黑洞吞噬，旧代码库无黑洞吞小物增半径机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Hole.io黑洞吞噬，旧代码库无黑洞吞小物增半径机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_093.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_093.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "094",
@@ -1496,12 +1770,16 @@
     "control_type": "方向键、A发射或释放钩爪。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "firmware-s3/main/display/arcade/game_138_rocnrope.cpp",
-    "simulator_source": "pc-agent-vision/arcade/game_138_rocnrope.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_094_grapple_swing.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_094_grapple_swing.py",
     "legacy_source": "#138 索道探险家 (Roc'n Rope)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_138_rocnrope.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #138 (game_138_rocnrope.cpp/.py) 索道锚索，调优为锚点摆荡惯性机制"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "基于Game #138 (game_138_rocnrope.cpp/.py) 索道锚索，调优为锚点摆荡惯性机制",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "firmware-s3/main/display/arcade/game_138_rocnrope.cpp",
+    "legacy_simulator_source": "pc-agent-vision/arcade/game_138_rocnrope.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "095",
@@ -1512,12 +1790,16 @@
     "control_type": "左右旋转。",
     "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
-    "firmware_source": "待新建 firmware-s3/main/display/arcade/game_095.cpp",
-    "simulator_source": "待新建 pc-agent-vision/arcade/game_095.py",
+    "firmware_source": "firmware-s3/main/display/arcade/game_095_super_hexagon.cpp",
+    "simulator_source": "pc-agent-vision/arcade/game_095_super_hexagon.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Super Hexagon，旧代码库无环形向心收缩多边形缝隙躲避机制，待全新实现"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "Super Hexagon，旧代码库无环形向心收缩多边形缝隙躲避机制，待全新实现",
+    "hardware_status": "NOT_TESTED",
+    "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_095.cpp",
+    "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_095.py",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "096",
@@ -1531,9 +1813,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_093_pengo.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_093_pengo.py",
     "legacy_source": "#093 企鹅推冰块 (Pengo)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_093_pengo.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #093 (game_093_pengo.cpp/.py) 冰块推动，改造为冰面滑行撞墙才停迷宫"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "基于Game #093 (game_093_pengo.cpp/.py) 冰块推动，改造为冰面滑行撞墙才停迷宫",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "097",
@@ -1547,9 +1831,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_097_frogger.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_097_frogger.py",
     "legacy_source": "#011 青蛙过河 (Frogger 1981)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_target_batch1.py)",
-    "adaptation_notes": "多车道车辆穿梭、河流浮木附着漂移与5穴归巢通关判定，双向验证通过"
+    "status": "integrated_software",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "adaptation_notes": "多车道车辆穿梭、河流浮木附着漂移与5穴归巢通关判定，双向验证通过",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
   },
   {
     "id": "098",
@@ -1563,9 +1849,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_116_lunarlander.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_116_lunarlander.py",
     "legacy_source": "#116 月球着陆器 (Lunar Lander)",
-    "status": "implemented",
-    "test_status": "UNIT_TEST_PASSED (tests/test_arcade_116_lunarlander.py)",
-    "adaptation_notes": "复用Game #116 (game_116_lunarlander.cpp/.py)，反冲推力微调与月面软着陆完备 (已纠正此前错误匹配#051)"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "复用Game #116 (game_116_lunarlander.cpp/.py)，反冲推力微调与月面软着陆完备 (已纠正此前错误匹配#051)",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "099",
@@ -1579,9 +1867,11 @@
     "firmware_source": "firmware-s3/main/display/arcade/game_179_gauntlet.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_179_gauntlet.py",
     "legacy_source": "#179 圣铠传说 (Gauntlet)",
-    "status": "rework_needed",
-    "test_status": "旧基线单元测试通过 (tests/test_arcade_179_gauntlet.py)，待按新规格重构验证",
-    "adaptation_notes": "基于Game #179 (game_179_gauntlet.cpp/.py) 地牢走位，重构为自动索敌与升级构筑"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "基于Game #179 (game_179_gauntlet.cpp/.py) 地牢走位，重构为自动索敌与升级构筑",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   },
   {
     "id": "100",
@@ -1595,8 +1885,10 @@
     "firmware_source": "待新建 firmware-s3/main/display/arcade/game_100.cpp",
     "simulator_source": "待新建 pc-agent-vision/arcade/game_100.py",
     "legacy_source": "None",
-    "status": "missing",
-    "test_status": "NOT_IMPLEMENTED",
-    "adaptation_notes": "Memory Match翻牌配对，旧代码库无4x4翻开图案匹配消除机制，待全新开发"
+    "status": "not_registered",
+    "test_status": "NOT_INTEGRATED (legacy sources, if present, do not establish target implementation)",
+    "adaptation_notes": "Memory Match翻牌配对，旧代码库无4x4翻开图案匹配消除机制，待全新开发",
+    "hardware_status": "NOT_TESTED",
+    "full_round_status": "NOT_TESTED"
   }
 ]

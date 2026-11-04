@@ -395,6 +395,7 @@ main {
 }
 .hero-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 13px;
   align-items: center;
   margin-top: 23px;
@@ -2495,4 +2496,76 @@ dialog p {
   flex-direction: column;
   align-items: center;
   gap: 6px;
+}
+.arcade-track-stage {
+  display: none;
+  width: 100%;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+}
+.arcade-track-btn {
+  height: 88px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  transition: transform 0.06s ease, filter 0.06s ease;
+}
+.arcade-track-btn.track-red {
+  background: linear-gradient(180deg, #ef4444, #b91c1c);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+}
+.arcade-track-btn.track-green {
+  background: linear-gradient(180deg, #22c55e, #15803d);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
+}
+.arcade-track-btn.track-blue {
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+.arcade-track-btn.track-yellow {
+  background: linear-gradient(180deg, #eab308, #a16207);
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.35);
+}
+.arcade-track-btn:active,
+.arcade-track-btn.pressed {
+  transform: translateY(3px) scale(0.97);
+  filter: brightness(1.25);
+}
+.arcade-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.arcade-filter-bar select {
+  flex: 1 1 170px;
+  font-size: 12px;
+}
+.arcade-filter-bar input {
+  flex: 1 1 160px;
+  font-size: 12px;
+}
+.arcade-card .game-selection {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  gap: 8px;
+  max-height: 272px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.arcade-card .game-selection button {
+  font-size: 11px;
+  padding: 8px 10px;
+  text-align: left;
+  justify-content: flex-start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

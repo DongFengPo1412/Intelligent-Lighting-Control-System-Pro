@@ -42,6 +42,7 @@ void Game020Pong::ResetBall(bool serve_to_right) {
 }
 
 void Game020Pong::Init() {
+    p2_is_ai_ = true;
     Reset();
 }
 
@@ -53,7 +54,6 @@ void Game020Pong::Reset() {
     paddle_h_ = 4.0f;
     p1_score_ = 0;
     p2_score_ = 0;
-    p2_is_ai_ = true;
     state_timer_ = 0.0f;
     anim_timer_ = 0.0f;
     ResetBall(true);
@@ -67,7 +67,6 @@ void Game020Pong::Start() {
         paddle_h_ = 4.0f;
         p1_score_ = 0;
         p2_score_ = 0;
-        p2_is_ai_ = true;
         state_timer_ = 0.0f;
         anim_timer_ = 0.0f;
         ResetBall(true);
@@ -76,6 +75,12 @@ void Game020Pong::Start() {
 
 void Game020Pong::Pause() {
     if (state_ == STATE_PLAYING) state_ = STATE_PAUSED;
+}
+
+bool Game020Pong::SetPlayerCount(uint8_t count) {
+    if (count != 1 && count != 2) return false;
+    p2_is_ai_ = count == 1;
+    return true; // Selection changes neither scores nor lifecycle state.
 }
 
 void Game020Pong::Resume() {
@@ -136,11 +141,9 @@ void Game020Pong::Update(float dt, uint16_t keys_down, uint16_t keys_pressed) {
         if (p1_y_ < 0.0f) p1_y_ = 0.0f;
         if (p1_y_ > 16.0f - paddle_h_) p1_y_ = 16.0f - paddle_h_;
 
-        if (keys_down & KEY_A) {
-            p2_is_ai_ = false;
+        if (!p2_is_ai_ && (keys_down & KEY_A)) {
             p2_y_ -= paddle_speed * dt;
-        } else if (keys_down & KEY_B) {
-            p2_is_ai_ = false;
+        } else if (!p2_is_ai_ && (keys_down & KEY_B)) {
             p2_y_ += paddle_speed * dt;
         } else if (p2_is_ai_) {
             // 只有球朝 AI 飞来时才追球, 否则缓慢回中; 追球目标带有随机误差
@@ -300,6 +303,7 @@ CartridgeStatus Game020Pong::GetStatus() const {
     st.lives = (state_ == STATE_GAMEOVER) ? 0 : 1;
     st.state = (uint8_t)state_;
     st.progress = (uint8_t)(p1_score_ * 20);
+    st.player_count = p2_is_ai_ ? 1 : 2;
     return st;
 }
 

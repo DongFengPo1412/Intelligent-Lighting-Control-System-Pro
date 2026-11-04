@@ -4,6 +4,8 @@ import json
 import urllib.request
 import urllib.error
 import asyncio
+import time
+from pathlib import Path
 
 
 def main():
@@ -18,9 +20,15 @@ def main():
     def post(data):
         req=urllib.request.Request(base+'/api/arcade',data=json.dumps(data).encode(),headers={'Content-Type':'application/json'})
         return json.load(http.open(req,timeout=4))
-    for gid in (1,9,10,20,21,26,33,34,38,41,54,74,97):
+    registry=json.loads((Path(__file__).resolve().parents[1]/'pc-agent-vision/arcade/registered_games.json').read_text())
+    for gid in (entry['id'] for entry in registry):
         result=post({'action':'select','game_id':gid})
         assert result['status']=='ok' and result['simulated'] and result['game_status']['game_id']==gid
+        if gid==20:
+            assert post({'action':'players','count':2})['game_status']['player_count']==2
+            post({'action':'start'});post({'action':'pause'})
+            assert post({'action':'players','count':1})['game_status']['state']==2
+            assert post({'action':'resume'})['game_status']['player_count']==1
         for action in ('start','pause','resume','reset'):
             assert post({'action':action})['status']=='ok', (gid,action)
         assert post({'action':'input','down':18,'pressed':16})['status']=='ok'
@@ -28,12 +36,13 @@ def main():
         frame=json.load(http.open(base+'/api/arcade/frame',timeout=4))
         assert frame['simulated'] and frame['source']=='simulator' and len(frame['hex'])==1536
         assert post({'action':'exit'})['status']=='ok'
+        time.sleep(.08) # Stay below the production HTTP rate budget.
         print(f'Target {gid:03}: select/start/pause/resume/reset/multi-key/frame/exit passed (SIMULATOR)')
-    for gid in (-255,257,1.5,True,'1'):
+    for gid in (-255,257,1.5,True,'1',100):
         try: post({'action':'select','game_id':gid})
         except urllib.error.HTTPError as error: assert error.code==400
         else: raise AssertionError(f'Invalid ID accepted: {gid!r}')
-    print('Real HTTP integration passed for 13 registered games; HARDWARE NOT TESTED')
+    print(f'Real HTTP integration passed for {len(registry)} registered games; HARDWARE NOT TESTED')
     async def websocket_rate_check():
         import aiohttp
         async with aiohttp.ClientSession() as session:

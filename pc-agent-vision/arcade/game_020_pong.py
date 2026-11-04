@@ -79,6 +79,7 @@ class Game020Pong(BaseCartridge):
         return "双向挡板碰撞反弹与决胜对决"
 
     def init(self) -> None:
+        self.p2_is_ai = True
         self.reset()
 
     def _reset_ball(self, serve_to_right: bool):
@@ -97,7 +98,6 @@ class Game020Pong(BaseCartridge):
         self.paddle_h = 4.0
         self.p1_score = 0
         self.p2_score = 0
-        self.p2_is_ai = True
         self.state_timer = 0.0
         self.anim_timer = 0.0
         self._score = 0
@@ -111,7 +111,6 @@ class Game020Pong(BaseCartridge):
             self.paddle_h = 4.0
             self.p1_score = 0
             self.p2_score = 0
-            self.p2_is_ai = True
             self.state_timer = 0.0
             self.anim_timer = 0.0
             self._score = 0
@@ -120,6 +119,12 @@ class Game020Pong(BaseCartridge):
     def pause(self):
         if self._state == STATE_PLAYING:
             self._state = STATE_PAUSED
+
+    def set_player_count(self, count):
+        if type(count) is not int or count not in (1,2):
+            return False
+        self.p2_is_ai = count == 1
+        return True
 
     def resume(self):
         if self._state == STATE_PAUSED:
@@ -176,11 +181,9 @@ class Game020Pong(BaseCartridge):
                 self.p1_y += paddle_speed * dt
             self.p1_y = max(0.0, min(16.0 - self.paddle_h, self.p1_y))
 
-            if keys_down & KEY_A:
-                self.p2_is_ai = False
+            if not self.p2_is_ai and keys_down & KEY_A:
                 self.p2_y -= paddle_speed * dt
-            elif keys_down & KEY_B:
-                self.p2_is_ai = False
+            elif not self.p2_is_ai and keys_down & KEY_B:
                 self.p2_y += paddle_speed * dt
             elif self.p2_is_ai:
                 # 只有球朝 AI 飞来时才追球, 否则缓慢回中; 追球目标带有随机误差
@@ -294,10 +297,11 @@ class Game020Pong(BaseCartridge):
 
     def get_status(self) -> Dict[str, Any]:
         return {
+            "player_count": 1 if self.p2_is_ai else 2,
             "game_id": self.game_id,
-            "score": self.p1_score,
-            "high_score": max(self.p1_score, self.p2_score),
-            "lives": 1,
+            "score": self.p1_score * 10,
+            "high_score": self._high_score,
+            "lives": 0 if self._state == STATE_GAMEOVER else 1,
             "state": self._state,
-            "progress": min(100, (self.p1_score + self.p2_score) * 10),
+            "progress": self.p1_score * 20,
         }

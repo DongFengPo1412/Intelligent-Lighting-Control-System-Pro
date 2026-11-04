@@ -25,6 +25,7 @@ public:
     void Update(float dt, uint16_t keys_down, uint16_t keys_pressed) override;
     void Render(uint8_t* fb_rgb24) override;
     CartridgeStatus GetStatus() const override;
+    bool SetPlayerCount(uint8_t count);
 
 private:
     void ResetBall(bool serve_to_right);

@@ -106,45 +106,13 @@
     }
     return httpApi(path,data,method,timeout);
   }
-  let pairingPrompt = false;
-  async function httpApi(path, data, method = "POST", timeout = 15000) {
-    const abort = new AbortController(),
-      timer = setTimeout(() => abort.abort(), timeout);
-    try {
-      const r = await fetch(path, {
-        method,
-        headers: {
-          ...(data === undefined ? {} : {"Content-Type":"application/json"}),
-          ...(sessionStorage.getItem("kurisu_access_token") ? {Authorization:"Bearer "+sessionStorage.getItem("kurisu_access_token")} : {})
-        },
-        body: data === undefined ? undefined : JSON.stringify(data),
-        signal: abort.signal,
-        cache: "no-store",
-      });
-      const v = await r.json();
-      if (r.status === 401 && !pairingPrompt) {
-        pairingPrompt=true;
-        const token=window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）");
-        if (token) {
-          sessionStorage.setItem("kurisu_access_token",token.trim());
-          await fetch("/api/pair",{method:"POST",headers:{Authorization:"Bearer "+token.trim()}});
-        }
-      }
-      if (!r.ok || v.status === "error")
-        throw Error(v.error || v.message || `请求失败 (${r.status})`);
-      return v;
-    } catch (e) {
-      if (e.name === "AbortError")
-        throw Error(
-          method === "GET"
-            ? "连接超时，请检查电脑服务"
-            : "等待回执超时；操作可能已执行，请查看设备状态后再操作",
-        );
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
+  const pairedHttp = window.createPairedHttp({
+    fetch: (...args) => fetch(...args), storage: sessionStorage,
+    prompt: () => window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）")
+  });
+  const httpApi = (path,data,method="POST",timeout=15000) =>
+    pairedHttp(path,{method,body:data===undefined?undefined:JSON.stringify(data),
+      headers:data===undefined?{}:{"Content-Type":"application/json"}},timeout);
   function bind(id, fn) {
     $(id).addEventListener("click", async (e) => {
       const b = e.currentTarget;
@@ -347,7 +315,8 @@
       b.classList.toggle("active", Number(b.dataset.mode) === f.mode);
       b.setAttribute("aria-pressed", String(Number(b.dataset.mode) === f.mode));
     });
-    if ([19, 20].includes(f.mode)) state.game = "snake";
+    if (state.arcadeActive) state.game = "arcade";
+    else if ([19, 20].includes(f.mode)) state.game = "snake";
     else if ([21, 22].includes(f.mode)) state.game = "tetris";
     else if (state.game === "mario") {
       /* 马里奥处于主动运行状态，不因底层环境模式上报而被动停止 */
@@ -355,26 +324,34 @@
       state.game = null;
     }
     $("gameState").textContent = state.game
-      ? state.game === "snake"
+      ? state.game === "arcade"
+        ? ARCADE_TITLE_MAP[state.arcadeGid] || "街机"
+        : state.game === "snake"
         ? "贪吃蛇"
         : state.game === "tetris"
           ? "俄罗斯方块"
           : "超级马里奥"
       : "选择游戏开始";
     $$("[data-game]").forEach((b) =>
-      b.classList.toggle("active", b.dataset.game === state.game),
+      b.classList.toggle("active", state.arcadeActive ? Number(b.dataset.arcadeId)===state.arcadeGid : b.dataset.game === state.game),
     );
     if ($("marioContainer")) {
-      $("marioContainer").style.display = state.game === "mario" ? "flex" : "none";
+      $("marioContainer").style.display = state.arcadeActive || state.game === "mario" ? "flex" : "none";
     }
     if ($("gamepad")) {
-      $("gamepad").style.display = state.game === "mario" ? "none" : "flex";
+      $("gamepad").style.display = state.arcadeActive || state.game === "mario" ? "none" : "flex";
     }
     if (f.brightness != null) syncRange("brightness", f.brightness, " / 60");
     $("countdownState").textContent =
       f.mode === 25 ? "计时画面显示中" : "尚未开始 / 已结束";
   }
   async function setMode(mode) {
+    if (state.arcadeActive) {
+      await api("/api/arcade", {action:"exit"});
+      state.arcadeActive=false;state.game=null;
+      clearInterval(arcadeHeartbeatTimer);
+      if ($("marioContainer")) $("marioContainer").style.display="none";
+    }
     if (state.game === "mario") {
       await api("/api/game", { game: "mario", action: "stop" }).catch(() => {});
       state.game = null;
@@ -914,21 +891,8 @@
     try {
       if (!state.board) throw Error("请先连接灯板");
       if (file.size > 20 * 1024 * 1024) throw Error("临时上传不能超过 20 MiB");
-      const r = await fetch(
-        "/api/pro/music-upload?visual=" +
-          encodeURIComponent($("musicVisual").value),
-        { method: "POST", body: file },
-      );
-      const v = await r.json();
-      if (r.status === 401 && !pairingPrompt) {
-        pairingPrompt=true;
-        const token=window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）");
-        if (token) {
-          sessionStorage.setItem("kurisu_access_token",token.trim());
-          await fetch("/api/pair",{method:"POST",headers:{Authorization:"Bearer "+token.trim()}});
-        }
-      }
-      if (!r.ok) throw Error(v.error || "上传失败");
+      await pairedHttp("/api/pro/music-upload?visual="+
+        encodeURIComponent($("musicVisual").value),{method:"POST",body:file});
       notice(state.simulated ? "模拟音源已提交" : "音乐已开始");
       lastPro = 0;
     } catch (error) {
@@ -993,15 +957,145 @@
     }
   }
 
-    // =========================================================================
+  // =========================================================================
   // 统一 100 款点阵街机游戏核心控制器 (ESP32 唯一权威来源，全链路响应式联动)
   // =========================================================================
+  const ARCADE_CATALOG_100 = [
+    [1, "A", "超级马里奥", "Super Mario Bros."],
+    [2, "A", "涂鸦跳跃", "Doodle Jump"],
+    [3, "A", "空中冲刺", "Celeste Dash"],
+    [4, "A", "重力翻转", "VVVVVV Flip"],
+    [5, "A", "挖洞夺金", "Lode Runner"],
+    [6, "A", "泡泡捕敌", "Bubble Bobble"],
+    [7, "A", "深井射击", "Downwell"],
+    [8, "A", "蓄力跳跃", "Jump King"],
+    [9, "B", "飞翔小鸟", "Flappy Bird 16"],
+    [10, "B", "堆叠大师", "Stack Master"],
+    [11, "B", "恐龙跑酷", "Dino Runner"],
+    [12, "B", "旋盘投刀", "Knife Hit"],
+    [13, "B", "摆锤投球", "Pendulum Drop"],
+    [14, "B", "轨道跃迁", "Orbit Hop"],
+    [15, "C", "闪灯记忆", "Simon Says"],
+    [16, "C", "打地鼠", "Whack-A-Mole"],
+    [17, "C", "四轨节奏", "Rhythm Lanes"],
+    [18, "C", "红灯绿灯", "Red Light Green"],
+    [19, "C", "猜球杯", "Shell Shuffle"],
+    [20, "D", "双人乒乓", "Pong 1972"],
+    [21, "D", "经典打砖块", "Breakout 1976"],
+    [22, "D", "迷你弹珠台", "Mini Pinball"],
+    [23, "D", "空气曲棍球", "Air Hockey"],
+    [24, "D", "弹珠撞靶", "Peggle Bounce"],
+    [25, "D", "滚珠平衡迷宫", "Tilt Labyrinth"],
+    [26, "E", "太空侵略者", "Space Invaders 1978"],
+    [27, "E", "小行星", "Asteroids"],
+    [28, "E", "导弹指挥官", "Missile Command"],
+    [29, "E", "百足蜈蚣", "Centipede"],
+    [30, "E", "打鸭子", "Duck Hunt"],
+    [31, "E", "双向射击", "Robotron 2084"],
+    [32, "E", "横向防卫", "Defender"],
+    [33, "F", "经典贪吃蛇", "Classic Snake"],
+    [34, "F", "吃豆人", "Pac-Man 1980"],
+    [35, "F", "落石夺宝", "Boulder Dash"],
+    [36, "F", "地下充气战", "Dig Dug"],
+    [37, "F", "染色跳格", "Q*bert"],
+    [38, "F", "炸弹人", "Bomberman 1983"],
+    [39, "F", "迷雾探索迷宫", "Fog Maze"],
+    [40, "F", "镜像双人迷宫", "Mirror Twins"],
+    [41, "G", "俄罗斯方块", "Tetris"],
+    [42, "G", "彩球连锁", "Puyo Puyo"],
+    [43, "G", "2048滑块", "Neon 2048"],
+    [44, "G", "宝石迷阵", "Bejeweled"],
+    [45, "G", "同色消块", "SameGame"],
+    [46, "G", "合成大西瓜", "Suika Merge"],
+    [47, "G", "九宫拼块", "Blockudoku"],
+    [48, "G", "三合镇", "Triple Town"],
+    [49, "H", "灭灯谜题", "Lights Out"],
+    [50, "H", "四色迷你数独", "Color Sudoku"],
+    [51, "H", "同色连线", "Flow Free"],
+    [52, "H", "管道旋转接水", "Pipe Connect"],
+    [53, "H", "汉诺塔", "Tower of Hanoi"],
+    [54, "I", "推箱子", "Sokoban 1982"],
+    [55, "I", "镜面激光", "Mirror Laser"],
+    [56, "I", "数字华容道", "15 Sliding Puzzle"],
+    [57, "I", "移车出库", "Rush Hour"],
+    [58, "I", "编程机器人", "Robo Programmer"],
+    [59, "I", "割绳子", "Cut the Rope"],
+    [60, "I", "传送门谜题", "Portal Grid"],
+    [61, "J", "四子棋", "Connect Four"],
+    [62, "J", "黑白棋", "Reversi"],
+    [63, "J", "五子棋", "Gomoku"],
+    [64, "J", "西洋跳棋", "Checkers"],
+    [65, "J", "点格棋", "Dots and Boxes"],
+    [66, "J", "海战棋", "Battleship"],
+    [67, "J", "围墙棋", "Quoridor"],
+    [68, "K", "颜色密码", "Mastermind"],
+    [69, "K", "Nim取石子", "Nim Strategy"],
+    [70, "K", "连通染色", "Flood-It"],
+    [71, "K", "单人孔明棋", "Peg Solitaire"],
+    [72, "K", "Hex连通棋", "Hex Connection"],
+    [73, "K", "飞行棋", "Ludo Race"],
+    [74, "L", "变道赛车", "Highway Racer 1979"],
+    [75, "L", "滑雪绕旗", "Alpine Slalom"],
+    [76, "L", "迷你高尔夫", "Mini Golf"],
+    [77, "L", "保龄球", "Ten-Pin Bowling"],
+    [78, "L", "棒球击打", "Home Run Derby"],
+    [79, "L", "足球点球", "Penalty Shootout"],
+    [80, "M", "Tron光线摩托", "Tron Light Cycles"],
+    [81, "M", "Qix圈地", "Qix Territory"],
+    [82, "M", "坦克抛物线对轰", "Tank Artillery"],
+    [83, "M", "路径塔防", "Path Tower Defense"],
+    [84, "M", "节点征服", "Node Conquest"],
+    [85, "M", "旅鼠拯救", "Lemmings Rescue"],
+    [86, "N", "小农场", "Tiny Harvest"],
+    [87, "N", "交通灯管理", "Traffic Control"],
+    [88, "N", "机场降落引导", "Flight Control"],
+    [89, "N", "消防灭火", "Fire Brigade"],
+    [90, "N", "传送带工厂", "Conveyor Factory"],
+    [91, "O", "电线迷宫", "Steady Wire Loop"],
+    [92, "O", "水果忍者", "Fruit Ninja"],
+    [93, "O", "黑洞吞噬", "Hole.io"],
+    [94, "O", "钩爪摆荡", "Grapple Swing"],
+    [95, "O", "旋转避壁", "Super Hexagon"],
+    [96, "O", "冰面滑行迷宫", "Ice Slide Maze"],
+    [97, "P", "青蛙过河", "Frogger 1981"],
+    [98, "P", "月球着陆", "Lunar Lander"],
+    [99, "P", "自动攻击生存", "Pixel Survivor"],
+    [100, "P", "翻牌配对", "Memory Match"]
+  ];
+  const ARCADE_TITLE_MAP = Object.fromEntries(ARCADE_CATALOG_100.map(([id, , zh, en]) => [id, `[#${String(id).padStart(3, "0")}] ${zh} (${en})`]));
   let arcadeHeartbeatTimer = null;
+  let activeControlType = 3;
+
+  function filterArcadeCatalog() {
+    const cat = $("arcadeCategoryFilter")?.value || "all";
+    const q = ($("arcadeSearchInput")?.value || "").trim().toLowerCase();
+    let visible = 0;
+    $$("#arcadeGameGrid [data-arcade-id]").forEach((btn) => {
+      const gid = parseInt(btn.dataset.arcadeId, 10);
+      const item = ARCADE_CATALOG_100[gid - 1];
+      const available=ArcadeTransport.registeredIds.includes(gid);
+      btn.disabled=!available;
+      btn.title=available?"已接入软件，实机待验":"计划项目，尚未接入";
+      btn.dataset.available=String(available);
+      const matchCat = cat === "all" || btn.dataset.arcadeCat === cat;
+      const hay = `${btn.dataset.arcadeId} ${gid} ${item ? item[2] + " " + item[3] : btn.textContent}`.toLowerCase();
+      const show = matchCat && (!q || hay.includes(q));
+      btn.hidden = !show;
+      if (show) visible++;
+    });
+    if ($("arcadeVisibleCount")) {
+      $("arcadeVisibleCount").textContent = `${visible} / 100 目录 · ${ArcadeTransport.registeredIds.length} 已接入（实机待验）`;
+    }
+  }
+  if ($("arcadeCategoryFilter")) $("arcadeCategoryFilter").onchange = filterArcadeCatalog;
+  if ($("arcadeSearchInput")) $("arcadeSearchInput").oninput = filterArcadeCatalog;
+  filterArcadeCatalog();
 
   function updateGamepadLayout(controlType, gid) {
     const tapStage = $("arcadeTapStage");
     const dpad = $("arcadeDpad");
     const actions = $("arcadeActions");
+    const trackStage = $("arcadeTrackStage");
     const versus = $("arcadeVersusStage");
     const keyUp = $("marioKeyUp");
     const keyDown = $("marioKeyDown");
@@ -1012,10 +1106,10 @@
     const btnB_sub = document.querySelector("#marioKeyB .btn-sub");
     const tapBtn = $("arcadeTapBig");
 
-    // 重置所有区域可见性
     if (tapStage) tapStage.style.display = "none";
     if (dpad) dpad.style.display = "grid";
     if (actions) actions.style.display = "flex";
+    if (trackStage) trackStage.style.display = "none";
     if (versus) versus.style.display = "none";
     if (keyUp) keyUp.style.visibility = "visible";
     if (keyDown) keyDown.style.visibility = "visible";
@@ -1024,41 +1118,79 @@
     if (keyB) keyB.style.display = "inline-flex";
 
     const ct = Number(controlType !== undefined ? controlType : 3);
+    activeControlType = ct;
     const gNum = Number(gid || state.arcadeGid || 1);
+    const help=document.querySelector(".mario-help");
+    if(help)help.textContent=gNum===20
+      ? "P1 使用 ↑/↓；本地双人模式的 P2 使用 A/B（键盘 J/K）。AI/双人切换保留比分与暂停状态。"
+      : gNum===1
+        ? "手机支持多点触控：左右移动、A 跳跃、B 加速；电脑使用方向键、空格和 Shift。"
+        : "按当前卡带的手柄操作；支持多点触控和独立松键。电脑可使用方向键、J/K 与空格。";
 
     if (ct === 0) {
-      // CTRL_TAP_SINGLE (Flappy Bird #009, Stack #010)
+      // CTRL_TAP_SINGLE (#009 Flappy, #010 Stack, #012 Knife Hit, #013 Pendulum, #014 Orbit Hop, #018 Red/Green Light)
       if (tapStage) tapStage.style.display = "flex";
       if (dpad) dpad.style.display = "none";
       if (actions) actions.style.display = "none";
       if (tapBtn) {
-        tapBtn.textContent = gNum === 9 ? "🕊️ 拍翅轻点 (TAP)" : "🧱 切削放置 (TAP)";
+        const tapLabels = {
+          9: "🕊️ 拍翅轻点 (TAP)",
+          10: "🧱 切削放置 (TAP)",
+          12: "🗡️ 投掷飞刀 (TAP)",
+          13: "🎯 释放摆球 (TAP)",
+          14: "🪐 切换轨道 (TAP)",
+          18: "🚦 按住前进 · 松开急停 (HOLD)"
+        };
+        tapBtn.textContent = tapLabels[gNum] || "👆 单键触控 (TAP)";
       }
     } else if (ct === 1) {
-      // CTRL_TWO_BUTTON (Breakout #021, Highway Racer #074, Doodle Jump #002)
+      // CTRL_TWO_BUTTON (#002 Doodle Jump, #021 Breakout, #074 Highway Racer, #075 Slalom Ski, #095 Super Hexagon)
       if (keyUp) keyUp.style.visibility = "hidden";
       if (keyDown) keyDown.style.visibility = "hidden";
       if (actions) actions.style.display = "none";
     } else if (ct === 2) {
-      // CTRL_DPAD_4WAY (Snake #033, Pacman #034, Sokoban #054, Frogger #097)
+      // CTRL_DPAD_4WAY
       if (actions) actions.style.display = "none";
     } else if (ct === 3) {
-      // CTRL_ARCADE_AB (Mario #001, Space Invaders #026, Bomberman #038, Tetris #041)
-      if (gNum === 41) {
+      // CTRL_ARCADE_AB
+      if (gNum === 41 || gNum === 42) {
         if (btnA_sub) btnA_sub.textContent = "旋转";
-        if (btnB_sub) btnB_sub.textContent = "软降";
+        if (btnB_sub) btnB_sub.textContent = "快降";
       } else if (gNum === 38) {
         if (btnA_sub) btnA_sub.textContent = "炸弹";
-        if (btnB_sub) btnB_sub.textContent = "引爆";
-      } else if (gNum === 26) {
-        if (btnA_sub) btnA_sub.textContent = "激光";
-        if (btnB_sub) btnB_sub.textContent = "防御";
+        if (btnB_sub) btnB_sub.textContent = "动作";
+      } else if (gNum === 22) {
+        if (btnA_sub) btnA_sub.textContent = "左挡";
+        if (btnB_sub) btnB_sub.textContent = "右挡";
+      } else if (gNum === 92) {
+        if (btnA_sub) btnA_sub.textContent = "挥刀";
+        if (btnB_sub) btnB_sub.textContent = "旋斩";
+      } else if ([26, 27, 28, 29, 30, 31, 32].includes(gNum)) {
+        if (btnA_sub) btnA_sub.textContent = "开火";
+        if (btnB_sub) btnB_sub.textContent = "副武";
       } else {
-        if (btnA_sub) btnA_sub.textContent = "跳跃";
-        if (btnB_sub) btnB_sub.textContent = "冲刺";
+        if (btnA_sub) btnA_sub.textContent = "确认/A";
+        if (btnB_sub) btnB_sub.textContent = "切换/B";
+      }
+    } else if (ct === 4) {
+      // CTRL_MULTI_TRACK (#015 Simon, #017 Rhythm Lanes, #070 Flood-It)
+      if (dpad) dpad.style.display = "none";
+      if (actions) actions.style.display = "none";
+      if (trackStage) trackStage.style.display = "grid";
+      const t1 = $("arcadeTrack1"), t2 = $("arcadeTrack2"), t3 = $("arcadeTrack3"), t4 = $("arcadeTrack4");
+      if (gNum === 17) {
+        if (t1) t1.textContent = "轨 1";
+        if (t2) t2.textContent = "轨 2";
+        if (t3) t3.textContent = "轨 3";
+        if (t4) t4.textContent = "轨 4";
+      } else {
+        if (t1) t1.textContent = "1 · 红";
+        if (t2) t2.textContent = "2 · 绿";
+        if (t3) t3.textContent = "3 · 蓝";
+        if (t4) t4.textContent = "4 · 黄";
       }
     } else if (ct === 5) {
-      // CTRL_VERSUS_DUAL (Pong #020)
+      // CTRL_VERSUS_DUAL (#020 Pong)
       if (dpad) dpad.style.display = "none";
       if (actions) actions.style.display = "none";
       if (versus) versus.style.display = "flex";
@@ -1067,6 +1199,11 @@
 
   function updateArcadeHud(status) {
     if (!status) return;
+    if (status.game_id===20 && [1,2].includes(status.player_count)) {
+      state.pongPlayers=status.player_count;
+      const toggle=$("pongAiToggleBtn");
+      if(toggle)toggle.textContent=status.player_count===1?"单人 AI · 切为双人":"本地双人 · 切为 AI";
+    }
     const stateLabels = {
       0: "TITLE 待机",
       1: "PLAYING 游玩中",
@@ -1107,15 +1244,20 @@
       $("marioProgFill").style.width = `${Math.min(100, Math.max(0, status.progress || 0))}%`;
     }
     if ($("arcadeControlStat")) {
-      const cType = Number(status.control_type || 3);
-      const ctNames = { 0: "CTRL_TAP_SINGLE", 1: "CTRL_TWO_BUTTON", 2: "CTRL_DPAD_4WAY", 3: "CTRL_ARCADE_AB", 5: "CTRL_VERSUS_DUAL" };
+      const cType = Number(status.control_type !== undefined ? status.control_type : 3);
+      const ctNames = {
+        0: "CTRL_TAP_SINGLE",
+        1: "CTRL_TWO_BUTTON",
+        2: "CTRL_DPAD_4WAY",
+        3: "CTRL_ARCADE_AB",
+        4: "CTRL_MULTI_TRACK",
+        5: "CTRL_VERSUS_DUAL"
+      };
       $("arcadeControlStat").textContent = ctNames[cType] || `TYPE_${cType}`;
     }
 
-    // 专属动态手柄布局适配
     updateGamepadLayout(status.control_type, status.game_id || state.arcadeGid);
 
-    // 暂停按钮文本动态更新
     if ($("arcadePauseBtn")) {
       $("arcadePauseBtn").textContent = stCode === 2 ? "▶ 继续游戏" : "⏸ 暂停游戏";
     }
@@ -1123,43 +1265,29 @@
 
   async function launchArcadeGame(gameId) {
     const idMap = {
-      mario: 1, snake: 33, tetris: 41,
+      mario: 1, flappy: 9, stack: 10, pong: 20, breakout: 21,
+      space_invaders: 26, snake: 33, pacman: 34, bomberman: 38,
+      tetris: 41, sokoban: 54, highway: 74, frogger: 97,
       "001": 1, "033": 33, "041": 41,
       1: 1, 33: 33, 41: 41
     };
     const gid = idMap[gameId] || parseInt(gameId, 10);
-    if (!gid) {
-      notice("未知的街机游戏编号");
+    if (!ArcadeTransport.registeredIds.includes(gid)) {
+      notice("此目标游戏尚未接入当前固件");
       return;
     }
 
-    const titleMap = {
-      1: "[#001] 超级马里奥 (Super Mario Bros.)",
-      9: "[#009] 飞翔小鸟 (Flappy Bird 16)",
-      10: "[#010] 堆叠大师 (Stack Master)",
-      20: "[#020] 双人乒乓 (Pong 1972)",
-      21: "[#021] 经典打砖块 (Breakout 1976)",
-      26: "[#026] 太空侵略者 (Space Invaders 1978)",
-      33: "[#033] 经典贪吃蛇 (Classic Snake)",
-      34: "[#034] 吃豆人 (Pac-Man 1980)",
-      38: "[#038] 炸弹人 (Bomberman 1983)",
-      41: "[#041] 俄罗斯方块 (Tetris)",
-      54: "[#054] 推箱子 (Sokoban 1982)",
-      74: "[#074] 变道赛车 (Highway Racer 1979)",
-      97: "[#097] 青蛙过河 (Frogger 1981)",
-    };
+    const gameTitle = ARCADE_TITLE_MAP[gid] || `街机游戏 #${gid}`;
+    navigate("interaction");
+    if ($("arcadeGameTitle")) $("arcadeGameTitle").textContent = gameTitle;
+    if ($("gameState")) $("gameState").textContent = gameTitle;
 
-    if ($("arcadeGameTitle")) $("arcadeGameTitle").textContent = titleMap[gid] || `街机游戏 #${gid}`;
-    if ($("gameState")) $("gameState").textContent = titleMap[gid] || `街机 #${gid}`;
-
-    // 展现统一街机容器
     if ($("marioContainer")) {
       $("marioContainer").style.display = "flex";
       try { $("marioContainer").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
     }
     if ($("gamepad")) $("gamepad").style.display = "none";
 
-    // 选卡按钮高亮
     $$("[data-arcade-id]").forEach((btn) => {
       btn.classList.toggle("active", parseInt(btn.dataset.arcadeId, 10) === gid);
     });
@@ -1226,7 +1354,6 @@
     }, 300);
   }
 
-  // 绑定专属街机选卡按钮
   $$("[data-arcade-id]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -1234,8 +1361,8 @@
     };
   });
 
-  // 兼容旧版 data-game 选择按钮
   $$("[data-game]").forEach((b) => {
+    if (b.hasAttribute("data-arcade-id")) return;
     b.onclick = (e) => {
       e.preventDefault();
       launchArcadeGame(b.dataset.game);
@@ -1294,20 +1421,52 @@
     bindArcadeTouchKey(btn, btn.dataset.marioKey);
   });
 
+  // #092 水果忍者 (Fruit Ninja) 手机屏幕滑动切割手势直映射
+  const arcadeScreenCanvas = $("marioCanvas");
+  if (arcadeScreenCanvas) {
+    let swipeOrigin = null;
+    arcadeScreenCanvas.style.touchAction = "none";
+    arcadeScreenCanvas.addEventListener("pointerdown", (e) => {
+      if (!state.arcadeActive || state.arcadeGid !== 92) return;
+      swipeOrigin = { x: e.clientX, y: e.clientY, id: e.pointerId, fired: false };
+      try { arcadeScreenCanvas.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    arcadeScreenCanvas.addEventListener("pointermove", (e) => {
+      if (!swipeOrigin || swipeOrigin.id !== e.pointerId || swipeOrigin.fired || state.arcadeGid !== 92) return;
+      const dx = e.clientX - swipeOrigin.x;
+      const dy = e.clientY - swipeOrigin.y;
+      if (Math.hypot(dx, dy) >= 16) {
+        swipeOrigin.fired = true;
+        let mask = 16; // KEY_A slash
+        if (Math.abs(dx) > 8) mask |= dx > 0 ? 2 : 1;
+        if (Math.abs(dy) > 8) mask |= dy > 0 ? 8 : 4;
+        api("/api/arcade", { action: "input", down: mask, pressed: mask }).catch(() => {});
+        setTimeout(() => {
+          if (state.arcadeActive && state.arcadeGid === 92) {
+            api("/api/arcade", { action: "input", down: 0, pressed: 0 }).catch(() => {});
+          }
+        }, 90);
+      }
+    });
+    const clearSwipe = () => { swipeOrigin = null; };
+    arcadeScreenCanvas.addEventListener("pointerup", clearSwipe);
+    arcadeScreenCanvas.addEventListener("pointercancel", clearSwipe);
+  }
+
   if ($("pongAiToggleBtn")) {
     $("pongAiToggleBtn").onclick = async (e) => {
       e.preventDefault();
       try {
-        await api("/api/arcade", { action: "key", key: "start", down: true });
-        setTimeout(() => api("/api/arcade", { action: "key", key: "start", down: false }).catch(() => {}), 80);
-        notice("已切换 Pong 对战模式 (单人 AI / 本地双人)");
+        resetArcadeButtons.forEach(reset => reset());
+        const reply=await api("/api/arcade",{action:"players",count:state.pongPlayers===2?1:2});
+        updateArcadeHud(reply.game_status);
+        notice(state.pongPlayers===2?"已选择本地双人：P1 ↑/↓，P2 A/B":"已选择单人 AI");
       } catch (err) {
         notice("Pong 模式切换失败: " + err.message);
       }
     };
   }
 
-  // 顶部与操作栏功能按键
   if ($("marioStartBtn")) {
     $("marioStartBtn").onclick = async (e) => {
       e.preventDefault();
@@ -1370,10 +1529,12 @@
     };
   }
 
-  // 键盘事件全局适配 (WASD / 十字键 / 空格 / Shift / Enter / R)
+  // 键盘事件全局适配 (WASD / 十字键 / 1-4 四轨键 / 空格 / Shift / Enter / R)
   window.addEventListener("keydown", (e) => {
-    if (!state.arcadeActive || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+    if (!state.arcadeActive || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA" || document.activeElement?.tagName === "SELECT") return;
+    const trackKeyMap = activeControlType === 4 ? { "1": "left", "2": "down", "3": "up", "4": "right" } : {};
     const keyMap = {
+      ...trackKeyMap,
       ArrowLeft: "left", a: "left", A: "left",
       ArrowRight: "right", d: "right", D: "right",
       ArrowUp: "up", w: "up", W: "up",
@@ -1400,8 +1561,10 @@
   });
 
   window.addEventListener("keyup", (e) => {
-    if (!state.arcadeActive || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+    if (!state.arcadeActive || document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA" || document.activeElement?.tagName === "SELECT") return;
+    const trackKeyMap = activeControlType === 4 ? { "1": "left", "2": "down", "3": "up", "4": "right" } : {};
     const keyMap = {
+      ...trackKeyMap,
       ArrowLeft: "left", a: "left", A: "left",
       ArrowRight: "right", d: "right", D: "right",
       ArrowUp: "up", w: "up", W: "up",
@@ -1438,6 +1601,7 @@
           : "中等";
   };
   bind("setDifficulty", async () => {
+    if(state.arcadeActive)throw Error("当前街机卡带尚未接入此全局难度设置，需后续逐款实现");
     await api("/api/pro/difficulty", {
       level: Number($("difficulty").value),
       adaptive: $("adaptive").checked,
@@ -1692,7 +1856,7 @@
     return poll();
   });
   bind("retryConnection", () => {
-    pairingPrompt = false;
+    pairedHttp.resetPairing();
     lastGeneral = lastPro = 0;
     return poll();
   });

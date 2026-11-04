@@ -439,12 +439,18 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
                 }
                 cJSON_Delete(root);
                 return false;
+            } else if (strcasecmp(act, "players") == 0) {
+                bool ok = dm.ArcadePlayers((uint8_t)cJSON_GetObjectItemCaseSensitive(root,"count")->valueint);
+                cJSON_Delete(root);
+                return ok;
             } else if (strcasecmp(act, "input") == 0) {
                 cJSON* down_item = cJSON_GetObjectItem(root, "down");
                 cJSON* press_item = cJSON_GetObjectItem(root, "pressed");
                 uint16_t down = (down_item && cJSON_IsNumber(down_item)) ? (uint16_t)down_item->valueint : 0;
                 uint16_t press = (press_item && cJSON_IsNumber(press_item)) ? (uint16_t)press_item->valueint : 0;
-                dm.ArcadeInput(down, press);
+                bool ok = dm.ArcadeInput(down, press);
+                cJSON_Delete(root);
+                return ok;
             } else if (strcasecmp(act, "start") == 0) {
                 dm.ArcadeStart();
             } else if (strcasecmp(act, "pause") == 0) {

@@ -33,6 +33,9 @@ public class MainActivity extends Activity {
     private volatile boolean bridgeTrusted=false, backgrounded=false, destroyed=false;
     private final java.util.concurrent.atomic.AtomicInteger bridgeEpoch=new java.util.concurrent.atomic.AtomicInteger();
     private final DeviceUdpClient udpClient=new DeviceUdpClient();
+    private final DeviceUdpClient readClient=new DeviceUdpClient();
+    private final java.util.concurrent.ThreadPoolExecutor readExecutor=new java.util.concurrent.ThreadPoolExecutor(
+        1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1));
     private final java.util.concurrent.ThreadPoolExecutor udpExecutor=new java.util.concurrent.ThreadPoolExecutor(
         1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(64));
     private static final class DeviceTarget {
@@ -163,7 +166,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
                 if(bridgeTrusted)releaseDeviceInput();
-                bridgeTrusted=false;bridgeEpoch.incrementAndGet();udpClient.interrupt();
+                bridgeTrusted=false;bridgeEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
                 super.onPageStarted(view,url,favicon);
             }
             @Override public void onPageFinished(WebView view,String url) {
@@ -250,7 +253,7 @@ public class MainActivity extends Activity {
         webView.onPause();super.onPause();
     }
     @Override protected void onResume() { super.onResume();backgrounded=false;if(webView!=null)webView.onResume(); }
-    @Override protected void onDestroy() { releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
+    @Override protected void onDestroy() { releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();readExecutor.shutdownNow();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
 
     private static boolean isOfflinePage(String url) {
@@ -259,7 +262,7 @@ public class MainActivity extends Activity {
         return "file".equals(uri.getScheme()) && (uri.getAuthority()==null || uri.getAuthority().isEmpty()) && "/android_asset/www/index.html".equals(uri.getPath());
     }
     private void releaseDeviceInput() {
-        bridgeEpoch.incrementAndGet();udpClient.interrupt();
+        bridgeEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
         final DeviceTarget target=deviceTarget;
         if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.token(target.token))return;
         final String host=target.host,key=target.token;
@@ -285,9 +288,14 @@ public class MainActivity extends Activity {
             if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.token(target.token)) {
                 dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"pairing_required"));return;
             }
-            try { udpExecutor.execute(()->{
+            // Each lane is serial with its own stable replay identity. A dropped
+            // frame cannot occupy the control socket, or reorder its sequence.
+            final boolean readOnly=DeviceUdpClient.isReadOnly(message);
+            final DeviceUdpClient client=readOnly?readClient:udpClient;
+            final String identity=readOnly?java.util.UUID.nameUUIDFromBytes((clientId+":read").getBytes(StandardCharsets.UTF_8)).toString().replace("-",""):clientId;
+            try { (readOnly?readExecutor:udpExecutor).execute(()->{
                 if(epoch!=bridgeEpoch.get()||backgrounded||destroyed)return;
-                String result=udpClient.request(target.host,target.token,clientId,message,timeoutMs,retries,callbackId);
+                String result=client.request(target.host,target.token,identity,message,readOnly?150:timeoutMs,readOnly?0:retries,callbackId);
                 dispatchResult(epoch,callbackId,result);
             }); } catch(java.util.concurrent.RejectedExecutionException full) {
                 dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"queue_full"));

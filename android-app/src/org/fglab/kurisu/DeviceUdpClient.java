@@ -9,6 +9,14 @@ import org.json.JSONObject;
 
 /** Used only on the bounded single-worker executor. Retries reuse the same wire request. */
 final class DeviceUdpClient {
+    static boolean isReadOnly(String message) {
+        try {
+            JSONObject cmd=new JSONObject(new JSONObject(message).getString("command"));
+            String name=cmd.getString("cmd");
+            return "frame".equals(name)||"status".equals(name)||
+                ("arcade".equals(name)&&"status".equals(cmd.optString("action")));
+        } catch(Exception invalid) {return false;}
+    }
     private String bootId="";
     private String peerIdentity="";
     private long sequence=System.currentTimeMillis()*1000L;
@@ -53,11 +61,13 @@ final class DeviceUdpClient {
             if(!("arcade".equals(name)||"frame".equals(name)||"status".equals(name)))return error(callback,"forbidden_command");
             if("arcade".equals(name)) {
                 String action=cmd.getString("action");
-                if(!action.matches("select|start|pause|resume|reset|exit|input|heartbeat|status"))return error(callback,"invalid_action");
+                if(!action.matches("select|start|pause|resume|reset|exit|input|heartbeat|status|players"))return error(callback,"invalid_action");
+                if("players".equals(action) && (!(cmd.get("count") instanceof Number) ||
+                    (cmd.getDouble("count")!=1 && cmd.getDouble("count")!=2)))return error(callback,"invalid_player_count");
                 if("select".equals(action)) {
                     if(!(cmd.get("game_id") instanceof Number))return error(callback,"invalid_game_id");
                     double id=cmd.getDouble("game_id");
-                    if(id!=Math.floor(id)||!(id==1||id==9||id==10||id==20||id==21||id==26||id==33||id==34||id==38||id==41||id==54||id==74||id==97))return error(callback,"invalid_game_id");
+                    if(id!=Math.floor(id)||!(id==1||id==2||id==3||id==4||id==5||id==6||id==9||id==10||id==14||id==15||id==16||id==17||id==18||id==19||id==20||id==21||id==22||id==26||id==27||id==28||id==29||id==30||id==31||id==33||id==34||id==38||id==40||id==41||id==42||id==43||id==44||id==45||id==51||id==52||id==53||id==54||id==55||id==62||id==63||id==64||id==65||id==66||id==67||id==72||id==73||id==74||id==75||id==76||id==83||id==84||id==85||id==86||id==87||id==88||id==92||id==93||id==94||id==95||id==97))return error(callback,"invalid_game_id");
                 }
                 if("input".equals(action)) for(String key:new String[]{"down","pressed"}) {
                     if(!(cmd.get(key) instanceof Number))return error(callback,"invalid_input");

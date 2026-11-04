@@ -44,6 +44,7 @@ enum CartridgeState : uint8_t {
 
 // 游戏 HUD 状态回读
 struct CartridgeStatus {
+    uint8_t player_count = 0; // 0: not applicable, Pong: 1 AI / 2 local players.
     uint32_t score = 0;
     uint32_t high_score = 0;
     uint8_t lives = 1;

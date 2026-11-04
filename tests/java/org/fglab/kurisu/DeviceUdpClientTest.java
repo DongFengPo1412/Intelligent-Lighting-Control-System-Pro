@@ -17,6 +17,8 @@ public final class DeviceUdpClientTest {
         final DatagramSocket stranger=new DatagramSocket(new InetSocketAddress("127.0.0.1",0));
         final AtomicBoolean running=new AtomicBoolean(true), mute=new AtomicBoolean(false);
         final AtomicInteger executions=new AtomicInteger();
+        final AtomicBoolean dropFrames=new AtomicBoolean(false);
+        final CountDownLatch frameStarted=new CountDownLatch(1);
         final List<String> wires=Collections.synchronizedList(new ArrayList<>());
         final Map<String,String> cache=new HashMap<>();
         final CountDownLatch mutedRequest=new CountDownLatch(1);
@@ -32,6 +34,9 @@ public final class DeviceUdpClientTest {
                     else if(!KEY.equals(request.optString("token")))reply=new JSONObject().put("request_id",id).put("status","error").put("error","pairing_required");
                     else {
                         wires.add(raw);check(id.startsWith(request.getLong("seq")+"_"));check(BOOT.equals(request.getString("boot_id")));
+                        if(dropFrames.get() && "frame".equals(new JSONObject(request.getString("command")).optString("cmd"))) {
+                            frameStarted.countDown();continue;
+                        }
                         if(!cache.containsKey(id)) {
                             executions.incrementAndGet();
                             reply=new JSONObject().put("request_id",id).put("status","ok").put("arcade",new JSONObject().put("game_id",1).put("state",1).put("score",0));
@@ -63,6 +68,15 @@ public final class DeviceUdpClientTest {
             check("forbidden_command".equals(result.getString("error")));check(wires.size()==before);
             result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope("bad_mask","{\"cmd\":\"arcade\",\"action\":\"input\",\"down\":\"18\",\"pressed\":16}").toString(),100,0,"bad_mask"));
             check("invalid_input".equals(result.getString("error")));check(wires.size()==before);
+            check(DeviceUdpClient.isReadOnly(envelope("f","{\"cmd\":\"frame\"}").toString()));
+            check(!DeviceUdpClient.isReadOnly(envelope("i",command).toString()));
+            dropFrames.set(true);
+            DeviceUdpClient readClient=new DeviceUdpClient();AtomicReference<String> dropped=new AtomicReference<>();
+            Thread read=new Thread(()->dropped.set(readClient.request("127.0.0.1",KEY,"jvm_read_client",envelope("frame","{\"cmd\":\"frame\"}").toString(),1000,0,"frame")));
+            read.start();check(frameStarted.await(1,TimeUnit.SECONDS));
+            result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope("control",command).toString(),100,1,"control"));
+            check("ok".equals(result.getString("status")));check(read.isAlive());read.join(1500);
+            check("ack_timeout".equals(new JSONObject(dropped.get()).getString("error")));
             mute.set(true);AtomicReference<String> cancelled=new AtomicReference<>();
             Thread request=new Thread(()->cancelled.set(client.request("127.0.0.1",KEY,"jvm_client",envelope("cancel",command).toString(),1000,2,"cancel")));
             request.start();check(mutedRequest.await(1,TimeUnit.SECONDS));client.interrupt();request.join(1500);

@@ -144,11 +144,10 @@
                 <button class="primary" id="startConversation">
                   和红莉栖聊聊 <svg>
                     <use href="#i-arrow" />
-                  </svg></button><button class="hero-secondary" data-go="lights">
+                  </svg></button>
+                <button class="hero-secondary" data-go="lights">探索灯光</button>
                 <button class="hero-secondary" id="heroPlayMario" style="border-color:rgba(235,24,24,0.5);background:rgba(235,24,24,0.18);color:#ffd23f;font-weight:700;">
                   🎮 玩超级马里奥
-                </button>
-                  探索灯光
                 </button>
               </div>
               <span class="hero-footnote">STEINS;GATE INSPIRED · PERSONAL LIGHTING LAB</span>
@@ -494,37 +493,133 @@
         <div class="two-columns">
           <article class="card arcade-card">
             <div class="card-heading">
-              <h2>掌上街机</h2>
+              <h2>掌上街机 · 100 合 1</h2>
               <span class="subtle-badge" id="gameState">选择游戏开始</span>
             </div>
-            <div class="game-selection" role="group" aria-label="100款点阵街机游戏选择">
-              <button class="secondary" data-arcade-id="001" data-game="mario" id="btnArcade001">
-                #001 超级马里奥
-              </button><button class="secondary" data-arcade-id="009" data-game="flappy" id="btnArcade009">
-                #009 飞翔小鸟
-              </button><button class="secondary" data-arcade-id="010" data-game="stack" id="btnArcade010">
-                #010 堆叠大师
-              </button><button class="secondary" data-arcade-id="020" data-game="pong" id="btnArcade020">
-                #020 双人乒乓
-              </button><button class="secondary" data-arcade-id="021" data-game="breakout" id="btnArcade021">
-                #021 经典打砖块
-              </button><button class="secondary" data-arcade-id="026" data-game="space_invaders" id="btnArcade026">
-                #026 太空侵略者
-              </button><button class="secondary" data-arcade-id="033" data-game="snake" id="btnArcade033">
-                #033 经典贪吃蛇
-              </button><button class="secondary" data-arcade-id="034" data-game="pacman" id="btnArcade034">
-                #034 吃豆人
-              </button><button class="secondary" data-arcade-id="038" data-game="bomberman" id="btnArcade038">
-                #038 炸弹人
-              </button><button class="secondary" data-arcade-id="041" data-game="tetris" id="btnArcade041">
-                #041 俄罗斯方块
-              </button><button class="secondary" data-arcade-id="054" data-game="sokoban" id="btnArcade054">
-                #054 推箱子
-              </button><button class="secondary" data-arcade-id="074" data-game="highway" id="btnArcade074">
-                #074 变道赛车
-              </button><button class="secondary" data-arcade-id="097" data-game="frogger" id="btnArcade097">
-                #097 青蛙过河
-              </button>
+            <div class="arcade-filter-bar" role="search" aria-label="100款街机分类与搜索">
+              <select id="arcadeCategoryFilter" aria-label="街机玩法分类">
+                <option value="all">全部 100 款游戏</option>
+                <option value="A">A. 平台跳跃与空间移动 (8)</option>
+                <option value="B">B. 单键与时机挑战 (6)</option>
+                <option value="C">C. 反应、观察与记忆 (5)</option>
+                <option value="D">D. 弹球与碰撞物理 (6)</option>
+                <option value="E">E. 射击与防御 (7)</option>
+                <option value="F">F. 迷宫、追逐与探索 (8)</option>
+                <option value="G">G. 方块、合并与消除 (8)</option>
+                <option value="H">H. 逻辑解谜 (5)</option>
+                <option value="I">I. 机关与路径规划 (7)</option>
+                <option value="J">J. 棋盘对弈 (7)</option>
+                <option value="K">K. 数字与桌面益智 (6)</option>
+                <option value="L">L. 竞速与体育 (6)</option>
+                <option value="M">M. 领地、战术与生存 (6)</option>
+                <option value="N">N. 微型经营与管理 (5)</option>
+                <option value="O">O. 触控技巧与特殊运动 (6)</option>
+                <option value="P">P. 精选拓展新作 (4)</option>
+              </select>
+              <input id="arcadeSearchInput" type="search" aria-label="搜索游戏编号或名称" placeholder="搜索 #001~#100 或名称…" maxlength="60" autocomplete="off" />
+              <span class="subtle-badge" id="arcadeVisibleCount">100 / 100</span>
+            </div>
+            <div class="game-selection" id="arcadeGameGrid" role="group" aria-label="100款点阵街机游戏选择">
+              <button class="secondary" data-arcade-id="001" data-arcade-cat="A" data-game="mario" id="btnArcade001">#001 超级马里奥</button>
+              <button class="secondary" data-arcade-id="002" data-arcade-cat="A" id="btnArcade002">#002 涂鸦跳跃</button>
+              <button class="secondary" data-arcade-id="003" data-arcade-cat="A" id="btnArcade003">#003 空中冲刺</button>
+              <button class="secondary" data-arcade-id="004" data-arcade-cat="A" id="btnArcade004">#004 重力翻转</button>
+              <button class="secondary" data-arcade-id="005" data-arcade-cat="A" id="btnArcade005">#005 挖洞夺金</button>
+              <button class="secondary" data-arcade-id="006" data-arcade-cat="A" id="btnArcade006">#006 泡泡捕敌</button>
+              <button class="secondary" data-arcade-id="007" data-arcade-cat="A" id="btnArcade007">#007 深井射击</button>
+              <button class="secondary" data-arcade-id="008" data-arcade-cat="A" id="btnArcade008">#008 蓄力跳跃</button>
+              <button class="secondary" data-arcade-id="009" data-arcade-cat="B" data-game="flappy" id="btnArcade009">#009 飞翔小鸟</button>
+              <button class="secondary" data-arcade-id="010" data-arcade-cat="B" data-game="stack" id="btnArcade010">#010 堆叠大师</button>
+              <button class="secondary" data-arcade-id="011" data-arcade-cat="B" id="btnArcade011">#011 恐龙跑酷</button>
+              <button class="secondary" data-arcade-id="012" data-arcade-cat="B" id="btnArcade012">#012 旋盘投刀</button>
+              <button class="secondary" data-arcade-id="013" data-arcade-cat="B" id="btnArcade013">#013 摆锤投球</button>
+              <button class="secondary" data-arcade-id="014" data-arcade-cat="B" id="btnArcade014">#014 轨道跃迁</button>
+              <button class="secondary" data-arcade-id="015" data-arcade-cat="C" id="btnArcade015">#015 闪灯记忆</button>
+              <button class="secondary" data-arcade-id="016" data-arcade-cat="C" id="btnArcade016">#016 打地鼠</button>
+              <button class="secondary" data-arcade-id="017" data-arcade-cat="C" id="btnArcade017">#017 四轨节奏</button>
+              <button class="secondary" data-arcade-id="018" data-arcade-cat="C" id="btnArcade018">#018 红灯绿灯</button>
+              <button class="secondary" data-arcade-id="019" data-arcade-cat="C" id="btnArcade019">#019 猜球杯</button>
+              <button class="secondary" data-arcade-id="020" data-arcade-cat="D" data-game="pong" id="btnArcade020">#020 双人乒乓</button>
+              <button class="secondary" data-arcade-id="021" data-arcade-cat="D" data-game="breakout" id="btnArcade021">#021 经典打砖块</button>
+              <button class="secondary" data-arcade-id="022" data-arcade-cat="D" id="btnArcade022">#022 迷你弹珠台</button>
+              <button class="secondary" data-arcade-id="023" data-arcade-cat="D" id="btnArcade023">#023 空气曲棍球</button>
+              <button class="secondary" data-arcade-id="024" data-arcade-cat="D" id="btnArcade024">#024 弹珠撞靶</button>
+              <button class="secondary" data-arcade-id="025" data-arcade-cat="D" id="btnArcade025">#025 滚珠平衡迷宫</button>
+              <button class="secondary" data-arcade-id="026" data-arcade-cat="E" data-game="space_invaders" id="btnArcade026">#026 太空侵略者</button>
+              <button class="secondary" data-arcade-id="027" data-arcade-cat="E" id="btnArcade027">#027 小行星</button>
+              <button class="secondary" data-arcade-id="028" data-arcade-cat="E" id="btnArcade028">#028 导弹指挥官</button>
+              <button class="secondary" data-arcade-id="029" data-arcade-cat="E" id="btnArcade029">#029 百足蜈蚣</button>
+              <button class="secondary" data-arcade-id="030" data-arcade-cat="E" id="btnArcade030">#030 打鸭子</button>
+              <button class="secondary" data-arcade-id="031" data-arcade-cat="E" id="btnArcade031">#031 双向射击</button>
+              <button class="secondary" data-arcade-id="032" data-arcade-cat="E" id="btnArcade032">#032 横向防卫</button>
+              <button class="secondary" data-arcade-id="033" data-arcade-cat="F" data-game="snake" id="btnArcade033">#033 经典贪吃蛇</button>
+              <button class="secondary" data-arcade-id="034" data-arcade-cat="F" data-game="pacman" id="btnArcade034">#034 吃豆人</button>
+              <button class="secondary" data-arcade-id="035" data-arcade-cat="F" id="btnArcade035">#035 落石夺宝</button>
+              <button class="secondary" data-arcade-id="036" data-arcade-cat="F" id="btnArcade036">#036 地下充气战</button>
+              <button class="secondary" data-arcade-id="037" data-arcade-cat="F" id="btnArcade037">#037 染色跳格</button>
+              <button class="secondary" data-arcade-id="038" data-arcade-cat="F" data-game="bomberman" id="btnArcade038">#038 炸弹人</button>
+              <button class="secondary" data-arcade-id="039" data-arcade-cat="F" id="btnArcade039">#039 迷雾探索迷宫</button>
+              <button class="secondary" data-arcade-id="040" data-arcade-cat="F" id="btnArcade040">#040 镜像双人迷宫</button>
+              <button class="secondary" data-arcade-id="041" data-arcade-cat="G" data-game="tetris" id="btnArcade041">#041 俄罗斯方块</button>
+              <button class="secondary" data-arcade-id="042" data-arcade-cat="G" id="btnArcade042">#042 彩球连锁</button>
+              <button class="secondary" data-arcade-id="043" data-arcade-cat="G" id="btnArcade043">#043 2048滑块</button>
+              <button class="secondary" data-arcade-id="044" data-arcade-cat="G" id="btnArcade044">#044 宝石迷阵</button>
+              <button class="secondary" data-arcade-id="045" data-arcade-cat="G" id="btnArcade045">#045 同色消块</button>
+              <button class="secondary" data-arcade-id="046" data-arcade-cat="G" id="btnArcade046">#046 合成大西瓜</button>
+              <button class="secondary" data-arcade-id="047" data-arcade-cat="G" id="btnArcade047">#047 九宫拼块</button>
+              <button class="secondary" data-arcade-id="048" data-arcade-cat="G" id="btnArcade048">#048 三合镇</button>
+              <button class="secondary" data-arcade-id="049" data-arcade-cat="H" id="btnArcade049">#049 灭灯谜题</button>
+              <button class="secondary" data-arcade-id="050" data-arcade-cat="H" id="btnArcade050">#050 四色迷你数独</button>
+              <button class="secondary" data-arcade-id="051" data-arcade-cat="H" id="btnArcade051">#051 同色连线</button>
+              <button class="secondary" data-arcade-id="052" data-arcade-cat="H" id="btnArcade052">#052 管道旋转接水</button>
+              <button class="secondary" data-arcade-id="053" data-arcade-cat="H" id="btnArcade053">#053 汉诺塔</button>
+              <button class="secondary" data-arcade-id="054" data-arcade-cat="I" data-game="sokoban" id="btnArcade054">#054 推箱子</button>
+              <button class="secondary" data-arcade-id="055" data-arcade-cat="I" id="btnArcade055">#055 镜面激光</button>
+              <button class="secondary" data-arcade-id="056" data-arcade-cat="I" id="btnArcade056">#056 数字华容道</button>
+              <button class="secondary" data-arcade-id="057" data-arcade-cat="I" id="btnArcade057">#057 移车出库</button>
+              <button class="secondary" data-arcade-id="058" data-arcade-cat="I" id="btnArcade058">#058 编程机器人</button>
+              <button class="secondary" data-arcade-id="059" data-arcade-cat="I" id="btnArcade059">#059 割绳子</button>
+              <button class="secondary" data-arcade-id="060" data-arcade-cat="I" id="btnArcade060">#060 传送门谜题</button>
+              <button class="secondary" data-arcade-id="061" data-arcade-cat="J" id="btnArcade061">#061 四子棋</button>
+              <button class="secondary" data-arcade-id="062" data-arcade-cat="J" id="btnArcade062">#062 黑白棋</button>
+              <button class="secondary" data-arcade-id="063" data-arcade-cat="J" id="btnArcade063">#063 五子棋</button>
+              <button class="secondary" data-arcade-id="064" data-arcade-cat="J" id="btnArcade064">#064 西洋跳棋</button>
+              <button class="secondary" data-arcade-id="065" data-arcade-cat="J" id="btnArcade065">#065 点格棋</button>
+              <button class="secondary" data-arcade-id="066" data-arcade-cat="J" id="btnArcade066">#066 海战棋</button>
+              <button class="secondary" data-arcade-id="067" data-arcade-cat="J" id="btnArcade067">#067 围墙棋</button>
+              <button class="secondary" data-arcade-id="068" data-arcade-cat="K" id="btnArcade068">#068 颜色密码</button>
+              <button class="secondary" data-arcade-id="069" data-arcade-cat="K" id="btnArcade069">#069 Nim取石子</button>
+              <button class="secondary" data-arcade-id="070" data-arcade-cat="K" id="btnArcade070">#070 连通染色</button>
+              <button class="secondary" data-arcade-id="071" data-arcade-cat="K" id="btnArcade071">#071 单人孔明棋</button>
+              <button class="secondary" data-arcade-id="072" data-arcade-cat="K" id="btnArcade072">#072 Hex连通棋</button>
+              <button class="secondary" data-arcade-id="073" data-arcade-cat="K" id="btnArcade073">#073 飞行棋</button>
+              <button class="secondary" data-arcade-id="074" data-arcade-cat="L" data-game="highway" id="btnArcade074">#074 变道赛车</button>
+              <button class="secondary" data-arcade-id="075" data-arcade-cat="L" id="btnArcade075">#075 滑雪绕旗</button>
+              <button class="secondary" data-arcade-id="076" data-arcade-cat="L" id="btnArcade076">#076 迷你高尔夫</button>
+              <button class="secondary" data-arcade-id="077" data-arcade-cat="L" id="btnArcade077">#077 保龄球</button>
+              <button class="secondary" data-arcade-id="078" data-arcade-cat="L" id="btnArcade078">#078 棒球击打</button>
+              <button class="secondary" data-arcade-id="079" data-arcade-cat="L" id="btnArcade079">#079 足球点球</button>
+              <button class="secondary" data-arcade-id="080" data-arcade-cat="M" id="btnArcade080">#080 Tron光线摩托</button>
+              <button class="secondary" data-arcade-id="081" data-arcade-cat="M" id="btnArcade081">#081 Qix圈地</button>
+              <button class="secondary" data-arcade-id="082" data-arcade-cat="M" id="btnArcade082">#082 坦克抛物线对轰</button>
+              <button class="secondary" data-arcade-id="083" data-arcade-cat="M" id="btnArcade083">#083 路径塔防</button>
+              <button class="secondary" data-arcade-id="084" data-arcade-cat="M" id="btnArcade084">#084 节点征服</button>
+              <button class="secondary" data-arcade-id="085" data-arcade-cat="M" id="btnArcade085">#085 旅鼠拯救</button>
+              <button class="secondary" data-arcade-id="086" data-arcade-cat="N" id="btnArcade086">#086 小农场</button>
+              <button class="secondary" data-arcade-id="087" data-arcade-cat="N" id="btnArcade087">#087 交通灯管理</button>
+              <button class="secondary" data-arcade-id="088" data-arcade-cat="N" id="btnArcade088">#088 机场降落引导</button>
+              <button class="secondary" data-arcade-id="089" data-arcade-cat="N" id="btnArcade089">#089 消防灭火</button>
+              <button class="secondary" data-arcade-id="090" data-arcade-cat="N" id="btnArcade090">#090 传送带工厂</button>
+              <button class="secondary" data-arcade-id="091" data-arcade-cat="O" id="btnArcade091">#091 电线迷宫</button>
+              <button class="secondary" data-arcade-id="092" data-arcade-cat="O" id="btnArcade092">#092 水果忍者</button>
+              <button class="secondary" data-arcade-id="093" data-arcade-cat="O" id="btnArcade093">#093 黑洞吞噬</button>
+              <button class="secondary" data-arcade-id="094" data-arcade-cat="O" id="btnArcade094">#094 钩爪摆荡</button>
+              <button class="secondary" data-arcade-id="095" data-arcade-cat="O" id="btnArcade095">#095 旋转避壁</button>
+              <button class="secondary" data-arcade-id="096" data-arcade-cat="O" id="btnArcade096">#096 冰面滑行迷宫</button>
+              <button class="secondary" data-arcade-id="097" data-arcade-cat="P" data-game="frogger" id="btnArcade097">#097 青蛙过河</button>
+              <button class="secondary" data-arcade-id="098" data-arcade-cat="P" id="btnArcade098">#098 月球着陆</button>
+              <button class="secondary" data-arcade-id="099" data-arcade-cat="P" id="btnArcade099">#099 自动攻击生存</button>
+              <button class="secondary" data-arcade-id="100" data-arcade-cat="P" id="btnArcade100">#100 翻牌配对</button>
             </div>
             <!-- 马里奥专属实时手机触屏街机交互界面 -->
             <div class="mario-container" id="marioContainer" style="display:none;">
@@ -594,6 +689,14 @@
                       <span class="btn-letter">A</span>
                       <small class="btn-sub">跳跃</small>
                     </button>
+                  </div>
+
+                  <!-- 四轨 / 四色专属触控区 (CTRL_MULTI_TRACK: #015 Simon / #017 四轨节奏 / #070 连通染色) -->
+                  <div class="arcade-track-stage" id="arcadeTrackStage" role="group" aria-label="四轨与四色触控面板">
+                    <button type="button" class="arcade-track-btn track-red" id="arcadeTrack1" data-mario-key="left">1 · 红</button>
+                    <button type="button" class="arcade-track-btn track-green" id="arcadeTrack2" data-mario-key="down">2 · 绿</button>
+                    <button type="button" class="arcade-track-btn track-blue" id="arcadeTrack3" data-mario-key="up">3 · 蓝</button>
+                    <button type="button" class="arcade-track-btn track-yellow" id="arcadeTrack4" data-mario-key="right">4 · 黄</button>
                   </div>
 
                   <!-- 双人对战分栏 (Pong 等专属) -->
@@ -824,6 +927,7 @@
     </form>
   </dialog>
   <script src="matrix3d.js?v=20261025u"></script>
+  <script src="paired_http.js?v=20261104"></script>
   <script src="arcade_transport.js?v=20261104"></script>
   <script src="app.js?v=20261104"></script>
 </body>

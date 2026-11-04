@@ -1,0 +1,297 @@
+[
+  {
+    "id": 1,
+    "module": "game_001_mario",
+    "class": "Game001Mario"
+  },
+  {
+    "id": 2,
+    "module": "game_002_doodle_jump",
+    "class": "Game002DoodleJump"
+  },
+  {
+    "id": 3,
+    "module": "game_003_celeste_dash",
+    "class": "Game003CelesteDash"
+  },
+  {
+    "id": 4,
+    "module": "game_004_gravity_flip",
+    "class": "Game004GravityFlip"
+  },
+  {
+    "id": 5,
+    "module": "game_005_lode_runner",
+    "class": "Game005LodeRunner"
+  },
+  {
+    "id": 6,
+    "module": "game_006_bubble_bobble",
+    "class": "Game006BubbleBobble"
+  },
+  {
+    "id": 9,
+    "module": "game_009_flappy_bird",
+    "class": "Game009FlappyBird"
+  },
+  {
+    "id": 10,
+    "module": "game_010_stack",
+    "class": "Game010Stack"
+  },
+  {
+    "id": 14,
+    "module": "game_014_orbit_hop",
+    "class": "Game014OrbitHop"
+  },
+  {
+    "id": 15,
+    "module": "game_015_simon_memory",
+    "class": "Game015SimonMemory"
+  },
+  {
+    "id": 16,
+    "module": "game_016_whack_a_mole",
+    "class": "Game016WhackAMole"
+  },
+  {
+    "id": 17,
+    "module": "game_017_rhythm_lanes",
+    "class": "Game017RhythmLanes"
+  },
+  {
+    "id": 18,
+    "module": "game_018_red_green_light",
+    "class": "Game018RedGreenLight"
+  },
+  {
+    "id": 19,
+    "module": "game_019_shell_game",
+    "class": "Game019ShellGame"
+  },
+  {
+    "id": 20,
+    "module": "game_020_pong",
+    "class": "Game020Pong"
+  },
+  {
+    "id": 21,
+    "module": "game_021_breakout",
+    "class": "Game021Breakout"
+  },
+  {
+    "id": 22,
+    "module": "game_022_pinball",
+    "class": "Game022Pinball"
+  },
+  {
+    "id": 26,
+    "module": "game_026_space_invaders",
+    "class": "Game026SpaceInvaders"
+  },
+  {
+    "id": 27,
+    "module": "game_027_asteroids",
+    "class": "Game027Asteroids"
+  },
+  {
+    "id": 28,
+    "module": "game_028_missile_command",
+    "class": "Game028MissileCommand"
+  },
+  {
+    "id": 29,
+    "module": "game_029_centipede",
+    "class": "Game029Centipede"
+  },
+  {
+    "id": 30,
+    "module": "game_030_duck_hunt",
+    "class": "Game030DuckHunt"
+  },
+  {
+    "id": 31,
+    "module": "game_031_robotron",
+    "class": "Game031Robotron"
+  },
+  {
+    "id": 33,
+    "module": "game_033_snake",
+    "class": "Game033Snake"
+  },
+  {
+    "id": 34,
+    "module": "game_034_pacman",
+    "class": "Game034Pacman"
+  },
+  {
+    "id": 38,
+    "module": "game_038_bomberman",
+    "class": "Game038Bomberman"
+  },
+  {
+    "id": 40,
+    "module": "game_040_mirror_maze",
+    "class": "Game040MirrorMaze"
+  },
+  {
+    "id": 41,
+    "module": "game_041_tetris",
+    "class": "Game041Tetris"
+  },
+  {
+    "id": 42,
+    "module": "game_042_puyo_puyo",
+    "class": "Game042PuyoPuyo"
+  },
+  {
+    "id": 43,
+    "module": "game_043_merge_2048",
+    "class": "Game043Merge2048"
+  },
+  {
+    "id": 44,
+    "module": "game_044_bejeweled",
+    "class": "Game044Bejeweled"
+  },
+  {
+    "id": 45,
+    "module": "game_045_samegame",
+    "class": "Game045SameGame"
+  },
+  {
+    "id": 51,
+    "module": "game_051_flow_free",
+    "class": "Game051FlowFree"
+  },
+  {
+    "id": 52,
+    "module": "game_052_pipe_connect",
+    "class": "Game052PipeConnect"
+  },
+  {
+    "id": 53,
+    "module": "game_053_tower_of_hanoi",
+    "class": "Game053TowerOfHanoi"
+  },
+  {
+    "id": 54,
+    "module": "game_054_sokoban",
+    "class": "Game054Sokoban"
+  },
+  {
+    "id": 55,
+    "module": "game_055_mirror_laser",
+    "class": "Game055MirrorLaser"
+  },
+  {
+    "id": 62,
+    "module": "game_062_reversi",
+    "class": "Game062Reversi"
+  },
+  {
+    "id": 63,
+    "module": "game_063_gomoku",
+    "class": "Game063Gomoku"
+  },
+  {
+    "id": 64,
+    "module": "game_064_checkers",
+    "class": "Game064Checkers"
+  },
+  {
+    "id": 65,
+    "module": "game_065_dots_and_boxes",
+    "class": "Game065DotsAndBoxes"
+  },
+  {
+    "id": 66,
+    "module": "game_066_battleship",
+    "class": "Game066Battleship"
+  },
+  {
+    "id": 67,
+    "module": "game_067_quoridor",
+    "class": "Game067Quoridor"
+  },
+  {
+    "id": 72,
+    "module": "game_072_hex_board",
+    "class": "Game072HexBoard"
+  },
+  {
+    "id": 73,
+    "module": "game_073_ludo_race",
+    "class": "Game073LudoRace"
+  },
+  {
+    "id": 74,
+    "module": "game_074_highway_racer",
+    "class": "Game074HighwayRacer"
+  },
+  {
+    "id": 75,
+    "module": "game_075_slalom_ski",
+    "class": "Game075SlalomSki"
+  },
+  {
+    "id": 76,
+    "module": "game_076_mini_golf",
+    "class": "Game076MiniGolf"
+  },
+  {
+    "id": 83,
+    "module": "game_083_tower_defense",
+    "class": "Game083TowerDefense"
+  },
+  {
+    "id": 84,
+    "module": "game_084_node_conquest",
+    "class": "Game084NodeConquest"
+  },
+  {
+    "id": 85,
+    "module": "game_085_lemmings_rescue",
+    "class": "Game085LemmingsRescue"
+  },
+  {
+    "id": 86,
+    "module": "game_086_tiny_farm",
+    "class": "Game086TinyFarm"
+  },
+  {
+    "id": 87,
+    "module": "game_087_traffic_control",
+    "class": "Game087TrafficControl"
+  },
+  {
+    "id": 88,
+    "module": "game_088_atc_landing",
+    "class": "Game088AtcLanding"
+  },
+  {
+    "id": 92,
+    "module": "game_092_fruit_slice",
+    "class": "Game092FruitSlice"
+  },
+  {
+    "id": 93,
+    "module": "game_093_black_hole",
+    "class": "Game093BlackHole"
+  },
+  {
+    "id": 94,
+    "module": "game_094_grapple_swing",
+    "class": "Game094GrappleSwing"
+  },
+  {
+    "id": 95,
+    "module": "game_095_super_hexagon",
+    "class": "Game095SuperHexagon"
+  },
+  {
+    "id": 97,
+    "module": "game_097_frogger",
+    "class": "Game097Frogger"
+  }
+]

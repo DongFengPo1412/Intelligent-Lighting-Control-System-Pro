@@ -61,8 +61,9 @@ public:
 
     // 统一街机系统交互
     bool ArcadeSelectGame(uint8_t game_id);
-    void ArcadeInput(uint16_t down, uint16_t pressed);
+    bool ArcadeInput(uint16_t down, uint16_t pressed);
     void ArcadeStart();
+    bool ArcadePlayers(uint8_t count);
     void ArcadePause();
     void ArcadeResume();
     void ArcadeReset();

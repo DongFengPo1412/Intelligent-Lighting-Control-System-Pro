@@ -17,13 +17,14 @@ public:
     // 游戏选择与幂等生命周期管理
     bool SelectGame(uint8_t game_id);
     void Start();
+    bool SetPlayerCount(uint8_t count);
     void Pause();
     void Resume();
     void Reset();
     void Exit();
 
     // 输入与 Wi-Fi 看门狗
-    void HandleInput(uint16_t keys_down, uint16_t keys_pressed);
+    bool HandleInput(uint16_t keys_down, uint16_t keys_pressed);
     void FeedHeartbeat();
     bool IsNetworkDisconnected() const { return is_network_disconnected_; }
 
@@ -50,6 +51,13 @@ private:
     Cartridge* current_game_ = nullptr;
     uint16_t current_keys_down_ = 0;
     uint16_t current_keys_pressed_ = 0;
+    static constexpr unsigned kInputEvents = 32;
+    uint16_t input_events_[kInputEvents] = {};
+    unsigned input_head_ = 0, input_count_ = 0;
+    void ClearInput() {
+        current_keys_down_ = current_keys_pressed_ = 0;
+        input_head_ = input_count_ = 0;
+    }
     uint32_t last_heartbeat_time_ms_ = 0;
     bool is_network_disconnected_ = false;
     bool watchdog_enabled_ = true;

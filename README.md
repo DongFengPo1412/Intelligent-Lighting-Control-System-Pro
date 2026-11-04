@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-04 handoff / A.1:** 59 target cartridges are software-integrated; 41 remain unregistered. Disposable readback lanes, explicit Pong player selection and safe first-pair retries are implemented. See [scope and acceptance boundaries](docs/ARCADE_HANDOFF_A1.md). Physical tests remain pending.
+
 A local PC voice agent and one ESP32-S3 drive a 16×16 light matrix, a Kurisu pixel pet and matrix games.
 
 [简体中文](README_ZH.md) · **English** · [日本語](README_JA.md)

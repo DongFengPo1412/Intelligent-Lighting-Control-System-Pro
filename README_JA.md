@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-04 引き継ぎ / A.1:** 59 本のターゲットカートリッジをソフトウェアに統合、41 本は未登録です。[通信修正と検証範囲](docs/ARCADE_HANDOFF_A1.md)。実機検証は未実施です。
+
 PCのローカル音声エージェントと1台のESP32-S3による、16×16 LED、紅莉栖のピクセルペット、ドットマトリクスゲームの開発プロジェクトです。
 
 [简体中文](README_ZH.md) · [English](README.md) · **日本語**

@@ -480,16 +480,22 @@ DisplayManager::ArcadeSnapshot DisplayManager::SnapshotArcade() const
             am.GetCurrentStatus(), am.GetCurrentGameName()};
 }
 
-void DisplayManager::ArcadeInput(uint16_t down, uint16_t pressed)
+bool DisplayManager::ArcadeInput(uint16_t down, uint16_t pressed)
 {
     DisplayLock lock(mutex_);
-    arcade::ArcadeManager::GetInstance().HandleInput(down, pressed);
+    return arcade::ArcadeManager::GetInstance().HandleInput(down, pressed);
 }
 
 void DisplayManager::ArcadeStart()
 {
     DisplayLock lock(mutex_);
     arcade::ArcadeManager::GetInstance().Start();
+}
+
+bool DisplayManager::ArcadePlayers(uint8_t count)
+{
+    DisplayLock lock(mutex_);
+    return arcade::ArcadeManager::GetInstance().SetPlayerCount(count);
 }
 
 void DisplayManager::ArcadePause()

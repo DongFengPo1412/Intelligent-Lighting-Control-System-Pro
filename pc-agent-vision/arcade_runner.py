@@ -33,17 +33,63 @@ from arcade.base_cartridge import (
     KEY_SELECT,
 )
 from arcade.game_001_mario import Game001Mario
+from arcade.game_002_doodle_jump import Game002DoodleJump
+from arcade.game_003_celeste_dash import Game003CelesteDash
+from arcade.game_004_gravity_flip import Game004GravityFlip
+from arcade.game_005_lode_runner import Game005LodeRunner
+from arcade.game_006_bubble_bobble import Game006BubbleBobble
 from arcade.game_009_flappy_bird import Game009FlappyBird
 from arcade.game_010_stack import Game010Stack
+from arcade.game_014_orbit_hop import Game014OrbitHop
+from arcade.game_015_simon_memory import Game015SimonMemory
+from arcade.game_016_whack_a_mole import Game016WhackAMole
+from arcade.game_017_rhythm_lanes import Game017RhythmLanes
+from arcade.game_018_red_green_light import Game018RedGreenLight
+from arcade.game_019_shell_game import Game019ShellGame
 from arcade.game_020_pong import Game020Pong
 from arcade.game_021_breakout import Game021Breakout
+from arcade.game_022_pinball import Game022Pinball
 from arcade.game_026_space_invaders import Game026SpaceInvaders
+from arcade.game_027_asteroids import Game027Asteroids
+from arcade.game_028_missile_command import Game028MissileCommand
+from arcade.game_029_centipede import Game029Centipede
+from arcade.game_030_duck_hunt import Game030DuckHunt
+from arcade.game_031_robotron import Game031Robotron
 from arcade.game_033_snake import Game033Snake
 from arcade.game_034_pacman import Game034Pacman
 from arcade.game_038_bomberman import Game038Bomberman
+from arcade.game_040_mirror_maze import Game040MirrorMaze
 from arcade.game_041_tetris import Game041Tetris
+from arcade.game_042_puyo_puyo import Game042PuyoPuyo
+from arcade.game_043_merge_2048 import Game043Merge2048
+from arcade.game_044_bejeweled import Game044Bejeweled
+from arcade.game_045_samegame import Game045SameGame
+from arcade.game_051_flow_free import Game051FlowFree
+from arcade.game_052_pipe_connect import Game052PipeConnect
+from arcade.game_053_tower_of_hanoi import Game053TowerOfHanoi
 from arcade.game_054_sokoban import Game054Sokoban
+from arcade.game_055_mirror_laser import Game055MirrorLaser
+from arcade.game_062_reversi import Game062Reversi
+from arcade.game_063_gomoku import Game063Gomoku
+from arcade.game_064_checkers import Game064Checkers
+from arcade.game_065_dots_and_boxes import Game065DotsAndBoxes
+from arcade.game_066_battleship import Game066Battleship
+from arcade.game_067_quoridor import Game067Quoridor
+from arcade.game_072_hex_board import Game072HexBoard
+from arcade.game_073_ludo_race import Game073LudoRace
 from arcade.game_074_highway_racer import Game074HighwayRacer
+from arcade.game_075_slalom_ski import Game075SlalomSki
+from arcade.game_076_mini_golf import Game076MiniGolf
+from arcade.game_083_tower_defense import Game083TowerDefense
+from arcade.game_084_node_conquest import Game084NodeConquest
+from arcade.game_085_lemmings_rescue import Game085LemmingsRescue
+from arcade.game_086_tiny_farm import Game086TinyFarm
+from arcade.game_087_traffic_control import Game087TrafficControl
+from arcade.game_088_atc_landing import Game088AtcLanding
+from arcade.game_092_fruit_slice import Game092FruitSlice
+from arcade.game_093_black_hole import Game093BlackHole
+from arcade.game_094_grapple_swing import Game094GrappleSwing
+from arcade.game_095_super_hexagon import Game095SuperHexagon
 from arcade.game_097_frogger import Game097Frogger
 
 KEY_MAP = {
@@ -83,17 +129,63 @@ class ArcadeSession:
         self.broadcast_fn = broadcast_fn
         self.cartridges: Dict[int, BaseCartridge] = {
             1: Game001Mario(),
+            2: Game002DoodleJump(),
+            3: Game003CelesteDash(),
+            4: Game004GravityFlip(),
+            5: Game005LodeRunner(),
+            6: Game006BubbleBobble(),
             9: Game009FlappyBird(),
             10: Game010Stack(),
+            14: Game014OrbitHop(),
+            15: Game015SimonMemory(),
+            16: Game016WhackAMole(),
+            17: Game017RhythmLanes(),
+            18: Game018RedGreenLight(),
+            19: Game019ShellGame(),
             20: Game020Pong(),
             21: Game021Breakout(),
+            22: Game022Pinball(),
             26: Game026SpaceInvaders(),
+            27: Game027Asteroids(),
+            28: Game028MissileCommand(),
+            29: Game029Centipede(),
+            30: Game030DuckHunt(),
+            31: Game031Robotron(),
             33: Game033Snake(),
             34: Game034Pacman(),
             38: Game038Bomberman(),
+            40: Game040MirrorMaze(),
             41: Game041Tetris(),
+            42: Game042PuyoPuyo(),
+            43: Game043Merge2048(),
+            44: Game044Bejeweled(),
+            45: Game045SameGame(),
+            51: Game051FlowFree(),
+            52: Game052PipeConnect(),
+            53: Game053TowerOfHanoi(),
             54: Game054Sokoban(),
+            55: Game055MirrorLaser(),
+            62: Game062Reversi(),
+            63: Game063Gomoku(),
+            64: Game064Checkers(),
+            65: Game065DotsAndBoxes(),
+            66: Game066Battleship(),
+            67: Game067Quoridor(),
+            72: Game072HexBoard(),
+            73: Game073LudoRace(),
             74: Game074HighwayRacer(),
+            75: Game075SlalomSki(),
+            76: Game076MiniGolf(),
+            83: Game083TowerDefense(),
+            84: Game084NodeConquest(),
+            85: Game085LemmingsRescue(),
+            86: Game086TinyFarm(),
+            87: Game087TrafficControl(),
+            88: Game088AtcLanding(),
+            92: Game092FruitSlice(),
+            93: Game093BlackHole(),
+            94: Game094GrappleSwing(),
+            95: Game095SuperHexagon(),
             97: Game097Frogger(),
         }
         self.current_cartridge: Optional[BaseCartridge] = None
@@ -129,7 +221,7 @@ class ArcadeSession:
     @synchronized
     def select_game(self, game_id: int, force_simulation: bool = False) -> Dict[str, Any]:
         """选择卡带：向 ESP32 下发正式指令或在显式离线模拟时切换本地卡带"""
-        valid_ids = [1, 9, 10, 20, 21, 26, 33, 34, 38, 41, 54, 74, 97]
+        valid_ids = self.cartridges
         if type(game_id) is not int or game_id not in valid_ids:
             return {"status": "error", "error": "invalid_game_id", "message": f"不支持的街机编号: {game_id}"}
 
@@ -144,7 +236,7 @@ class ArcadeSession:
             # 显式模拟模式 (明确标记 simulated: True)
             self.simulated_mode = True
             self.current_cartridge = self.cartridges[game_id]
-            self.current_cartridge.reset()
+            self.current_cartridge.init()
             self._refresh_simulator_status()
             self.is_running = True
             return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
@@ -329,16 +421,35 @@ class ArcadeSession:
         self._update_status_from_hardware(reply["arcade"])
         return {"status":"ok","source":"esp32_hardware","simulated":False,"game_status":self.status}
 
-    @synchronized
     def read_status(self):
-        if self.simulated_mode:
-            self._refresh_simulator_status()
-            return {"status":"ok","game_status":self.status,"source":"simulator","simulated":True}
+        with self._lock:
+            if self.simulated_mode:
+                self._refresh_simulator_status()
+                return {"status":"ok","game_status":dict(self.status),"source":"simulator","simulated":True}
+            previous=self.status
         reply=self._send_esp32_command({"cmd":"arcade","action":"status"})
-        if reply.get("status") != "ok":
-            return {"status":"error","error":reply.get("error","device_offline"),"simulated":False}
+        with self._lock:
+            if self.simulated_mode or self.status is not previous:
+                return {"status":"error","error":"stale_reply","simulated":False}
+            if reply.get("status") != "ok":
+                return {"status":"error","error":reply.get("error","device_offline"),"simulated":False}
+            self._update_status_from_hardware(reply['arcade'])
+            return {"status":"ok","game_status":dict(self.status),"source":"esp32_hardware","simulated":False}
+
+    @synchronized
+    def players(self, count):
+        if type(count) is not int or count not in (1,2) or self.status['game_id'] != 20:
+            return {"status":"error","error":"invalid_player_mode"}
+        self.keys_down=self.keys_pressed=0
+        if self.simulated_mode:
+            self.current_cartridge.set_player_count(count)
+            self._refresh_simulator_status()
+            return {"status":"ok","game_status":self.status,"simulated":True,"source":"simulator"}
+        reply=self._send_esp32_command({"cmd":"arcade","action":"players","count":count})
+        if reply.get('status')!='ok':
+            return {"status":"error","error":reply.get('error','players_failed'),"simulated":False}
         self._update_status_from_hardware(reply['arcade'])
-        return {"status":"ok","game_status":self.status,"source":"esp32_hardware","simulated":False}
+        return {"status":"ok","game_status":self.status,"simulated":False,"source":"esp32_hardware"}
 
     @synchronized
     def heartbeat(self) -> Dict[str, Any]:
@@ -355,36 +466,29 @@ class ArcadeSession:
         # 模拟模式心跳
         return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
 
-    @synchronized
     def get_frame(self) -> Dict[str, Any]:
-        """获取当前帧缓冲与 HUD 状态"""
-        if not self.simulated_mode:
+        with self._lock:
+            if self.simulated_mode:
+                return self._get_frame()
+            controller=self.controller
+            gid=self.status['game_id']
             if not self.is_hardware_available():
-                return {
-                    "running": False,
-                    "status": self.status,
-                    "hex": "",
-                    "source": "hardware_offline",
-                    "frame_id": 0,
-                    "simulated": False,
-                    "error": "device_offline",
-                }
-            # 从真实硬件快照帧缓冲 (hardware_pwm)
-            res = self._send_esp32_command({"cmd": "frame"})
-            if res.get("status") == "ok" and isinstance(res.get("pixels"),str) and len(res["pixels"]) == 1536 and all(c in "0123456789abcdefABCDEF" for c in res["pixels"]):
-                self.current_hex = res.get("pixels", "")
-                return {
-                    "running": self.is_running,
-                    "status": self.status,
-                    "hex": self.current_hex,
-                    "source": "hardware_pwm",
-                    "frame_id": res.get("frame_id", 0),
-                    "simulated": False,
-                }
+                return {"status":"error","error":"device_offline","running":False,"source":"hardware_offline","hex":"","simulated":False}
+        # Disposable remote readback owns neither the game state lock nor the
+        # gateway's control lane while waiting for a packet.
+        res=self._send_esp32_command({"cmd":"frame"})
+        with self._lock:
+            if self.simulated_mode or self.controller is not controller or self.status['game_id']!=gid:
+                return {"status":"error","error":"stale_frame","running":False,"source":"hardware_offline","hex":"","simulated":False}
+            pixels=res.get('pixels')
+            if res.get('status')!='ok' or not isinstance(pixels,str) or len(pixels)!=1536 or any(c not in '0123456789abcdefABCDEF' for c in pixels):
+                return {"status":"error","error":res.get('error','invalid_frame'),"running":False,"source":"hardware_offline","hex":"","simulated":False}
+            self.current_hex=pixels
+            return {"running":self.is_running,"status":dict(self.status),"hex":pixels,
+                "source":"hardware_pwm","frame_id":res.get('frame_id',0),"simulated":False}
 
-            return {"running":False,"status":"error","error":res.get("error","invalid_frame"),
-                    "source":"hardware_offline","hex":"","simulated":False}
-
+    def _get_frame(self) -> Dict[str, Any]:
+        """获取当前帧缓冲与 HUD 状态"""
         # Render a simulator ONLY when explicitly selected.
         if self.simulated_mode and self.current_cartridge:
             fb = self.current_cartridge.render()
@@ -442,6 +546,7 @@ class ArcadeSession:
             "state": st_code,
             "state_name": STATE_NAMES.get(st_code, "UNKNOWN"),
             "progress": arc_data.get("progress", 0),
+            "player_count": arc_data.get("player_count", 0),
             "source": "esp32_hardware",
             "simulated": False,
         }
@@ -457,6 +562,7 @@ class ArcadeSession:
             "game_name": self.current_cartridge.name,
             "control_type": self.current_cartridge.control_type,
             "score": st.get("score", 0),
+            "player_count": st.get("player_count", 0),
             "high_score": st.get("high_score", 0),
             "lives": st.get("lives", 1),
             "state": st_code,

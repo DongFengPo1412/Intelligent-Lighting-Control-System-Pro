@@ -7,6 +7,8 @@ import uuid
 import os
 import ipaddress
 import re
+import copy
+import hashlib
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -53,6 +55,9 @@ class WiFiGateway:
         self._pending = {}
         self._pending_lock = threading.Lock()
         self._send_lock = threading.RLock()
+        self._read_lock = threading.Lock()
+        self._read_sequence = self._sequence
+        self._read_boot = None
         self._remember_board()
         self._init_socket()
         if self.is_running:
@@ -206,8 +211,35 @@ class WiFiGateway:
         return self.send_command(cmd_str)
 
     def request(self, command):
+        try:
+            query=json.loads(command)
+            read_only=isinstance(query,dict) and (query.get('cmd') in ('frame','status') or
+                (query.get('cmd')=='arcade' and query.get('action')=='status'))
+        except (ValueError,TypeError):
+            query=None
+            read_only=False
+        if read_only:
+            # Share the receiver/pending table, but never the control wait lock,
+            # result slot or replay sequence. The identity is stable per client.
+            if not self._read_lock.acquire(blocking=False):
+                return {"status":"error","error":"telemetry_busy"}
+            try:
+                channel=copy.copy(self)
+                channel._send_lock=threading.RLock()
+                channel.client_id=hashlib.sha256((self.client_id+':read').encode()).hexdigest()[:32]
+                channel._sequence=self._read_sequence
+                channel.boot_id=self._read_boot
+                channel.send_command(command,timeout=0.15,retries=0)
+                self._read_sequence=channel._sequence
+                self._read_boot=channel.boot_id
+                return dict(channel.last_result)
+            finally:
+                self._read_lock.release()
         with self._send_lock:
-            self.send_command(command)
+            if isinstance(query,dict) and query.get('cmd')=='arcade' and query.get('action') in ('input','heartbeat'):
+                self.send_command(command,timeout=0.2,retries=1)
+            else:
+                self.send_command(command)
             return dict(self.last_result)
 
     def broadcast_json(self, payload: Dict[str, Any]) -> bool:

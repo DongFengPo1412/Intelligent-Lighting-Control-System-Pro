@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-04 接续开发 / A.1：** 已接入 59 款目标卡带，其余 41 款未注册；新增独立回读通道、Pong 玩家模式命令及首次配对安全重试。[实现与验收边界](docs/ARCADE_HANDOFF_A1.md)。尚未进行手机、灯板及音效实机验收。
+
 PC 本地语音智能体与单颗 ESP32-S3 协同的灯板、红莉栖桌宠和点阵游戏平台。
 
 **简体中文** · [English](README.md) · [日本語](README_JA.md)

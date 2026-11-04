@@ -173,6 +173,8 @@ class TestArcadeBatch1Deep(unittest.TestCase):
         g3 = Game020Pong()
         g3.start()
         frame(g3, KEY_A, KEY_A)
+        self.assertTrue(g3.p2_is_ai)
+        self.assertTrue(g3.set_player_count(2))
         self.assertFalse(g3.p2_is_ai)
 
     # ------------------------------------------------------------------ #021

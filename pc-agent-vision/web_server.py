@@ -549,6 +549,8 @@ async def handle_arcade(request: web.Request):
             if not isinstance(k,str) or type(down) is not bool:
                 return web.json_response({"status":"error","error":"invalid_key"},status=400)
             return web.json_response(await asyncio.to_thread(arcade.key,k,down))
+        elif action == "players":
+            return web.json_response(await asyncio.to_thread(arcade.players, data.get("count")))
         elif action == "input":
             return web.json_response(await asyncio.to_thread(arcade.input_state,data.get("down"),data.get("pressed")))
         elif action == "heartbeat":

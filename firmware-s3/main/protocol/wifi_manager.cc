@@ -414,6 +414,7 @@ void WifiManager::UdpServerTaskLoop()
                     cJSON_AddNumberToObject(arc_obj, "state", st.state);
                     cJSON_AddNumberToObject(arc_obj, "score", st.score);
                     cJSON_AddNumberToObject(arc_obj, "high_score", st.high_score);
+                    if (st.player_count) cJSON_AddNumberToObject(arc_obj, "player_count", st.player_count);
                     cJSON_AddNumberToObject(arc_obj, "lives", st.lives);
                     cJSON_AddNumberToObject(arc_obj, "progress", st.progress);
                     cJSON_AddNumberToObject(arc_obj, "control_type", (int)snapshot.control_type);
