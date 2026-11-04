@@ -23,6 +23,11 @@ public:
     uint16_t GetReleaseYear() const override { return 2014; }
     ControlType GetControlType() const override { return CTRL_MULTI_TRACK; }
 
+    float BeatInterval() const {return difficulty_==0?.50f:difficulty_==2?.32f:.40f;}
+    float FallSpeed() const {return 13.f/(3.f*BeatInterval());}
+    float JudgeWindow() const {return difficulty_==0?2.f:difficulty_==2?1.4f:1.8f;}
+    int MaxMisses() const {return difficulty_==0?10:difficulty_==2?5:8;}
+    bool SupportsDifficulty() const override {return true;}
     void Init() override;
     void Reset() override;
     void Start() override;

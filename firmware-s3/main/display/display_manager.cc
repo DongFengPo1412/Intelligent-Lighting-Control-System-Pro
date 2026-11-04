@@ -119,7 +119,9 @@ void DisplayManager::DisplayTaskLoop()
     ESP_LOGI(TAG, "Display task loop entered.");
 
     while (is_running_) {
+        int64_t frame_start=esp_timer_get_time();
         uint32_t delay_ms = 33;
+        bool arcade_frame=false;
         {
             DisplayLock lock(mutex_);
             DisplayMode mode = current_mode_;
@@ -128,6 +130,8 @@ void DisplayManager::DisplayTaskLoop()
             if (mode != last_mode_) {
                 ESP_LOGI(TAG, ">>> Mode switched from %d to %d", (int)last_mode_, (int)mode);
                 hal_.Clear();
+                arcade_clock_.Reset(esp_timer_get_time());
+                if(last_mode_==DisplayMode::ARCADE_GAME)arcade::Sounds().Invalidate();
                 if (mode == DisplayMode::SNAKE_GAME) {
                     game_engine_.InitSnake();
                 } else if (mode == DisplayMode::TETRIS_GAME) {
@@ -185,7 +189,8 @@ void DisplayManager::DisplayTaskLoop()
 
                 case DisplayMode::ARCADE_GAME: {
                     arcade::ArcadeManager& am = arcade::ArcadeManager::GetInstance();
-                    am.Update(0.033f);
+                    arcade_frame=true;
+                    arcade_clock_.Advance(esp_timer_get_time(),[&](float dt){am.Update(dt);});
                     uint8_t raw_rgb[TOTAL_LEDS * 3];
                     am.Render(raw_rgb);
                     for (int i = 0; i < TOTAL_LEDS; i++) {
@@ -210,6 +215,10 @@ void DisplayManager::DisplayTaskLoop()
             BoardLed::GetInstance().UpdateAnimation();
 
         } // Release before sleeping so network/input tasks can proceed.
+        if(arcade_frame) {
+            int64_t remaining=33333-(esp_timer_get_time()-frame_start);
+            delay_ms=remaining>0?uint32_t((remaining+999)/1000):1;
+        }
         vTaskDelay(pdMS_TO_TICKS(delay_ms) > 0 ? pdMS_TO_TICKS(delay_ms) : 1);
     }
 
@@ -477,7 +486,7 @@ DisplayManager::ArcadeSnapshot DisplayManager::SnapshotArcade() const
     DisplayLock lock(mutex_);
     auto& am = arcade::ArcadeManager::GetInstance();
     return {am.IsActive(), am.GetCurrentGameId(), am.GetCurrentControlType(),
-            am.GetCurrentStatus(), am.GetCurrentGameName()};
+            am.GetCurrentStatus(), am.GetCurrentGameName(),uint32_t(arcade_clock_.DroppedUs()/1000)};
 }
 
 bool DisplayManager::ArcadeInput(uint16_t down, uint16_t pressed)
@@ -527,4 +536,9 @@ void DisplayManager::ArcadeHeartbeat()
 {
     DisplayLock lock(mutex_);
     arcade::ArcadeManager::GetInstance().FeedHeartbeat();
+}
+
+bool DisplayManager::ArcadeConfigure(bool enabled,uint8_t volume,int difficulty) {
+    DisplayLock lock(mutex_);
+    return arcade::ArcadeManager::GetInstance().Configure(enabled,volume,difficulty);
 }

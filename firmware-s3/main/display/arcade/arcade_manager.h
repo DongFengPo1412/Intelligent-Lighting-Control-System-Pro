@@ -18,6 +18,7 @@ public:
     bool SelectGame(uint8_t game_id);
     void Start();
     bool SetPlayerCount(uint8_t count);
+    bool Configure(bool enabled,uint8_t volume,int difficulty=-1);
     void Pause();
     void Resume();
     void Reset();

@@ -11,6 +11,8 @@ import time
 import threading
 import inspect
 from functools import wraps
+from arcade.fixed_step import FixedStepClock
+from collections import deque
 from typing import Dict, Any, Optional
 from arcade.base_cartridge import (
     BaseCartridge,
@@ -125,6 +127,9 @@ class ArcadeSession:
 
     def __init__(self, controller=None, broadcast_fn=None):
         self._lock = threading.RLock()
+        self._clock=FixedStepClock()
+        self.sound_enabled=True;self.sound_volume=25
+        self.sound_events=deque(maxlen=16)
         self.controller = controller
         self.broadcast_fn = broadcast_fn
         self.cartridges: Dict[int, BaseCartridge] = {
@@ -236,6 +241,8 @@ class ArcadeSession:
             # 显式模拟模式 (明确标记 simulated: True)
             self.simulated_mode = True
             self.current_cartridge = self.cartridges[game_id]
+            self._clock.reset()
+            self.current_cartridge._sound_sink=lambda kind,detail:self.sound_events.append((kind,detail)) if self.sound_enabled and self.sound_volume else None
             self.current_cartridge.init()
             self._refresh_simulator_status()
             self.is_running = True
@@ -437,6 +444,29 @@ class ArcadeSession:
             return {"status":"ok","game_status":dict(self.status),"source":"esp32_hardware","simulated":False}
 
     @synchronized
+    def configure(self,enabled,volume,difficulty=None):
+        if type(enabled) is not bool or type(volume) is not int or not 0<=volume<=100 or (difficulty is not None and (type(difficulty) is not int or difficulty not in (0,1,2))):
+            return {"status":"error","error":"invalid_arcade_config"}
+        if not self.simulated_mode:
+            command={"cmd":"arcade","action":"config","sound_enabled":enabled,"sound_volume":volume}
+            if difficulty is not None:command['difficulty']=difficulty
+            reply=self._send_esp32_command(command)
+            if reply.get('status')!='ok':return {"status":"error","error":reply.get('error','config_rejected'),"simulated":False}
+            self._update_status_from_hardware(reply['arcade'])
+        else:
+            game=self.current_cartridge
+            if game is None:return {"status":"error","error":"no_cartridge_selected"}
+            if difficulty is not None:
+                if not game.difficulty_supported:return {"status":"error","error":"difficulty_unsupported"}
+                if difficulty!=game.difficulty:
+                    if game.get_status()['state'] in (STATE_PLAYING,STATE_PAUSED):return {"status":"error","error":"difficulty_requires_restart"}
+                    game.set_difficulty(difficulty);game.reset();self._clock.reset()
+            self.sound_enabled=enabled;self.sound_volume=volume
+            if not enabled:self.sound_events.clear()
+            self._refresh_simulator_status()
+        return {"status":"ok","simulated":self.simulated_mode,"source":"simulator" if self.simulated_mode else "esp32_hardware","game_status":dict(self.status)}
+
+    @synchronized
     def players(self, count):
         if type(count) is not int or count not in (1,2) or self.status['game_id'] != 20:
             return {"status":"error","error":"invalid_player_mode"}
@@ -547,6 +577,11 @@ class ArcadeSession:
             "state_name": STATE_NAMES.get(st_code, "UNKNOWN"),
             "progress": arc_data.get("progress", 0),
             "player_count": arc_data.get("player_count", 0),
+            "difficulty_supported": arc_data.get("difficulty_supported",False),
+            "difficulty": arc_data.get("difficulty",1),
+            "sound_enabled": arc_data.get("sound_enabled",False),
+            "sound_volume": arc_data.get("sound_volume",0),
+            "timing_dropped_ms": arc_data.get("timing_dropped_ms",0),
             "source": "esp32_hardware",
             "simulated": False,
         }
@@ -570,6 +605,11 @@ class ArcadeSession:
             "progress": st.get("progress", 0),
             "source": "simulator",
             "simulated": True,
+            "difficulty_supported": self.current_cartridge.difficulty_supported,
+            "difficulty": self.current_cartridge.difficulty,
+            "sound_enabled": self.sound_enabled,
+            "sound_volume": self.sound_volume,
+            "timing_dropped_ms": self._clock.dropped_us//1000,
         }
 
     def _game_name_for_id(self, gid: int) -> str:
@@ -580,8 +620,10 @@ class ArcadeSession:
     def _simulator_step(self,dt):
         if not self.simulated_mode or not self.current_cartridge:
             return None
-        self.current_cartridge.update(dt,self.keys_down,self.keys_pressed)
-        self.keys_pressed=0
+        def step(fixed_dt):
+            self.current_cartridge.update(fixed_dt,self.keys_down,self.keys_pressed)
+            self.keys_pressed=0
+        self._clock.advance(dt,step)
         self.current_hex=self.current_cartridge.render().hex()
         self._refresh_simulator_status()
         return {"type":"arcade_frame","hex":self.current_hex,"status":dict(self.status),"simulated":True}

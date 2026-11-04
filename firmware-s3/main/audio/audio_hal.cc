@@ -253,6 +253,7 @@ esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* byt
 }
 
 esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
+    NotifyExternalPlayback();
     if (!tx_chan_ || !mono_samples || count == 0) return ESP_ERR_INVALID_STATE;
     if (!playback_mutex_ || xSemaphoreTake(playback_mutex_, pdMS_TO_TICKS(500)) != pdTRUE) return ESP_ERR_TIMEOUT;
     if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
@@ -291,6 +292,32 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
     ResetSpeakerTimer();
     xSemaphoreGive(playback_mutex_);
     return ret;
+}
+
+void AudioHAL::NotifyExternalPlayback() {
+    playback_priority_.External(uint32_t(esp_timer_get_time()/1000));
+}
+
+esp_err_t AudioHAL::TryPlayGamePcm(const int16_t* data,size_t count) {
+    if(!data || !count || count>160 || !initialized_ || !tx_chan_)return ESP_ERR_INVALID_STATE;
+    if(!playback_priority_.GameAllowed(uint32_t(esp_timer_get_time()/1000)))return ESP_ERR_TIMEOUT;
+    if(!playback_mutex_ || xSemaphoreTake(playback_mutex_,0)!=pdTRUE)return ESP_ERR_TIMEOUT;
+    esp_err_t result=ESP_ERR_TIMEOUT;
+    if(playback_priority_.GameAllowed(uint32_t(esp_timer_get_time()/1000))) {
+        if(spk_power_timer_)esp_timer_stop(spk_power_timer_);
+        result=EnableSpeaker(true);
+        if(result==ESP_OK) {
+            for(size_t i=0;i<count;++i) {
+                int64_t value=int64_t(data[i])*volume_factor_;
+                tx_buffer_[2*i]=tx_buffer_[2*i+1]=int32_t(value);
+            }
+            size_t written=0;
+            result=i2s_channel_write(tx_chan_,tx_buffer_,count*2*sizeof(int32_t),&written,0);
+            if(result==ESP_OK && written!=count*2*sizeof(int32_t))result=ESP_ERR_TIMEOUT;
+        }
+        ResetSpeakerTimer();
+    }
+    xSemaphoreGive(playback_mutex_);return result;
 }
 
 esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms) {

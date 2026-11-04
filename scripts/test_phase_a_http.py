@@ -24,6 +24,17 @@ def main():
     for gid in (entry['id'] for entry in registry):
         result=post({'action':'select','game_id':gid})
         assert result['status']=='ok' and result['simulated'] and result['game_status']['game_id']==gid
+        if gid in (17,85,92,95):
+            configured=post({'action':'config','sound_enabled':True,'sound_volume':20,'difficulty':2})
+            assert configured['game_status']['difficulty_supported'] is True
+            assert configured['game_status']['difficulty']==2
+            post({'action':'start'})
+            rejected=post({'action':'config','sound_enabled':False,'sound_volume':90,'difficulty':0})
+            assert rejected['status']=='error'
+            observed=post({'action':'status'})['game_status']
+            assert observed['difficulty']==2 and observed['sound_enabled'] is True and observed['sound_volume']==20
+            post({'action':'reset'})
+            assert post({'action':'config','sound_enabled':False,'sound_volume':15,'difficulty':0})['game_status']['difficulty']==0
         if gid==20:
             assert post({'action':'players','count':2})['game_status']['player_count']==2
             post({'action':'start'});post({'action':'pause'})
@@ -43,6 +54,9 @@ def main():
         except urllib.error.HTTPError as error: assert error.code==400
         else: raise AssertionError(f'Invalid ID accepted: {gid!r}')
     print(f'Real HTTP integration passed for {len(registry)} registered games; HARDWARE NOT TESTED')
+    try: post({'action':'config','sound_enabled':True,'sound_volume':25,'difficulty':None})
+    except urllib.error.HTTPError as error: assert error.code==400
+    else: raise AssertionError('Explicit null difficulty accepted')
     async def websocket_rate_check():
         import aiohttp
         async with aiohttp.ClientSession() as session:

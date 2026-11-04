@@ -67,6 +67,8 @@ static void test_protocol() {
     for(auto text:bad){auto json=cJSON_Parse(text);assert(!arcade_protocol::Valid(json));cJSON_Delete(json);}
     auto json=cJSON_Parse("{\"action\":\"input\",\"down\":18,\"pressed\":16}");assert(arcade_protocol::Valid(json));cJSON_Delete(json);
 }
+#include "phase_b_core_test.h"
+
 int main(int argc,char** argv) {
     assert(opens==0); // All 13 production static constructors have already run.
     if(argc==3 && std::string(argv[1])=="reopen") {
@@ -99,9 +101,11 @@ int main(int argc,char** argv) {
     for(auto id:ids){
         assert(manager.SelectGame(id));assert(manager.GetCurrentGameId()==id);manager.Start();
         std::vector<uint8_t> guarded(800,0xa5);
+        arcade::FixedStepClock physics;physics.Reset(tick_ms*1000);
         for(int frame=0;frame<1800;++frame) {
-            tick_ms+=16;unsigned bit=1u<<((frame/9)%6);
-            manager.HandleInput(frame%11?bit:0,frame%9==0?bit:0);manager.Update(.016f);
+            tick_ms+=33+(frame%13);unsigned bit=1u<<((frame/9)%6);
+            manager.HandleInput(frame%11?bit:0,frame%9==0?bit:0);
+            assert(physics.Advance(tick_ms*1000,[&](float dt){manager.Update(dt);})<=4);
             manager.Render(guarded.data()+16);
             for(int i=0;i<16;++i)assert(guarded[i]==0xa5 && guarded[784+i]==0xa5);
         }
@@ -138,6 +142,6 @@ int main(int argc,char** argv) {
     manager.HandleInput(64,64);manager.Update(.033f);assert(manager.GetCurrentStatus().state==arcade::STATE_PAUSED);
     manager.Resume();assert(manager.GetCurrentStatus().state==arcade::STATE_PLAYING);
     manager.HandleInput(18,16);assert(manager.SelectGame(33));assert(!manager.current_keys_down_&&!manager.current_keys_pressed_);
-    test_replay();test_protocol();
+    test_replay();test_protocol();test_phase_b_foundations();
     std::cout<<"C++ production constructors/NVS failures/replay/protocol/watchdog tests passed\n";
 }

@@ -414,6 +414,14 @@ void WifiManager::UdpServerTaskLoop()
                     cJSON_AddNumberToObject(arc_obj, "state", st.state);
                     cJSON_AddNumberToObject(arc_obj, "score", st.score);
                     cJSON_AddNumberToObject(arc_obj, "high_score", st.high_score);
+                    cJSON_AddNumberToObject(arc_obj,"difficulty",st.difficulty);
+                    cJSON_AddBoolToObject(arc_obj,"difficulty_supported",st.difficulty_supported);
+                    cJSON_AddBoolToObject(arc_obj,"sound_enabled",arcade::Sounds().Enabled());
+                    cJSON_AddNumberToObject(arc_obj,"sound_volume",arcade::Sounds().Volume());
+                    cJSON_AddNumberToObject(arc_obj,"sound_played",arcade::Sounds().played.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_dropped",arcade::Sounds().dropped.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_preempted",arcade::Sounds().preempted.load());
+                    cJSON_AddNumberToObject(arc_obj,"timing_dropped_ms",snapshot.dropped_time_ms);
                     if (st.player_count) cJSON_AddNumberToObject(arc_obj, "player_count", st.player_count);
                     cJSON_AddNumberToObject(arc_obj, "lives", st.lives);
                     cJSON_AddNumberToObject(arc_obj, "progress", st.progress);

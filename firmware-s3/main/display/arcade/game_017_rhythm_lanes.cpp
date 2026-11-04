@@ -7,10 +7,7 @@
 
 namespace arcade {
 
-static const float kBeatInterval = 0.40f;
-static const float kNoteFallSpeed = 10.0f;
 static const float kJudgeY = 13.0f;
-static const float kJudgeWindow = 1.8f;
 static const float kPerfectWindow = 0.75f;
 
 static inline void SetPixel17(uint8_t* fb, int x, int y, uint8_t r, uint8_t g, uint8_t b) {
@@ -70,6 +67,7 @@ void Game017RhythmLanes::SpawnBeatNote() {
         lane = (uint8_t)((lane + 1 + (NextRand() % 3)) % 4);
     }
     last_lane_ = lane;
+    if(state_==STATE_PLAYING)SoundEvent(Sound::Beat,lane);
 
     notes_[slot].lane = lane;
     notes_[slot].y = 0.0f;
@@ -90,7 +88,7 @@ void Game017RhythmLanes::HandleLanePress(uint8_t lane) {
     for (int i = 0; i < kMaxNotes; ++i) {
         if (!notes_[i].active || notes_[i].lane != lane) continue;
         float dist = fabsf(notes_[i].y - kJudgeY);
-        if (dist <= kJudgeWindow && dist < best_dist) {
+        if (dist <= JudgeWindow() && dist < best_dist) {
             best_dist = dist;
             best_idx = i;
         }
@@ -99,6 +97,7 @@ void Game017RhythmLanes::HandleLanePress(uint8_t lane) {
     if (best_idx >= 0) {
         notes_[best_idx].active = false;
         notes_cleared_++;
+        SoundEvent(Sound::Hit,lane);
         int capped_combo = (combo_ > 10) ? 10 : combo_;
         if (best_dist <= kPerfectWindow) {
             AddScore(20u + (uint32_t)(capped_combo * 2));
@@ -115,7 +114,7 @@ void Game017RhythmLanes::HandleLanePress(uint8_t lane) {
         combo_ = 0;
         misses_++;
         miss_flash_timer_ = 0.20f;
-        if (misses_ >= kMaxMisses) {
+        if (misses_ >= MaxMisses()) {
             state_ = STATE_GAMEOVER;
             state_timer_ = 0.0f;
         }
@@ -257,13 +256,13 @@ void Game017RhythmLanes::Update(float dt, uint16_t keys_down, uint16_t keys_pres
 
         for (int i = 0; i < kMaxNotes; ++i) {
             if (!notes_[i].active) continue;
-            notes_[i].y += kNoteFallSpeed * dt;
+            notes_[i].y += FallSpeed() * dt;
             if (notes_[i].y > 15.2f) {
                 notes_[i].active = false;
                 combo_ = 0;
                 misses_++;
                 miss_flash_timer_ = 0.20f;
-                if (misses_ >= kMaxMisses) {
+                if (misses_ >= MaxMisses()) {
                     state_ = STATE_GAMEOVER;
                     state_timer_ = 0.0f;
                     return;
@@ -271,16 +270,14 @@ void Game017RhythmLanes::Update(float dt, uint16_t keys_down, uint16_t keys_pres
             }
         }
 
-        if (beats_spawned_ < kTotalBeats) {
-            beat_timer_ += dt;
-            while (beat_timer_ >= kBeatInterval && beats_spawned_ < kTotalBeats) {
-                beat_timer_ -= kBeatInterval;
-                SpawnBeatNote();
-            }
-        } else if (!AnyActiveNotes()) {
-            state_ = STATE_VICTORY;
-            state_timer_ = 0.0f;
-            return;
+        beat_timer_ += dt;
+        while (beat_timer_ >= BeatInterval()) {
+            beat_timer_ -= BeatInterval();
+            if(beats_spawned_ < kTotalBeats)SpawnBeatNote();
+            else SoundEvent(Sound::Beat,last_lane_); // Keep the tail's final notes on the beat.
+        }
+        if(beats_spawned_ >= kTotalBeats && !AnyActiveNotes()) {
+            state_ = STATE_VICTORY;state_timer_ = 0.0f;return;
         }
     }
 }
@@ -351,10 +348,10 @@ void Game017RhythmLanes::Render(uint8_t* fb_rgb24) {
         }
     }
 
-    // 顶部剩余容错显示 (5 - misses_)
-    int hp = kMaxMisses - misses_;
-    for (int i = 0; i < hp && i < kMaxMisses; ++i) {
-        SetPixel17(fb_rgb24, i * 2, 0, 80, 230, 140);
+    // Fit every difficulty's remaining chances within the 16-pixel row.
+    int hp = MaxMisses() - misses_;
+    for (int i = 0; i < hp && i < MaxMisses(); ++i) {
+        SetPixel17(fb_rgb24, i * 15 / (MaxMisses() - 1), 0, 80, 230, 140);
     }
 
     if (state_ == STATE_PAUSED) {
@@ -369,7 +366,7 @@ CartridgeStatus Game017RhythmLanes::GetStatus() const {
     CartridgeStatus st;
     st.score = score_;
     st.high_score = high_score_;
-    int hp = kMaxMisses - misses_;
+    int hp = MaxMisses() - misses_;
     st.lives = (hp > 0 && state_ != STATE_GAMEOVER) ? (uint8_t)hp : 0;
     st.state = (uint8_t)state_;
     int prog = (beats_spawned_ * 100) / kTotalBeats;

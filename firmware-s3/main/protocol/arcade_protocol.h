@@ -11,6 +11,12 @@ inline bool Integer(cJSON* value, int minimum, int maximum) {
 inline bool Valid(cJSON* root) {
     cJSON* a = cJSON_GetObjectItemCaseSensitive(root, "action");
     if (!cJSON_IsString(a)) return false;
+    if (!strcmp(a->valuestring,"config")) {
+        auto enabled=cJSON_GetObjectItemCaseSensitive(root,"sound_enabled");
+        auto volume=cJSON_GetObjectItemCaseSensitive(root,"sound_volume");
+        auto difficulty=cJSON_GetObjectItemCaseSensitive(root,"difficulty");
+        return cJSON_IsBool(enabled) && Integer(volume,0,100) && (!difficulty || Integer(difficulty,0,2));
+    }
     if (!strcmp(a->valuestring, "players"))
         return Integer(cJSON_GetObjectItemCaseSensitive(root, "count"), 1, 2);
     if (!strcmp(a->valuestring, "select")) {

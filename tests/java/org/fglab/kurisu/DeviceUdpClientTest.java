@@ -68,6 +68,11 @@ public final class DeviceUdpClientTest {
             check("forbidden_command".equals(result.getString("error")));check(wires.size()==before);
             result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope("bad_mask","{\"cmd\":\"arcade\",\"action\":\"input\",\"down\":\"18\",\"pressed\":16}").toString(),100,0,"bad_mask"));
             check("invalid_input".equals(result.getString("error")));check(wires.size()==before);
+            result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope("bad_config","{\"cmd\":\"arcade\",\"action\":\"config\",\"sound_enabled\":true,\"sound_volume\":101}").toString(),100,0,"bad_config"));
+            check("invalid_config".equals(result.getString("error")));check(wires.size()==before);
+            String config="{\"cmd\":\"arcade\",\"action\":\"config\",\"sound_enabled\":true,\"sound_volume\":25,\"difficulty\":2}";
+            result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope("config",config).toString(),100,1,"config"));
+            check("ok".equals(result.getString("status")));check(new JSONObject(wires.get(wires.size()-1)).getString("command").equals(config));
             check(DeviceUdpClient.isReadOnly(envelope("f","{\"cmd\":\"frame\"}").toString()));
             check(!DeviceUdpClient.isReadOnly(envelope("i",command).toString()));
             dropFrames.set(true);

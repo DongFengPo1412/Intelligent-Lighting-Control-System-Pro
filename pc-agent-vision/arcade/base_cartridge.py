@@ -35,6 +35,21 @@ STATE_VICTORY  = 4
 class BaseCartridge(ABC):
     """所有街机卡带必须继承的标准基类"""
 
+    def emit_sound(self,kind,detail=0):
+        sink=getattr(self,"_sound_sink",None)
+        if sink:sink(kind,detail)
+
+    difficulty_supported = False
+    def set_difficulty(self, level):
+        if type(level) is not int or level not in (0,1,2) or not self.difficulty_supported:
+            return False
+        self.difficulty=level
+        return True
+    @property
+    def difficulty(self):return getattr(self,'_difficulty',1)
+    @difficulty.setter
+    def difficulty(self, level):self._difficulty=level
+
     @property
     def state(self) -> int:
         return getattr(self, "_state", STATE_TITLE)

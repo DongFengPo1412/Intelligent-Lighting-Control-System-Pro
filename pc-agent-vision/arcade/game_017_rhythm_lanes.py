@@ -48,6 +48,7 @@ class RhythmNote:
 
 
 class Game017RhythmLanes(BaseCartridge):
+    difficulty_supported = True
     def __init__(self):
         super().__init__()
         self._score = 0
@@ -116,6 +117,7 @@ class Game017RhythmLanes(BaseCartridge):
         if lane == self.last_lane and (self._next_rand() % 3) != 0:
             lane = (lane + 1 + (self._next_rand() % 3)) % 4
         self.last_lane = lane
+        if self._state==STATE_PLAYING:self.emit_sound("beat",lane)
 
         self.notes[slot].lane = lane
         self.notes[slot].y = 0.0
@@ -132,13 +134,14 @@ class Game017RhythmLanes(BaseCartridge):
             if not n.active or n.lane != lane:
                 continue
             dist = abs(n.y - JUDGE_Y)
-            if dist <= JUDGE_WINDOW and dist < best_dist:
+            if dist <= (2.0,1.8,1.4)[self.difficulty] and dist < best_dist:
                 best_dist = dist
                 best_idx = i
 
         if best_idx >= 0:
             self.notes[best_idx].active = False
             self.notes_cleared += 1
+            self.emit_sound("hit",lane)
             capped_combo = min(self.combo, 10)
             if best_dist <= PERFECT_WINDOW:
                 self._add_score(20 + capped_combo * 2)
@@ -153,7 +156,7 @@ class Game017RhythmLanes(BaseCartridge):
             self.combo = 0
             self.misses += 1
             self.miss_flash_timer = 0.20
-            if self.misses >= MAX_MISSES:
+            if self.misses >= (10,8,5)[self.difficulty]:
                 self._state = STATE_GAMEOVER
                 self.state_timer = 0.0
 
@@ -264,23 +267,23 @@ class Game017RhythmLanes(BaseCartridge):
             for n in self.notes:
                 if not n.active:
                     continue
-                n.y += NOTE_FALL_SPEED * dt
+                n.y += (JUDGE_Y/(3*(.50,.40,.32)[self.difficulty])) * dt
                 if n.y > 15.2:
                     n.active = False
                     self.combo = 0
                     self.misses += 1
                     self.miss_flash_timer = 0.20
-                    if self.misses >= MAX_MISSES:
+                    if self.misses >= (10,8,5)[self.difficulty]:
                         self._state = STATE_GAMEOVER
                         self.state_timer = 0.0
                         return
 
-            if self.beats_spawned < TOTAL_BEATS:
-                self.beat_timer += dt
-                while self.beat_timer >= BEAT_INTERVAL and self.beats_spawned < TOTAL_BEATS:
-                    self.beat_timer -= BEAT_INTERVAL
-                    self._spawn_beat_note()
-            elif not self._any_active_notes():
+            self.beat_timer += dt
+            while self.beat_timer >= (.50,.40,.32)[self.difficulty]:
+                self.beat_timer -= (.50,.40,.32)[self.difficulty]
+                if self.beats_spawned < TOTAL_BEATS:self._spawn_beat_note()
+                else:self.emit_sound("beat",self.last_lane)
+            if self.beats_spawned >= TOTAL_BEATS and not self._any_active_notes():
                 self._state = STATE_VICTORY
                 self.state_timer = 0.0
                 return
@@ -336,9 +339,9 @@ class Game017RhythmLanes(BaseCartridge):
                     for dx in range(3):
                         self._set_px(fb, x0 + dx, y, fr, fg, fb_c)
 
-        hp = MAX_MISSES - self.misses
-        for i in range(min(max(0, hp), MAX_MISSES)):
-            self._set_px(fb, i * 2, 0, 80, 230, 140)
+        hp = (10,8,5)[self.difficulty] - self.misses
+        for i in range(min(max(0, hp), (10,8,5)[self.difficulty])):
+            self._set_px(fb, i * 15 // ((10,8,5)[self.difficulty] - 1), 0, 80, 230, 140)
 
         if self._state == STATE_PAUSED:
             for y in range(5, 9):
@@ -348,7 +351,7 @@ class Game017RhythmLanes(BaseCartridge):
         return fb
 
     def get_status(self) -> Dict[str, Any]:
-        hp = MAX_MISSES - self.misses
+        hp = (10,8,5)[self.difficulty] - self.misses
         return {
             "game_id": self.game_id,
             "score": self._score,

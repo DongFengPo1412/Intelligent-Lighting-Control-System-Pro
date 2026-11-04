@@ -44,6 +44,7 @@ class HexWall:
 
 
 class Game095SuperHexagon(BaseCartridge):
+    difficulty_supported = True
     NUM_WALLS = 3
 
     def __init__(self):
@@ -185,7 +186,7 @@ class Game095SuperHexagon(BaseCartridge):
             self.player_angle %= TWO_PI_095
 
             player_sec = self.angle_to_sector(self.player_angle)
-            shrink_speed = min(5.0, 3.8 + float(self.walls_passed) * 0.04)
+            shrink_speed = min((4.,5.,5.5)[self.difficulty], (3.,3.8,4.3)[self.difficulty] + float(self.walls_passed) * 0.04)
 
             for i, w in enumerate(self.walls):
                 w.radius -= shrink_speed * dt

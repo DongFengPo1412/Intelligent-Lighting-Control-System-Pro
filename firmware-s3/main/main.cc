@@ -7,6 +7,7 @@
 #include "board_led.h"
 #include "command_dispatcher.h"
 #include "audio_hal.h"
+#include "arcade_audio_task.h"
 #include "wifi_manager.h"
 #include "arcade_manager.h"
 #include "arcade_score_store.h"
@@ -59,6 +60,8 @@ extern "C" void app_main(void)
         GPIO_NUM_15, // spk_bclk
         GPIO_NUM_16  // spk_lrck
     ));
+
+    if(!StartArcadeAudioTask())ESP_LOGW(TAG,"Arcade sound worker unavailable; games remain usable silently");
 
     // 3. 单块 16x16 蛇形灯板统一亮度，不再应用四块拼接板的梯级补偿。
     display.SetBrightness(20);

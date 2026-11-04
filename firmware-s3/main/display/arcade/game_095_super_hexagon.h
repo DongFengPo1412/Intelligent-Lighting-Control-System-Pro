@@ -23,6 +23,7 @@ public:
     uint16_t GetReleaseYear() const override { return 2012; }
     ControlType GetControlType() const override { return CTRL_TWO_BUTTON; }
 
+    bool SupportsDifficulty() const override {return true;}
     void Init() override;
     void Reset() override;
     void Start() override;

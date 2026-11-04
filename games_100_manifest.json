@@ -15,7 +15,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "002",
@@ -35,7 +36,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_004_doodle_jump.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_004_doodle_jump.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "003",
@@ -55,7 +57,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_003.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_003.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "004",
@@ -75,7 +78,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_004.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_004.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "005",
@@ -95,7 +99,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_024_lode_runner.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_024_lode_runner.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "006",
@@ -115,7 +120,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_025_bubble_bobble.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_025_bubble_bobble.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "007",
@@ -169,7 +175,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "重力拍翅、管道空隙穿越、死屏与结算滚动，ESP32固件与Python模拟器双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "010",
@@ -187,7 +194,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "单键切削堆叠、悬空断块坠落物理、HSV彩虹色环递进，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "011",
@@ -261,7 +269,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_014.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_014.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "015",
@@ -281,7 +290,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_015.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_015.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "016",
@@ -301,7 +311,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_026_whack_a_mole.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_026_whack_a_mole.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "017",
@@ -316,12 +327,14 @@
     "simulator_source": "pc-agent-vision/arcade/game_017_rhythm_lanes.py",
     "legacy_source": "#017 别踩白块儿 (Piano Tiles 2014)",
     "status": "integrated_software",
-    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "test_status": "tests/test_phase_b_gameplay.py; tests/phase_b_core_test.h; hardware NOT_TESTED",
     "adaptation_notes": "复用Game #017 (game_017_piano_tiles.cpp/.py)，四轨节拍下落判定完备",
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_017_piano_tiles.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_017_piano_tiles.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
+    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED"
   },
   {
     "id": "018",
@@ -341,7 +354,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_018.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_018.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "019",
@@ -361,7 +375,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_019.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_019.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "020",
@@ -379,7 +394,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "双向挡板碰撞反弹、智能AI对手/双人同屏对战、5分决胜机制，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "021",
@@ -397,7 +413,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "底部挡板可调反弹角、4行32块耐久砖阵列、3命清屏，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "022",
@@ -417,7 +434,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_108_pinball.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_108_pinball.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "023",
@@ -489,7 +507,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "外星编队下压、阵亡动态加速步进、火炮反击与掩体拦截，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "027",
@@ -509,7 +528,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_113_asteroids.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_113_asteroids.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "028",
@@ -529,7 +549,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_036_missile_command.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_036_missile_command.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "029",
@@ -549,7 +570,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_043_centipede.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_043_centipede.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "030",
@@ -569,7 +591,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_033_clay_shooting.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_033_clay_shooting.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "031",
@@ -589,7 +612,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_164_robotron.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_164_robotron.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "032",
@@ -625,7 +649,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "默认经典撞墙死，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "034",
@@ -643,7 +668,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "16x16迷宫全豆漫游、左右穿梭隧道、三色巡逻幽灵与能量豆反噬，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "035",
@@ -715,7 +741,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "定时炸弹布置、十字烈焰冲击波、软砖爆破碎裂与巡逻怪消灭，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "039",
@@ -753,7 +780,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_040.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_040.py",
-    "full_round_status": "SIMULATOR_PASSED (all authored levels)"
+    "full_round_status": "SIMULATOR_PASSED (all authored levels)",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "041",
@@ -771,7 +799,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "标准旋转与消行，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "042",
@@ -791,7 +820,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_083_puyopuyo.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_083_puyopuyo.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "043",
@@ -811,7 +841,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_016_neon_2048.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_016_neon_2048.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "044",
@@ -831,7 +862,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_044.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_044.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "045",
@@ -851,7 +883,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_045.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_045.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "046",
@@ -961,7 +994,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_051.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_051.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "052",
@@ -981,7 +1015,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_034_pipe_dream.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_034_pipe_dream.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "053",
@@ -1001,7 +1036,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_053.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_053.py",
-    "full_round_status": "SIMULATOR_PASSED (all authored levels)"
+    "full_round_status": "SIMULATOR_PASSED (all authored levels)",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "054",
@@ -1019,7 +1055,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "不可拉动单向推移、空间槽位逻辑归位、死锁与全箱入槽通关检测，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "055",
@@ -1039,7 +1076,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_055.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_055.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "056",
@@ -1167,7 +1205,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_035_othello.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_035_othello.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "063",
@@ -1187,7 +1226,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_063.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_063.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "064",
@@ -1207,7 +1247,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_064.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_064.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "065",
@@ -1227,7 +1268,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_065.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_065.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "066",
@@ -1247,7 +1289,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_066.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_066.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "067",
@@ -1267,7 +1310,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_067.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_067.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "068",
@@ -1359,7 +1403,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_072.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_072.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "073",
@@ -1379,7 +1424,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_073.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_073.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "074",
@@ -1397,7 +1443,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "三车道高速逆向慢车冲刷、左右变道闪避与1000m里程冲刺，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "075",
@@ -1417,7 +1464,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_176_alpineski.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_176_alpineski.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "076",
@@ -1437,7 +1485,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_076.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_076.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "077",
@@ -1565,7 +1614,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_083.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_083.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "084",
@@ -1585,7 +1635,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_084.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_084.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "085",
@@ -1600,12 +1651,14 @@
     "simulator_source": "pc-agent-vision/arcade/game_085_lemmings_rescue.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "test_status": "tests/test_phase_b_gameplay.py; tests/phase_b_core_test.h; hardware NOT_TESTED",
     "adaptation_notes": "Lemmings旅鼠拯救，旧代码库无自动移动分配技能脱困机制，待全新实现",
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_085.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_085.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
+    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED"
   },
   {
     "id": "086",
@@ -1625,7 +1678,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_086.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_086.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "087",
@@ -1645,7 +1699,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_087.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_087.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "088",
@@ -1665,7 +1720,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_088.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_088.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "089",
@@ -1734,12 +1790,14 @@
     "simulator_source": "pc-agent-vision/arcade/game_092_fruit_slice.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "test_status": "tests/test_phase_b_gameplay.py; tests/phase_b_core_test.h; hardware NOT_TESTED",
     "adaptation_notes": "水果忍者 Fruit Ninja，旧代码库无触控划线切水果避弹机制，待全新实现",
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_092.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_092.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
+    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED"
   },
   {
     "id": "093",
@@ -1759,7 +1817,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_093.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_093.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "094",
@@ -1779,7 +1838,8 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_138_rocnrope.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_138_rocnrope.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "095",
@@ -1794,12 +1854,14 @@
     "simulator_source": "pc-agent-vision/arcade/game_095_super_hexagon.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
+    "test_status": "tests/test_phase_b_gameplay.py; tests/phase_b_core_test.h; hardware NOT_TESTED",
     "adaptation_notes": "Super Hexagon，旧代码库无环形向心收缩多边形缝隙躲避机制，待全新实现",
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_095.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_095.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
+    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED"
   },
   {
     "id": "096",
@@ -1835,7 +1897,8 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "多车道车辆穿梭、河流浮木附着漂移与5穴归巢通关判定，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE"
+    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
+    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING"
   },
   {
     "id": "098",

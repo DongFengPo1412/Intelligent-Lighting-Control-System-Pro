@@ -63,12 +63,14 @@ CommandDispatcher::~CommandDispatcher()
 void CommandDispatcher::SetMicStreaming(bool enabled)
 {
     mic_streaming_ = enabled;
+    AudioHAL::GetInstance().GuardGameAudioForCapture(enabled);
     AudioHAL::GetInstance().EnableMic(enabled);
     ESP_LOGI(TAG, "Mic streaming toggled: %s", enabled ? "ENABLED" : "DISABLED");
 }
 
 bool CommandDispatcher::EnqueuePcm(const void* data,size_t bytes) {
     if(!audio_ring_buf_||!data||!bytes||bytes>2048||bytes%2)return false;
+    AudioHAL::GetInstance().NotifyExternalPlayback();
     audio_received_.fetch_add(bytes/2);
     if(xRingbufferSend(audio_ring_buf_,data,bytes,pdMS_TO_TICKS(100))!=pdTRUE){audio_dropped_.fetch_add(bytes/2);return false;}
     return true;
@@ -439,6 +441,11 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
                 }
                 cJSON_Delete(root);
                 return false;
+            } else if (strcasecmp(act, "config") == 0) {
+                auto difficulty=cJSON_GetObjectItemCaseSensitive(root,"difficulty");
+                bool ok=dm.ArcadeConfigure(cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(root,"sound_enabled")),
+                    cJSON_GetObjectItemCaseSensitive(root,"sound_volume")->valueint,difficulty?difficulty->valueint:-1);
+                cJSON_Delete(root);return ok;
             } else if (strcasecmp(act, "players") == 0) {
                 bool ok = dm.ArcadePlayers((uint8_t)cJSON_GetObjectItemCaseSensitive(root,"count")->valueint);
                 cJSON_Delete(root);

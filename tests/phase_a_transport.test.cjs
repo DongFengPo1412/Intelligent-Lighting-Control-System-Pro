@@ -68,6 +68,15 @@ test("a frame begun behind a pending control cannot overwrite its ACK",async()=>
   const frame=t.call("/api/arcade/frame");const outcome=frame.catch(e=>e.message);await turn();
   controlDone(ok);await input;frameDone(ok);assert.equal(await outcome,"stale_reply");
 });
+test("arcade sound/difficulty settings are validated and explicitly acknowledged",async()=>{
+  const sent=[];const t=new ArcadeTransport(async c=>{sent.push(c);return ok;});
+  await t.call('/api/arcade',{action:'config',sound_enabled:true,sound_volume:25,difficulty:2});
+  assert.deepEqual(sent.at(-1),{cmd:'arcade',action:'config',sound_enabled:true,sound_volume:25,difficulty:2});
+  const size=sent.length;
+  for(const data of [{sound_enabled:'true',sound_volume:25},{sound_enabled:true,sound_volume:101},{sound_enabled:true,sound_volume:25,difficulty:3}])
+    await assert.rejects(t.call('/api/arcade',{action:'config',...data}));
+  assert.equal(sent.length,size);
+});
 test("switch discards stale input/replies and clears held keys",async()=>{
   let release;const sent=[];
   const t=new ArcadeTransport(c=>{sent.push(c);return sent.length===1?new Promise(r=>release=r):Promise.resolve(ok);});

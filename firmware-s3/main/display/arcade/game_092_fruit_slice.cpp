@@ -54,7 +54,7 @@ void Game092FruitSlice::AddScore(uint32_t pts) {
 
 void Game092FruitSlice::SetupMatch() {
     score_ = 0;
-    lives_ = 3;
+    lives_ = difficulty_==0?5:difficulty_==2?2:3;
     fruits_sliced_ = 0;
     rng_seed_ = 0x2010F92Au;
     state_timer_ = 0.0f;
@@ -215,7 +215,7 @@ void Game092FruitSlice::PerformSlash(uint16_t keys_down, uint16_t keys_pressed) 
         float qx = slash_x0_ + t * sx;
         float qy = slash_y0_ + t * sy;
         float dist = hypotf(cx - qx, cy - qy);
-        if (dist <= 1.65f) {
+        if (dist <= HitRadius()) {
             if (items_[i].is_bomb) {
                 items_[i].active = false;
                 exploded_ = true;
@@ -233,6 +233,7 @@ void Game092FruitSlice::PerformSlash(uint16_t keys_down, uint16_t keys_pressed) 
         }
     }
 
+    if(hit_fruits)SoundEvent(Sound::Hit,hit_fruits);
     last_combo_ = hit_fruits;
     if (hit_fruits > 0) {
         uint32_t pts = (uint32_t)hit_fruits * 10u;
@@ -306,7 +307,7 @@ void Game092FruitSlice::Update(float dt, uint16_t keys_down, uint16_t keys_press
             if (slash_timer_ < 0.0f) slash_timer_ = 0.0f;
         }
 
-        if (keys_pressed & (KEY_A | KEY_B)) {
+        if ((keys_pressed & (KEY_A | KEY_B)) && slash_timer_<=0.0f) {
             PerformSlash(keys_down, keys_pressed);
             if (state_ != STATE_PLAYING) return;
         }
@@ -314,8 +315,9 @@ void Game092FruitSlice::Update(float dt, uint16_t keys_down, uint16_t keys_press
         spawn_timer_ -= dt;
         if (spawn_timer_ <= 0.0f) {
             SpawnWave();
-            float interval = 1.15f - (float)fruits_sliced_ * 0.01f;
-            if (interval < 0.65f) interval = 0.65f;
+            float interval = (difficulty_==0?1.40f:difficulty_==2?.95f:1.15f) - (float)fruits_sliced_ * 0.01f;
+            float minimum=difficulty_==0?.85f:difficulty_==2?.48f:.65f;
+            if (interval < minimum) interval = minimum;
             spawn_timer_ = interval;
         }
 
@@ -484,7 +486,7 @@ void Game092FruitSlice::Render(uint8_t* fb_rgb24) {
     SetPx092(fb_rgb24, bx, by, 180, 250, 255);
 
     // Lives HUD at top right
-    for (int i = 0; i < (int)lives_ && i < 3; ++i) {
+    for (int i = 0; i < (int)lives_ && i < 5; ++i) {
         SetPx092(fb_rgb24, 15 - i * 2, 0, 46, 215, 95);
     }
 

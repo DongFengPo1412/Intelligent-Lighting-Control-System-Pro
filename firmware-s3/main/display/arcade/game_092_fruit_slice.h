@@ -39,6 +39,8 @@ public:
     uint16_t GetReleaseYear() const override { return 2010; }
     ControlType GetControlType() const override { return CTRL_ARCADE_AB; }
 
+    float HitRadius() const {return difficulty_==0?1.9f:difficulty_==2?1.4f:1.65f;}
+    bool SupportsDifficulty() const override {return true;}
     void Init() override;
     void Reset() override;
     void Start() override;

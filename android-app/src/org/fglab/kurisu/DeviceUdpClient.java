@@ -61,7 +61,17 @@ final class DeviceUdpClient {
             if(!("arcade".equals(name)||"frame".equals(name)||"status".equals(name)))return error(callback,"forbidden_command");
             if("arcade".equals(name)) {
                 String action=cmd.getString("action");
-                if(!action.matches("select|start|pause|resume|reset|exit|input|heartbeat|status|players"))return error(callback,"invalid_action");
+                if(!action.matches("select|start|pause|resume|reset|exit|input|heartbeat|status|players|config"))return error(callback,"invalid_action");
+                if("config".equals(action)) {
+                    if(!(cmd.get("sound_enabled") instanceof Boolean) || !(cmd.get("sound_volume") instanceof Number))return error(callback,"invalid_config");
+                    double volume=cmd.getDouble("sound_volume");
+                    if(volume!=Math.floor(volume)||volume<0||volume>100)return error(callback,"invalid_config");
+                    if(cmd.has("difficulty")) {
+                        if(!(cmd.get("difficulty") instanceof Number))return error(callback,"invalid_config");
+                        double level=cmd.getDouble("difficulty");
+                        if(level!=Math.floor(level)||level<0||level>2)return error(callback,"invalid_config");
+                    }
+                }
                 if("players".equals(action) && (!(cmd.get("count") instanceof Number) ||
                     (cmd.getDouble("count")!=1 && cmd.getDouble("count")!=2)))return error(callback,"invalid_player_count");
                 if("select".equals(action)) {

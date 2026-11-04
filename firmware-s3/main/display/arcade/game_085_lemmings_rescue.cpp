@@ -71,7 +71,7 @@ void Game085LemmingsRescue::LoadStage(uint8_t stg) {
     saved_count_ = 0;
     dead_count_ = 0;
     spawn_timer_ = 0.4f;
-    stage_timer_ = 55.0f;
+    stage_timer_ = TimeLimit();
 
     memset(terrain_, LEM_EMPTY, sizeof(terrain_));
     for (int y = 1; y <= 14; ++y) {
@@ -168,6 +168,7 @@ void Game085LemmingsRescue::AssignSkillAtCursor() {
     }
     if (best_idx < 0) return;
 
+    SoundEvent(Sound::Action,selected_skill_);
     LemmingUnit& lm = lemmings_[best_idx];
     if (selected_skill_ == 0) {
         lm.state = LEM_STATE_BLOCKER;
@@ -443,7 +444,7 @@ void Game085LemmingsRescue::Update(float dt, uint16_t keys_down, uint16_t keys_p
     }
 
     // Too many lost (> 2 dead means < 3 can be saved)
-    if (dead_count_ >= 3) {
+    if (dead_count_ > kNumLemmings-RequiredSaved()) {
         state_ = STATE_GAMEOVER;
         state_timer_ = 0.0f;
         return;
@@ -451,7 +452,7 @@ void Game085LemmingsRescue::Update(float dt, uint16_t keys_down, uint16_t keys_p
 
     stage_timer_ -= dt;
     if (stage_timer_ <= 0.0f) {
-        if (saved_count_ >= 3) {
+        if (saved_count_ >= RequiredSaved()) {
             if (stage_ >= 3) {
                 state_ = STATE_VICTORY;
                 state_timer_ = 0.0f;
@@ -473,7 +474,7 @@ void Game085LemmingsRescue::Update(float dt, uint16_t keys_down, uint16_t keys_p
             }
         }
         if (active_mobile == 0) {
-            if (saved_count_ >= 3) {
+            if (saved_count_ >= RequiredSaved()) {
                 if (stage_ >= 3) {
                     state_ = STATE_VICTORY;
                     state_timer_ = 0.0f;

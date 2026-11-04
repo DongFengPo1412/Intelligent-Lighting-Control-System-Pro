@@ -2452,6 +2452,11 @@ dialog p {
   justify-content: center;
   padding: 6px 0;
 }
+.arcade-settings {display:flex;flex-wrap:wrap;gap:10px;border:1px solid #334155;border-radius:10px;margin:12px 0;padding:12px;}
+.arcade-settings label {display:flex;flex:1 1 100%;align-items:center;gap:8px;font-size:12px;white-space:nowrap;}
+.arcade-settings input[type="range"] {flex:1;min-width:80px;}
+.arcade-settings select {width:auto;}
+.arcade-settings .field-help {flex-basis:100%;}
 .arcade-tap-btn {
   width: 100%;
   max-width: 380px;

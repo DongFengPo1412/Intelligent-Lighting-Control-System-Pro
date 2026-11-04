@@ -162,8 +162,9 @@ void Game095SuperHexagon::Update(float dt, uint16_t keys_down, uint16_t keys_pre
         if (player_angle_ < 0.0f) player_angle_ += kTwoPi095;
 
         int player_sec = AngleToSector(player_angle_);
-        float shrink_speed = 3.8f + (float)walls_passed_ * 0.04f;
-        if (shrink_speed > 5.0f) shrink_speed = 5.0f;
+        float shrink_speed = (difficulty_==0?3.f:difficulty_==2?4.3f:3.8f) + (float)walls_passed_ * 0.04f;
+        float maximum=difficulty_==0?4.f:difficulty_==2?5.5f:5.f;
+        if (shrink_speed > maximum) shrink_speed = maximum;
 
         for (int i = 0; i < kNumWalls; ++i) {
             walls_[i].radius -= shrink_speed * dt;

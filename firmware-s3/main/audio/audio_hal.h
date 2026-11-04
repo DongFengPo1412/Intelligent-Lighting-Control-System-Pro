@@ -8,6 +8,7 @@
 #include <freertos/semphr.h>
 #include <cstdint>
 #include <cstddef>
+#include "audio_priority.h"
 
 class AudioHAL {
 public:
@@ -34,6 +35,9 @@ public:
 
     // 播放单声道 16-bit PCM (根据音量系数映射至 32-bit，对齐中阶 NoAudioCodecSimplex)
     esp_err_t PlayMonoPcm(const int16_t* mono_samples, size_t count);
+    void NotifyExternalPlayback();
+    void GuardGameAudioForCapture(bool active){playback_priority_.Capture(active);if(active)NotifyExternalPlayback();}
+    esp_err_t TryPlayGamePcm(const int16_t* mono_samples,size_t count);
 
     // 从 INMP441 读取一段麦克风采样数据 (16kHz 16-bit 单声道)
     esp_err_t ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms = 200);
@@ -66,6 +70,7 @@ private:
     i2s_chan_handle_t rx_chan_; // INMP441 输入通道
     esp_timer_handle_t spk_power_timer_; // 扬声器自动休眠定时器
     SemaphoreHandle_t playback_mutex_;
+    AudioPriorityGate playback_priority_;
     int32_t tx_buffer_[480]; // Protected by playback_mutex_; never on a task's stack.
     int output_volume_;
     int64_t volume_factor_;

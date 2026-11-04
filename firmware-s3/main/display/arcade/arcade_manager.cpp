@@ -224,6 +224,7 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
     }
 
     ArcadeScoreStore::Flush(); // 落盘上一款游戏尚未保存的最高分
+    Sounds().Invalidate();
     current_game_ = cart;
     control_paused_ = false;
     current_game_->Init(); // Only selected after app_main has initialized NVS.
@@ -232,6 +233,7 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
     is_network_disconnected_ = false;
     FeedHeartbeat();
 
+    Sounds().Emit(Sound::Select,game_id);
     ESP_LOGI(TAG, "Selected Cartridge #%03u: %s (%s)",
              current_game_->GetId(), current_game_->GetName(), current_game_->GetEnglishName());
     return true;
@@ -242,7 +244,10 @@ void ArcadeManager::Start()
     if (current_game_) {
         FeedHeartbeat();
         control_paused_ = false;
+        auto before=current_game_->GetStatus().state;
+        if(before!=STATE_PLAYING)Sounds().Invalidate();
         current_game_->Start();
+        if(before!=current_game_->GetStatus().state)Sounds().Emit(Sound::Start,current_game_->GetId());
     }
 }
 
@@ -257,11 +262,13 @@ bool ArcadeManager::SetPlayerCount(uint8_t count)
 
 void ArcadeManager::Pause()
 {
+    Sounds().Invalidate();
     ClearInput();
     if (current_game_) {
         auto state = current_game_->GetStatus().state;
         control_paused_ = state == STATE_PLAYING || state == STATE_PAUSED;
         current_game_->Pause();
+        if(state==STATE_PLAYING)Sounds().Emit(Sound::Pause,current_game_->GetId());
         ArcadeScoreStore::Flush();
     }
 }
@@ -277,6 +284,7 @@ void ArcadeManager::Resume()
 
 void ArcadeManager::Reset()
 {
+    Sounds().Invalidate();
     if (current_game_) {
         ArcadeScoreStore::Flush();
         current_game_->Reset();
@@ -288,6 +296,7 @@ void ArcadeManager::Reset()
 
 void ArcadeManager::Exit()
 {
+    Sounds().Invalidate();
     if (current_game_) {
         current_game_->Pause();
     }
@@ -361,7 +370,17 @@ void ArcadeManager::Update(float dt)
     current_keys_pressed_ = 0; // One edge per game tick; rapid taps do not collapse.
     if (control_paused_) return;
 
+    auto before=current_game_->GetStatus();
     current_game_->Update(dt, current_keys_down_, pressed);
+    auto after=current_game_->GetStatus();
+    if(after.score>before.score)Sounds().Emit(Sound::Score,current_game_->GetId());
+    if(after.lives<before.lives)Sounds().Emit(Sound::Hurt,current_game_->GetId());
+    if(after.state!=before.state) {
+        if(after.state==STATE_VICTORY){Sounds().Invalidate();Sounds().Emit(Sound::Win,current_game_->GetId());}
+        else if(after.state==STATE_GAMEOVER){Sounds().Invalidate();Sounds().Emit(Sound::Lose,current_game_->GetId());}
+        else if(after.state==STATE_PAUSED){Sounds().Invalidate();Sounds().Emit(Sound::Pause,current_game_->GetId());}
+        else if(after.state==STATE_PLAYING)Sounds().Emit(Sound::Start,current_game_->GetId());
+    }
 
     // 离开 PLAYING (结算/胜利/暂停) 时才把本局最高分写入 Flash, 游戏帧内绝不擦写 Flash
     CartridgeState st = (CartridgeState)current_game_->GetStatus().state;
@@ -394,6 +413,8 @@ CartridgeStatus ArcadeManager::GetCurrentStatus() const
 {
     if (current_game_) {
         auto status = current_game_->GetStatus();
+        status.difficulty=current_game_->Difficulty();
+        status.difficulty_supported=current_game_->SupportsDifficulty();
         if (control_paused_) status.state = STATE_PAUSED;
         return status;
     }
@@ -412,3 +433,16 @@ const char* ArcadeManager::GetCurrentGameName() const
 }
 
 } // namespace arcade
+
+namespace arcade {
+bool ArcadeManager::Configure(bool enabled,uint8_t volume,int difficulty) {
+    if(volume>100 || difficulty < -1 || difficulty>2)return false;
+    if(difficulty>=0) {
+        if(!current_game_ || !current_game_->SupportsDifficulty())return false;
+        auto state=current_game_->GetStatus().state;
+        if(unsigned(difficulty)!=current_game_->Difficulty() && (state==STATE_PLAYING || state==STATE_PAUSED))return false;
+        if(unsigned(difficulty)!=current_game_->Difficulty()) {current_game_->SetDifficulty(difficulty);Reset();}
+    }
+    Sounds().Configure(enabled,volume);return true;
+}
+}

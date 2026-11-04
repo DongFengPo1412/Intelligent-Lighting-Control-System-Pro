@@ -51,6 +51,7 @@ class LemmingUnit:
 
 
 class Game085LemmingsRescue(BaseCartridge):
+    difficulty_supported = True
     NUM_LEMMINGS = 5
 
     def __init__(self):
@@ -65,7 +66,7 @@ class Game085LemmingsRescue(BaseCartridge):
         self.saved_count = 0
         self.dead_count = 0
         self.spawn_timer = 0.4
-        self.stage_timer = 55.0
+        self.stage_timer = (70.,55.,45.)[self.difficulty]
         self.hatch_x = 2
         self.hatch_y = 2
         self.exit_x = 13
@@ -127,7 +128,7 @@ class Game085LemmingsRescue(BaseCartridge):
         self.saved_count = 0
         self.dead_count = 0
         self.spawn_timer = 0.4
-        self.stage_timer = 55.0
+        self.stage_timer = (70.,55.,45.)[self.difficulty]
 
         self.terrain = [[LEM_EMPTY] * 16 for _ in range(16)]
         for y in range(1, 15):
@@ -215,6 +216,7 @@ class Game085LemmingsRescue(BaseCartridge):
         if best_idx < 0:
             return
 
+        self.emit_sound("action",self.selected_skill)
         lm = self.lemmings[best_idx]
         if self.selected_skill == 0:
             lm.state = LEM_STATE_BLOCKER
@@ -449,14 +451,14 @@ class Game085LemmingsRescue(BaseCartridge):
         for i in range(self.NUM_LEMMINGS):
             self._update_lemming(i, dt)
 
-        if self.dead_count >= 3:
+        if self.dead_count > self.NUM_LEMMINGS-(2,3,4)[self.difficulty]:
             self._state = STATE_GAMEOVER
             self.state_timer = 0.0
             return
 
         self.stage_timer -= dt
         if self.stage_timer <= 0.0:
-            if self.saved_count >= 3:
+            if self.saved_count >= (2,3,4)[self.difficulty]:
                 if self.stage >= 3:
                     self._state = STATE_VICTORY
                     self.state_timer = 0.0
@@ -472,7 +474,7 @@ class Game085LemmingsRescue(BaseCartridge):
                 1 for lm in self.lemmings if lm.alive and lm.state != LEM_STATE_BLOCKER
             )
             if active_mobile == 0:
-                if self.saved_count >= 3:
+                if self.saved_count >= (2,3,4)[self.difficulty]:
                     if self.stage >= 3:
                         self._state = STATE_VICTORY
                         self.state_timer = 0.0

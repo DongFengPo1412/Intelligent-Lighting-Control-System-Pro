@@ -47,6 +47,9 @@ public:
     uint16_t GetReleaseYear() const override { return 1991; }
     ControlType GetControlType() const override { return CTRL_ARCADE_AB; }
 
+    unsigned RequiredSaved() const {return difficulty_==0?2:difficulty_==2?4:3;}
+    float TimeLimit() const {return difficulty_==0?70.f:difficulty_==2?45.f:55.f;}
+    bool SupportsDifficulty() const override {return true;}
     void Init() override;
     void Reset() override;
     void Start() override;

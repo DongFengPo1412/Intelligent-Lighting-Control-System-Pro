@@ -66,6 +66,7 @@ class JuiceDrop:
 
 
 class Game092FruitSlice(BaseCartridge):
+    difficulty_supported = True
     MAX_ITEMS = 8
     MAX_DROPS = 24
 
@@ -74,7 +75,7 @@ class Game092FruitSlice(BaseCartridge):
         self._state = STATE_TITLE
         self._score = 0
         self._high_score = 0
-        self.lives = 3
+        self.lives = (5,3,2)[self.difficulty]
         self.fruits_sliced = 0
         self.rng_seed = 0x2010F92A
         self.state_timer = 0.0
@@ -128,7 +129,7 @@ class Game092FruitSlice(BaseCartridge):
 
     def _setup_match(self) -> None:
         self._score = 0
-        self.lives = 3
+        self.lives = (5,3,2)[self.difficulty]
         self.fruits_sliced = 0
         self.rng_seed = 0x2010F92A
         self.state_timer = 0.0
@@ -265,7 +266,7 @@ class Game092FruitSlice(BaseCartridge):
             t = max(0.0, min(1.0, t))
             qx = self.slash_x0 + t * sx
             qy = self.slash_y0 + t * sy
-            if math.hypot(cx - qx, cy - qy) <= 1.65:
+            if math.hypot(cx - qx, cy - qy) <= (1.9,1.65,1.4)[self.difficulty]:
                 if it.is_bomb:
                     it.active = False
                     self.exploded = True
@@ -280,6 +281,7 @@ class Game092FruitSlice(BaseCartridge):
                     self.fruits_sliced += 1
                     self._spawn_juice(cx, cy, it.kind, False)
 
+        if hit_fruits:self.emit_sound("hit",hit_fruits)
         self.last_combo = hit_fruits
         if hit_fruits > 0:
             pts = hit_fruits * 10
@@ -345,7 +347,7 @@ class Game092FruitSlice(BaseCartridge):
             if self.slash_timer > 0.0:
                 self.slash_timer = max(0.0, self.slash_timer - dt)
 
-            if keys_pressed & (KEY_A | KEY_B):
+            if keys_pressed & (KEY_A | KEY_B) and self.slash_timer<=0:
                 self._perform_slash(keys_down, keys_pressed)
                 if self._state != STATE_PLAYING:
                     return
@@ -353,7 +355,7 @@ class Game092FruitSlice(BaseCartridge):
             self.spawn_timer -= dt
             if self.spawn_timer <= 0.0:
                 self._spawn_wave()
-                self.spawn_timer = max(0.65, 1.15 - float(self.fruits_sliced) * 0.01)
+                self.spawn_timer = max((.85,.65,.48)[self.difficulty], (1.40,1.15,.95)[self.difficulty] - float(self.fruits_sliced) * 0.01)
 
             gravity = 16.0
             for it in self.items:
@@ -481,7 +483,7 @@ class Game092FruitSlice(BaseCartridge):
 
         _set_px(fb, int(round(self.blade_x)), int(round(self.blade_y)), 180, 250, 255)
 
-        for i in range(min(3, self.lives)):
+        for i in range(min(5, self.lives)):
             _set_px(fb, 15 - i * 2, 0, 46, 215, 95)
 
         if self._state == STATE_PAUSED:

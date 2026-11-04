@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "arcade_sound.h"
 
 namespace arcade {
 
@@ -44,6 +45,8 @@ enum CartridgeState : uint8_t {
 
 // 游戏 HUD 状态回读
 struct CartridgeStatus {
+    uint8_t difficulty = 1;
+    bool difficulty_supported = false;
     uint8_t player_count = 0; // 0: not applicable, Pong: 1 AI / 2 local players.
     uint32_t score = 0;
     uint32_t high_score = 0;
@@ -71,6 +74,15 @@ public:
     virtual void Update(float dt, uint16_t keys_down, uint16_t keys_pressed) = 0;
     virtual void Render(uint8_t* fb_rgb24) = 0;
     virtual CartridgeStatus GetStatus() const = 0;
+    virtual bool SupportsDifficulty() const {return false;}
+    unsigned Difficulty() const {return difficulty_;}
+    bool SetDifficulty(unsigned level) {
+        if(level>2 || !SupportsDifficulty())return false;
+        difficulty_=level;return true;
+    }
+protected:
+    unsigned difficulty_=1;
+    void SoundEvent(Sound kind,uint8_t detail=0) {Sounds().Emit(kind,GetId(),detail);}
 };
 
 } // namespace arcade

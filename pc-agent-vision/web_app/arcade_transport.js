@@ -3,7 +3,7 @@
 (function (root) {
   const KEYS = Object.freeze({left:1,right:2,up:4,down:8,a:16,b:32,start:64,select:128});
   const IDS = new Set([1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 17, 18, 19, 20, 21, 22, 26, 27, 28, 29, 30, 31, 33, 34, 38, 40, 41, 42, 43, 44, 45, 51, 52, 53, 54, 55, 62, 63, 64, 65, 66, 67, 72, 73, 74, 75, 76, 83, 84, 85, 86, 87, 88, 92, 93, 94, 95, 97]);
-  const ACTIONS = new Set(["select","start","pause","resume","reset","exit","input","heartbeat","status","frame","players"]);
+  const ACTIONS = new Set(["select","start","pause","resume","reset","exit","input","heartbeat","status","frame","players","config"]);
   const requestId = () => "r_" + (root.crypto?.randomUUID?.() || Date.now().toString(36) + "_" + Math.random().toString(36).slice(2));
 
   function nativeExchange(bridge) {
@@ -67,6 +67,12 @@
       if (action === "heartbeat" && this.down) { action="input"; data={down:this.down,pressed:0}; }
       const command = action === "frame" ? {cmd:"frame"} : {cmd:"arcade",action};
       if (action === "select") command.game_id=data.game_id;
+      if (action === "config") {
+        if(typeof data.sound_enabled!=="boolean" || !Number.isInteger(data.sound_volume) || data.sound_volume<0 || data.sound_volume>100 ||
+           (data.difficulty!==undefined && (!Number.isInteger(data.difficulty)||data.difficulty<0||data.difficulty>2)))return Promise.reject(Error("无效街机设置"));
+        command.sound_enabled=data.sound_enabled;command.sound_volume=data.sound_volume;
+        if(data.difficulty!==undefined)command.difficulty=data.difficulty;
+      }
       if (action === "players") {
         command.count=data.count;
       }

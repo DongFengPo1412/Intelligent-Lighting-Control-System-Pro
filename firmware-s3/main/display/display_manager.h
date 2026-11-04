@@ -1,4 +1,5 @@
 #pragma once
+#include "arcade_clock.h"
 
 #include "display_types.h"
 #include "display_hal.h"
@@ -69,12 +70,14 @@ public:
     void ArcadeReset();
     void ArcadeExit();
     void ArcadeHeartbeat();
+    bool ArcadeConfigure(bool enabled,uint8_t volume,int difficulty);
     struct ArcadeSnapshot {
         bool active;
         uint8_t game_id;
         arcade::ControlType control_type;
         arcade::CartridgeStatus status;
         const char* name;
+        uint32_t dropped_time_ms;
     };
     ArcadeSnapshot SnapshotArcade() const;
 
@@ -107,6 +110,7 @@ private:
     SemaphoreHandle_t mutex_;
     TaskHandle_t task_handle_;
     bool is_running_;
+    arcade::FixedStepClock arcade_clock_;
 
     // 智能倒计时状态机
     uint32_t countdown_start_ms_;

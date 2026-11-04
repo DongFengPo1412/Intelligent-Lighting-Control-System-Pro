@@ -85,9 +85,25 @@ async function main() {
     if(!result.visible||result.registered+result.planned!==100)throw Error("Incorrect catalogue/page state");
     const png=await call("Page.captureScreenshot",{format:"png"});
     fs.writeFileSync(path.join(work,"pong.png"),Buffer.from(png.data,"base64"));
-    fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,exceptions},null,2));
+    await evaluate('document.getElementById("btnArcade017").click()');
+    await until('document.getElementById("marioStateTag").textContent.includes("TITLE")&&!document.getElementById("arcadeDifficulty").disabled');
+    await evaluate(`document.getElementById("arcadeDifficulty").value="2";
+      document.getElementById("arcadeSoundVolume").value="18";
+      document.getElementById("arcadeSoundEnabled").checked=true;
+      document.getElementById("arcadeDifficulty").dispatchEvent(new Event("input"));
+      document.getElementById("arcadeApplySettings").click()`);
+    await until('window.__replies.some(r=>r.game_status?.game_id===17&&r.game_status.difficulty===2&&r.game_status.sound_volume===18)');
+    const configuration=await evaluate('(async()=>await(await fetch("/api/arcade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status"})})).json())()');
+    if(configuration.game_status.difficulty!==2||configuration.game_status.sound_volume!==18||!configuration.game_status.sound_enabled)throw Error("Unconfirmed configuration");
+    await evaluate('document.getElementById("arcadeApplySettings").scrollIntoView({block:"center",behavior:"instant"})');
+    const settingsPng=await call("Page.captureScreenshot",{format:"png"});
+    fs.writeFileSync(path.join(work,"settings.png"),Buffer.from(settingsPng.data,"base64"));
+    await evaluate('document.getElementById("marioStartBtn").click()');
+    await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
+    if(!await evaluate('document.getElementById("arcadeDifficulty").disabled'))throw Error("Difficulty was editable during a round");
+    fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,exceptions},null,2));
     if(exceptions.length)throw Error(JSON.stringify(exceptions));
-    console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; visible Pong, AI->2 players, real two-touch masks 36->4->0. Physical hardware NOT_TESTED.`);
+    console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; Pong two-touch masks 36->4->0; authoritative rhythm Hard/volume18 settings, in-round difficulty locked. Physical hardware NOT_TESTED.`);
   } finally {if(socket)socket.close();chrome.kill();}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

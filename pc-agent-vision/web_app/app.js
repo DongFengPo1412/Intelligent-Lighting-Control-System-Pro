@@ -1121,11 +1121,17 @@
     activeControlType = ct;
     const gNum = Number(gid || state.arcadeGid || 1);
     const help=document.querySelector(".mario-help");
-    if(help)help.textContent=gNum===20
+    const specificHelp={
+      17:"四轨对应 1/2/3/4 或 ←/↓/↑/→；在下方判定线击中音符。三拍预滚，完成64音符；乱按会扣容错。音效会让路于语音/音乐/收音。",
+      85:"方向键移动光标，A 给附近行走旅鼠分配技能，B 按 阻挡→搭桥→挖掘 循环；默认挖掘。顶端亮点提示所选技能；三关均须达到救援目标。",
+      92:"方向键移动刀光，A/B 挥刀，也可在灯板预览上划动；挥刀存在短冷却。切够40个水果，避开红色脉冲炸弹。",
+      95:"左右绕核心移动白点，穿过墙壁缺口；通过30道墙或存活45秒获胜。"
+    };
+    if(help)help.textContent=specificHelp[gNum] || (gNum===20
       ? "P1 使用 ↑/↓；本地双人模式的 P2 使用 A/B（键盘 J/K）。AI/双人切换保留比分与暂停状态。"
       : gNum===1
         ? "手机支持多点触控：左右移动、A 跳跃、B 加速；电脑使用方向键、空格和 Shift。"
-        : "按当前卡带的手柄操作；支持多点触控和独立松键。电脑可使用方向键、J/K 与空格。";
+        : "按当前卡带的手柄操作；支持多点触控和独立松键。电脑可使用方向键、J/K 与空格。");
 
     if (ct === 0) {
       // CTRL_TAP_SINGLE (#009 Flappy, #010 Stack, #012 Knife Hit, #013 Pendulum, #014 Orbit Hop, #018 Red/Green Light)
@@ -1156,6 +1162,12 @@
       if (gNum === 41 || gNum === 42) {
         if (btnA_sub) btnA_sub.textContent = "旋转";
         if (btnB_sub) btnB_sub.textContent = "快降";
+      } else if(gNum===85) {
+        if(btnA_sub)btnA_sub.textContent="分配技能";
+        if(btnB_sub)btnB_sub.textContent="切换技能";
+      } else if(gNum===92) {
+        if(btnA_sub)btnA_sub.textContent="挥刀";
+        if(btnB_sub)btnB_sub.textContent="斜挥刀";
       } else if (gNum === 38) {
         if (btnA_sub) btnA_sub.textContent = "炸弹";
         if (btnB_sub) btnB_sub.textContent = "动作";
@@ -1197,8 +1209,32 @@
     }
   }
 
+  let arcadeSettingsDirty=false;
+  for(const id of ["arcadeDifficulty","arcadeSoundEnabled","arcadeSoundVolume"])
+    $(id)?.addEventListener("input",()=>{arcadeSettingsDirty=true;});
+  if($("arcadeApplySettings"))$("arcadeApplySettings").onclick=async()=>{
+    const button=$("arcadeApplySettings");button.disabled=true;
+    try {
+      const data={action:"config",sound_enabled:$("arcadeSoundEnabled").checked,sound_volume:Number($("arcadeSoundVolume").value)};
+      if(!$("arcadeDifficulty").disabled)data.difficulty=Number($("arcadeDifficulty").value);
+      const reply=await api("/api/arcade",data);arcadeSettingsDirty=false;updateArcadeHud(reply.game_status);
+      notice("卡带设置已确认"+ (reply.simulated?"（模拟模式无实体声音）":""));
+    } catch(error){notice(error.message);}finally{button.disabled=false;}
+  };
+
   function updateArcadeHud(status) {
     if (!status) return;
+    const difficulty=$("arcadeDifficulty");
+    if(difficulty) {
+      difficulty.disabled=!status.difficulty_supported || [1,2].includes(status.state);
+      if(!arcadeSettingsDirty) {
+        difficulty.value=String(status.difficulty??1);
+        $("arcadeSoundEnabled").checked=status.sound_enabled===true;
+        $("arcadeSoundVolume").value=String(status.sound_volume??25);
+      }
+      $("arcadeSettingsStatus").textContent=(status.difficulty_supported?"此卡带支持三档实际难度；待机或结算时调整。":"此卡带尚未接入统一难度。")+
+        (status.simulated?" 模拟模式仅记录音效事件。":" 语音、音乐、收音优先，游戏声音可能保持静音。");
+    }
     if (status.game_id===20 && [1,2].includes(status.player_count)) {
       state.pongPlayers=status.player_count;
       const toggle=$("pongAiToggleBtn");
@@ -1277,6 +1313,7 @@
       return;
     }
 
+    arcadeSettingsDirty=false;
     const gameTitle = ARCADE_TITLE_MAP[gid] || `街机游戏 #${gid}`;
     navigate("interaction");
     if ($("arcadeGameTitle")) $("arcadeGameTitle").textContent = gameTitle;

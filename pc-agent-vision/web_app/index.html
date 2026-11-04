@@ -715,6 +715,14 @@
                   </div>
                 </div>
 
+                <fieldset class="arcade-settings">
+                  <legend>当前卡带设置</legend>
+                  <label>难度（待机或结算时调整）<select id="arcadeDifficulty"><option value="0">Easy</option><option value="1" selected>Normal</option><option value="2">Hard</option></select></label>
+                  <label><input id="arcadeSoundEnabled" type="checkbox" checked />游戏音效</label>
+                  <label>音效音量<input id="arcadeSoundVolume" type="range" min="0" max="100" value="25" /></label>
+                  <button type="button" id="arcadeApplySettings" class="secondary">应用卡带设置</button>
+                  <p id="arcadeSettingsStatus" class="field-help">以设备回执为准；语音、音乐或收音占用时游戏音效让路。</p>
+                </fieldset>
                 <p class="field-help mario-help">
                   📱 手机触屏直接畅玩（多点触控已优化，长按 A 跳更高，按住 B 加速冲刺）；电脑支持键盘 WASD / 方向键 / 空格。
                 </p>

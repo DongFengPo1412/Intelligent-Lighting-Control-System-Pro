@@ -92,6 +92,7 @@ idf_component_register(
         "protocol/network_auth.cc"
         "protocol/wifi_manager.cc"
         "audio/audio_hal.cc"
+        "audio/arcade_audio_task.cc"
     INCLUDE_DIRS
         "."
         "display"
