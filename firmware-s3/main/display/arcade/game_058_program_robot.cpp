@@ -90,9 +90,10 @@ void Game058ProgramRobot::Draw(uint8_t *fb) {
     Cell(fb, 3, 2, door_ ? 20 : 190, door_ ? 160 : 45, door_ ? 170 : 45, 2, 0);
     Cell(fb, 6, 1, 40, 220, 70, 2, 0);
     Cell(fb, x_, y_, 245, 245, 245, 2, 0);
-    const int dx[] = {0, 1, 0, -1}, dy[] = {-1, 0, 1, 0};
-    Px(fb, x_ * 2 + (dx[heading_] >= 0 ? 1 : 0), y_ * 2 + (dy[heading_] >= 0 ? 1 : 0), 60, 180,
-       255);
+    for (int i = 0; i < 2; ++i) {
+        const int dx[] = {i, 1, i, 0}, dy[] = {0, i, 1, i};
+        Px(fb, x_ * 2 + dx[heading_], y_ * 2 + dy[heading_], 60, 180, 255);
+    }
     const int palette[][3] = {{40, 230, 100}, {255, 180, 20}, {40, 160, 255}, {150, 70, 200}};
     int offset = std::max(0, length_ - 16);
     for (int i = offset; i < length_; ++i) {

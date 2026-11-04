@@ -242,6 +242,27 @@ struct B2MechanismProbe {
             rush.Update(dt, 0, i % 2 ? KEY_LEFT : KEY_RIGHT);
         assert(rush.moves_ == 16 && rush.GetStatus().state == STATE_GAMEOVER);
         Game058ProgramRobot robot;
+
+        robot.Init();
+        robot.Start();
+        unsigned marker_masks = 0;
+        for (int heading = 0; heading < 4; ++heading) {
+            robot.heading_ = heading;
+            uint8_t frame[768];
+            robot.Render(frame);
+            unsigned mask = 0, pixels = 0;
+            for (int y = 0; y < 2; ++y)
+                for (int x = 0; x < 2; ++x) {
+                    int index = ((robot.y_ * 2 + y) * 16 + robot.x_ * 2 + x) * 3;
+                    if (frame[index] == 60 && frame[index + 1] == 180 && frame[index + 2] == 255) {
+                        mask |= 1u << (y * 2 + x);
+                        ++pixels;
+                    }
+                }
+            assert(pixels == 2);
+            assert(!(marker_masks & (1u << mask)));
+            marker_masks |= 1u << mask;
+        }
         robot.SetDifficulty(2);
         robot.Init();
         robot.Start();

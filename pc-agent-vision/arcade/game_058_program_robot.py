@@ -43,7 +43,9 @@ class Game058ProgramRobot(BatchCartridge):
             for x in range(8):self.cell(fb,x,y,(55,65,85) if self.wall(x,y) else (8,16,25),2,0)
         self.cell(fb,3,4,(245,190,20),2,0);self.cell(fb,3,2,(20,160,170) if self.door else (190,45,45),2,0)
         self.cell(fb,6,1,(40,220,70),2,0);self.cell(fb,self.x,self.y,(245,245,245),2,0)
-        dx,dy=((0,-1),(1,0),(0,1),(-1,0))[self.heading];self.px(fb,self.x*2+(1 if dx>=0 else 0),self.y*2+(1 if dy>=0 else 0),(60,180,255))
+        for i in range(2):
+            dx,dy=((i,0),(1,i),(i,1),(0,i))[self.heading]
+            self.px(fb,self.x*2+dx,self.y*2+dy,(60,180,255))
         palette=((40,230,100),(255,180,20),(40,160,255),(150,70,200))
         offset=max(0,len(self.program)-16)
         for i,cmd in enumerate(self.program[offset:]):self.px(fb,i,0,(255,255,255) if self.running and offset+i==self.pc else palette[cmd])

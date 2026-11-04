@@ -78,6 +78,14 @@ class PhaseB2Tests(unittest.TestCase):
                 self.assertEqual(g.attempts,2-run)
             self.assertEqual(g.state,STATE_GAMEOVER)
 
+    def test_robot_all_four_heading_markers_are_visually_distinct(self):
+        g=self.game(58);markers=[]
+        for heading in range(4):
+            g.heading=heading;frame=g.render()
+            marker=tuple(tuple(frame[((g.y*2+y)*16+g.x*2+x)*3:((g.y*2+y)*16+g.x*2+x)*3+3]) for y in range(2) for x in range(2))
+            self.assertEqual(marker.count((60,180,255)),2);markers.append(marker)
+        self.assertEqual(len(set(markers)),4)
+
     def test_qix_trail_self_collision_and_enemy_collision(self):
         g=self.game(81)
         for key in (KEY_A,KEY_RIGHT,KEY_RIGHT,KEY_DOWN,KEY_LEFT,KEY_UP):g.update(DT,0,key)
