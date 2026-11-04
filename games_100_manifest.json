@@ -1388,7 +1388,7 @@
     "product_quality_status": "NOT_CERTIFIED",
     "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
     "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
-    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
+    "difficulty_implementation_status": "SUPPORTED_NOT_FULLY_CERTIFIED"
   },
   {
     "id": "056",
