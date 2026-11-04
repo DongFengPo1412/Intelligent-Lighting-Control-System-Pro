@@ -11,27 +11,7 @@ void Game077Bowling::Setup() {
     before = 10;
     memset(rolls, 0, sizeof(rolls));
 }
-int Game077Bowling::Total() const {
-    int score = 0, i = 0;
-    for (int f = 0; f < 10 && i < nroll; ++f) {
-        int a = rolls[i];
-        if (a == 10) {
-            for (int j = i; j < std::min(nroll, i + 3); ++j)
-                score += rolls[j];
-            ++i;
-        } else if (i + 1 < nroll) {
-            int b = rolls[i + 1];
-            score += a + b;
-            if (a + b == 10 && i + 2 < nroll)
-                score += rolls[i + 2];
-            i += 2;
-        } else {
-            score += a;
-            break;
-        }
-    }
-    return score;
-}
+int Game077Bowling::Total() const { return B3BowlingTotal(rolls, nroll); }
 void Game077Bowling::Resolve() {
     int standing = 0;
     for (int i = 0; i < 10; ++i)

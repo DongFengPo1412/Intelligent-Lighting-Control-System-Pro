@@ -160,6 +160,18 @@ from arcade.game_080_tron import Game080Tron
 
 from arcade.game_082_artillery import Game082Artillery
 
+from arcade.game_089_firefighter import Game089Firefighter
+
+from arcade.game_090_conveyor import Game090Conveyor
+
+from arcade.game_091_wire_maze import Game091WireMaze
+
+from arcade.game_096_ice_maze import Game096IceMaze
+
+from arcade.game_099_auto_survivor import Game099AutoSurvivor
+
+from arcade.game_100_memory_match import Game100MemoryMatch
+
 KEY_MAP = {
     "left": KEY_LEFT,
     "right": KEY_RIGHT,
@@ -294,6 +306,12 @@ class ArcadeSession:
         self.cartridges[79]=Game079Penalty()
         self.cartridges[80]=Game080Tron()
         self.cartridges[82]=Game082Artillery()
+        self.cartridges[89]=Game089Firefighter()
+        self.cartridges[90]=Game090Conveyor()
+        self.cartridges[91]=Game091WireMaze()
+        self.cartridges[96]=Game096IceMaze()
+        self.cartridges[99]=Game099AutoSurvivor()
+        self.cartridges[100]=Game100MemoryMatch()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None

@@ -29,6 +29,12 @@
 #include "game_079_penalty.h"
 #include "game_080_tron.h"
 #include "game_082_artillery.h"
+#include "game_089_firefighter.h"
+#include "game_090_conveyor.h"
+#include "game_091_wire_maze.h"
+#include "game_096_ice_maze.h"
+#include "game_099_auto_survivor.h"
+#include "game_100_memory_match.h"
 #include <vector>
 namespace arcade {
 struct B3Probe {
@@ -199,6 +205,70 @@ struct B3Probe {
             return {double(g.angle), double(g.power), double(g.x),
                     double(g.y),     double(g.hp),    double(g.enemy_hp),
                     double(g.owner), double(g.shots), double(g.flying)};
+        }
+        case 89: {
+            const auto &g = *static_cast<const Game089Firefighter *>(game);
+            return {double(g.x),        double(g.y),        double(g.face),
+                    double(g.water),    double(g.burned),   double(g.extinguished),
+                    double(g.fire[0]),  double(g.fire[1]),  double(g.fire[2]),
+                    double(g.fire[3]),  double(g.fire[4]),  double(g.fire[5]),
+                    double(g.fire[6]),  double(g.fire[7]),  double(g.fire[8]),
+                    double(g.fire[9]),  double(g.fire[10]), double(g.fire[11]),
+                    double(g.fire[12]), double(g.fire[13]), double(g.fire[14]),
+                    double(g.fire[15]), double(g.fire[16]), double(g.fire[17]),
+                    double(g.fire[18]), double(g.fire[19]), double(g.fire[20]),
+                    double(g.fire[21]), double(g.fire[22]), double(g.fire[23]),
+                    double(g.fire[24]), double(g.fire[25]), double(g.fire[26]),
+                    double(g.fire[27]), double(g.fire[28]), double(g.fire[29]),
+                    double(g.fire[30]), double(g.fire[31]), double(g.fire[32]),
+                    double(g.fire[33]), double(g.fire[34]), double(g.fire[35]),
+                    double(g.fire[36]), double(g.fire[37]), double(g.fire[38]),
+                    double(g.fire[39]), double(g.fire[40]), double(g.fire[41]),
+                    double(g.fire[42]), double(g.fire[43]), double(g.fire[44]),
+                    double(g.fire[45]), double(g.fire[46]), double(g.fire[47]),
+                    double(g.fire[48]), double(g.fire[49]), double(g.fire[50]),
+                    double(g.fire[51]), double(g.fire[52]), double(g.fire[53]),
+                    double(g.fire[54]), double(g.fire[55]), double(g.fire[56]),
+                    double(g.fire[57]), double(g.fire[58]), double(g.fire[59]),
+                    double(g.fire[60]), double(g.fire[61]), double(g.fire[62]),
+                    double(g.fire[63])};
+        }
+        case 90: {
+            const auto &g = *static_cast<const Game090Conveyor *>(game);
+            return {double(g.x),
+                    double(g.y),
+                    double(g.delivered),
+                    double(g.waste),
+                    double(g.item[0]),
+                    double(g.item[1]),
+                    double(g.item[2]),
+                    double(g.item[3]),
+                    double(g.processed[0]),
+                    double(g.processed[1]),
+                    double(g.processed[2]),
+                    double(g.processed[3])};
+        }
+        case 91: {
+            const auto &g = *static_cast<const Game091WireMaze *>(game);
+            return {double(g.x), double(g.y), double(g.steps)};
+        }
+        case 96: {
+            const auto &g = *static_cast<const Game096IceMaze *>(game);
+            return {double(g.x),  double(g.y),     double(g.dx),
+                    double(g.dy), double(g.moves), double(g.sliding)};
+        }
+        case 99: {
+            const auto &g = *static_cast<const Game099AutoSurvivor *>(game);
+            return {double(g.x),       double(g.y),        double(g.hp),     double(g.kills),
+                    double(g.damage),  double(g.upgrades), double(g.ehp[0]), double(g.ehp[1]),
+                    double(g.ehp[2]),  double(g.ehp[3]),   double(g.ehp[4]), double(g.ehp[5]),
+                    double(g.ehp[6]),  double(g.ehp[7]),   double(g.ehp[8]), double(g.ehp[9]),
+                    double(g.ehp[10]), double(g.ehp[11])};
+        }
+        case 100: {
+            const auto &g = *static_cast<const Game100MemoryMatch *>(game);
+            return {double(g.x),     double(g.y),     double(g.first),  double(g.second),
+                    double(g.pairs), double(g.turns), double(g.matched)};
         }
         default:
             return {};

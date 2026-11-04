@@ -440,6 +440,21 @@
     "class": "Game088AtcLanding"
   },
   {
+    "id": 89,
+    "module": "game_089_firefighter",
+    "class": "Game089Firefighter"
+  },
+  {
+    "id": 90,
+    "module": "game_090_conveyor",
+    "class": "Game090Conveyor"
+  },
+  {
+    "id": 91,
+    "module": "game_091_wire_maze",
+    "class": "Game091WireMaze"
+  },
+  {
     "id": 92,
     "module": "game_092_fruit_slice",
     "class": "Game092FruitSlice"
@@ -460,6 +475,11 @@
     "class": "Game095SuperHexagon"
   },
   {
+    "id": 96,
+    "module": "game_096_ice_maze",
+    "class": "Game096IceMaze"
+  },
+  {
     "id": 97,
     "module": "game_097_frogger",
     "class": "Game097Frogger"
@@ -468,5 +488,15 @@
     "id": 98,
     "module": "game_098_lunar_lander",
     "class": "Game098LunarLander"
+  },
+  {
+    "id": 99,
+    "module": "game_099_auto_survivor",
+    "class": "Game099AutoSurvivor"
+  },
+  {
+    "id": 100,
+    "module": "game_100_memory_match",
+    "class": "Game100MemoryMatch"
   }
 ]

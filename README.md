@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-04 Phase B3:** **100/100 target games are now registered in C++ and Python.** The remaining 36 have 216 input-only win/loss rounds across three difficulty tiers, replayed in production C++ with key-state comparisons. All 100 pass basic host lifecycle/bounds and simulated HTTP integration; APK 2.0.0 and ESP-IDF build passed. Physical phone/LED/audio acceptance and final product quality remain pending. [Per-game scope and evidence](docs/ARCADE_PHASE_B3.md). Earlier entries below are historical milestones.
+
 **2026-11-04 Phase B2:** five new targets (035/057/058/081/098) bring the registry to **64/100**. Three-tier input-only full rounds, Mirror Laser's four stages and bounded short-write/priority audio policies have software evidence; physical acceptance remains pending. [Scope](docs/ARCADE_PHASE_B2.md).
 
 **2026-11-04 Phase B1:** fixed-step timing and nonblocking shared sound infrastructure; 017/085/092/095 have three real difficulty tiers and full-round host checks. Registry remains 59; physical/audio acceptance pending. [Details](docs/ARCADE_PHASE_B1.md).

@@ -20,3 +20,16 @@ def disc(fb,x,y,radius,color):
     for yy in range(16):
         for xx in range(16):
             if (xx-x)**2+(yy-y)**2<=radius**2:BatchCartridge.px(fb,xx,yy,color)
+
+
+def bowling_total(rolls):
+    """Ten-frame score, including strike/spare lookahead and tenth-frame bonus rolls."""
+    score=0;i=0
+    for frame in range(10):
+        if i>=len(rolls):break
+        a=rolls[i]
+        if a==10:score+=sum(rolls[i:i+3]);i+=1
+        elif i+1<len(rolls):
+            b=rolls[i+1];score+=a+b+(rolls[i+2] if a+b==10 and i+2<len(rolls) else 0);i+=2
+        else:score+=a;break
+    return score

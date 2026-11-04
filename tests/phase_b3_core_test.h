@@ -4,6 +4,14 @@ static double b3_number(cJSON *item) {
 }
 static void test_b3_rounds() {
     using namespace arcade;
+    { // Score arithmetic only: no runtime game state or forced victory.
+        const int strikes[] = {10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
+        const int spares[] = {5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5};
+        const int mixed[] = {10, 7, 3, 9, 0, 10, 0, 8, 8, 2, 0, 6, 10, 10, 10, 8, 1};
+        assert(B3BowlingTotal(strikes, 12) == 300);
+        assert(B3BowlingTotal(spares, 21) == 150);
+        assert(B3BowlingTotal(mixed, 17) == 167);
+    }
     constexpr float dt = 16667.f / 1000000.f;
     auto path =
         std::filesystem::path(__FILE__).parent_path() / "fixtures/phase_b3_input_paths.json";

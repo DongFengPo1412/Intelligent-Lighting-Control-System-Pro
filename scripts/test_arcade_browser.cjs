@@ -102,7 +102,7 @@ async function main() {
     await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
     if(!await evaluate('document.getElementById("arcadeDifficulty").disabled'))throw Error("Difficulty was editable during a round");
     const batchLayouts=[];
-    for(const gid of [35,55,57,58,81,98]) {
+    for(const gid of [35,55,57,58,81,...Object.keys(JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8"))).map(Number),98]) {
       await evaluate(`document.getElementById("btnArcade${String(gid).padStart(3,"0")}").click()`);
       await until(`window.__replies.some(r=>r.game_status?.game_id===${gid}&&r.game_status.state===0)`);
       const layout=await evaluate(`({gid:${gid},help:document.querySelector(".mario-help").textContent,
@@ -110,6 +110,12 @@ async function main() {
         a:document.querySelector("#marioKeyA .btn-sub").textContent,
         b:getComputedStyle(document.getElementById("marioKeyB")).display})`);
       if(layout.help.length<30 || (gid===35&&layout.actions!=="none") || ([81,98].includes(gid)&&layout.b!=="none"))throw Error("Incorrect batch control layout: "+JSON.stringify(layout));
+      const expected=JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8"))[gid];
+      if(expected){
+        const b3=await evaluate(`window.ARCADE_B3_RULES[${gid}]`);
+        if(!b3||!layout.help.includes(b3.help)||b3.control!==expected.control)throw Error("B3 help/control mismatch: "+gid);
+        if(b3.control===3 && (layout.a!==b3.a || (b3.b?layout.b==="none":layout.b!=="none")))throw Error("B3 action labels mismatch: "+gid);
+      }
       batchLayouts.push(layout);
     }
     await evaluate('document.getElementById("marioStartBtn").click()');

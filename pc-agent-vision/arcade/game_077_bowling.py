@@ -5,17 +5,7 @@ class Game077Bowling(BatchCartridge):
     game_id=77;name='保龄球';english_name='Bowling';core_mechanic='Aim and charge a rolling ball, knock down a rack, and play ten frames with strike/spare bonuses including tenth-frame extra rolls.'
     control_type=3
     def setup(self):self.aim=self.power=0.;self.x=8.;self.y=14.;self.vx=self.vy=0.;self.charging=self.flying=False;self.pins=1023;self.frame=self.shot=self.first=self.nroll=0;self.rolls=[];self.before=10
-    def total(self):
-        score=0;i=0
-        for frame in range(10):
-            if i>=len(self.rolls):break
-            a=self.rolls[i]
-            if a==10:
-                score+=sum(self.rolls[i:i+3]);i+=1
-            elif i+1<len(self.rolls):
-                b=self.rolls[i+1];score+=a+b+(self.rolls[i+2] if a+b==10 and i+2<len(self.rolls) else 0);i+=2
-            else:score+=a;break
-        return score
+    def total(self):return bowling_total(self.rolls)
     def resolve(self):
         knocked=self.before-self.pins.bit_count()
         knocked=max(0,knocked);self.rolls.append(knocked);self.nroll=len(self.rolls);self._score=self.total();self._high_score=max(self._high_score,self.score);self.emit_sound('hit',knocked);self.flying=False

@@ -24,7 +24,7 @@ def main():
     for gid in (entry['id'] for entry in registry):
         result=post({'action':'select','game_id':gid})
         assert result['status']=='ok' and result['simulated'] and result['game_status']['game_id']==gid
-        if gid in (17,35,57,58,81,85,92,95,98):
+        if result['game_status'].get('difficulty_supported') is True:
             configured=post({'action':'config','sound_enabled':True,'sound_volume':20,'difficulty':2})
             assert configured['game_status']['difficulty_supported'] is True
             assert configured['game_status']['difficulty']==2
@@ -49,7 +49,7 @@ def main():
         assert post({'action':'exit'})['status']=='ok'
         time.sleep(.08) # Stay below the production HTTP rate budget.
         print(f'Target {gid:03}: select/start/pause/resume/reset/multi-key/frame/exit passed (SIMULATOR)')
-    for gid in (-255,257,1.5,True,'1',100):
+    for gid in (-255,257,1.5,True,'1',101):
         try: post({'action':'select','game_id':gid})
         except urllib.error.HTTPError as error: assert error.code==400
         else: raise AssertionError(f'Invalid ID accepted: {gid!r}')

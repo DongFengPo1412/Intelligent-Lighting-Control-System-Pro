@@ -50,3 +50,27 @@ inline void B3Disc(uint8_t *fb, float x, float y, float radius, int r, int g, in
                 B3Pixel(fb, xx, yy, r, g, b);
 }
 } // namespace arcade
+
+namespace arcade {
+inline int B3BowlingTotal(const int *rolls, int nroll) {
+    int score = 0, i = 0;
+    for (int f = 0; f < 10 && i < nroll; ++f) {
+        int a = rolls[i];
+        if (a == 10) {
+            for (int j = i; j < std::min(nroll, i + 3); ++j)
+                score += rolls[j];
+            ++i;
+        } else if (i + 1 < nroll) {
+            int b = rolls[i + 1];
+            score += a + b;
+            if (a + b == 10 && i + 2 < nroll)
+                score += rolls[i + 2];
+            i += 2;
+        } else {
+            score += a;
+            break;
+        }
+    }
+    return score;
+}
+} // namespace arcade
