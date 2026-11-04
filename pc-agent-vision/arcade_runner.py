@@ -148,6 +148,18 @@ from arcade.game_069_nim import Game069Nim
 
 from arcade.game_070_flood_it import Game070FloodIt
 
+from arcade.game_071_peg_solitaire import Game071PegSolitaire
+
+from arcade.game_077_bowling import Game077Bowling
+
+from arcade.game_078_baseball import Game078Baseball
+
+from arcade.game_079_penalty import Game079Penalty
+
+from arcade.game_080_tron import Game080Tron
+
+from arcade.game_082_artillery import Game082Artillery
+
 KEY_MAP = {
     "left": KEY_LEFT,
     "right": KEY_RIGHT,
@@ -276,6 +288,12 @@ class ArcadeSession:
         self.cartridges[68]=Game068Mastermind()
         self.cartridges[69]=Game069Nim()
         self.cartridges[70]=Game070FloodIt()
+        self.cartridges[71]=Game071PegSolitaire()
+        self.cartridges[77]=Game077Bowling()
+        self.cartridges[78]=Game078Baseball()
+        self.cartridges[79]=Game079Penalty()
+        self.cartridges[80]=Game080Tron()
+        self.cartridges[82]=Game082Artillery()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None

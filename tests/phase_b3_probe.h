@@ -23,6 +23,12 @@
 #include "game_068_mastermind.h"
 #include "game_069_nim.h"
 #include "game_070_flood_it.h"
+#include "game_071_peg_solitaire.h"
+#include "game_077_bowling.h"
+#include "game_078_baseball.h"
+#include "game_079_penalty.h"
+#include "game_080_tron.h"
+#include "game_082_artillery.h"
 #include <vector>
 namespace arcade {
 struct B3Probe {
@@ -163,6 +169,36 @@ struct B3Probe {
             const auto &g = *static_cast<const Game070FloodIt *>(game);
             return {double(g.color), double(g.selected), double(g.moves), double(g.count),
                     double(g.flooded)};
+        }
+        case 71: {
+            const auto &g = *static_cast<const Game071PegSolitaire *>(game);
+            return {double(g.mask), double(g.x), double(g.y), double(g.dir), double(g.moves)};
+        }
+        case 77: {
+            const auto &g = *static_cast<const Game077Bowling *>(game);
+            return {double(g.aim),  double(g.power), double(g.x),    double(g.y),
+                    double(g.pins), double(g.frame), double(g.shot), double(g.nroll)};
+        }
+        case 78: {
+            const auto &g = *static_cast<const Game078Baseball *>(game);
+            return {double(g.ball_y), double(g.pitches), double(g.runs), double(g.strikes),
+                    double(g.active)};
+        }
+        case 79: {
+            const auto &g = *static_cast<const Game079Penalty *>(game);
+            return {double(g.aim),   double(g.power), double(g.flight), double(g.keeper),
+                    double(g.shots), double(g.goals), double(g.flying)};
+        }
+        case 80: {
+            const auto &g = *static_cast<const Game080Tron *>(game);
+            return {double(g.x),  double(g.y),    double(g.dir),   double(g.ex),
+                    double(g.ey), double(g.edir), double(g.steps), double(g.board_hash)};
+        }
+        case 82: {
+            const auto &g = *static_cast<const Game082Artillery *>(game);
+            return {double(g.angle), double(g.power), double(g.x),
+                    double(g.y),     double(g.hp),    double(g.enemy_hp),
+                    double(g.owner), double(g.shots), double(g.flying)};
         }
         default:
             return {};

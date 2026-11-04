@@ -1,3 +1,9 @@
+#include "game_082_artillery.h"
+#include "game_080_tron.h"
+#include "game_079_penalty.h"
+#include "game_078_baseball.h"
+#include "game_077_bowling.h"
+#include "game_071_peg_solitaire.h"
 #include "game_070_flood_it.h"
 #include "game_069_nim.h"
 #include "game_068_mastermind.h"
@@ -211,6 +217,18 @@ static Game069Nim s_game_069;
 
 static Game070FloodIt s_game_070;
 
+static Game071PegSolitaire s_game_071;
+
+static Game077Bowling s_game_077;
+
+static Game078Baseball s_game_078;
+
+static Game079Penalty s_game_079;
+
+static Game080Tron s_game_080;
+
+static Game082Artillery s_game_082;
+
 ArcadeManager& ArcadeManager::GetInstance()
 {
     static ArcadeManager instance;
@@ -235,6 +253,12 @@ void ArcadeManager::Init()
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
 {
     switch (game_id) {
+        case 82: return &s_game_082;
+        case 80: return &s_game_080;
+        case 79: return &s_game_079;
+        case 78: return &s_game_078;
+        case 77: return &s_game_077;
+        case 71: return &s_game_071;
         case 70: return &s_game_070;
         case 69: return &s_game_069;
         case 68: return &s_game_068;

@@ -350,6 +350,11 @@
     "class": "Game070FloodIt"
   },
   {
+    "id": 71,
+    "module": "game_071_peg_solitaire",
+    "class": "Game071PegSolitaire"
+  },
+  {
     "id": 72,
     "module": "game_072_hex_board",
     "class": "Game072HexBoard"
@@ -375,9 +380,34 @@
     "class": "Game076MiniGolf"
   },
   {
+    "id": 77,
+    "module": "game_077_bowling",
+    "class": "Game077Bowling"
+  },
+  {
+    "id": 78,
+    "module": "game_078_baseball",
+    "class": "Game078Baseball"
+  },
+  {
+    "id": 79,
+    "module": "game_079_penalty",
+    "class": "Game079Penalty"
+  },
+  {
+    "id": 80,
+    "module": "game_080_tron",
+    "class": "Game080Tron"
+  },
+  {
     "id": 81,
     "module": "game_081_qix",
     "class": "Game081Qix"
+  },
+  {
+    "id": 82,
+    "module": "game_082_artillery",
+    "class": "Game082Artillery"
   },
   {
     "id": 83,

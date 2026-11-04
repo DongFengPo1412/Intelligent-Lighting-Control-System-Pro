@@ -601,5 +601,140 @@
     "help": "左右选色，A 将左上连通块染色并吞并相邻同色色块。限定步数覆盖全部6×6棋盘。",
     "a": "扩张染色",
     "b": ""
+  },
+  "71": {
+    "id": 71,
+    "slug": "peg_solitaire",
+    "cls": "Game071PegSolitaire",
+    "name": "单人孔明棋",
+    "en": "Peg Solitaire",
+    "core": "Jump over adjacent pegs into an empty triangle hole, removing the jumped peg; leave exactly one.",
+    "keys": [
+      "mask",
+      "x",
+      "y",
+      "dir",
+      "moves"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "三角棋盘方向键选起点，B 轮换六个跳跃方向，A 跳过相邻棋子落到空孔并吃子。只剩一子获胜，无合法跳法失败；底部橙点显示方向。",
+    "a": "跳吃",
+    "b": "换跳跃方向"
+  },
+  "77": {
+    "id": 77,
+    "slug": "bowling",
+    "cls": "Game077Bowling",
+    "name": "保龄球",
+    "en": "Bowling",
+    "core": "Aim and charge a rolling ball, knock down a rack, and play ten frames with strike/spare bonuses including tenth-frame extra rolls.",
+    "keys": [
+      "aim",
+      "power",
+      "x",
+      "y",
+      "pins",
+      "frame",
+      "shot",
+      "nroll"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "左右瞄准，按住 A 蓄力、松开发球。十局标准Strike/Spare加分，第十局满足条件补投。球瓶有有限级连带碰撞，三档碰撞容差与目标分不同。",
+    "a": "按住蓄力/松开发球",
+    "b": ""
+  },
+  "78": {
+    "id": 78,
+    "slug": "baseball",
+    "cls": "Game078Baseball",
+    "name": "棒球击打",
+    "en": "Baseball",
+    "core": "A pitched ball approaches the plate; a timed swing earns hits or home runs, while missed pitches accumulate strikes.",
+    "keys": [
+      "ball_y",
+      "pitches",
+      "runs",
+      "strikes",
+      "active"
+    ],
+    "control": 0,
+    "lives": null,
+    "help": "观察白色来球，A 在到达下方击球区时挥棒；中心时机记本垒打。累计6分完成挑战，三次失击或十球耗尽失败。",
+    "a": "挥棒",
+    "b": ""
+  },
+  "79": {
+    "id": 79,
+    "slug": "penalty",
+    "cls": "Game079Penalty",
+    "name": "足球点球",
+    "en": "Penalty Shootout",
+    "core": "Aim and charge a shot against a moving goalkeeper; five attempts decide a three-goal challenge.",
+    "keys": [
+      "aim",
+      "power",
+      "flight",
+      "keeper",
+      "shots",
+      "goals",
+      "flying"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "左右瞄准，按住 A 蓄力后松开发球；超过一秒会偏射。观察移动门将，五球进至少三球获胜。",
+    "a": "按住蓄力/松开射门",
+    "b": ""
+  },
+  "80": {
+    "id": 80,
+    "slug": "tron",
+    "cls": "Game080Tron",
+    "name": "光线摩托",
+    "en": "Tron Light Cycles",
+    "core": "Two continuous riders leave solid trails; turning avoids walls and traps the opponent, with a survival milestone.",
+    "keys": [
+      "x",
+      "y",
+      "dir",
+      "ex",
+      "ey",
+      "edir",
+      "steps",
+      "board_hash"
+    ],
+    "control": 2,
+    "lives": null,
+    "help": "方向键转向，不能180度倒车。蓝色是你，红色是AI，轨迹均不可穿越；撞墙撞线失败，围困对手或完成生存里程碑获胜。",
+    "a": "转向",
+    "b": ""
+  },
+  "82": {
+    "id": 82,
+    "slug": "artillery",
+    "cls": "Game082Artillery",
+    "name": "坦克抛物线对轰",
+    "en": "Artillery",
+    "core": "Choose elevation and power, fire a gravity shell over terrain, damage the enemy and deform impact terrain before its return shot.",
+    "keys": [
+      "angle",
+      "power",
+      "x",
+      "y",
+      "hp",
+      "enemy_hp",
+      "owner",
+      "shots",
+      "flying"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,self.hp)",
+      "std::max(0,hp)"
+    ],
+    "help": "左右调仰角，上下调力度，A 发射抛物线炮弹。撞击会挖低地形；击中对方扣生命，随后敌人还击。先摧毁敌方坦克获胜。",
+    "a": "发射",
+    "b": ""
   }
 }
