@@ -94,6 +94,16 @@ esp_err_t AudioHAL::Init(
         ESP_LOGW(TAG, "AudioHAL 已经初始化，跳过重复初始化");
         return ESP_OK;
     }
+    // Init has not started playback/capture yet. Release partial DMA resources so
+    // a failed audio peripheral does not starve the display/control fallback.
+    auto failed = [&](esp_err_t error) {
+        if (spk_power_timer_) { esp_timer_delete(spk_power_timer_); spk_power_timer_ = nullptr; }
+        if (rx_chan_) { i2s_del_channel(rx_chan_); rx_chan_ = nullptr; }
+        if (tx_chan_) { i2s_del_channel(tx_chan_); tx_chan_ = nullptr; }
+        mic_enabled_ = speaker_enabled_ = false;
+        return error;
+    };
+    if (!playback_mutex_) return failed(ESP_ERR_NO_MEM);
 
     ESP_LOGI(TAG, "正在初始化 I2S 硬件音频驱动...");
     ESP_LOGI(TAG, "  - INMP441 麦克风: WS=%d, SCK=%d, DIN=%d", mic_ws, mic_sck, mic_din);
@@ -114,7 +124,7 @@ esp_err_t AudioHAL::Init(
     esp_err_t ret = i2s_new_channel(&tx_chan_cfg, &tx_chan_, nullptr);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "创建 I2S TX 通道失败: %s", esp_err_to_name(ret));
-        return ret;
+        return failed(ret);
     }
 
     // 采用标准飞利浦 Philips 格式 (left_align = false, bit_shift = true)
@@ -153,7 +163,7 @@ esp_err_t AudioHAL::Init(
     ret = i2s_channel_init_std_mode(tx_chan_, &tx_std_cfg);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "初始化 I2S TX 标准模式失败: %s", esp_err_to_name(ret));
-        return ret;
+        return failed(ret);
     }
 
     // 默认保持 TX 待命休眠，不常驻振荡 BCLK，彻底阻断空闲状态下的 WS2812 与供电高频电磁啸叫
@@ -167,7 +177,11 @@ esp_err_t AudioHAL::Init(
         .name = "spk_power_timer",
         .skip_unhandled_events = true,
     };
-    esp_timer_create(&timer_args, &spk_power_timer_);
+    ret = esp_timer_create(&timer_args, &spk_power_timer_);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Speaker power timer creation failed: %s", esp_err_to_name(ret));
+        return failed(ret);
+    }
 
     // 2. 初始化 INMP441 麦克风输入通道 (RX) 显式绑定至 I2S_NUM_1
     i2s_chan_config_t rx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
@@ -177,7 +191,7 @@ esp_err_t AudioHAL::Init(
     ret = i2s_new_channel(&rx_chan_cfg, nullptr, &rx_chan_);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "创建 I2S RX 通道失败: %s", esp_err_to_name(ret));
-        return ret;
+        return failed(ret);
     }
 
     // INMP441 32-bit slot, MONO, LEFT mask (标准单工收音配置)
@@ -216,15 +230,18 @@ esp_err_t AudioHAL::Init(
     ret = i2s_channel_init_std_mode(rx_chan_, &rx_std_cfg);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "初始化 I2S RX 标准模式失败: %s", esp_err_to_name(ret));
-        return ret;
+        return failed(ret);
     }
 
     // INMP441 硬件 DMA 通道初始化完毕后常驻使能，杜绝频繁开启关断导致 DMA 悬垂与死锁超时
     ret = i2s_channel_enable(rx_chan_);
-    if (ret == ESP_OK) {
-        mic_enabled_ = true;
-        ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 通道常驻使能就绪");
+    if (ret != ESP_OK) {
+        mic_enabled_ = false;
+        ESP_LOGE(TAG, "INMP441 RX enable failed: %s; audio initialization incomplete", esp_err_to_name(ret));
+        return failed(ret);
     }
+    mic_enabled_ = true;
+    ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 通道常驻使能就绪");
     initialized_ = true;
     ESP_LOGI(TAG, "I2S 硬件驱动初始化成功 (默认 70%% 音量 + 自动休眠静音防啸叫)");
 
@@ -232,6 +249,7 @@ esp_err_t AudioHAL::Init(
 }
 
 esp_err_t AudioHAL::EnableMic(bool enable) {
+    if (enable && (!initialized_ || !rx_chan_)) return ESP_ERR_INVALID_STATE;
     mic_enabled_ = enable;
     return ESP_OK;
 }
@@ -254,7 +272,7 @@ esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* byt
 
 esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
     NotifyExternalPlayback();
-    if (!tx_chan_ || !mono_samples || count == 0) return ESP_ERR_INVALID_STATE;
+    if (!initialized_ || !tx_chan_ || !mono_samples || count == 0) return ESP_ERR_INVALID_STATE;
     if (!playback_mutex_ || xSemaphoreTake(playback_mutex_, pdMS_TO_TICKS(500)) != pdTRUE) return ESP_ERR_TIMEOUT;
     if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
     esp_err_t ret = EnableSpeaker(true);
@@ -323,7 +341,7 @@ arcade::AudioWriteResult AudioHAL::TryPlayGamePcm(const int16_t* data,size_t cou
 }
 
 esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms) {
-    if (!rx_chan_ || !dest_buf) return ESP_ERR_INVALID_STATE;
+    if (!initialized_ || !rx_chan_ || !dest_buf) return ESP_ERR_INVALID_STATE;
 
     const size_t raw_buffer_size = 256;
     int32_t bit32_buffer[raw_buffer_size];

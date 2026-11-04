@@ -22,7 +22,10 @@
               !Number.isInteger(reply.arcade.state))) throw Error("缺少有效街机状态");
           resolve({status:"ok", source:command.cmd === "frame" ? "hardware_pwm" : "esp32_hardware",
             simulated:false, request_id:id, mode:reply.mode, game_status:reply.arcade,
-            hex:reply.pixels, frame_id:reply.frame_id, is_connected:true});
+            hex:reply.pixels, pixels:reply.pixels, frame_source:reply.frame_source,
+            volume:reply.volume, brightness:reply.brightness,
+            countdown_active:reply.countdown_active, countdown_remaining:reply.countdown_remaining,
+            frame_id:reply.frame_id, is_connected:true});
         } catch (error) { reject(error); }
       };
       try {
@@ -30,6 +33,49 @@
         bridge.sendUdpAsync(JSON.stringify({request_id:id, command:JSON.stringify(command)}), policy.timeout, policy.retries, id);
       } catch (error) { delete callbacks[id]; clearTimeout(timer); reject(error); }
     });
+  }
+
+  // The APK uses the same paired/replay-protected bridge for basic device
+  // controls. PC-only AI, camera and music routes are intentionally not translated.
+  function nativeDeviceApi(exchange) {
+    let tail=Promise.resolve();
+    const integer=(n,min,max)=>Number.isInteger(n)&&n>=min&&n<=max;
+    const mode=n=>integer(n,0,31)&&n!==18;
+    return async (path,data={},method="POST")=>{
+      let command, allowed=[];
+      if (path==="/api/status" && method==="GET") command={cmd:"status"};
+      else if (path==="/api/pro/frame" && method==="GET") command={cmd:"frame"};
+      else if (path==="/api/mode" && method==="POST" && mode(data.mode) && data.mode!==25) {
+        command={cmd:"mode",val:data.mode};allowed=["mode"];
+      } else if (path==="/api/volume" && method==="POST" && integer(data.volume,0,100)) {
+        command={cmd:"volume",val:data.volume};allowed=["volume"];
+      } else if (path==="/api/cmd" && method==="POST") {
+        allowed=["cmd"];
+        if (data.cmd==="brightness" && integer(data.val,0,60)) {command={cmd:"brightness",val:data.val};allowed.push("val");}
+        else if (data.cmd==="countdown" && integer(data.seconds,1,86400)) {command={cmd:"countdown",seconds:data.seconds};allowed.push("seconds");}
+        else if (["stop_countdown","pet"].includes(data.cmd)) command={cmd:data.cmd};
+      }
+      if (!command || Object.keys(data).some(k=>!allowed.includes(k))) throw Error("此操作或参数不受直连模式支持；AI、音乐和视觉需要电脑服务");
+      const read=["status","frame"].includes(command.cmd),id=requestId();
+      const send=async()=>{
+        const reply=await exchange(command,id,read?{timeout:200,retries:0}:{timeout:700,retries:1});
+        if (!reply || reply.status!=="ok" || !(mode(reply.mode)||reply.mode===32)) throw Error("设备回执缺少有效模式");
+        if (command.cmd==="frame") {
+          if(!/^[0-9a-f]{1536}$/i.test(reply.hex||reply.pixels||""))throw Error("不完整的灯板帧");
+          return {...reply,pixels:reply.pixels||reply.hex,frame_source:"hardware_pwm"};
+        }
+        if (!integer(reply.brightness,0,60)||!integer(reply.volume,0,100)||
+            typeof reply.countdown_active!=="boolean"||!integer(reply.countdown_remaining,0,86400)) throw Error("设备状态不完整，请确认固件与APK版本一致");
+        if ((command.cmd==="mode"&&reply.mode!==command.val)||
+            (command.cmd==="brightness"&&reply.brightness!==command.val)||
+            (command.cmd==="volume"&&reply.volume!==command.val)||
+            (command.cmd==="pet"&&reply.mode!==17)||
+            (command.cmd==="stop_countdown"&&reply.countdown_active))throw Error("设备未确认目标状态");
+        return {...reply,status:"online",wifi:{last_command:{brightness:reply.brightness,volume:reply.volume}}};
+      };
+      if(read)return send();
+      const result=tail.then(send);tail=result.catch(()=>{});return result;
+    };
   }
 
   class ArcadeTransport {
@@ -121,5 +167,6 @@
   ArcadeTransport.registeredIds=Object.freeze([...IDS]);
   root.ArcadeTransport=ArcadeTransport;
   root.arcadeNativeExchange=nativeExchange;
-  if (typeof module !== "undefined") module.exports={ArcadeTransport,nativeExchange};
+  root.nativeDeviceApi=nativeDeviceApi;
+  if (typeof module !== "undefined") module.exports={ArcadeTransport,nativeExchange,nativeDeviceApi};
 })(typeof window !== "undefined" ? window : globalThis);

@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-05 整机软件收尾审计：** 采用[明确验证的兼容运行配置](docs/PRO_HARDWARE_READINESS.md)后，可进入经授权的首次受控上板验证。默认本机GPU/cuDNN语音仍有失败；兼容配置为CPU ASR、禁用cuDNN的CUDA TTS及隔离依赖覆盖。已修复APK基础灯控断链与启动假健康。不是实机/最终品质验收，不承诺中阶延迟。[最终需求](docs/PRO_FINAL_REQUIREMENTS_BASELINE.md) · [51项审计](docs/PRO_FINAL_FEATURE_AUDIT.md)。小游戏保持100注册/56成功路径，其余非阻断品质项列P2。
+
 **2026-11-05 Phase C 软件审查：** 保持100/100注册；56款已有C++/Python成功完整局或生存目标输入证据，44款仍待补齐。100款均已导出开始/游玩/实际结算画面，部分结算为失败，不能据此认定通关。已修复Tron音效、翻牌随机性、传送门/Nim/消防挑战结构、Mario生命周期及计分/进度问题。55款仍只有通用生命周期音效；4款跨端随机源尚未统一认证。真实手机、LED、听音与最终产品品质均未验收。[逐款记录](docs/ARCADE_PHASE_C.md) · [部署准备，未刷写](docs/ARCADE_PHASE_C_HARDWARE_READINESS.md)。
 
 **2026-11-04 Phase B3：100/100 正式目标已完成 C++/Python 软件注册。** 新增36款通过三档共216条仅按键胜负回放及生产C++关键状态对照；全部100款通过基础主机生命周期/边界与模拟HTTP集成，固件和2.0.0 APK构建通过。手机、LED、听音、延迟及最终精品品质仍待验。[逐款范围与证据](docs/ARCADE_PHASE_B3.md)。下方数字为历史阶段记录。

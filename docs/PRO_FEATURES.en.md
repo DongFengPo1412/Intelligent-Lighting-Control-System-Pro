@@ -1,5 +1,7 @@
 # Pro implementation and deployment
 
+2026-11-05: use the [final requirements and audit](PRO_FINAL_FEATURE_AUDIT.md) and [explicit compatible deployment profile](PRO_HARDWARE_READINESS.md). Older sections below are historical; normal PCM now defaults to Wi-Fi and paired v2, not the old v1/USB settings. No current hardware acceptance is claimed.
+
 [简体中文](PRO_FEATURES.md) · **English** · [日本語](PRO_FEATURES.ja.md) · [Overview](../README_EN.md)
 
 Implementation status as of 2026-10-25: source integration, offline checks and build evidence, with limited board communication, audio, gesture and music-following acceptance. **Full-system hardware acceptance remains incomplete.** Each test applies only to its recorded version and conditions; see the [board records](hardware-checks-20261023.en.md).
@@ -44,7 +46,7 @@ The entry remains `pc-agent-vision/web_server.py`. Since 2026-10-25, `/` serves 
 | `KURISU_DATA_DIR` | `%LOCALAPPDATA%/KurisuPro`: memory, faces, gaze calibration and device address; outside Git. |
 | `KURISU_CACHE_DIR` | `~/.codex/cache/tasks/kurisu-runtime-<pid>`: voice cache/diagnostics; explicitly isolate tests. |
 | `KURISU_CONTINUOUS` | `1`: listen again after replies; exit after 10 s idle or a closing phrase. `0` selects a single turn. |
-| `KURISU_AUDIO_TRANSPORT` | `usb`; `wifi` opts into TCP PCM. Retains the historical USB conversion, 70% board volume and audio baseline. |
+| `KURISU_AUDIO_TRANSPORT` | Current default `wifi`; `usb` is explicit diagnostics only. Existing board volume/audio processing retained. |
 | `KURISU_BARGE_IN` | Off; `1` with Wi-Fi enables experimental reference-echo processing and wake interruption, still followed by unprompted ASR confirmation. |
 | `KURISU_ECHO_DELAY_MS` | `120`: experimental reference alignment, not a calibrated acoustic delay. |
 | `KURISU_AUTO_MEMORY` | `1`: explicit first-person preferences/names/habits may be saved; `记住：…` saves manually. View/delete/clear through the console; `0` disables automatic extraction. |

@@ -7,6 +7,8 @@
 #include <netinet/tcp.h>
 #include <unistd.h>
 #include <string.h>
+#include <esp_log.h>
+#include <errno.h>
 
 namespace {
 const char hello[]="pcm16le/16000/mono/v2";
@@ -19,11 +21,18 @@ bool write_all(int fd,const void* input,size_t length) {
 }
 NetworkAudio& NetworkAudio::GetInstance(){static NetworkAudio instance;return instance;}
 bool NetworkAudio::Start(){
-    if(tx_)return true;
-    tx_=xSemaphoreCreateMutex();if(!tx_)return false;
-    return xTaskCreatePinnedToCore(Task,"wifi_pcm",8192,this,4,nullptr,0)==pdPASS;
+    bool expected=false;
+    if(!running_.compare_exchange_strong(expected,true))return true;
+    if(!tx_)tx_=xSemaphoreCreateMutex();
+    if(!tx_){running_=false;ESP_LOGE("NetworkAudio","PCM mutex allocation failed");return false;}
+    if(xTaskCreatePinnedToCore(Task,"wifi_pcm",8192,this,4,nullptr,0)!=pdPASS){
+        running_=false;ESP_LOGE("NetworkAudio","PCM worker creation failed");return false;
+    }
+    return true;
 }
-void NetworkAudio::Task(void* arg){((NetworkAudio*)arg)->Run();vTaskDelete(nullptr);}
+void NetworkAudio::Task(void* arg){
+    auto* audio=(NetworkAudio*)arg;audio->Run();audio->ready_=false;audio->running_=false;vTaskDelete(nullptr);
+}
 bool NetworkAudio::Send(uint8_t kind,const void* data,size_t bytes){
     if(bytes>2048||!tx_)return false;
     if(xSemaphoreTake(tx_,pdMS_TO_TICKS(100))!=pdTRUE)return false;
@@ -34,10 +43,13 @@ bool NetworkAudio::Send(uint8_t kind,const void* data,size_t bytes){
 bool NetworkAudio::SendMic(const int16_t* data,size_t count){return ready_&&Send(2,data,count*2);}
 void NetworkAudio::Run(){
     int server=socket(AF_INET,SOCK_STREAM,IPPROTO_IP);
-    if(server<0)return;
+    if(server<0){ESP_LOGE("NetworkAudio","PCM socket creation failed: errno=%d",errno);return;}
     int reuse=1;setsockopt(server,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(reuse));
     sockaddr_in address={};address.sin_family=AF_INET;address.sin_port=htons(8889);address.sin_addr.s_addr=htonl(INADDR_ANY);
-    if(bind(server,(sockaddr*)&address,sizeof(address))<0||listen(server,1)<0){close(server);return;}
+    if(bind(server,(sockaddr*)&address,sizeof(address))<0||listen(server,1)<0){
+        ESP_LOGE("NetworkAudio","PCM bind/listen failed: errno=%d",errno);close(server);return;
+    }
+    ESP_LOGI("NetworkAudio","PCM listener ready on TCP 8889");
     for(;;){
         int fd=accept(server,nullptr,nullptr);if(fd<0){vTaskDelay(pdMS_TO_TICKS(100));continue;}
         // PCM chunks are 15-32 ms long. Do not hold a small header/payload

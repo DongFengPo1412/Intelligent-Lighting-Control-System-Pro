@@ -9,6 +9,41 @@ import org.json.JSONObject;
 
 /** Used only on the bounded single-worker executor. Retries reuse the same wire request. */
 final class DeviceUdpClient {
+    private static boolean integer(JSONObject command,String key,int minimum,int maximum) {
+        Object value=command.opt(key);
+        if(!(value instanceof Number))return false;
+        double number=((Number)value).doubleValue();
+        return Double.isFinite(number) && number==Math.floor(number) && number>=minimum && number<=maximum;
+    }
+    private static boolean onlyFields(JSONObject command,String... allowed) {
+        java.util.Iterator<String> fields=command.keys();
+        while(fields.hasNext()) {
+            String field=fields.next();boolean known=false;
+            for(String name:allowed)if(name.equals(field)){known=true;break;}
+            if(!known)return false;
+        }
+        return true;
+    }
+    private static boolean isBasicCommand(String name) {
+        return "mode".equals(name)||"brightness".equals(name)||"volume".equals(name)||
+            "countdown".equals(name)||"stop_countdown".equals(name)||"pet".equals(name)||"kurisu".equals(name);
+    }
+    private static String basicCommandError(JSONObject command,String name) {
+        if("mode".equals(name)) {
+            if(!onlyFields(command,"cmd","val"))return "invalid_fields";
+            // Arcade selection and countdown have their own lifecycle commands.
+            return integer(command,"val",0,31) && command.optInt("val")!=18 && command.optInt("val")!=25 ? null : "invalid_mode";
+        }
+        if("brightness".equals(name)||"volume".equals(name)) {
+            if(!onlyFields(command,"cmd","val"))return "invalid_fields";
+            return integer(command,"val",0,"brightness".equals(name)?60:100) ? null : "invalid_"+name;
+        }
+        if("countdown".equals(name)) {
+            if(!onlyFields(command,"cmd","seconds"))return "invalid_fields";
+            return integer(command,"seconds",1,86400) ? null : "invalid_countdown";
+        }
+        return onlyFields(command,"cmd") ? null : "invalid_fields";
+    }
     static boolean isReadOnly(String message) {
         try {
             JSONObject cmd=new JSONObject(new JSONObject(message).getString("command"));
@@ -58,7 +93,12 @@ final class DeviceUdpClient {
             if(command.getBytes(StandardCharsets.UTF_8).length>2048)return error(callback,"command_too_large");
             JSONObject cmd=new JSONObject(command);
             String name=cmd.getString("cmd");
-            if(!("arcade".equals(name)||"frame".equals(name)||"status".equals(name)))return error(callback,"forbidden_command");
+            boolean basic=isBasicCommand(name);
+            if(!("arcade".equals(name)||"frame".equals(name)||"status".equals(name)||basic))return error(callback,"forbidden_command");
+            if(basic) {
+                String invalid=basicCommandError(cmd,name);
+                if(invalid!=null)return error(callback,invalid);
+            }
             if("arcade".equals(name)) {
                 String action=cmd.getString("action");
                 if(!action.matches("select|start|pause|resume|reset|exit|input|heartbeat|status|players|config"))return error(callback,"invalid_action");

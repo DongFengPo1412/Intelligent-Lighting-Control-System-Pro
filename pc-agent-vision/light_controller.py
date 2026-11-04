@@ -26,7 +26,11 @@ class LightController(ProControlMixin):
         self.on_mic_data: Optional[Callable[[bytes], None]] = None
         self.on_status_data: Optional[Callable[[Dict[str, Any]], None]] = None
         self._chime_pcm: bytes = self._create_chime_pcm()
-        self.audio_transport = os.environ.get('KURISU_AUDIO_TRANSPORT', 'usb')
+        # Normal operation is wireless even with USB power attached. USB audio
+        # remains an explicit diagnostic choice; never silently fall back to it.
+        self.audio_transport = os.environ.get('KURISU_AUDIO_TRANSPORT', 'wifi').strip().lower()
+        if self.audio_transport not in ('wifi', 'usb'):
+            raise ValueError('KURISU_AUDIO_TRANSPORT must be wifi or usb')
         self._network_audio = None
         self.playback_cancel = threading.Event()
         self.playback_started_at = None

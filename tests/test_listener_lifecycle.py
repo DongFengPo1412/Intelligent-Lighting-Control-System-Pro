@@ -113,8 +113,8 @@ class ListenerLifecycleTests(unittest.TestCase):
         listener._heal_circuit_broken = False
         listener.heal_status = "ok"
         listener.controller = types.SimpleNamespace(
-            audio_connected=False,
-            connect_audio=lambda: False,
+            audio_connected=True,
+            connect_audio=lambda: True,
             enable_mic=lambda en: None,
             on_mic_data=None,
             _voice_listener=None

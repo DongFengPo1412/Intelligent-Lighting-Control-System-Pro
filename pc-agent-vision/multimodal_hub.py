@@ -105,11 +105,10 @@ class MultimodalHub:
             self.face_sample_at = time.monotonic() if image is not None else None
 
     def _capture(self):
-        import cv2
-        import mediapipe as mp
-
         cap = None
         try:
+            import cv2
+            import mediapipe as mp
             cap = cv2.VideoCapture(self.camera)
             if not cap.isOpened():
                 raise RuntimeError("Cannot open selected camera")

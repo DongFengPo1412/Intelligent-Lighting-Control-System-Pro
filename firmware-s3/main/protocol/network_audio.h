@@ -16,6 +16,7 @@ public:
 private:
     int client_=-1;
     std::atomic<bool> ready_{false};
+    std::atomic<bool> running_{false};
     SemaphoreHandle_t tx_=nullptr;
     bool Send(uint8_t kind,const void* data,size_t bytes);
     static void Task(void* arg);

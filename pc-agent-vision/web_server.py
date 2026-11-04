@@ -659,6 +659,7 @@ async def handle_status(request: web.Request):
         "tts_status": tts_status,
         "listener_listening": bool(listener and listener.is_listening and listener_healthy),
         "listener_healthy": listener_healthy,
+        "listener_start_error": getattr(listener, 'last_start_error', None) if listener else None,
         "listener_threads": listener_threads,
         "listener_threads_alive": bool(listener and listener.has_live_threads()),
         "listener_paused": bool(listener and listener.is_paused),

@@ -2,6 +2,8 @@
 
 **简体中文** · [English](PRO_FEATURES.en.md) · [日本語](PRO_FEATURES.ja.md) · [项目首页](../README.md)
 
+2026-11-05 收尾基线：[最终需求与来源](PRO_FINAL_REQUIREMENTS_BASELINE.md)、[逐项软件审计](PRO_FINAL_FEATURE_AUDIT.md)、[首次上板条件与兼容运行配置](PRO_HARDWARE_READINESS.md)。下方2026-10-25内容保留其历史范围，不能代替最新验收或宣称已上板。正常音频默认已改为Wi-Fi，USB仅显式诊断。
+
 2026-10-25 实现状态。新增功能完成源码接入、离线检查与构建，并有部分板卡通信、音频、手势及音乐随动验收记录；**全功能实机验收尚未完成**。各项测试只适用于所记录的版本与条件，详见[实机记录](hardware-checks-20261023.zh-CN.md)。
 
 ## 18 项需求对应关系
@@ -44,7 +46,7 @@ PC 3.10 环境安装 `pc-agent-vision/requirements-pro.txt`。它覆盖控制、
 | `KURISU_DATA_DIR` | `%LOCALAPPDATA%/KurisuPro`；持久记忆、登记人脸、视线校准和设备地址。不是仓库文件。 |
 | `KURISU_CACHE_DIR` | `~/.codex/cache/tasks/kurisu-runtime-<pid>`；语音缓存和诊断。测试时显式使用本次任务缓存。 |
 | `KURISU_CONTINUOUS` | `1`；回复后继续等下一句，空闲 10 秒或明确结束语退出。设 `0` 使用单轮。 |
-| `KURISU_AUDIO_TRANSPORT` | `usb`；设为 `wifi` 才使用新增 TCP PCM。保留已验收 USB 音频转换、70% 板端音量与原处理基线。 |
+| `KURISU_AUDIO_TRANSPORT` | 当前默认 `wifi`；`usb` 仅显式诊断。保留70%板端音量与原处理基线，USB供电不自动选择USB音频。 |
 | `KURISU_MUSIC_DIR` | 可选本地曲库路径，覆盖已保存目录，详见[指南](LOCAL_MUSIC.md)。 |
 | `KURISU_MUSIC_GAIN` | 默认 `0.25`，仅衰减歌曲扬声器输出，MIR 与助手音量不变。 |
 | `KURISU_MUSIC_WAKE` | 默认 `1`，仅完整语音服务的 Wi-Fi 音乐中保留唤醒监测。 |

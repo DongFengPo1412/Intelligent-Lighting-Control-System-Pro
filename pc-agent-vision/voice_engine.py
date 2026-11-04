@@ -87,6 +87,12 @@ class VoiceEngine:
             return
 
         try:
+            # Explicit process-wide compatibility profile for mismatched local
+            # cuDNN DLLs. Model weights, voice and signal processing stay unchanged.
+            if os.environ.get('KURISU_TTS_CUDNN', '1') == '0':
+                import torch
+                torch.backends.cudnn.enabled = False
+                print("[VoiceEngine] 已显式禁用本进程 cuDNN 后端，保留可用的 CUDA 运算。")
             print("[VoiceEngine] 正在载入牧濑红莉栖 (CV: 今井麻美) 专属中日双语大模型...")
             t0 = time.time()
             custom_config = {
@@ -102,7 +108,8 @@ class VoiceEngine:
             }
             cfg = TTS_Config(custom_config)
             self.tts = TTS(cfg)
-            print(f"[VoiceEngine] 牧濑红莉栖专属神经声学模型已就绪 (耗时: {time.time()-t0:.2f}s, GPU RTX 加速)")
+            actual_device = getattr(self.tts.configs, 'device', 'unknown')
+            print(f"[VoiceEngine] 牧濑红莉栖专属神经声学模型已就绪 (耗时: {time.time()-t0:.2f}s, device={actual_device})")
         except Exception as e:
             print(f"[VoiceEngine 异常] 加载牧濑红莉栖模型失败: {e}。根据用户要求，绝不使用微软备选语音，保持静音。")
             self.tts = None

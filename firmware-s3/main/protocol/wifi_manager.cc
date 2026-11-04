@@ -180,7 +180,7 @@ esp_err_t WifiManager::InitAndConnect(const char* sta_ssid, const char* sta_pass
     ESP_ERROR_CHECK(esp_wifi_start());
 
     // 6. 启动独立后台 UDP 局域网监听任务 (分配至 Core 0，优先级 4)
-    xTaskCreatePinnedToCore(
+    if (xTaskCreatePinnedToCore(
         WifiManager::UdpServerTaskTrampoline,
         "wifi_udp_srv",
         8192,
@@ -188,7 +188,11 @@ esp_err_t WifiManager::InitAndConnect(const char* sta_ssid, const char* sta_pass
         4,
         &udp_task_handle_,
         0
-    );
+    ) != pdPASS) {
+        udp_task_handle_ = nullptr;
+        ESP_LOGE(TAG, "UDP control worker unavailable (out of memory); Wi-Fi connection alone is not control readiness");
+        return ESP_ERR_NO_MEM;
+    }
 
     return ESP_OK;
 }
@@ -371,11 +375,11 @@ void WifiManager::UdpServerTaskLoop()
 
             char ack[512];
             snprintf(ack, sizeof(ack),
-                     "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u}\n",
+                     "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"brightness\":%u,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u}\n",
                      id, ok ? "ok" : "error", ok ? "" : "invalid_command",
                      (int)dm.GetMode(), dm.IsCountdownActive() ? "true" : "false",
                      (unsigned)dm.GetCountdownRemainingSeconds(),
-                     dispatcher.IsMicStreaming() ? "true" : "false", AudioHAL::GetInstance().GetVolume(),
+                     dispatcher.IsMicStreaming() ? "true" : "false", AudioHAL::GetInstance().GetVolume(), unsigned(dm.GetBrightness()),
                      (unsigned)dispatcher.AudioReceived(), (unsigned)dispatcher.AudioPlayed(),
                      (unsigned)dispatcher.AudioDropped(), (unsigned)dispatcher.AudioErrors(),
                      (unsigned)dispatcher.AudioStackFree());

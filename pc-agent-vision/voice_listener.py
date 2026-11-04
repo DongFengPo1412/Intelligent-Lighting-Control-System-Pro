@@ -52,6 +52,7 @@ class VoiceListener:
         self._ready_event = threading.Event()
         self.stop_pending = False
         self.stop_pending_threads: List[str] = []
+        self.last_start_error = None
         self._pending_prefix = ""
         self._speech_active = False
 
@@ -116,16 +117,19 @@ class VoiceListener:
             if 'PATH' in os.environ and torch_lib not in os.environ['PATH']:
                 os.environ['PATH'] = torch_lib + os.pathsep + os.environ['PATH']
 
+        asr_device = os.environ.get('KURISU_ASR_DEVICE', 'auto').strip().lower()
+        if asr_device not in ('auto', 'cpu'):
+            raise ValueError('KURISU_ASR_DEVICE must be auto or cpu')
         try:
-            if torch.cuda.is_available():
+            if asr_device != 'cpu' and torch.cuda.is_available():
                 from faster_whisper import WhisperModel
                 print("[VoiceListener] 正在载入本地 Whisper-Base 离线极速 ASR (NVIDIA RTX CUDA fp16)...")
                 self.whisper_model = WhisperModel("base", device="cuda", compute_type="float16")
                 print("[VoiceListener] >>> 本地离线 Whisper-Base ASR 已就绪 (GPU CUDA 加速) <<<")
             else:
-                raise RuntimeError("CUDA not available")
+                raise RuntimeError("CPU explicitly selected" if asr_device == 'cpu' else "CUDA not available")
         except Exception as e:
-            print(f"[VoiceListener] CUDA 加速未能启动 ({e})，回退至 CPU int8 引擎...")
+            print(f"[VoiceListener] Whisper 使用 CPU int8 引擎 ({e})...")
             from faster_whisper import WhisperModel
             self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
             print("[VoiceListener] >>> 本地离线 Whisper-Base ASR CPU int8 就绪 <<<")
@@ -831,10 +835,11 @@ class VoiceListener:
     def is_healthy(self) -> bool:
         """
         完整健康运行条件：
+        - 最近一次启动失败且尚未重新成功启动时，不报告健康；
         - 若未处于监听中：只要不处于停止挂起 (stop_pending) 状态且无活跃硬件收尾即为健康；
         - 若处于监听中：必须核心线程均存活，未熔断，无活跃硬件收尾，且未在 stop_pending 挂起状态。
         """
-        if self.stop_pending or self._heal_circuit_broken:
+        if self.stop_pending or self._heal_circuit_broken or getattr(self, 'last_start_error', None):
             return False
         st = self.get_thread_status()
         if st['teardown']:
@@ -864,6 +869,7 @@ class VoiceListener:
 
             self.stop_pending = False
             self.stop_pending_threads = []
+            self.last_start_error = None
             self._stop_event.clear()
             self._ready_event.clear()
             self.is_listening = False
@@ -887,9 +893,11 @@ class VoiceListener:
             started_threads = []
             try:
                 self.controller.on_mic_data = self._on_board_pcm
-                if self.controller.connect_audio():
-                    self.controller.enable_mic(True)
-                    self._update_board_led("listening")
+                if not self.controller.connect_audio():
+                    raise RuntimeError("Audio transport connection failed")
+                if self.controller.enable_mic(True) is False:
+                    raise RuntimeError("Board did not acknowledge microphone enable")
+                self._update_board_led("listening")
 
                 self._process_thread = threading.Thread(target=self._process_loop, daemon=True, name="voicelistener_process")
                 self._process_thread.start()
@@ -910,6 +918,7 @@ class VoiceListener:
             except Exception as start_ex:
                 # 出现任何异常（连接失败、线程启动失败等），执行完整原子级回滚
                 print(f"[VoiceListener] 启动过程异常，执行完整失败回滚: {start_ex}")
+                self.last_start_error = str(start_ex)
                 self._stop_event.set()
                 self.is_listening = False
                 self._ready_event.set()
@@ -933,6 +942,8 @@ class VoiceListener:
                 except Exception:
                     pass
                 self.controller.on_mic_data = None
+                if not self.stop_pending and getattr(self.controller, '_voice_listener', None) is self:
+                    self.controller._voice_listener = None
                 return False
 
     def stop(self, timeout: float = 2.0) -> bool:

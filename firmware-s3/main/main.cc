@@ -72,16 +72,18 @@ extern "C" void app_main(void)
 
     // 2. 初始化 I2S 硬件音频驱动 (INMP441 麦克风 + MAX98357 扬声器，开机双音阶自检)
     AudioHAL& audio = AudioHAL::GetInstance();
-    ESP_ERROR_CHECK(audio.Init(
+    esp_err_t audio_ret = audio.Init(
         GPIO_NUM_4,  // mic_ws
         GPIO_NUM_5,  // mic_sck
         GPIO_NUM_6,  // mic_din
         GPIO_NUM_7,  // spk_dout
         GPIO_NUM_15, // spk_bclk
         GPIO_NUM_16  // spk_lrck
-    ));
+    );
+    if (audio_ret != ESP_OK)
+        ESP_LOGE(TAG, "Audio unavailable: %s; light/control operation remains available", esp_err_to_name(audio_ret));
 
-    if(!StartArcadeAudioTask())ESP_LOGW(TAG,"Arcade sound worker unavailable; games remain usable silently");
+    if(audio.IsInitialized() && !StartArcadeAudioTask())ESP_LOGW(TAG,"Arcade sound worker unavailable; games remain usable silently");
 
     // 3. 单块 16x16 蛇形灯板统一亮度，不再应用四块拼接板的梯级补偿。
     display.SetBrightness(20);
@@ -98,7 +100,7 @@ extern "C" void app_main(void)
     esp_err_t wifi_ret = wifi.InitAndConnect(KURISU_WIFI_STA_SSID, KURISU_WIFI_STA_PASSWORD,
                         KURISU_WIFI_AP_SSID, KURISU_WIFI_AP_PASSWORD, 8888);
     if (wifi_ret != ESP_OK) ESP_LOGE(TAG,"Wi-Fi unavailable: %s; USB/display remain available",esp_err_to_name(wifi_ret));
-    else if(!NetworkAudio::GetInstance().Start())ESP_LOGE(TAG,"Wi-Fi PCM server failed to start");
+    else if(audio.IsInitialized() && !NetworkAudio::GetInstance().Start())ESP_LOGE(TAG,"Wi-Fi PCM server failed to start");
 
     // 7. 初始默认展示：牧濑红莉栖桌宠伴侣 (同时保留模式 14 经典圆形变脸特效)
     display.SetMode(DisplayMode::KURISU_DESK_PET);

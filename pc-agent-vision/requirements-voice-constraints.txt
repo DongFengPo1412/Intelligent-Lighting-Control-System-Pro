@@ -1,0 +1,6 @@
+# Compatibility constraints for the existing GPT-SoVITS runtime; not a full installer.
+# Validated with Python 3.10, torch 2.5.1+cu121 and the existing local role weights.
+# Do not upgrade the user's shared environment or replace voice models implicitly.
+# Also use the explicit ASR/cuDNN profile in docs/PRO_HARDWARE_READINESS.md.
+transformers==4.46.3
+huggingface-hub==0.36.0

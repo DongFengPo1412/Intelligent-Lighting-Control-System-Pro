@@ -73,6 +73,44 @@ public final class DeviceUdpClientTest {
             String config="{\"cmd\":\"arcade\",\"action\":\"config\",\"sound_enabled\":true,\"sound_volume\":25,\"difficulty\":2}";
             result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope("config",config).toString(),100,1,"config"));
             check("ok".equals(result.getString("status")));check(new JSONObject(wires.get(wires.size()-1)).getString("command").equals(config));
+            String[] basicCommands={
+                "{\"cmd\":\"mode\",\"val\":0}","{\"cmd\":\"mode\",\"val\":17}","{\"cmd\":\"mode\",\"val\":31}",
+                "{\"cmd\":\"brightness\",\"val\":0}","{\"cmd\":\"brightness\",\"val\":60}",
+                "{\"cmd\":\"volume\",\"val\":0}","{\"cmd\":\"volume\",\"val\":100}",
+                "{\"cmd\":\"countdown\",\"seconds\":1}","{\"cmd\":\"countdown\",\"seconds\":86400}",
+                "{\"cmd\":\"stop_countdown\"}","{\"cmd\":\"pet\"}","{\"cmd\":\"kurisu\"}"
+            };
+            for(int i=0;i<basicCommands.length;i++) {
+                String basic=basicCommands[i],callback="basic_"+i;
+                int executionsBefore=executions.get(),wiresBefore=wires.size();
+                result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope(callback,basic).toString(),100,1,callback));
+                check("ok".equals(result.getString("status")));check(callback.equals(result.getString("request_id")));
+                check(executions.get()==executionsBefore+1);check(wires.size()==wiresBefore+2);
+                check(wires.get(wiresBefore).equals(wires.get(wiresBefore+1)));
+                check(new JSONObject(wires.get(wiresBefore)).getString("command").equals(basic));
+                check(!DeviceUdpClient.isReadOnly(envelope(callback,basic).toString()));
+            }
+            String[] invalidBasics={
+                "{\"cmd\":\"mode\",\"val\":18}","{\"cmd\":\"mode\",\"val\":25}","{\"cmd\":\"mode\",\"val\":32}",
+                "{\"cmd\":\"mode\",\"val\":-1}","{\"cmd\":\"mode\",\"val\":1.5}","{\"cmd\":\"mode\",\"val\":\"17\"}",
+                "{\"cmd\":\"brightness\",\"val\":61}","{\"cmd\":\"brightness\",\"val\":-1}","{\"cmd\":\"brightness\",\"val\":true}",
+                "{\"cmd\":\"volume\",\"val\":101}","{\"cmd\":\"volume\",\"val\":-1}","{\"cmd\":\"volume\",\"val\":\"70\"}",
+                "{\"cmd\":\"countdown\",\"seconds\":0}","{\"cmd\":\"countdown\",\"seconds\":86401}","{\"cmd\":\"countdown\",\"seconds\":1.5}",
+                "{\"cmd\":\"countdown\",\"seconds\":\"60\"}","{\"cmd\":\"countdown\"}","{\"cmd\":\"mode\",\"val\":null}",
+                "{\"cmd\":\"pet\",\"enable\":true}","{\"cmd\":\"stop_countdown\",\"seconds\":10}",
+                "{\"cmd\":\"brightness\",\"val\":20,\"token\":\"injected\"}","{\"cmd\":\"volume\",\"volume\":70}"
+            };
+            before=wires.size();
+            for(int i=0;i<invalidBasics.length;i++) {
+                String callback="invalid_basic_"+i;
+                result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope(callback,invalidBasics[i]).toString(),100,0,callback));
+                check("error".equals(result.getString("status")));check(result.getString("error").startsWith("invalid_"));check(wires.size()==before);
+            }
+            for(String forbidden:new String[]{"pair","mic","audio_abort","canvas","track","unknown"}) {
+                String callback="forbidden_"+forbidden;
+                result=new JSONObject(client.request("127.0.0.1",KEY,"jvm_client",envelope(callback,new JSONObject().put("cmd",forbidden).toString()).toString(),100,0,callback));
+                check("forbidden_command".equals(result.getString("error")));check(wires.size()==before);
+            }
             check(DeviceUdpClient.isReadOnly(envelope("f","{\"cmd\":\"frame\"}").toString()));
             check(!DeviceUdpClient.isReadOnly(envelope("i",command).toString()));
             dropFrames.set(true);
@@ -86,7 +124,7 @@ public final class DeviceUdpClientTest {
             Thread request=new Thread(()->cancelled.set(client.request("127.0.0.1",KEY,"jvm_client",envelope("cancel",command).toString(),1000,2,"cancel")));
             request.start();check(mutedRequest.await(1,TimeUnit.SECONDS));client.interrupt();request.join(1500);
             check(!request.isAlive());check("error".equals(new JSONObject(cancelled.get()).getString("status")));
-            System.out.println("JVM production UDP: pairing, correlated/peer-filtered ACK, identical retry, command/type validation and lifecycle interrupt passed (loopback)");
+            System.out.println("JVM production UDP: pairing, correlated/peer-filtered ACK, identical retry, 12 basic controls, 22 invalid basic payloads, forbidden commands and lifecycle interrupt passed (loopback)");
         } finally {running.set(false);server.close();stranger.close();board.join(1500);check(!board.isAlive());}
     }
 }

@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-05 Pro最終ソフトウェア監査：** [検証した明示的な実行設定](docs/PRO_HARDWARE_READINESS.md)を使い、承認後の初回実機検証に進めます。標準GPU/cuDNN音声設定の不具合は残り、互換設定はCPU ASR・cuDNN無効のCUDA TTS・分離した依存パッケージです。APK基本操作と起動状態を修正。実機・最終品質・Mid相当の遅延を保証しません。[要求](docs/PRO_FINAL_REQUIREMENTS_BASELINE.md) · [51項目の監査](docs/PRO_FINAL_FEATURE_AUDIT.md)。ゲームは100登録/56成功経路で、残りの改善はP2です。
+
 **2026-11-05 Phase C ソフトウェア確認：** 登録数は100/100。56本にC++/Pythonの成功ラウンドまたは生存目標の入力記録があり、44本は未認証です。100本の開始・プレイ・実際の終了画面を出力しましたが、敗北画面も含みます。Tronの効果音、Memory Matchのシャッフル、3ゲームのチャレンジ構成、Marioの状態管理と得点・進捗表示を修正。55本は共通イベント音のみで、4本の乱数差は追加確認が必要です。実機・実音・最終品質は未検証。[ゲーム別記録](docs/ARCADE_PHASE_C.md) · [実機導入の準備](docs/ARCADE_PHASE_C_HARDWARE_READINESS.md)。
 
 **2026-11-04 Phase B3:** 正式100タイトルをC++/Pythonに登録済み。追加36タイトルは3難易度・勝敗計216件の入力リプレイを実機用C++と照合。100タイトルの基本ホスト検証・模擬HTTP統合、ファームウェアとAPK 2.0.0のビルドに合格。実機LED・音声・スマートフォンおよび製品品質の受入は未実施。[検証範囲](docs/ARCADE_PHASE_B3.md)。以下は過去のマイルストーン。

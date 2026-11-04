@@ -1,5 +1,7 @@
 # Pro の実装と導入
 
+2026-11-05: 最新の[要求・監査](PRO_FINAL_FEATURE_AUDIT.md)と[明示的な互換実行設定](PRO_HARDWARE_READINESS.md)を参照。以下は過去の範囲です。通常PCMはWi-Fi・認証付きv2が既定であり、旧v1/USB設定をそのまま使いません。現在版の実機合格を意味しません。
+
 [简体中文](PRO_FEATURES.md) · [English](PRO_FEATURES.en.md) · **日本語** · [概要](../README_JA.md)
 
 2026-10-25時点の実装状況です。ソース統合・オフライン検査・ビルドに加え、限定的な基板通信、音声、ジェスチャー、音楽追従の受入記録があります。**全機能の実機受入は未完了です。** 各試験は記録した版と条件にのみ適用します。[実機記録](hardware-checks-20261023.ja.md)を参照してください。
@@ -44,7 +46,7 @@ Python 3.10 と `pc-agent-vision/requirements-pro.txt` を使います。制御�
 | `KURISU_DATA_DIR` | `%LOCALAPPDATA%/KurisuPro`：記憶、顔、視線校正、機器アドレス。Git外です。 |
 | `KURISU_CACHE_DIR` | `~/.codex/cache/tasks/kurisu-runtime-<pid>`：音声キャッシュ・診断。テストは明示的に隔離します。 |
 | `KURISU_CONTINUOUS` | `1`：応答後も受け付け、10秒無操作または終了句で待機へ。`0` は単一ターンです。 |
-| `KURISU_AUDIO_TRANSPORT` | `usb`。`wifi` でTCP PCMを選択。既存USB変換・板側70%音量・音声基準を保持します。 |
+| `KURISU_AUDIO_TRANSPORT` | 現在の既定は `wifi`。`usb` は明示的な診断用途のみ。既存の板側音量・処理は維持します。 |
 | `KURISU_BARGE_IN` | 既定で無効。Wi-Fi時の `1` で実験的参照エコー処理・起動語割込みを有効化。無誘導ASR確認は残ります。 |
 | `KURISU_ECHO_DELAY_MS` | `120`：参照音の実験的整列値で、音響校正結果ではありません。 |
 | `KURISU_AUTO_MEMORY` | `1`：明示的な一人称の名前・好み・習慣を保存可能。`记住：…` は手動保存、画面から表示・削除・全消去。`0` で自動抽出を無効化。 |

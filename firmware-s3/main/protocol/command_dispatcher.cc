@@ -60,16 +60,21 @@ CommandDispatcher::~CommandDispatcher()
         audio_ring_buf_ = nullptr;
     }
 }
-void CommandDispatcher::SetMicStreaming(bool enabled)
+bool CommandDispatcher::SetMicStreaming(bool enabled)
 {
+    if (enabled && (!mic_task_handle_ || AudioHAL::GetInstance().EnableMic(true) != ESP_OK)) {
+        ESP_LOGE(TAG, "Mic streaming unavailable: microphone worker/audio initialization failed");
+        return false;
+    }
     mic_streaming_ = enabled;
     AudioHAL::GetInstance().GuardGameAudioForCapture(enabled);
-    AudioHAL::GetInstance().EnableMic(enabled);
+    if (!enabled) AudioHAL::GetInstance().EnableMic(false);
     ESP_LOGI(TAG, "Mic streaming toggled: %s", enabled ? "ENABLED" : "DISABLED");
+    return true;
 }
 
 bool CommandDispatcher::EnqueuePcm(const void* data,size_t bytes) {
-    if(!audio_ring_buf_||!data||!bytes||bytes>2048||bytes%2)return false;
+    if(!audio_play_task_handle_||!audio_ring_buf_||!data||!bytes||bytes>2048||bytes%2)return false;
     AudioHAL::GetInstance().NotifyExternalPlayback();
     audio_received_.fetch_add(bytes/2);
     if(xRingbufferSend(audio_ring_buf_,data,bytes,pdMS_TO_TICKS(100))!=pdTRUE){audio_dropped_.fetch_add(bytes/2);return false;}
@@ -90,17 +95,16 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
     is_running_ = true;
 
     // 0. 创建 32KB 深度环形缓冲蓄水池 (RingBuffer)，将 USB 极速接收与 I2S DMA 发声彻底解耦！
-    if (!audio_ring_buf_) {
+    if (AudioHAL::GetInstance().IsInitialized() && !audio_ring_buf_) {
         audio_ring_buf_ = xRingbufferCreate(32768, RINGBUF_TYPE_BYTEBUF);
         if (!audio_ring_buf_) {
             ESP_LOGE(TAG, "Failed to create audio ring buffer!");
-            is_running_ = false;
-            return ESP_FAIL;
+            ESP_LOGW(TAG, "Continuing with serial control; PCM playback disabled");
         }
     }
 
     // 1. 启动专用音频播放消费任务 (运行在 Core 0，不与 Core 1 渲染任务争抢)
-    BaseType_t ret = xTaskCreatePinnedToCore(
+    BaseType_t ret = audio_ring_buf_ ? xTaskCreatePinnedToCore(
         AudioPlayTaskTrampoline,
         "audio_play_task",
         8192,
@@ -108,9 +112,10 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
         priority > 1 ? priority : 2,
         &audio_play_task_handle_,
         core_id
-    );
+    ) : pdFAIL;
     if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create audio play task!");
+        ESP_LOGE(TAG, "PCM playback unavailable: audio initialization/buffer/worker failed");
+        if (audio_ring_buf_) { vRingbufferDelete(audio_ring_buf_); audio_ring_buf_ = nullptr; }
     }
 
     ret = xTaskCreatePinnedToCore(
@@ -130,7 +135,7 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
     }
 
     // 启动后台麦克风音频流上传任务 (同样绑定至 Core 0，不抢占 Core 1 渲染任务)
-    xTaskCreatePinnedToCore(
+    ret = AudioHAL::GetInstance().IsInitialized() ? xTaskCreatePinnedToCore(
         MicTaskTrampoline,
         "mic_stream_task",
         4096,
@@ -138,9 +143,11 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
         priority > 1 ? priority - 1 : 1,
         &mic_task_handle_,
         core_id
-    );
+    ) : pdFAIL;
+    if (ret != pdPASS) ESP_LOGE(TAG, "Microphone streaming unavailable: audio initialization/worker failed");
 
-    ESP_LOGI(TAG, "Serial, Mic & AudioPlay tasks started on Core %d", (int)core_id);
+    ESP_LOGI(TAG, "Core %d workers: serial=ready mic=%s pcm_play=%s", (int)core_id,
+        mic_task_handle_ ? "ready" : "unavailable", audio_play_task_handle_ ? "ready" : "unavailable");
     return ESP_OK;
 }
 
@@ -314,12 +321,12 @@ void CommandDispatcher::SerialTaskLoop()
                         audio_received_len += take;
                         i += (take - 1); // for-loop 自增 i++
                         if (audio_received_len >= audio_expected_len) {
-                            if (audio_ring_buf_) {
+                            if (audio_ring_buf_ && audio_play_task_handle_) {
                                 audio_received_.fetch_add(audio_received_len / 2);
                                 if (xRingbufferSend(audio_ring_buf_, audio_payload, audio_received_len, pdMS_TO_TICKS(100)) != pdTRUE) {
                                     audio_dropped_.fetch_add(audio_received_len / 2);
                                 }
-                            }
+                            } else audio_dropped_.fetch_add(audio_received_len / 2);
                             rx_state = STATE_TEXT;
                         }
                         break;
@@ -564,9 +571,9 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     else if (strcasecmp(cmd, "mic") == 0) {
         cJSON* en_item = cJSON_GetObjectItem(root, "enable");
         if (en_item && cJSON_IsBool(en_item)) {
-            SetMicStreaming(cJSON_IsTrue(en_item));
+            bool ok = SetMicStreaming(cJSON_IsTrue(en_item));
             cJSON_Delete(root);
-            return true;
+            return ok;
         }
     }
     // {"cmd":"game", "name":"snake", "dx":1, "dy":0}
@@ -648,8 +655,8 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     if (strcasecmp(text_str, "fire") == 0)          { dm.SetMode(DisplayMode::CYBER_FIRE); return true; }
     if (strcasecmp(text_str, "matrix") == 0)        { dm.SetMode(DisplayMode::MATRIX_RAIN_PRO); return true; }
     if (strcasecmp(text_str, "beep") == 0)          { return AudioHAL::GetInstance().PlayBeep(1000, 200) == ESP_OK; }
-    if (strcasecmp(text_str, "mic on") == 0)        { SetMicStreaming(true); return true; }
-    if (strcasecmp(text_str, "mic off") == 0)       { SetMicStreaming(false); return true; }
+    if (strcasecmp(text_str, "mic on") == 0)        { return SetMicStreaming(true); }
+    if (strcasecmp(text_str, "mic off") == 0)       { return SetMicStreaming(false); }
     if (strcasecmp(text_str, "board_led green") == 0 || strcasecmp(text_str, "led green") == 0 || strcasecmp(text_str, "led speaking") == 0) {
         BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
         return true;

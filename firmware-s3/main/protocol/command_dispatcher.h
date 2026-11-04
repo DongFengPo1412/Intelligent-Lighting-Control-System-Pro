@@ -21,7 +21,7 @@ public:
     void SendStatus();
 
     // 麦克风音频流控
-    void SetMicStreaming(bool enabled);
+    bool SetMicStreaming(bool enabled);
     bool IsMicStreaming() const { return mic_streaming_; }
     uint32_t AudioReceived() const { return audio_received_.load(); }
     uint32_t AudioPlayed() const { return audio_played_.load(); }

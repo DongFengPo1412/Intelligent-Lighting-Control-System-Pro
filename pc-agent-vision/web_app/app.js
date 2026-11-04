@@ -60,7 +60,7 @@
   ];
   const modeName = (n) =>
     modes.find((m) => m[0] === n)?.[1] ||
-    (n === 25 ? "专注倒计时" : "尚未读取");
+    (n === 25 ? "专注倒计时" : n === 32 ? "街机" : "尚未读取");
   const colors = {
     5: ["#273831", "#9bc6b0"],
     7: ["#292b40", "#a5a9e2"],
@@ -87,6 +87,7 @@
     toastTimer = setTimeout(() => ($("toast").hidden = true), 6500);
   }
   const nativeMode = location.protocol === "file:";
+  const nativeDevice = nativeMode ? window.nativeDeviceApi(window.arcadeNativeExchange(window.AmadeusNative)) : null;
   const arcadeTransport = new window.ArcadeTransport(nativeMode ? window.arcadeNativeExchange(window.AmadeusNative) :
     async (command, id, policy) => {
       const path = command.cmd === "frame" ? "/api/arcade/frame" : "/api/arcade";
@@ -98,11 +99,7 @@
   async function api(path, data, method = "POST", timeout = 15000) {
     if (path === "/api/arcade" || path.startsWith("/api/arcade/")) return arcadeTransport.call(path,data);
     if (nativeMode) {
-      if (path === "/api/status") {
-        const r=await window.arcadeNativeExchange(window.AmadeusNative)({cmd:"status"},"status_"+Date.now(),{timeout:400,retries:0});
-        return {...r,status:"online",is_connected:true,simulated:false};
-      }
-      throw Error("此功能需要电脑服务；街机可直接连接灯板");
+      return nativeDevice(path,data,method);
     }
     return httpApi(path,data,method,timeout);
   }
@@ -190,7 +187,7 @@
     state.simulated = !!s?.simulated;
     state.board = !!s?.is_connected;
     const text = !s
-      ? "电脑服务未连接"
+      ? (nativeMode ? "灯板未连接" : "电脑服务未连接")
       : s.simulated
         ? "离线模拟 · 无实物输出"
         : s.is_connected
@@ -208,10 +205,10 @@
       ? "当前为模拟服务：可预览操作流程，不会控制灯板、播放声音或打开摄像头。"
       : state.online
         ? "电脑服务在线，灯板尚未连接。请检查灯板电源与 Wi-Fi。"
-        : "电脑服务未连接，请在连接设置中检查地址和网络。";
+        : (nativeMode ? "灯板未连接，请检查设备地址、配对令牌、电源和Wi-Fi。" : "电脑服务未连接，请在连接设置中检查地址和网络。");
     $("serverStatus").textContent = state.online ? "服务在线" : "离线";
     $("serverAddress").textContent =
-      location.protocol === "file:" ? "尚未设置" : location.origin;
+      nativeMode ? "APK直连ESP32（设备设置）" : location.origin;
     $("boardConnection").textContent = s?.simulated
       ? "模拟设备"
       : s?.is_connected
@@ -233,7 +230,8 @@
       : wakeReady
         ? "对板载麦克风说“助手”即可开始"
         : "可发送文字；板载语音状态见设置";
-    $("sendChat").disabled = !state.online || !!state.ownChat;
+    if(nativeMode)$("voiceState").textContent="灯光和街机可直连；AI对话需连接电脑服务";
+    $("sendChat").disabled = nativeMode || !state.online || !!state.ownChat;
     markHardware();
     if (!state.board) {
       for (const id of ["previousMusic", "nextMusic", "stopMusic"])
@@ -1936,7 +1934,13 @@
         lastGeneral = now;
         if (!nativeMode) openSocket();
       }
-      if (nativeMode) { $("status").textContent="APK 直连 ESP32；语音、音乐和视觉需要电脑服务"; return; }
+      if (nativeMode) {
+        $("status").textContent="APK 直连 ESP32：灯效、亮度、音量、倒计时和街机；AI、音乐和视觉需要电脑服务";
+        if(state.board && state.page!=="settings" && !state.arcadeActive){
+          stage="frame";renderFrame(await api("/api/pro/frame",undefined,"GET"));
+        }
+        lastError="";return;
+      }
       stage = "features";
       if (now - lastPro > 1500) {
         const p = await api("/api/pro/status", undefined, "GET", 6000);
@@ -1968,7 +1972,7 @@
         connection(null);
         state.socket?.close();
       } else if (stage === "frame") {
-        connection({ ...state.general, is_connected: false });
+        if(!nativeMode)connection({ ...state.general, is_connected: false });
         $("frameSource").textContent = "帧回读失败：" + error.message;
         lastGeneral = 0;
       } else {

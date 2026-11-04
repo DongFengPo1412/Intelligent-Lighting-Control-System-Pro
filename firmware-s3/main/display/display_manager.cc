@@ -288,6 +288,12 @@ void DisplayManager::SetBrightness(uint8_t brightness)
     hal_.SetGlobalBrightness(brightness);
 }
 
+uint8_t DisplayManager::GetBrightness() const
+{
+    DisplayLock lock(mutex_);
+    return hal_.GetGlobalBrightness();
+}
+
 void DisplayManager::FeedFingertip(float x,float y,bool visible,float confidence) {
     DisplayLock lock(mutex_);fingertip_tracker_.FeedTarget(x,y,visible,confidence);
 }
