@@ -1,12 +1,12 @@
 # Phase B3 — 36 remaining targets
 
-Current verified checkpoint: **2/6**, **76/100 registered**. This is software integration, not final product/hardware acceptance.
+Current verified checkpoint: **3/6**, **82/100 registered**. This is software integration, not final product/hardware acceptance.
 
 | Group | IDs | Status |
 |---|---|---|
 | 1 | 007, 008, 011, 012, 013, 023 | BUILD + INPUT_REPLAY_PASSED |
 | 2 | 024, 025, 032, 036, 037, 039 | BUILD + INPUT_REPLAY_PASSED |
-| 3 | 046, 047, 048, 049, 050, 056 | PENDING |
+| 3 | 046, 047, 048, 049, 050, 056 | BUILD + INPUT_REPLAY_PASSED |
 | 4 | 059, 060, 061, 068, 069, 070 | PENDING |
 | 5 | 071, 077, 078, 079, 080, 082 | PENDING |
 | 6 | 089, 090, 091, 096, 099, 100 | PENDING |

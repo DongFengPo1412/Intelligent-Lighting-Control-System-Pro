@@ -925,12 +925,12 @@
     "simulator_source": "pc-agent-vision/arcade/game_046_suika.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "SOURCE_IMPLEMENTED; validation pending",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Drop circles under gravity; equal levels merge on contact, different levels collide and a high stack overflows.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "PENDING",
+    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
     "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
-    "difficulty_status": "THREE_REAL_PROFILES_IMPLEMENTED; VALIDATION_PENDING"
+    "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED"
   },
   {
     "id": "047",
@@ -945,12 +945,12 @@
     "simulator_source": "pc-agent-vision/arcade/game_047_blockudoku.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "SOURCE_IMPLEMENTED; validation pending",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Place a three-piece rack freely on a 6x6 board; clear full rows, columns or 3x3 regions.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "PENDING",
+    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
     "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
-    "difficulty_status": "THREE_REAL_PROFILES_IMPLEMENTED; VALIDATION_PENDING"
+    "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED"
   },
   {
     "id": "048",
@@ -965,12 +965,12 @@
     "simulator_source": "pc-agent-vision/arcade/game_048_triple_town.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "SOURCE_IMPLEMENTED; validation pending",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Place grass; three connected equal objects merge at the placed cell and can cascade into a house.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "PENDING",
+    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
     "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
-    "difficulty_status": "THREE_REAL_PROFILES_IMPLEMENTED; VALIDATION_PENDING"
+    "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED"
   },
   {
     "id": "049",
@@ -985,12 +985,12 @@
     "simulator_source": "pc-agent-vision/arcade/game_049_lights_out.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "SOURCE_IMPLEMENTED; validation pending",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Toggle a lamp and its orthogonal neighbours on a solvable 5x5 board; turn every light off within a move budget.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "PENDING",
+    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
     "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
-    "difficulty_status": "THREE_REAL_PROFILES_IMPLEMENTED; VALIDATION_PENDING"
+    "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED"
   },
   {
     "id": "050",
@@ -1005,12 +1005,12 @@
     "simulator_source": "pc-agent-vision/arcade/game_050_mini_sudoku.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "SOURCE_IMPLEMENTED; validation pending",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Fill four colours under row, column and 2x2 box constraints; checking a conflicting or incomplete board costs an attempt.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "PENDING",
+    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
     "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
-    "difficulty_status": "THREE_REAL_PROFILES_IMPLEMENTED; VALIDATION_PENDING"
+    "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED"
   },
   {
     "id": "051",
@@ -1128,12 +1128,12 @@
     "simulator_source": "pc-agent-vision/arcade/game_056_sliding_puzzle.py",
     "legacy_source": "None",
     "status": "integrated_software",
-    "test_status": "SOURCE_IMPLEMENTED; validation pending",
+    "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Slide the empty cell of a legally scrambled 3x3 numbered board back into ordered 1 through 8.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "PENDING",
+    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
     "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
-    "difficulty_status": "THREE_REAL_PROFILES_IMPLEMENTED; VALIDATION_PENDING"
+    "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED"
   },
   {
     "id": "057",
