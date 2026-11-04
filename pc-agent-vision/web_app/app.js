@@ -1122,6 +1122,7 @@
     const gNum = Number(gid || state.arcadeGid || 1);
     const help=document.querySelector(".mario-help");
     const specificHelp={
+      ...Object.fromEntries(Object.entries(window.ARCADE_B3_RULES||{}).map(([id,v])=>[id,v.help])),
       35:"方向键挖土、收集8颗青色宝石，再进入右下出口；可水平推石，提防头顶落石。三档改变落石速度和限时。",
       55:"方向键移动光标，A 旋转镜面并进入安全预览；B 确认发射/停止。只有发射才会充能或引爆炸弹；暂停与重新开局使用上方按钮。共四关。",
       57:"A 选择下一辆车，B 上一辆；白点标示当前车辆。横车用左右，竖车用上下；让红车到达右侧出口。移动次数有限。",
@@ -1228,6 +1229,10 @@
       if (actions) actions.style.display = "none";
       if (versus) versus.style.display = "flex";
     }
+    const b3=window.ARCADE_B3_RULES?.[gNum];
+    if(b3 && ct===3){if(btnA_sub)btnA_sub.textContent=b3.a||"确认";if(btnB_sub)btnB_sub.textContent=b3.b||"";if(keyB)keyB.style.display=b3.b?"inline-flex":"none";}
+    if(b3 && ct===0 && tapBtn)tapBtn.textContent=b3.a;
+
   }
 
   let arcadeSettingsDirty=false;

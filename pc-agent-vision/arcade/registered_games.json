@@ -30,6 +30,16 @@
     "class": "Game006BubbleBobble"
   },
   {
+    "id": 7,
+    "module": "game_007_downwell",
+    "class": "Game007Downwell"
+  },
+  {
+    "id": 8,
+    "module": "game_008_jump_king",
+    "class": "Game008JumpKing"
+  },
+  {
     "id": 9,
     "module": "game_009_flappy_bird",
     "class": "Game009FlappyBird"
@@ -38,6 +48,21 @@
     "id": 10,
     "module": "game_010_stack",
     "class": "Game010Stack"
+  },
+  {
+    "id": 11,
+    "module": "game_011_dino_runner",
+    "class": "Game011DinoRunner"
+  },
+  {
+    "id": 12,
+    "module": "game_012_knife_hit",
+    "class": "Game012KnifeHit"
+  },
+  {
+    "id": 13,
+    "module": "game_013_pendulum_toss",
+    "class": "Game013PendulumToss"
   },
   {
     "id": 14,
@@ -83,6 +108,11 @@
     "id": 22,
     "module": "game_022_pinball",
     "class": "Game022Pinball"
+  },
+  {
+    "id": 23,
+    "module": "game_023_air_hockey",
+    "class": "Game023AirHockey"
   },
   {
     "id": 26,

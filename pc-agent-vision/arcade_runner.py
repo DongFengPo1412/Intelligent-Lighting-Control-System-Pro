@@ -100,6 +100,18 @@ from arcade.game_058_program_robot import Game058ProgramRobot
 from arcade.game_081_qix import Game081Qix
 from arcade.game_098_lunar_lander import Game098LunarLander
 
+from arcade.game_007_downwell import Game007Downwell
+
+from arcade.game_008_jump_king import Game008JumpKing
+
+from arcade.game_011_dino_runner import Game011DinoRunner
+
+from arcade.game_012_knife_hit import Game012KnifeHit
+
+from arcade.game_013_pendulum_toss import Game013PendulumToss
+
+from arcade.game_023_air_hockey import Game023AirHockey
+
 KEY_MAP = {
     "left": KEY_LEFT,
     "right": KEY_RIGHT,
@@ -204,6 +216,12 @@ class ArcadeSession:
         self.cartridges[58]=Game058ProgramRobot()
         self.cartridges[81]=Game081Qix()
         self.cartridges[98]=Game098LunarLander()
+        self.cartridges[7]=Game007Downwell()
+        self.cartridges[8]=Game008JumpKing()
+        self.cartridges[11]=Game011DinoRunner()
+        self.cartridges[12]=Game012KnifeHit()
+        self.cartridges[13]=Game013PendulumToss()
+        self.cartridges[23]=Game023AirHockey()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None

@@ -1,0 +1,124 @@
+{
+  "7": {
+    "id": 7,
+    "slug": "downwell",
+    "cls": "Game007Downwell",
+    "name": "向下射击",
+    "en": "Downwell",
+    "core": "Fall through a vertical shaft, fire downward with finite ammo, reload on shelves and defeat enemies before landing.",
+    "keys": [
+      "x",
+      "y",
+      "vy",
+      "ammo",
+      "kills",
+      "hp"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,self.hp)",
+      "std::max(0,hp)"
+    ]
+  },
+  "8": {
+    "id": 8,
+    "slug": "jump_king",
+    "cls": "Game008JumpKing",
+    "name": "蓄力跳跃",
+    "en": "Jump King",
+    "core": "Charge then release a ballistic jump between elevated platforms; failed landings lose altitude.",
+    "keys": [
+      "x",
+      "y",
+      "vx",
+      "vy",
+      "charge",
+      "facing",
+      "grounded"
+    ],
+    "control": 3,
+    "lives": null
+  },
+  "11": {
+    "id": 11,
+    "slug": "dino_runner",
+    "cls": "Game011DinoRunner",
+    "name": "恐龙跑酷",
+    "en": "Dino Runner",
+    "core": "Automatic running, grounded jump timing, accelerating obstacles and a twelve-obstacle survival milestone.",
+    "keys": [
+      "y",
+      "vy",
+      "distance",
+      "cleared",
+      "ob[0]",
+      "ob[1]",
+      "ob[2]"
+    ],
+    "control": 0,
+    "lives": null
+  },
+  "12": {
+    "id": 12,
+    "slug": "knife_hit",
+    "cls": "Game012KnifeHit",
+    "name": "旋盘投刀",
+    "en": "Knife Hit",
+    "core": "Throw knives into a rotating target while avoiding all already embedded blade angles.",
+    "keys": [
+      "theta",
+      "knife_y",
+      "hits",
+      "flying"
+    ],
+    "control": 0,
+    "lives": null
+  },
+  "13": {
+    "id": 13,
+    "slug": "pendulum_toss",
+    "cls": "Game013PendulumToss",
+    "name": "摆锤投球",
+    "en": "Pendulum Toss",
+    "core": "Release a swinging bob with its tangential velocity and land inside three baskets with limited balls.",
+    "keys": [
+      "x",
+      "y",
+      "vx",
+      "vy",
+      "phase",
+      "hits",
+      "balls",
+      "flying"
+    ],
+    "control": 0,
+    "lives": [
+      "max(0,self.balls)",
+      "std::max(0,balls)"
+    ]
+  },
+  "23": {
+    "id": 23,
+    "slug": "air_hockey",
+    "cls": "Game023AirHockey",
+    "name": "空气曲棍球",
+    "en": "Air Hockey",
+    "core": "Move a two-dimensional paddle, deflect a puck, use a close-range power strike and score three goals against bounded AI.",
+    "keys": [
+      "paddle_x",
+      "paddle_y",
+      "ax",
+      "x",
+      "y",
+      "vx",
+      "vy",
+      "goals",
+      "against"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,3-self.against)",
+      "std::max(0,3-against)"
+    ]
+  }
+}

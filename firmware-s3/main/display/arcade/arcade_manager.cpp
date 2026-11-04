@@ -1,3 +1,9 @@
+#include "game_023_air_hockey.h"
+#include "game_013_pendulum_toss.h"
+#include "game_012_knife_hit.h"
+#include "game_011_dino_runner.h"
+#include "game_008_jump_king.h"
+#include "game_007_downwell.h"
 #include "game_035_boulder_dash.h"
 #include "game_057_rush_hour.h"
 #include "game_058_program_robot.h"
@@ -139,6 +145,18 @@ static Game058ProgramRobot s_game_058;
 static Game081Qix s_game_081;
 static Game098LunarLander s_game_098;
 
+static Game007Downwell s_game_007;
+
+static Game008JumpKing s_game_008;
+
+static Game011DinoRunner s_game_011;
+
+static Game012KnifeHit s_game_012;
+
+static Game013PendulumToss s_game_013;
+
+static Game023AirHockey s_game_023;
+
 ArcadeManager& ArcadeManager::GetInstance()
 {
     static ArcadeManager instance;
@@ -163,6 +181,12 @@ void ArcadeManager::Init()
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
 {
     switch (game_id) {
+        case 23: return &s_game_023;
+        case 13: return &s_game_013;
+        case 12: return &s_game_012;
+        case 11: return &s_game_011;
+        case 8: return &s_game_008;
+        case 7: return &s_game_007;
         case 35: return &s_game_035;
         case 57: return &s_game_057;
         case 58: return &s_game_058;
