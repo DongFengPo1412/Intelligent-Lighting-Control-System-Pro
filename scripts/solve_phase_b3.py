@@ -89,7 +89,9 @@ def policy(g,won,context):
 
 
 def witness(gid,level,won,rules):
-    g=ArcadeSession().cartridges[gid];assert g.set_difficulty(level);g.init();g.start()
+    g=ArcadeSession().cartridges[gid];assert g.set_difficulty(level)
+    if gid==100:assert g.set_replay_seed(0x100fa)
+    g.init();g.start()
     rle=[];checks=[];context={};expected=STATE_VICTORY if won else STATE_GAMEOVER
     keys=rules[str(gid)]['keys']
     for step in range(1,20001):
@@ -102,7 +104,7 @@ def witness(gid,level,won,rules):
             checks.append([step,status['state'],status['score'],status['lives'],status['progress'],*values])
         if g.state!=STATE_PLAYING:break
     assert g.state==expected,(gid,level,won,g.get_status(),{k:v for k,v in vars(g).items() if not isinstance(v,list)})
-    return dict(id=gid,difficulty=level,outcome='win' if won else 'loss',steps=step,inputs=rle,checkpoints=checks)
+    return dict(id=gid,difficulty=level,**({'seed':0x100fa} if gid==100 else {}),outcome='win' if won else 'loss',steps=step,inputs=rle,checkpoints=checks)
 
 
 def main():

@@ -6,7 +6,7 @@
     "core_mechanic": "横向平台跳跃、躲避敌人、收集物品、到达终点。",
     "scheme_16x16": "保留横向滚屏、平台、跳跃、敌人和终点。角色使用1×2或2×2像素，采用短关卡和简化碰撞。",
     "control_type": "左右移动、A跳跃。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_001_mario.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_001_mario.py",
@@ -15,9 +15,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "002",
@@ -26,7 +30,7 @@
     "core_mechanic": "角色不断自动向上弹跳，玩家控制左右移动，寻找下一个落脚平台。",
     "scheme_16x16": "角色使用1×2像素，屏幕显示3～4层平台，角色上升时地图向下滚动。",
     "control_type": "左右。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_002_doodle_jump.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_002_doodle_jump.py",
@@ -37,9 +41,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_004_doodle_jump.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_004_doodle_jump.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "003",
@@ -48,7 +56,7 @@
     "core_mechanic": "普通移动和跳跃之外，能够进行短距离定向冲刺。",
     "scheme_16x16": "改为单屏短关卡，保留尖刺、平台、冲刺和抵达终点机制。每次落地恢复冲刺能力。",
     "control_type": "方向键、A跳跃、B冲刺。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_003_celeste_dash.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_003_celeste_dash.py",
@@ -59,9 +67,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_003.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_003.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "004",
@@ -70,7 +82,7 @@
     "core_mechanic": "通过反转重力在地面和天花板之间切换。",
     "scheme_16x16": "单屏关卡，上下墙面和尖刺使用不同颜色表示。",
     "control_type": "左右、A切换重力。\n\n\n\n不允许变成普通跳跃游戏。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_004_gravity_flip.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_004_gravity_flip.py",
@@ -81,9 +93,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_004.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_004.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "005",
@@ -92,7 +108,7 @@
     "core_mechanic": "挖掘临时陷阱、躲避敌人、收集全部金币。",
     "scheme_16x16": "采用12×14左右的小地图，保留挖洞和自动回填机制，敌人数量减少。",
     "control_type": "方向键、A/B挖洞。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_005_lode_runner.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_005_lode_runner.py",
@@ -103,9 +119,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_024_lode_runner.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_024_lode_runner.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_LOSS_ONLY",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "006",
@@ -114,7 +134,7 @@
     "core_mechanic": "发射泡泡困住敌人，再触碰泡泡消灭敌人。",
     "scheme_16x16": "同屏最多3个敌人，泡泡简化为单点或2×2图形，保留上浮与过期机制。",
     "control_type": "左右、A跳跃、B发射泡泡。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_006_bubble_bobble.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_006_bubble_bobble.py",
@@ -125,9 +145,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_025_bubble_bobble.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_025_bubble_bobble.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "007",
@@ -145,10 +169,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Fall through a vertical shaft, fire downward with finite ammo, reload on shelves and defeat enemies before landing.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "008",
@@ -166,10 +194,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Charge then release a ballistic jump between elevated platforms; failed landings lose altitude.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "009",
@@ -178,7 +210,7 @@
     "core_mechanic": "单键振翅获得向上速度，角色受重力下降，穿过不断出现的管道空隙。",
     "scheme_16x16": "小鸟1～2像素，管道宽2列，间隙3～5格，障碍持续向左移动。",
     "control_type": "A。\n\n\n\n按通过的管道数量计分。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_009_flappy_bird.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_009_flappy_bird.py",
@@ -187,9 +219,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "重力拍翅、管道空隙穿越、死屏与结算滚动，ESP32固件与Python模拟器双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "010",
@@ -198,7 +234,7 @@
     "core_mechanic": "移动方块左右往返，玩家按键放下，未重叠区域被裁剪。",
     "scheme_16x16": "方块逐层上升，宽度逐渐缩小；达到一定高度后画面向下滚动。",
     "control_type": "A。\n\n\n\n保留方块越来越窄的核心难度机制。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_010_stack.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_010_stack.py",
@@ -207,9 +243,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "单键切削堆叠、悬空断块坠落物理、HSV彩虹色环递进，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "011",
@@ -227,10 +267,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Automatic running, grounded jump timing, accelerating obstacles and a twelve-obstacle survival milestone.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "012",
@@ -248,10 +292,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Throw knives into a rotating target while avoiding all already embedded blade angles.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "013",
@@ -269,10 +317,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Release a swinging bob with its tangential velocity and land inside three baskets with limited balls.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "014",
@@ -281,7 +333,7 @@
     "core_mechanic": "角色沿轨道自动运动，在轨道交会处跳入其他轨道。",
     "scheme_16x16": "使用同心方形或圆形近似轨道，以颜色突出可跳转位置。",
     "control_type": "A。\n\n\n\n必须保留轨道切换，而不是改成普通障碍跳跃。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_014_orbit_hop.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_014_orbit_hop.py",
@@ -292,9 +344,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_014.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_014.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "015",
@@ -303,7 +359,7 @@
     "core_mechanic": "记住并复现不断增长的颜色序列。",
     "scheme_16x16": "四个颜色区域，按顺序闪烁。",
     "control_type": "四个对应按钮。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_015_simon_memory.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_015_simon_memory.py",
@@ -314,9 +370,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_015.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_015.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "016",
@@ -325,7 +385,7 @@
     "core_mechanic": "随机目标出现，玩家必须在目标消失前准确击中。",
     "scheme_16x16": "3×3洞位，显示光标或使用对应位置选择。",
     "control_type": "方向键、A。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_016_whack_a_mole.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_016_whack_a_mole.py",
@@ -336,9 +396,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_026_whack_a_mole.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_026_whack_a_mole.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "017",
@@ -358,10 +422,14 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_017_piano_tiles.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_017_piano_tiles.py",
-    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
     "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
-    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "018",
@@ -370,7 +438,7 @@
     "core_mechanic": "绿灯可以前进，红灯必须停止。",
     "scheme_16x16": "顶部显示红绿信号，玩家在赛道上逐格前进。",
     "control_type": "按住A前进，松开停止。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_018_red_green_light.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_018_red_green_light.py",
@@ -381,9 +449,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_018.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_018.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "019",
@@ -392,7 +464,7 @@
     "core_mechanic": "记住球被放进哪个杯子，跟踪杯子交换位置，最终猜测。",
     "scheme_16x16": "3～4个杯子，以简单点阵图形表示，逐渐提高交换次数和速度。",
     "control_type": "左右选择、A确认。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_019_shell_game.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_019_shell_game.py",
@@ -403,9 +475,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_019.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_019.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "020",
@@ -414,7 +490,7 @@
     "core_mechanic": "控制挡板反弹小球，与对手竞争得分。",
     "scheme_16x16": "左右两侧使用2～3像素挡板，球为1像素。",
     "control_type": "上下。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_020_pong.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_020_pong.py",
@@ -423,9 +499,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "双向挡板碰撞反弹、智能AI对手/双人同屏对战、5分决胜机制，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "021",
@@ -434,7 +514,7 @@
     "core_mechanic": "用底部挡板控制反弹小球，清除顶部砖块。",
     "scheme_16x16": "顶部3～4排砖块，底部3像素挡板。",
     "control_type": "左右。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_021_breakout.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_021_breakout.py",
@@ -443,9 +523,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "底部挡板可调反弹角、4行32块耐久砖阵列、3命清屏，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "022",
@@ -454,7 +538,7 @@
     "core_mechanic": "利用左右拨杆击打小球，避免小球掉落，击中目标计分。",
     "scheme_16x16": "一个小球、两个拨杆、少量固定障碍和得分目标。",
     "control_type": "A控制左拨杆，B控制右拨杆。\n\n\n\n物理模拟可以简化，但必须保留拨杆操作。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_022_pinball.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_022_pinball.py",
@@ -465,9 +549,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_108_pinball.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_108_pinball.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "023",
@@ -485,10 +573,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Move a two-dimensional paddle, deflect a puck, use a close-range power strike and score three goals against bounded AI.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "024",
@@ -506,10 +598,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Aim a finite supply of gravity-driven balls; collide with and remove every peg.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "025",
@@ -527,10 +623,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Tilt acceleration and inertia, wall bounces, lethal pits and a low-speed finish.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "026",
@@ -539,7 +639,7 @@
     "core_mechanic": "底部炮台射击逐渐下降的敌人阵列。",
     "scheme_16x16": "3～5列敌人，减少敌人数量，保留移动、下落和射击规则。",
     "control_type": "左右、A射击。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_026_space_invaders.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_026_space_invaders.py",
@@ -548,9 +648,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "外星编队下压、阵亡动态加速步进、火炮反击与掩体拦截，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "UNSEEDED_RANDOMNESS_DIFFERS; NOT_CERTIFIED",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "027",
@@ -559,7 +663,7 @@
     "core_mechanic": "飞船旋转、推进、射击漂浮的小行星。",
     "scheme_16x16": "飞船采用单点或极简箭头表示，使用8方向转向和惯性运动。",
     "control_type": "左右旋转、A推进、B射击。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_027_asteroids.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_027_asteroids.py",
@@ -570,9 +674,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_113_asteroids.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_113_asteroids.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "028",
@@ -581,7 +689,7 @@
     "core_mechanic": "选择拦截位置，引爆范围攻击阻止导弹到达地面。",
     "scheme_16x16": "地面目标位于底部，十字光标选择爆炸位置，爆炸范围随时间变化。",
     "control_type": "方向键、A发射。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_028_missile_command.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_028_missile_command.py",
@@ -592,9 +700,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_036_missile_command.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_036_missile_command.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "029",
@@ -603,7 +715,7 @@
     "core_mechanic": "射击由多个身体节段组成、遇到障碍会转向的蜈蚣。",
     "scheme_16x16": "身体每段1像素，缩减障碍和节段数量。",
     "control_type": "左右、A射击。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_029_centipede.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_029_centipede.py",
@@ -614,9 +726,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_043_centipede.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_043_centipede.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "030",
@@ -625,7 +741,7 @@
     "core_mechanic": "瞄准移动目标，在有限弹药和时间内完成射击。",
     "scheme_16x16": "使用高对比度单点或小图案作为目标。",
     "control_type": "方向键移动准星、A射击。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_030_duck_hunt.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_030_duck_hunt.py",
@@ -636,9 +752,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_033_clay_shooting.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_033_clay_shooting.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "031",
@@ -647,7 +767,7 @@
     "core_mechanic": "角色在二维场地移动，并主动选择不同方向射击，抵御敌群。",
     "scheme_16x16": "最多12个敌人，角色和敌人用不同颜色表示。",
     "control_type": "方向键移动、独立射击方向键。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_031_robotron.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_031_robotron.py",
@@ -658,9 +778,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_164_robotron.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_164_robotron.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "032",
@@ -678,10 +802,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Wraparound horizontal flight and lasers protect four humans from abducting landers.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "033",
@@ -690,7 +818,7 @@
     "core_mechanic": "移动、吃食物、身体增长、避免自撞。",
     "scheme_16x16": "保留现有完整玩法，优化速度、颜色和难度。",
     "control_type": "方向键。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_033_snake.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_033_snake.py",
@@ -699,9 +827,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "默认经典撞墙死，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "034",
@@ -710,7 +842,7 @@
     "core_mechanic": "在迷宫收集豆子，同时躲避幽灵。",
     "scheme_16x16": "15×15迷宫，最多2个幽灵，保留能量豆机制。",
     "control_type": "方向键。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_034_pacman.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_034_pacman.py",
@@ -719,9 +851,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "16x16迷宫全豆漫游、左右穿梭隧道、三色巡逻幽灵与能量豆反噬，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "UNSEEDED_RANDOMNESS_DIFFERS; NOT_CERTIFIED",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "035",
@@ -739,10 +875,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED; HTTP/CHROMIUM_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Dig and collect eight gems; horizontal rock push, falling/crushing/rolling; timed exit challenge.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "HOST_CPP_AND_SIM_THREE_DIFFICULTIES_INPUT_ONLY_ROUND_PASSED",
-    "audio_status": "ACTION_EVENT_AND_STREAM_POLICY_TESTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_CPP_PY_HTTP_VERIFIED; HARDWARE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "036",
@@ -760,10 +900,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Dig tunnels, aim a held pump at pursuing monsters, maintain inflation until they burst.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "037",
@@ -781,10 +925,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Diagonal hops on a triangular pyramid, persistent tile colours and a pursuing chaser.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "038",
@@ -793,7 +941,7 @@
     "core_mechanic": "放置定时炸弹，利用墙体遮挡爆炸，击败敌人。",
     "scheme_16x16": "11×11地图，十字形爆炸范围，部分障碍可以炸毁。",
     "control_type": "方向键、A放炸弹。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_038_bomberman.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_038_bomberman.py",
@@ -802,9 +950,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "定时炸弹布置、十字烈焰冲击波、软砖爆破碎裂与巡逻怪消灭，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "039",
@@ -822,10 +974,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "A deterministic perfect maze with restricted vision, remembered explored walls and a hidden exit.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "040",
@@ -834,7 +990,7 @@
     "core_mechanic": "一次输入同时驱动两个镜像角色，让两个角色抵达各自目标。",
     "scheme_16x16": "左右对称地图，两个角色使用不同颜色。",
     "control_type": "方向键。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_040_mirror_maze.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_040_mirror_maze.py",
@@ -845,9 +1001,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_040.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_040.py",
-    "full_round_status": "SIMULATOR_PASSED (all authored levels)",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "041",
@@ -856,7 +1016,7 @@
     "core_mechanic": "方块下落、旋转、堆叠、消行。",
     "scheme_16x16": "使用10列棋盘，其余区域可用于状态显示。",
     "control_type": "左右、A旋转、B快速下落。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_041_tetris.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_041_tetris.py",
@@ -865,9 +1025,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "标准旋转与消行，ESP32唯一权威确立，NVS持久化、滚动大数字结算屏及统一移动Web控制器就绪",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "UNSEEDED_RANDOMNESS_DIFFERS; NOT_CERTIFIED",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "042",
@@ -876,7 +1040,7 @@
     "core_mechanic": "同色彩球达到4个连通后消除，可触发连锁反应。",
     "scheme_16x16": "6列×12行棋盘，彩球用单点表示。",
     "control_type": "左右、旋转、快速下落。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_042_puyo_puyo.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_042_puyo_puyo.py",
@@ -887,9 +1051,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_083_puyopuyo.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_083_puyopuyo.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "043",
@@ -898,7 +1066,7 @@
     "core_mechanic": "滑动整个棋盘，将相同数值的方块合并。",
     "scheme_16x16": "4×4棋盘，每个数值使用固定颜色和简单图案编码。",
     "control_type": "方向键。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_043_merge_2048.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_043_merge_2048.py",
@@ -909,9 +1077,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_016_neon_2048.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_016_neon_2048.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "044",
@@ -920,7 +1092,7 @@
     "core_mechanic": "交换相邻宝石，使三个或以上同色宝石形成连续排列。",
     "scheme_16x16": "6×6棋盘，用颜色表示不同宝石。",
     "control_type": "方向键、A选择及交换。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_044_bejeweled.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_044_bejeweled.py",
@@ -931,9 +1103,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_044.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_044.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "045",
@@ -942,7 +1118,7 @@
     "core_mechanic": "选择相邻的同色连通块，整组清除。",
     "scheme_16x16": "10×10彩色棋盘，消除后执行重力下落。",
     "control_type": "方向键、A。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_045_samegame.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_045_samegame.py",
@@ -953,9 +1129,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_045.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_045.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "046",
@@ -973,10 +1153,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Drop circles under gravity; equal levels merge on contact, different levels collide and a high stack overflows.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "047",
@@ -994,10 +1178,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Place a three-piece rack freely on a 6x6 board; clear full rows, columns or 3x3 regions.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "048",
@@ -1015,10 +1203,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Place grass; three connected equal objects merge at the placed cell and can cascade into a house.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "049",
@@ -1036,10 +1228,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Toggle a lamp and its orthogonal neighbours on a solvable 5x5 board; turn every light off within a move budget.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "050",
@@ -1057,10 +1253,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Fill four colours under row, column and 2x2 box constraints; checking a conflicting or incomplete board costs an attempt.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "051",
@@ -1069,7 +1269,7 @@
     "core_mechanic": "连接相同颜色的两个端点，所有路径不能相互交叉。",
     "scheme_16x16": "6×6棋盘，最多4组颜色。",
     "control_type": "方向键、A选择及延伸路径。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_051_flow_free.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_051_flow_free.py",
@@ -1080,9 +1280,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_051.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_051.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "052",
@@ -1091,7 +1295,7 @@
     "core_mechanic": "旋转不同方向的管道，将水源连接至终点。",
     "scheme_16x16": "6×6管件棋盘，采用简化管件图形和方向编码。",
     "control_type": "方向键、A旋转。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_052_pipe_connect.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_052_pipe_connect.py",
@@ -1102,9 +1306,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_034_pipe_dream.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_034_pipe_dream.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "053",
@@ -1113,7 +1321,7 @@
     "core_mechanic": "在不能把大盘放到小盘上的规则下完成圆盘搬运。",
     "scheme_16x16": "3根柱子、4～5个圆盘，使用不同长度和颜色表示大小。",
     "control_type": "左右、A选择、B放下。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_053_tower_of_hanoi.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_053_tower_of_hanoi.py",
@@ -1124,9 +1332,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_053.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_053.py",
-    "full_round_status": "SIMULATOR_PASSED (all authored levels)",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "054",
@@ -1135,7 +1347,7 @@
     "core_mechanic": "推动箱子到指定目标，箱子不能直接拉动。",
     "scheme_16x16": "12×12地图，2～4个箱子，支持撤销。",
     "control_type": "方向键、B撤销。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_054_sokoban.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_054_sokoban.py",
@@ -1144,9 +1356,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "不可拉动单向推移、空间槽位逻辑归位、死锁与全箱入槽通关检测，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "055",
@@ -1166,9 +1382,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_055.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_055.py",
-    "full_round_status": "HOST_CPP_AND_SIM_FOUR_AUTHORED_STAGES_PASSED",
-    "audio_status": "MIRROR_EDIT_FIRE_EVENTS_TESTED; LISTENING_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "056",
@@ -1186,10 +1406,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Slide the empty cell of a legally scrambled 3x3 numbered board back into ordered 1 through 8.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "057",
@@ -1207,10 +1431,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED; HTTP/CHROMIUM_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "One authored 6x6 fixed-axis vehicle puzzle; BFS proves a legal exit route; move/time budgets.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "HOST_CPP_AND_SIM_THREE_DIFFICULTIES_INPUT_ONLY_ROUND_PASSED",
-    "audio_status": "ACTION_EVENT_AND_STREAM_POLICY_TESTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_CPP_PY_HTTP_VERIFIED; HARDWARE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "058",
@@ -1228,10 +1456,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED; HTTP/CHROMIUM_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "One authored relative-command program; switch opens a gate; finite buffer and three failed runs.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "HOST_CPP_AND_SIM_THREE_DIFFICULTIES_INPUT_ONLY_ROUND_PASSED",
-    "audio_status": "ACTION_EVENT_AND_STREAM_POLICY_TESTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_CPP_PY_HTTP_VERIFIED; HARDWARE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "059",
@@ -1249,10 +1481,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "A rope constrains a swinging candy; cut at the correct time and preserve tangential momentum to feed the target.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "060",
@@ -1270,10 +1506,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Linked floor portals cross a sealed wall; a remote switch unlocks the exit gate.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "061",
@@ -1291,10 +1531,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Seven columns obey gravity; alternating player and tactical AI must connect four before the opponent.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "062",
@@ -1303,7 +1547,7 @@
     "core_mechanic": "落子夹住对方棋子并翻转颜色。",
     "scheme_16x16": "8×8棋盘，使用两种高对比度颜色。",
     "control_type": "方向键、A落子。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_062_reversi.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_062_reversi.py",
@@ -1314,9 +1558,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_035_othello.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_035_othello.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "063",
@@ -1325,7 +1573,7 @@
     "core_mechanic": "横、竖、斜方向先形成五子连线获胜。",
     "scheme_16x16": "15×15棋盘，棋子1像素，光标闪烁。",
     "control_type": "方向键、A落子。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_063_gomoku.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_063_gomoku.py",
@@ -1336,9 +1584,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_063.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_063.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "064",
@@ -1347,7 +1599,7 @@
     "core_mechanic": "斜向移动、跳吃对方棋子、升王。",
     "scheme_16x16": "8×8棋盘，每枚棋子1像素。",
     "control_type": "方向键、A选择及落子。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_064_checkers.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_064_checkers.py",
@@ -1358,9 +1610,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_064.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_064.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_LOSS_ONLY",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "065",
@@ -1369,7 +1625,7 @@
     "core_mechanic": "轮流连接线段，完成一个方格即可得分。",
     "scheme_16x16": "4×4或5×5方格阵列。",
     "control_type": "方向键、A画边。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_065_dots_and_boxes.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_065_dots_and_boxes.py",
@@ -1380,9 +1636,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_065.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_065.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "066",
@@ -1391,7 +1651,7 @@
     "core_mechanic": "隐藏舰船位置，轮流猜测对方舰船所在格子。",
     "scheme_16x16": "两张8×8棋盘轮流显示，保证隐藏信息不泄露。",
     "control_type": "方向键、A确认。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_066_battleship.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_066_battleship.py",
@@ -1402,9 +1662,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_066.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_066.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "067",
@@ -1413,7 +1677,7 @@
     "core_mechanic": "在移动棋子和放置墙体之间决策，争先到达棋盘对边。",
     "scheme_16x16": "7×7棋盘，墙体用相邻像素表示。",
     "control_type": "方向键、A移动、B放墙。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_067_quoridor.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_067_quoridor.py",
@@ -1424,9 +1688,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_067.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_067.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "068",
@@ -1444,10 +1712,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Guess a hidden four-colour code; exact and misplaced matches account for duplicates without double counting.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "069",
@@ -1465,10 +1737,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Choose one heap and a positive take count; alternating normal-play Nim rewards taking the last stone.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "070",
@@ -1486,10 +1762,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Recolour the connected top-left region, expanding only across adjacent matching cells within a move limit.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "071",
@@ -1507,10 +1787,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Jump over adjacent pegs into an empty triangle hole, removing the jumped peg; leave exactly one.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "072",
@@ -1519,7 +1803,7 @@
     "core_mechanic": "双方争取把各自对应的两条边连接起来。",
     "scheme_16x16": "7×7棋盘，采用偏移格布局表现六边形相邻关系。",
     "control_type": "方向键、A落子。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_072_hex_board.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_072_hex_board.py",
@@ -1530,9 +1814,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_072.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_072.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "073",
@@ -1541,7 +1829,7 @@
     "core_mechanic": "掷骰子、推进棋子、撞回对手棋子并率先到达终点。",
     "scheme_16x16": "每方2枚棋子，压缩路线长度。",
     "control_type": "方向键、A确认。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_073_ludo_race.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_073_ludo_race.py",
@@ -1552,9 +1840,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_073.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_073.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "074",
@@ -1563,7 +1855,7 @@
     "core_mechanic": "在不断前进的道路上切换车道，避让其他车辆并超车。",
     "scheme_16x16": "3～4条车道，道路纵向滚动。",
     "control_type": "左右。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_074_highway_racer.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_074_highway_racer.py",
@@ -1572,9 +1864,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "三车道高速逆向慢车冲刷、左右变道闪避与1000m里程冲刺，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "UNSEEDED_RANDOMNESS_DIFFERS; NOT_CERTIFIED",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "075",
@@ -1583,7 +1879,7 @@
     "core_mechanic": "沿雪道左右转向，依次绕过旗门。",
     "scheme_16x16": "纵向滚屏，旗门采用颜色标记。",
     "control_type": "左右。\n\n\n\n与赛车保持操作和过门判定上的区别。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_075_slalom_ski.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_075_slalom_ski.py",
@@ -1594,9 +1890,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_176_alpineski.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_176_alpineski.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "076",
@@ -1605,7 +1905,7 @@
     "core_mechanic": "控制击球角度和力度，以尽可能少的杆数入洞。",
     "scheme_16x16": "单屏障碍地图、8方向、3档力度。",
     "control_type": "方向键、A/B调整和击球。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_076_mini_golf.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_076_mini_golf.py",
@@ -1616,9 +1916,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_076.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_076.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "077",
@@ -1636,10 +1940,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Aim and charge a rolling ball, knock down a rack, and play ten frames with strike/spare bonuses including tenth-frame extra rolls.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "078",
@@ -1657,10 +1965,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "A pitched ball approaches the plate; a timed swing earns hits or home runs, while missed pitches accumulate strikes.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "079",
@@ -1678,10 +1990,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Aim and charge a shot against a moving goalkeeper; five attempts decide a three-goal challenge.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "080",
@@ -1699,10 +2015,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Two continuous riders leave solid trails; turning avoids walls and traps the opponent, with a survival milestone.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "081",
@@ -1720,10 +2040,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED; HTTP/CHROMIUM_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Vulnerable trail and moving enemy; flood-fill captures the enemy-free side; percentage/time targets.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "HOST_CPP_AND_SIM_THREE_DIFFICULTIES_INPUT_ONLY_ROUND_PASSED",
-    "audio_status": "ACTION_EVENT_AND_STREAM_POLICY_TESTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_CPP_PY_HTTP_VERIFIED; HARDWARE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "082",
@@ -1741,10 +2065,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Choose elevation and power, fire a gravity shell over terrain, damage the enemy and deform impact terrain before its return shot.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "083",
@@ -1753,7 +2081,7 @@
     "core_mechanic": "部署防御塔，阻止敌人沿道路抵达终点。",
     "scheme_16x16": "固定折线道路、3种塔、少量敌人。",
     "control_type": "方向键、A建造、B切换塔。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_083_tower_defense.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_083_tower_defense.py",
@@ -1764,9 +2092,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_083.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_083.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "084",
@@ -1775,7 +2107,7 @@
     "core_mechanic": "在不同节点间调配兵力，占领中立或敌方据点。",
     "scheme_16x16": "6～8个节点，用颜色和亮度表示归属及兵力。",
     "control_type": "方向键、A/B分兵。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_084_node_conquest.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_084_node_conquest.py",
@@ -1786,9 +2118,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_084.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_084.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "085",
@@ -1808,10 +2144,14 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_085.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_085.py",
-    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
     "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
-    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "086",
@@ -1820,7 +2160,7 @@
     "core_mechanic": "播种、浇水、等待作物成熟、收获，并规划有限土地。",
     "scheme_16x16": "5×5农田，以颜色表示作物成长阶段。",
     "control_type": "方向键、A/B操作。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_086_tiny_farm.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_086_tiny_farm.py",
@@ -1831,9 +2171,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_086.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_086.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "087",
@@ -1842,7 +2186,7 @@
     "core_mechanic": "控制交叉路口交通信号，减少拥堵和碰撞。",
     "scheme_16x16": "单个十字路口，使用两组方向车流。",
     "control_type": "A/B切换交通灯。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_087_traffic_control.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_087_traffic_control.py",
@@ -1853,9 +2197,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_087.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_087.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "088",
@@ -1864,7 +2212,7 @@
     "core_mechanic": "为不同方向进入的飞机安排安全降落路线和顺序。",
     "scheme_16x16": "一条跑道、最多4架飞机，飞机以彩色单点表示。",
     "control_type": "方向键选择飞机、A/B设置降落。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_088_atc_landing.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_088_atc_landing.py",
@@ -1875,9 +2223,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_088.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_088.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "089",
@@ -1895,10 +2247,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Fire grows and spreads on a grid; directional hose jets spend water, a station refills it, and the house must be protected.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "090",
@@ -1916,10 +2272,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Rotate belt tiles to route raw products through a processor to a coloured order sink, without wasting three items.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "091",
@@ -1937,10 +2297,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Guide an electrical contact along a one-pixel conducting wire; touching a non-wire cell breaks the circuit.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "092",
@@ -1960,10 +2324,14 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_092.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_092.py",
-    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
     "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
-    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "093",
@@ -1972,7 +2340,7 @@
     "core_mechanic": "吞噬比自己小的物体并逐渐扩大半径，再吞噬更大的物体。",
     "scheme_16x16": "单屏小地图，物体采用1～3像素图形。",
     "control_type": "方向键。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_093_black_hole.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_093_black_hole.py",
@@ -1983,9 +2351,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_093.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_093.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "094",
@@ -1994,7 +2366,7 @@
     "core_mechanic": "发射钩绳连接锚点，利用摆荡惯性穿越障碍。",
     "scheme_16x16": "固定锚点、短绳、简化摆动模型。",
     "control_type": "方向键、A发射或释放钩爪。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_094_grapple_swing.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_094_grapple_swing.py",
@@ -2005,9 +2377,13 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "firmware-s3/main/display/arcade/game_138_rocnrope.cpp",
     "legacy_simulator_source": "pc-agent-vision/arcade/game_138_rocnrope.py",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "095",
@@ -2027,10 +2403,14 @@
     "hardware_status": "NOT_TESTED",
     "legacy_firmware_source": "待新建 firmware-s3/main/display/arcade/game_095.cpp",
     "legacy_simulator_source": "待新建 pc-agent-vision/arcade/game_095.py",
-    "full_round_status": "HOST_FULL_ROUND_CPP_AND_SIMULATOR (Easy/Normal/Hard, actual inputs, failure/pause/restart)",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
     "difficulty_status": "SOURCE_IMPLEMENTED; UNIT_TEST_PASSED; HTTP_UI_TESTED; HARDWARE_NOT_TESTED",
-    "audio_status": "EVENT_AND_SYNTHESIS_TESTED; LISTENING_NOT_TESTED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "096",
@@ -2048,10 +2428,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "A directional push slides until a wall, not just one tile; reach the exit at rest before the slide budget expires.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "097",
@@ -2060,7 +2444,7 @@
     "core_mechanic": "穿越多排车流，再利用移动浮木渡河，到达指定位置。",
     "scheme_16x16": "将交通区和河流区压缩到12～14行，青蛙使用单像素，浮木使用2～4像素。",
     "control_type": "方向键。\n\n\n\n必须保留乘移动浮木的机制，不能只做普通躲障碍。",
-    "difficulty_modes": "Easy / Normal / Hard (Dynamic ramp)",
+    "difficulty_modes": "Standard only implemented; Easy / Normal / Hard remain targets",
     "scoring_rules": "标准计分 (过关/消除/击杀加分，高分榜记录)",
     "firmware_source": "firmware-s3/main/display/arcade/game_097_frogger.cpp",
     "simulator_source": "pc-agent-vision/arcade/game_097_frogger.py",
@@ -2069,9 +2453,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED (tests/test_arcade_handoff.py); hardware NOT_TESTED",
     "adaptation_notes": "多车道车辆穿梭、河流浮木附着漂移与5穴归巢通关判定，双向验证通过",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "NOT_CERTIFIED_BY_THIS_MILESTONE",
-    "audio_status": "SHARED_LIFECYCLE_EVENT_HOOKS; INDIVIDUAL_AUDIO_ACCEPTANCE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "full_round_status": "NOT_CERTIFIED",
+    "audio_status": "GENERIC_MANAGER_EVENTS_ONLY; REVIEW_PENDING",
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "NOT_SUPPORTED"
   },
   {
     "id": "098",
@@ -2089,10 +2477,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED (production C++ host); SIMULATOR_PASSED; HTTP/CHROMIUM_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Continuous 2D thrust/rotation/fuel physics; safe landing constraints and narrow difficulty pads.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "HOST_CPP_AND_SIM_THREE_DIFFICULTIES_INPUT_ONLY_ROUND_PASSED",
-    "audio_status": "ACTION_EVENT_AND_STREAM_POLICY_TESTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_CPP_PY_HTTP_VERIFIED; HARDWARE_PENDING",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "099",
@@ -2110,10 +2502,14 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Move through a pursuing horde while automatically attacking nearby enemies; kills grant a damage or firing-rate upgrade.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   },
   {
     "id": "100",
@@ -2131,9 +2527,13 @@
     "test_status": "BUILD_PASSED; UNIT_TEST_PASSED; SIMULATOR_PASSED; HARDWARE_NOT_TESTED",
     "adaptation_notes": "Reveal two hidden cards, remember mismatches, and clear eight pairs before the turn or time budget.",
     "hardware_status": "NOT_TESTED",
-    "full_round_status": "INPUT_ONLY_WIN_AND_LOSS_CPP_PY_THREE_TIERS_PASSED",
-    "audio_status": "ACTION_EVENTS_IMPLEMENTED; LISTENING_PENDING",
+    "full_round_status": "CPP_PY_WIN_PATH_PASSED",
+    "audio_status": "CARTRIDGE_EVENTS_PRESENT; LISTENING_PENDING",
     "difficulty_status": "THREE_REAL_PROFILES_REPLAY_VERIFIED",
-    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED"
+    "b3_integration_status": "REGISTERED; BUILD_PASSED; BASIC_LIFECYCLE_HOST_PASSED; SIMULATOR_HTTP_PASSED; HARDWARE_NOT_TESTED",
+    "product_quality_status": "NOT_CERTIFIED",
+    "phase_c_review_status": "OBSERVED_PATH_AGREES; NOT_A_COMPLETE_RULE_PROOF",
+    "visual_status": "ACTUAL_CPP_PY_THREE_STATES",
+    "difficulty_implementation_status": "THREE_TIERS_INPUT_VERIFIED"
   }
 ]

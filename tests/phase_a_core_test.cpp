@@ -70,9 +70,14 @@ static void test_protocol() {
 #include "phase_b_core_test.h"
 #include "phase_b2_core_test.h"
 #include "phase_b3_core_test.h"
+#include "phase_c_native_test.h"
 
 int main(int argc,char** argv) {
-    assert(opens==0); // All 13 production static constructors have already run.
+    assert(opens==0); // Production static constructors must not touch NVS.
+    if(argc==3&&std::string(argv[1])=="capture"){
+        file=argv[2];initialized=true;arcade::ArcadeScoreStore::SetReady(true);
+        arcade::ArcadeManager::GetInstance().Init();capture_phase_c();return 0;
+    }
     if(argc==3 && std::string(argv[1])=="reopen") {
         file=argv[2];std::ifstream in(file);std::string key;uint32_t value;
         while(in>>key>>value)durable[key]=value;
@@ -144,6 +149,6 @@ int main(int argc,char** argv) {
     manager.HandleInput(64,64);manager.Update(.033f);assert(manager.GetCurrentStatus().state==arcade::STATE_PAUSED);
     manager.Resume();assert(manager.GetCurrentStatus().state==arcade::STATE_PLAYING);
     manager.HandleInput(18,16);assert(manager.SelectGame(33));assert(!manager.current_keys_down_&&!manager.current_keys_pressed_);
-    test_replay();test_protocol();test_phase_b_foundations();test_b2_audio();test_b2_rounds();test_b2_mechanisms();test_b3_rounds();
+    test_replay();test_protocol();test_phase_b_foundations();test_b2_audio();test_b2_rounds();test_b2_mechanisms();test_b3_rounds();if(const char* cases=std::getenv("PHASE_C_REPLAY"))test_b3_rounds(cases);test_phase_c_directed();capture_phase_c();audit_phase_c_observations();
     std::cout<<"C++ production constructors/NVS failures/replay/protocol/watchdog tests passed\n";
 }

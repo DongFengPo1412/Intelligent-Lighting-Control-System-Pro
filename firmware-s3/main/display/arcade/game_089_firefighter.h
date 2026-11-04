@@ -10,8 +10,9 @@ class Game089Firefighter : public BatchCartridge {
 
   private:
     friend struct B3Probe;
-    int fire[64]{}, x = 1, y = 6, face = 0, water = 8, burned = 0, extinguished = 0;
-    double spread = 0;
+    int fire[64]{}, x = 1, y = 6, face = 0, water = 8, burned = 0, extinguished = 0, wave = 0;
+    double spread = 0, spray_cooldown = 0, refill = 0;
+    void LoadWave();
     void Setup() override;
     void Tick(float, uint16_t, uint16_t) override;
     void Draw(uint8_t *) override;

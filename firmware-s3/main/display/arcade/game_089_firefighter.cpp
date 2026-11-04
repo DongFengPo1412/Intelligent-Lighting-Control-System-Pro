@@ -1,18 +1,28 @@
 #include "game_089_firefighter.h"
 namespace arcade {
 
+void Game089Firefighter::LoadWave() {
+    memset(fire, 0, sizeof(fire));
+    const int p[3][3] = {{14, 21, 46}, {10, 30, 54}, {12, 25, 43}};
+    for (auto n : p[wave])
+        fire[n] = 2;
+    spread = 0;
+}
 void Game089Firefighter::Setup() {
     memset(fire, 0, sizeof(fire));
     fire[14] = fire[21] = fire[46] = 2;
     x = 1;
     y = 6;
     face = 0;
-    const int n[] = {8, 6, 4};
+    const int n[] = {8, 7, 6};
     water = n[difficulty_];
-    burned = extinguished = 0;
+    burned = extinguished = wave = 0;
+    spray_cooldown = refill = 0;
+    LoadWave();
     spread = 0;
 }
 void Game089Firefighter::Tick(float dt, uint16_t down, uint16_t pressed) {
+    spray_cooldown = std::max(0., spray_cooldown - std::round(double(dt) * 1000000) / 1000000);
     int dx, dy;
     Direction(down, pressed, dx, dy);
     if (dx || dy) {
@@ -20,12 +30,18 @@ void Game089Firefighter::Tick(float dt, uint16_t down, uint16_t pressed) {
         x = std::max(0, std::min(7, x + dx));
         y = std::max(0, std::min(7, y + dy));
     }
-    const int water_max[] = {8, 6, 4};
-    if ((pressed & KEY_B) && x == 1 && y == 6) {
-        water = water_max[difficulty_];
-        SoundEvent(Sound::Action);
-    }
-    if ((pressed & KEY_A) && water) {
+    const int water_max[] = {8, 7, 6};
+    if (((pressed | down) & KEY_B) && x == 1 && y == 6 && water < water_max[difficulty_]) {
+        refill += std::round(double(dt) * 1000000) / 1000000;
+        if (refill >= .6) {
+            water = water_max[difficulty_];
+            refill = 0;
+            SoundEvent(Sound::Action);
+        }
+    } else
+        refill = 0;
+    if ((pressed & KEY_A) && water && spray_cooldown == 0) {
+        spray_cooldown = .18;
         --water;
         const int xx[] = {1, -1, 0, 0}, yy[] = {0, 0, 1, -1};
         for (int d = 1; d <= 3; ++d) {
@@ -42,7 +58,7 @@ void Game089Firefighter::Tick(float dt, uint16_t down, uint16_t pressed) {
         SoundEvent(Sound::Hit);
     }
     spread += std::round(double(dt) * 1000000) / 1000000;
-    const double period[] = {1.5, 1., .7};
+    const double period[] = {3., 2.5, 2.};
     if (spread >= period[difficulty_]) {
         spread = 0;
         int old[64];
@@ -63,12 +79,17 @@ void Game089Firefighter::Tick(float dt, uint16_t down, uint16_t pressed) {
         burned += v > 0;
     const int limit[] = {120, 90, 60};
     if (!burned) {
-        Award(1000 + water * 20);
-        Finish(true);
+        Award(300 + water * 20);
+        ++wave;
+        if (wave == 3) {
+            Award(500);
+            Finish(true);
+        } else
+            LoadWave();
     } else if (fire[49] || burned >= 24 || elapsed_ > limit[difficulty_])
         Finish(false);
 }
-int Game089Firefighter::Progress() const { return std::min(100, extinguished * 100 / 3); }
+int Game089Firefighter::Progress() const { return std::min(100, wave * 100 / 3); }
 void Game089Firefighter::Draw(uint8_t *fb) {
     for (int p = 0; p < 64; ++p)
         if (fire[p])

@@ -362,7 +362,7 @@ CartridgeStatus Game010Stack::GetStatus() const {
     st.high_score = high_score_;
     st.lives = (state_ == STATE_GAMEOVER) ? 0 : 1;
     st.state = (uint8_t)state_;
-    st.progress = (uint8_t)(score_ > 255 ? 255 : score_);
+    st.progress = (uint8_t)(score_ >= 25 ? 100 : score_ * 4);
     return st;
 }
 

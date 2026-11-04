@@ -40,6 +40,7 @@ public:
 
     // 整板统一亮度
     void SetBrightness(uint8_t brightness);
+    uint32_t StackFreeBytes() const { return task_handle_ ? uxTaskGetStackHighWaterMark(task_handle_) : 0; }
     void FeedFingertip(float x,float y,bool visible,float confidence);
     void ConfigureFingertip(float x0,float y0,float x1,float y1,bool invert_x,bool invert_y);
     void FeedHand(float x,float y,float z,bool pinch,bool visible);

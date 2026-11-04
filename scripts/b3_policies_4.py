@@ -15,12 +15,25 @@ def rope(g,won,c):
 
 def portal(g,won,c):
     if not won:return 0,0
-    if not g.teleports:
-        if g.y>1:return 0,KEY_UP
-        return 0,KEY_A
-    if not g.gate:
-        return 0,KEY_LEFT if g.x>5 else KEY_UP if g.y>5 else 0
-    return 0,KEY_RIGHT if g.x<6 else KEY_UP
+    from collections import deque
+    initial=(g.x,g.y,g.gate);goal=g.EXITS[g.stage];queue=deque([initial]);parent={initial:None};end=None
+    while queue:
+        x,y,gate=queue.popleft()
+        if (x,y)==goal and gate:end=(x,y,gate);break
+        choices=[]
+        for dx,dy,key in ((1,0,KEY_RIGHT),(-1,0,KEY_LEFT),(0,1,KEY_DOWN),(0,-1,KEY_UP)):
+            nx=x+dx;ny=y+dy
+            if not(1<=nx<=6 and 1<=ny<=6) or nx==4 or (ny==3 and nx>=5 and not gate) or (nx,ny)==g.BLOCKS[g.stage]:continue
+            choices.append(((nx,ny,gate or (nx,ny)==g.SWITCHES[g.stage]),key))
+        a,b=g.PORTALS[g.stage]
+        if (x,y) in (a,b):
+            nx,ny=b if (x,y)==a else a;choices.append(((nx,ny,gate or (nx,ny)==g.SWITCHES[g.stage]),KEY_A))
+        for node,key in choices:
+            if node not in parent:parent[node]=((x,y,gate),key);queue.append(node)
+    assert end,('portal room unsolvable',g.stage)
+    path=[]
+    while parent[end]:end,key=parent[end];path.append(key)
+    return 0,path[-1]
 
 def connect(g,won,c):
     if not won:return 0,KEY_A
@@ -74,6 +87,7 @@ def mastermind(g,won,c):
 
 def nim(g,won,c):
     if not won:return 0,0
+    if g.thinking>0:return 0,0
     xor=g.piles[0]^g.piles[1]^g.piles[2]
     targets=[(i,v-(v^xor)) for i,v in enumerate(g.piles) if (v^xor)<v]
     i,n=targets[0] if targets else next((i,1) for i,v in enumerate(g.piles) if v)

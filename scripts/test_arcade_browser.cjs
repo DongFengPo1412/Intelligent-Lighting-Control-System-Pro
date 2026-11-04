@@ -102,14 +102,14 @@ async function main() {
     await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
     if(!await evaluate('document.getElementById("arcadeDifficulty").disabled'))throw Error("Difficulty was editable during a round");
     const batchLayouts=[];
-    for(const gid of [35,55,57,58,81,...Object.keys(JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8"))).map(Number),98]) {
+    for(const gid of [...Array.from({length:100},(_,i)=>i+1),98]) {
       await evaluate(`document.getElementById("btnArcade${String(gid).padStart(3,"0")}").click()`);
       await until(`window.__replies.some(r=>r.game_status?.game_id===${gid}&&r.game_status.state===0)`);
       const layout=await evaluate(`({gid:${gid},help:document.querySelector(".mario-help").textContent,
         actions:getComputedStyle(document.getElementById("arcadeActions")).display,
         a:document.querySelector("#marioKeyA .btn-sub").textContent,
         b:getComputedStyle(document.getElementById("marioKeyB")).display})`);
-      if(layout.help.length<30 || (gid===35&&layout.actions!=="none") || ([81,98].includes(gid)&&layout.b!=="none"))throw Error("Incorrect batch control layout: "+JSON.stringify(layout));
+      if(layout.help.length<5 || (([35,55,57,58,81,98].includes(gid)||Object.hasOwn(JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8")),gid))&&layout.help.length<30) || (gid===35&&layout.actions!=="none") || ([81,98].includes(gid)&&layout.b!=="none"))throw Error("Incorrect batch control layout: "+JSON.stringify(layout));
       const expected=JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8"))[gid];
       if(expected){
         const b3=await evaluate(`window.ARCADE_B3_RULES[${gid}]`);
@@ -118,11 +118,11 @@ async function main() {
       }
       batchLayouts.push(layout);
     }
-    await evaluate('document.getElementById("marioStartBtn").click()');
-    await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
     await evaluate('document.getElementById("arcadeDpad").scrollIntoView({block:"center",behavior:"instant"})');
     const landerPoints=await evaluate(`["marioKeyRight","marioKeyA"].map((id,i)=>{
       const r=document.getElementById(id).getBoundingClientRect();return {id:i+1,x:r.x+r.width/2,y:r.y+r.height/2,radiusX:1,radiusY:1,force:1};})`);
+    await evaluate('document.getElementById("marioStartBtn").click()');
+    await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
     await call("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:landerPoints});
     await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===18');
     await call("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[landerPoints[1]]});

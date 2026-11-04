@@ -24,6 +24,9 @@ def main():
     parser.add_argument('--idf-path', default=os.environ.get('IDF_PATH'))
     parser.add_argument('--java-home', default=os.environ.get('JAVA_HOME'))
     parser.add_argument('--json-jar',help='Optional pinned org.json:json:20240303 JAR for real JVM UDP loopback test')
+    parser.add_argument('--capture-dir',help='Optional actual C++ renderer output outside repository')
+    parser.add_argument('--phase-c-observations',help='Exploratory comparison; mismatches reported, never certified')
+    parser.add_argument('--phase-c-cases',help='Optional additional input-only replay JSON')
     args = parser.parse_args()
     work = Path(args.work_dir).resolve()
     if work == ROOT or ROOT in work.parents:
@@ -61,8 +64,19 @@ def main():
         run([os.environ.get('CC','cc'),'-c',cjson/'cJSON.c','-o',work/'cJSON.o'],work)
         run([os.environ.get('CXX','c++'),'-std=c++17','-pthread',*[f'-I{x}' for x in includes],
              *sources,work/'cJSON.o','-o',executable],work)
-    run([executable,work/'nvs-host.txt'],work)
+    replay_env=dict(os.environ)
+    render_env=dict(os.environ)
+    if args.capture_dir:
+        captures=Path(args.capture_dir).resolve()
+        if captures==ROOT or ROOT in captures.parents:raise ValueError('Capture outside repository')
+        render_env['PHASE_C_CAPTURE']=str(captures)
+    if args.phase_c_observations:
+        replay_env['PHASE_C_OBSERVATIONS']=str(Path(args.phase_c_observations).resolve())
+        replay_env['PHASE_C_COMPARISON']=str(work/'phase-c-comparison.csv')
+    if args.phase_c_cases:replay_env['PHASE_C_REPLAY']=str(Path(args.phase_c_cases).resolve())
+    run([executable,work/'nvs-host.txt'],work,replay_env)
     run([executable,'reopen',work/'nvs-host.txt'],work)
+    if args.capture_dir:run([executable,'capture',work/'visual-nvs-host.txt'],work,render_env)
     java = Path(args.java_home)/'bin'
     harness = work/'BridgePolicyTest.java'
     harness.write_text('''import org.fglab.kurisu.BridgePolicy;

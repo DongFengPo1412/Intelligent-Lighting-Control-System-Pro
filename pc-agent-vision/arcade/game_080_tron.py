@@ -8,7 +8,9 @@ class Game080Tron(BatchCartridge):
     def tick(self,dt,down,pressed):
         keys=down|pressed
         for k,d in ((KEY_UP,0),(KEY_RIGHT,1),(KEY_DOWN,2),(KEY_LEFT,3)):
-            if keys&k and d!=(self.dir+2)%4:self.dir=d;break
+            if keys&k and d!=(self.dir+2)%4:
+                if self.dir!=d:self.emit_sound('action',d)
+                self.dir=d;break
         self.clock+=dt
         if self.clock<( .16,.13,.10)[self.difficulty]:return
         self.clock-=(.16,.13,.10)[self.difficulty];delta=((0,-1),(1,0),(0,1),(-1,0))
@@ -18,9 +20,11 @@ class Game080Tron(BatchCartridge):
         dx,dy=delta[self.dir];nx=self.x+dx;ny=self.y+dy;dx,dy=delta[self.edir];mx=self.ex+dx;my=self.ey+dy
         dead=not(1<=nx<=14 and 1<=ny<=14) or (0<=nx<16 and 0<=ny<16 and self.board[ny*16+nx]) or (nx,ny)==(mx,my)
         enemy=not(1<=mx<=14 and 1<=my<=14) or (0<=mx<16 and 0<=my<16 and self.board[my*16+mx])
-        if dead:self.finish(False);return
+        if dead:self.emit_sound('collision');self.finish(False);return
         self.x=nx;self.y=ny;self.board[ny*16+nx]=1;self.steps+=1;self.award(10)
-        if enemy or self.steps>=(50,65,80)[self.difficulty]:self.award(500);self.finish(True)
+        if enemy or self.steps>=(50,65,80)[self.difficulty]:
+            if enemy:self.emit_sound('hit')
+            self.award(500);self.finish(True)
         else:self.ex=mx;self.ey=my;self.board[my*16+mx]=2
         self.board_hash=2166136261
         for v in self.board:self.board_hash=((self.board_hash^v)*16777619)&0xffffffff

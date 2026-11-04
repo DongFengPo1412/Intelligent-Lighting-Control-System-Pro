@@ -43,6 +43,7 @@ public:
     CartridgeStatus GetStatus() const override;
 
 private:
+    friend struct PhaseCProbe;
     void ResetPositions();
     bool IsWall(int x, int y) const;
     void MoveGhost(PacGhost& g, float dt);

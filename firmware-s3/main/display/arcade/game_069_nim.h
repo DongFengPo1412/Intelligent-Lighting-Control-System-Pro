@@ -10,7 +10,10 @@ class Game069Nim : public BatchCartridge {
 
   private:
     friend struct B3Probe;
-    int piles[3]{}, pile = 0, take = 1, turns = 0;
+    int piles[3]{}, pile = 0, take = 1, turns = 0, human_wins = 0, ai_wins = 0, round = 0;
+    double thinking = 0;
+    void LoadRound();
+    void EndRound(bool);
     void Setup() override;
     void Tick(float, uint16_t, uint16_t) override;
     void Draw(uint8_t *) override;

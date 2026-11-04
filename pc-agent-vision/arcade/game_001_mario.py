@@ -46,6 +46,7 @@ class Game001Mario(BaseCartridge):
         }
         self._fallback_mode = False
         self._paused = False
+        self._native_paused = False
         self._fallback_timer = 0.0
         self._high_score = 0
         self._anim_timer = 0.0
@@ -86,6 +87,12 @@ class Game001Mario(BaseCartridge):
                 self._game_handle = None
             except Exception:
                 pass
+
+    @property
+    def state(self):return self._status.get("state",STATE_TITLE)
+
+    @property
+    def score(self):return self._status.get("score",0)
 
     @property
     def game_id(self) -> int:
@@ -132,11 +139,12 @@ class Game001Mario(BaseCartridge):
                 ctypes.byref(prog),
             )
             raw_st = state.value
+            self._native_paused = raw_st==3
             if raw_st == 0:
                 mapped_st = STATE_TITLE
             elif raw_st == 3:
                 mapped_st = STATE_PAUSED
-            elif raw_st in (4, 5):
+            elif raw_st == 5:
                 mapped_st = STATE_GAMEOVER
             elif raw_st == 6:
                 mapped_st = STATE_VICTORY
@@ -184,6 +192,8 @@ class Game001Mario(BaseCartridge):
         if self._status["state"] == STATE_PAUSED:
             self._paused = False
             self._status["state"] = STATE_PLAYING
+            if self._native_paused and self._dll and self._game_handle:
+                self.update(0.0,0,KEY_START)
 
     def update(self, dt: float, keys_down: int, keys_pressed: int) -> None:
         if self._paused:
@@ -210,11 +220,12 @@ class Game001Mario(BaseCartridge):
             )
             # Map native states (0:TITLE, 1:READY, 2:PLAY, 3:PAUSE, 4:DEAD, 5:GAMEOVER, 6:WIN)
             raw_st = state.value
+            self._native_paused = raw_st==3
             if raw_st == 0:
                 mapped_st = STATE_TITLE
             elif raw_st == 3:
                 mapped_st = STATE_PAUSED
-            elif raw_st in (4, 5):
+            elif raw_st == 5:
                 mapped_st = STATE_GAMEOVER
             elif raw_st == 6:
                 mapped_st = STATE_VICTORY
@@ -250,6 +261,9 @@ class Game001Mario(BaseCartridge):
                     self._status["state"] = STATE_PLAYING
 
     def render(self) -> bytearray:
+        if self.state in (STATE_GAMEOVER,STATE_VICTORY):
+            render_result_screen(self._buf,self.state==STATE_VICTORY,self.score,self._high_score,self._anim_timer)
+            return bytearray(self._buf)
         if self._dll and self._game_handle:
             raw_buf = ctypes.create_string_buffer(16 * 16 * 3)
             self._dll.mario_render(self._game_handle, raw_buf)

@@ -4,6 +4,8 @@
 #include <esp_timer.h>
 #include <freertos/task.h>
 
+static TaskHandle_t sound_task_handle=nullptr;
+uint32_t ArcadeAudioStackFreeBytes(){return sound_task_handle?uxTaskGetStackHighWaterMark(sound_task_handle):0;}
 static uint32_t NowMs(){return uint32_t(esp_timer_get_time()/1000);}
 static void AudioTask(void*) {
     auto& bus=arcade::Sounds();auto& audio=AudioHAL::GetInstance();
@@ -17,5 +19,5 @@ static void AudioTask(void*) {
 }
 bool StartArcadeAudioTask() {
     arcade::Sounds().SetClock(NowMs);
-    return xTaskCreate(AudioTask,"arcade_sfx",4096,nullptr,2,nullptr)==pdPASS;
+    return xTaskCreate(AudioTask,"arcade_sfx",4096,nullptr,2,&sound_task_handle)==pdPASS;
 }

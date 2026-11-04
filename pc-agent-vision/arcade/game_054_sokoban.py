@@ -252,7 +252,8 @@ class Game054Sokoban(BaseCartridge):
     def get_status(self) -> Dict[str, Any]:
         return {
             "game_id": self.game_id,
-            "score": self.moves,
+            "score": self._score,
+            "moves": self.moves,
             "high_score": self._high_score,
             "lives": 1,
             "state": self._state,

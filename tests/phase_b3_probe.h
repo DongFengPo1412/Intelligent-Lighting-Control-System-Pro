@@ -38,6 +38,12 @@
 #include <vector>
 namespace arcade {
 struct B3Probe {
+    static uint32_t MemoryFingerprint(const Game100MemoryMatch &g) {
+        uint32_t h = 2166136261u;
+        for (auto v : g.cards)
+            h = (h ^ unsigned(v)) * 16777619u;
+        return h;
+    }
     static std::vector<double> Read(Cartridge *game) {
         switch (game->GetId()) {
         case 7: {
@@ -144,7 +150,8 @@ struct B3Probe {
         }
         case 60: {
             const auto &g = *static_cast<const Game060PortalPuzzle *>(game);
-            return {double(g.x), double(g.y), double(g.moves), double(g.gate), double(g.teleports)};
+            return {double(g.x),         double(g.y),     double(g.moves),      double(g.gate),
+                    double(g.teleports), double(g.stage), double(g.stage_moves)};
         }
         case 61: {
             const auto &g = *static_cast<const Game061ConnectFour *>(game);
@@ -168,8 +175,10 @@ struct B3Probe {
         }
         case 69: {
             const auto &g = *static_cast<const Game069Nim *>(game);
-            return {double(g.pile),     double(g.take),     double(g.turns),
-                    double(g.piles[0]), double(g.piles[1]), double(g.piles[2])};
+            return {double(g.pile),       double(g.take),     double(g.turns),
+                    double(g.piles[0]),   double(g.piles[1]), double(g.piles[2]),
+                    double(g.human_wins), double(g.ai_wins),  double(g.round),
+                    double(g.thinking)};
         }
         case 70: {
             const auto &g = *static_cast<const Game070FloodIt *>(game);
@@ -231,7 +240,7 @@ struct B3Probe {
                     double(g.fire[54]), double(g.fire[55]), double(g.fire[56]),
                     double(g.fire[57]), double(g.fire[58]), double(g.fire[59]),
                     double(g.fire[60]), double(g.fire[61]), double(g.fire[62]),
-                    double(g.fire[63])};
+                    double(g.fire[63]), double(g.wave),     double(g.refill)};
         }
         case 90: {
             const auto &g = *static_cast<const Game090Conveyor *>(game);

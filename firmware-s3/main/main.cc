@@ -2,6 +2,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
+#include <esp_heap_caps.h>
+#include "arcade_sound.h"
 #include "display_manager.h"
 #include "network_audio.h"
 #include "board_led.h"
@@ -20,6 +22,24 @@
 #endif
 
 static const char* TAG = "MainApp";
+
+// Low-rate serial-only diagnostics. No additional task, allocation or control endpoint.
+static void LogRuntimeBudget() {
+    ESP_LOGI("RuntimeBudget", "internal_free=%u internal_min=%u internal_largest=%u psram_free=%u psram_largest=%u",
+        unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)),
+        unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)),
+        unsigned(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)),
+        unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT)),
+        unsigned(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT)));
+    ESP_LOGI("RuntimeBudget", "stack_min_bytes main=%u display=%u sfx=%u pcm_play=%u",
+        unsigned(uxTaskGetStackHighWaterMark(nullptr)),unsigned(DisplayManager::GetInstance().StackFreeBytes()),
+        unsigned(ArcadeAudioStackFreeBytes()),unsigned(CommandDispatcher::GetInstance().AudioStackFree()));
+    auto& bus=arcade::Sounds();
+    ESP_LOGI("RuntimeBudget", "sfx queued=%u dropped=%u played=%u preempted=%u busy=%u short=%u late=%u faults=%u",
+        unsigned(bus.queued.load()),unsigned(bus.dropped.load()),unsigned(bus.played.load()),
+        unsigned(bus.preempted.load()),unsigned(bus.busy.load()),unsigned(bus.short_writes.load()),
+        unsigned(bus.late.load()),unsigned(bus.faults.load()));
+}
 
 extern "C" void app_main(void)
 {
@@ -90,10 +110,12 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "    - 查状态: 'status'");
 
     // 6. 主循环：进入极低功耗心跳监听 (不与渲染和串口争抢 CPU 资源)
+    LogRuntimeBudget();
     uint32_t heartbeat_tick = 0;
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(5000));
         heartbeat_tick++;
+        if(heartbeat_tick%6==0)LogRuntimeBudget();
 
         if (display.IsCountdownActive()) {
             ESP_LOGI(TAG, "[心跳 #%u]: 倒计时运行中，剩余 %u 秒",

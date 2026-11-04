@@ -1,10 +1,28 @@
 #include "game_100_memory_match.h"
+#ifdef ESP_PLATFORM
+#include "esp_random.h"
+#else
+#include <atomic>
+#include <chrono>
+#endif
 namespace arcade {
 
 void Game100MemoryMatch::Setup() {
     for (int i = 0; i < 16; ++i)
         cards[i] = i / 2;
-    uint32_t seed = 0x100fa;
+    uint32_t seed = replay_seed_;
+    if (!replay_seeded_) {
+#ifdef ESP_PLATFORM
+        seed = esp_random();
+#else
+        static std::atomic<uint32_t> serial{1};
+        seed = uint32_t(std::chrono::steady_clock::now().time_since_epoch().count()) ^
+               serial.fetch_add(0x9e3779b9u);
+#endif
+        if (seed == last_seed_)
+            ++seed;
+    }
+    last_seed_ = seed;
     for (int i = 15; i > 0; --i) {
         int j = (B3Random(seed) >> 16) % (i + 1);
         std::swap(cards[i], cards[j]);

@@ -44,7 +44,9 @@ class B3Tests(unittest.TestCase):
         ids=set()
         for case in DATA['cases']:
             with self.subTest(id=case['id'],level=case['difficulty'],outcome=case['outcome']):
-                ids.add(case['id']);g=ArcadeSession().cartridges[case['id']];self.assertTrue(g.set_difficulty(case['difficulty']));g.init();g.start()
+                ids.add(case['id']);g=ArcadeSession().cartridges[case['id']];self.assertTrue(g.set_difficulty(case['difficulty']))
+                if case['id']==100:self.assertTrue(g.set_replay_seed(case['seed']))
+                g.init();g.start()
                 g.pause();g.update(.04,KEY_RIGHT|KEY_A,KEY_RIGHT|KEY_A);self.assertEqual(g.state,STATE_PAUSED);g.resume()
                 checkpoints={c[0]:c for c in case['checkpoints']};step=0
                 for n,down,pressed in case['inputs']:

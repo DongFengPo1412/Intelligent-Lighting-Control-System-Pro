@@ -10,10 +10,12 @@ class Game060PortalPuzzle : public BatchCartridge {
 
   private:
     friend struct B3Probe;
-    int x = 1, y = 6, moves = 0;
+    int x = 1, y = 6, moves = 0, stage = 0, stage_moves = 0;
     bool gate = false;
     int teleports = 0;
     void Setup() override;
+    void LoadStage();
+    bool Wall(int, int) const;
     void Tick(float, uint16_t, uint16_t) override;
     void Draw(uint8_t *) override;
     int Progress() const override;

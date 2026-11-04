@@ -1,11 +1,20 @@
 from .b3_helpers import *
+import secrets
 
 
 class Game100MemoryMatch(BatchCartridge):
     game_id=100;name='翻牌配对';english_name='Memory Match';core_mechanic='Reveal two hidden cards, remember mismatches, and clear eight pairs before the turn or time budget.'
     control_type=3
+    def set_replay_seed(self,seed):
+        if type(seed) is not int or not 0<=seed<=0xffffffff:return False
+        self._replay_seed=seed;return True
+    def use_random_seeds(self):self._replay_seed=None
     def setup(self):
-        self.cards=[i//2 for i in range(16)];seed=0x100fa
+        self.cards=[i//2 for i in range(16)];seed=getattr(self,'_replay_seed',None)
+        if seed is None:
+            seed=secrets.randbits(32)
+            if seed==getattr(self,'_last_seed',None):seed=(seed+1)&0xffffffff
+        self._last_seed=seed
         for i in range(15,0,-1):seed=rng(seed);j=(seed>>16)%(i+1);self.cards[i],self.cards[j]=self.cards[j],self.cards[i]
         self.x=self.y=self.pairs=self.turns=self.matched=0;self.first=self.second=-1;self.wait=0.
     def tick(self,dt,down,pressed):

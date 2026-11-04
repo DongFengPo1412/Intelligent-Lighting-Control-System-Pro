@@ -21,6 +21,8 @@ void Game080Tron::Tick(float dt, uint16_t down, uint16_t pressed) {
               dy[] = {-1, 0, 1, 0}, goal[] = {50, 65, 80};
     for (int d = 0; d < 4; ++d)
         if ((keys & k[d]) && d != (dir + 2) % 4) {
+            if (dir != d)
+                SoundEvent(Sound::Action, d);
             dir = d;
             break;
         }
@@ -44,6 +46,7 @@ void Game080Tron::Tick(float dt, uint16_t down, uint16_t pressed) {
     bool enemy = mx < 1 || mx > 14 || my < 1 || my > 14 ||
                  (mx >= 0 && mx < 16 && my >= 0 && my < 16 && board[my * 16 + mx]);
     if (dead) {
+        SoundEvent(Sound::Collision);
         Finish(false);
         return;
     }
@@ -53,6 +56,8 @@ void Game080Tron::Tick(float dt, uint16_t down, uint16_t pressed) {
     ++steps;
     Award(10);
     if (enemy || steps >= goal[difficulty_]) {
+        if (enemy)
+            SoundEvent(Sound::Hit);
         Award(500);
         Finish(true);
     } else {

@@ -2,7 +2,7 @@
 static double b3_number(cJSON *item) {
     return cJSON_IsBool(item) ? double(cJSON_IsTrue(item)) : cJSON_GetNumberValue(item);
 }
-static void test_b3_rounds() {
+static void test_b3_rounds(const char *override_path = nullptr) {
     using namespace arcade;
     { // Score arithmetic only: no runtime game state or forced victory.
         const int strikes[] = {10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
@@ -15,6 +15,8 @@ static void test_b3_rounds() {
     constexpr float dt = 16667.f / 1000000.f;
     auto path =
         std::filesystem::path(__FILE__).parent_path() / "fixtures/phase_b3_input_paths.json";
+    if (override_path)
+        path = std::filesystem::path(override_path);
     std::ifstream input(path);
     assert(input);
     std::stringstream text;
@@ -32,7 +34,13 @@ static void test_b3_rounds() {
             std::string(cJSON_GetObjectItemCaseSensitive(row, "outcome")->valuestring) == "win";
         assert(manager.SelectGame(id));
         auto *game = manager.current_game_;
-        assert(game->SetDifficulty(level));
+        if (game->SupportsDifficulty())
+            assert(game->SetDifficulty(level));
+        else
+            assert(level == 1);
+        if (id == 100)
+            static_cast<Game100MemoryMatch *>(game)->SetReplaySeed(
+                uint32_t(cJSON_GetObjectItemCaseSensitive(row, "seed")->valuedouble));
         game->Init();
         game->Start();
         game->Pause();
@@ -92,6 +100,8 @@ static void test_b3_rounds() {
         assert(game->GetStatus().state == STATE_PLAYING);
         ++total;
     }
+    assert(manager.SelectGame(100));
+    static_cast<Game100MemoryMatch *>(manager.current_game_)->UseRandomSeeds();
     cJSON_Delete(root);
     std::cout << "B3 production input-only wins/losses, three difficulties and cross-language "
                  "state checkpoints passed: "

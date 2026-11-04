@@ -471,7 +471,9 @@
       "y",
       "moves",
       "gate",
-      "teleports"
+      "teleports",
+      "stage",
+      "stage_moves"
     ],
     "control": 3,
     "lives": null,
@@ -574,7 +576,11 @@
       "turns",
       "piles[0]",
       "piles[1]",
-      "piles[2]"
+      "piles[2]",
+      "human_wins",
+      "ai_wins",
+      "round",
+      "thinking"
     ],
     "control": 3,
     "lives": null,
@@ -814,7 +820,9 @@
       "fire[60]",
       "fire[61]",
       "fire[62]",
-      "fire[63]"
+      "fire[63]",
+      "wave",
+      "refill"
     ],
     "control": 3,
     "lives": null,
