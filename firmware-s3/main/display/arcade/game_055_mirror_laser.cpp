@@ -57,6 +57,7 @@ void Game055MirrorLaser::AddScore(uint32_t pts) {
 }
 
 void Game055MirrorLaser::LoadStage(int stage_idx) {
+    firing_=false;
     if (stage_idx < 0 || stage_idx >= kNumStages) stage_idx = 0;
     stage_ = stage_idx;
     memset(grid_, LASER_EMPTY, sizeof(grid_));
@@ -262,10 +263,12 @@ void Game055MirrorLaser::Update(float dt, uint16_t keys_down, uint16_t keys_pres
             return;
         }
 
-        if (keys_pressed & (KEY_B | KEY_SELECT)) {
+        if (keys_pressed & KEY_SELECT) {
             LoadStage(stage_);
             return;
         }
+
+        if(keys_pressed&KEY_B){firing_=!firing_;charge_timer_=bomb_timer_=0;SoundEvent(Sound::Shot);}
 
         if (keys_pressed & KEY_LEFT) {
             if (cursor_x_ > 0) cursor_x_--;
@@ -279,6 +282,8 @@ void Game055MirrorLaser::Update(float dt, uint16_t keys_down, uint16_t keys_pres
 
         if (keys_pressed & KEY_A) {
             if (rotatable_[cursor_y_][cursor_x_]) {
+                firing_=false; // Safe editing; only explicit fire can consume a life.
+                SoundEvent(Sound::Action,cursor_y_*7+cursor_x_);
                 if (grid_[cursor_y_][cursor_x_] == LASER_MIRROR_SLASH) {
                     grid_[cursor_y_][cursor_x_] = LASER_MIRROR_BACKSLASH;
                 } else if (grid_[cursor_y_][cursor_x_] == LASER_MIRROR_BACKSLASH) {
@@ -290,7 +295,7 @@ void Game055MirrorLaser::Update(float dt, uint16_t keys_down, uint16_t keys_pres
             }
         }
 
-        if (bomb_hit_) {
+        if (firing_ && bomb_hit_) {
             bomb_timer_ += dt;
             if (bomb_timer_ >= 0.45f) {
                 if (lives_ > 1) {
@@ -307,7 +312,7 @@ void Game055MirrorLaser::Update(float dt, uint16_t keys_down, uint16_t keys_pres
             bomb_timer_ = 0.0f;
         }
 
-        if (receiver_powered_) {
+        if (firing_ && receiver_powered_) {
             charge_timer_ += dt;
             if (charge_timer_ >= 0.40f) {
                 AddScore(200u);
@@ -432,6 +437,7 @@ void Game055MirrorLaser::Render(uint8_t* fb_rgb24) {
         }
     }
 
+    SetPx(fb_rgb24,15,0,firing_?255:30,firing_?70:210,firing_?20:240);
     if (state_ == STATE_PAUSED) {
         for (int y = 5; y <= 8; ++y) {
             SetPx(fb_rgb24, 6, y, 250, 250, 250);

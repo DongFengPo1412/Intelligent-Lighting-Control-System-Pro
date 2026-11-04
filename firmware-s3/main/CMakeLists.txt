@@ -25,6 +25,12 @@ idf_component_register(
         "display/board_led.cc"
         "display/mario_game.cpp"
         "display/arcade/arcade_manager.cpp"
+        "display/arcade/game_035_boulder_dash.cpp"
+        "display/arcade/game_057_rush_hour.cpp"
+        "display/arcade/game_058_program_robot.cpp"
+        "display/arcade/game_081_qix.cpp"
+        "display/arcade/game_098_lunar_lander.cpp"
+
         "display/arcade/arcade_result_screen.cpp"
         "display/arcade/arcade_score_store.cpp"
         "display/arcade/game_001_mario.cpp"

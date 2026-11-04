@@ -24,7 +24,7 @@ def main():
     for gid in (entry['id'] for entry in registry):
         result=post({'action':'select','game_id':gid})
         assert result['status']=='ok' and result['simulated'] and result['game_status']['game_id']==gid
-        if gid in (17,85,92,95):
+        if gid in (17,35,57,58,81,85,92,95,98):
             configured=post({'action':'config','sound_enabled':True,'sound_volume':20,'difficulty':2})
             assert configured['game_status']['difficulty_supported'] is True
             assert configured['game_status']['difficulty']==2

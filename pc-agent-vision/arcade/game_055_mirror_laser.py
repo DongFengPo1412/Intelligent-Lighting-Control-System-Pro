@@ -99,6 +99,7 @@ class Game055MirrorLaser(BaseCartridge):
             self._high_score = self._score
 
     def _load_stage(self, stage_idx: int) -> None:
+        self.firing=False
         if not (0 <= stage_idx < NUM_STAGES):
             stage_idx = 0
         self.stage = stage_idx
@@ -257,9 +258,14 @@ class Game055MirrorLaser(BaseCartridge):
                 self._state = STATE_PAUSED
                 return
 
-            if keys_pressed & (KEY_B | KEY_SELECT):
+            if keys_pressed & KEY_SELECT:
                 self._load_stage(self.stage)
                 return
+
+            if keys_pressed & KEY_B:
+                self.firing=not self.firing
+                self.charge_timer=self.bomb_timer=0.
+                self.emit_sound('shot')
 
             if keys_pressed & KEY_LEFT:
                 if self.cursor_x > 0:
@@ -276,6 +282,8 @@ class Game055MirrorLaser(BaseCartridge):
 
             if keys_pressed & KEY_A:
                 if self.rotatable[self.cursor_y][self.cursor_x]:
+                    self.firing=False
+                    self.emit_sound('action',self.cursor_y*7+self.cursor_x)
                     cur = self.grid[self.cursor_y][self.cursor_x]
                     if cur == LASER_MIRROR_SLASH:
                         self.grid[self.cursor_y][self.cursor_x] = LASER_MIRROR_BACKSLASH
@@ -285,7 +293,7 @@ class Game055MirrorLaser(BaseCartridge):
                     self.bomb_timer = 0.0
                     self.trace_beam()
 
-            if self.bomb_hit:
+            if self.firing and self.bomb_hit:
                 self.bomb_timer += dt
                 if self.bomb_timer >= 0.45:
                     if self.lives > 1:
@@ -299,7 +307,7 @@ class Game055MirrorLaser(BaseCartridge):
             else:
                 self.bomb_timer = 0.0
 
-            if self.receiver_powered:
+            if self.firing and self.receiver_powered:
                 self.charge_timer += dt
                 if self.charge_timer >= 0.40:
                     self._add_score(200)
@@ -391,6 +399,7 @@ class Game055MirrorLaser(BaseCartridge):
             if (int(self.anim_timer * 6.0) % 2) == 0:
                 self._set_px(fb, 1 + self.cursor_x * 2, 1 + self.cursor_y * 2, 255, 255, 120)
 
+        self._set_px(fb,15,0,255 if self.firing else 30,70 if self.firing else 210,20 if self.firing else 240)
         if self._state == STATE_PAUSED:
             for y in range(5, 9):
                 self._set_px(fb, 6, y, 250, 250, 250)

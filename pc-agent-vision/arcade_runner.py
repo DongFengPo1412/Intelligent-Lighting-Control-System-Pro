@@ -94,6 +94,12 @@ from arcade.game_094_grapple_swing import Game094GrappleSwing
 from arcade.game_095_super_hexagon import Game095SuperHexagon
 from arcade.game_097_frogger import Game097Frogger
 
+from arcade.game_035_boulder_dash import Game035BoulderDash
+from arcade.game_057_rush_hour import Game057RushHour
+from arcade.game_058_program_robot import Game058ProgramRobot
+from arcade.game_081_qix import Game081Qix
+from arcade.game_098_lunar_lander import Game098LunarLander
+
 KEY_MAP = {
     "left": KEY_LEFT,
     "right": KEY_RIGHT,
@@ -193,6 +199,11 @@ class ArcadeSession:
             95: Game095SuperHexagon(),
             97: Game097Frogger(),
         }
+        self.cartridges[35]=Game035BoulderDash()
+        self.cartridges[57]=Game057RushHour()
+        self.cartridges[58]=Game058ProgramRobot()
+        self.cartridges[81]=Game081Qix()
+        self.cartridges[98]=Game098LunarLander()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None
@@ -581,6 +592,7 @@ class ArcadeSession:
             "difficulty": arc_data.get("difficulty",1),
             "sound_enabled": arc_data.get("sound_enabled",False),
             "sound_volume": arc_data.get("sound_volume",0),
+            **{f"sound_{key}":arc_data.get(f"sound_{key}",0) for key in ("played","dropped","preempted","busy","short_writes","late","faults","duplicates")},
             "timing_dropped_ms": arc_data.get("timing_dropped_ms",0),
             "source": "esp32_hardware",
             "simulated": False,

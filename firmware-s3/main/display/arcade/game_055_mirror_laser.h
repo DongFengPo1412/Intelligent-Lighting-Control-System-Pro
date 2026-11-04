@@ -65,6 +65,7 @@ private:
     bool receiver_hit_;
     bool receiver_powered_;
     bool bomb_hit_;
+    bool firing_=false;
     float charge_timer_;
     float bomb_timer_;
     uint32_t score_;

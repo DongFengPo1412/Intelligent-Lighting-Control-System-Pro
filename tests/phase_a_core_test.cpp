@@ -68,6 +68,7 @@ static void test_protocol() {
     auto json=cJSON_Parse("{\"action\":\"input\",\"down\":18,\"pressed\":16}");assert(arcade_protocol::Valid(json));cJSON_Delete(json);
 }
 #include "phase_b_core_test.h"
+#include "phase_b2_core_test.h"
 
 int main(int argc,char** argv) {
     assert(opens==0); // All 13 production static constructors have already run.
@@ -97,7 +98,7 @@ int main(int argc,char** argv) {
     std::thread producer([]{for(unsigned i=1;i<=500;++i)Store::SaveHighScore(97,i);});
     for(int i=0;i<30;++i)Store::Flush();producer.join();Store::Flush();assert(durable["hs_097"]==500);
     auto& manager=arcade::ArcadeManager::GetInstance();manager.Init();
-    const int ids[]={1,2,3,4,5,6,9,10,14,15,16,17,18,19,20,21,22,26,27,28,29,30,31,33,34,38,40,41,42,43,44,45,51,52,53,54,55,62,63,64,65,66,67,72,73,74,75,76,83,84,85,86,87,88,92,93,94,95,97};
+    const int ids[]={1,2,3,4,5,6,9,10,14,15,16,17,18,19,20,21,22,26,27,28,29,30,31,33,34,35,38,40,41,42,43,44,45,51,52,53,54,55,57,58,62,63,64,65,66,67,72,73,74,75,76,81,83,84,85,86,87,88,92,93,94,95,97,98};
     for(auto id:ids){
         assert(manager.SelectGame(id));assert(manager.GetCurrentGameId()==id);manager.Start();
         std::vector<uint8_t> guarded(800,0xa5);
@@ -142,6 +143,6 @@ int main(int argc,char** argv) {
     manager.HandleInput(64,64);manager.Update(.033f);assert(manager.GetCurrentStatus().state==arcade::STATE_PAUSED);
     manager.Resume();assert(manager.GetCurrentStatus().state==arcade::STATE_PLAYING);
     manager.HandleInput(18,16);assert(manager.SelectGame(33));assert(!manager.current_keys_down_&&!manager.current_keys_pressed_);
-    test_replay();test_protocol();test_phase_b_foundations();
+    test_replay();test_protocol();test_phase_b_foundations();test_b2_audio();test_b2_rounds();test_b2_mechanisms();
     std::cout<<"C++ production constructors/NVS failures/replay/protocol/watchdog tests passed\n";
 }

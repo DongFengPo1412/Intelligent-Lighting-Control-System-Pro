@@ -101,9 +101,33 @@ async function main() {
     await evaluate('document.getElementById("marioStartBtn").click()');
     await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
     if(!await evaluate('document.getElementById("arcadeDifficulty").disabled'))throw Error("Difficulty was editable during a round");
-    fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,exceptions},null,2));
+    const batchLayouts=[];
+    for(const gid of [35,55,57,58,81,98]) {
+      await evaluate(`document.getElementById("btnArcade${String(gid).padStart(3,"0")}").click()`);
+      await until(`window.__replies.some(r=>r.game_status?.game_id===${gid}&&r.game_status.state===0)`);
+      const layout=await evaluate(`({gid:${gid},help:document.querySelector(".mario-help").textContent,
+        actions:getComputedStyle(document.getElementById("arcadeActions")).display,
+        a:document.querySelector("#marioKeyA .btn-sub").textContent,
+        b:getComputedStyle(document.getElementById("marioKeyB")).display})`);
+      if(layout.help.length<30 || (gid===35&&layout.actions!=="none") || ([81,98].includes(gid)&&layout.b!=="none"))throw Error("Incorrect batch control layout: "+JSON.stringify(layout));
+      batchLayouts.push(layout);
+    }
+    await evaluate('document.getElementById("marioStartBtn").click()');
+    await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
+    await evaluate('document.getElementById("arcadeDpad").scrollIntoView({block:"center",behavior:"instant"})');
+    const landerPoints=await evaluate(`["marioKeyRight","marioKeyA"].map((id,i)=>{
+      const r=document.getElementById(id).getBoundingClientRect();return {id:i+1,x:r.x+r.width/2,y:r.y+r.height/2,radiusX:1,radiusY:1,force:1};})`);
+    await call("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:landerPoints});
+    await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===18');
+    await call("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[landerPoints[1]]});
+    await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===2');
+    await call("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
+    await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===0');
+    const batchPng=await call("Page.captureScreenshot",{format:"png"});
+    fs.writeFileSync(path.join(work,"lander.png"),Buffer.from(batchPng.data,"base64"));
+    fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,batchLayouts,exceptions},null,2));
     if(exceptions.length)throw Error(JSON.stringify(exceptions));
-    console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; Pong two-touch masks 36->4->0; authoritative rhythm Hard/volume18 settings, in-round difficulty locked. Physical hardware NOT_TESTED.`);
+    console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; Pong 36->4->0 and Lander 18->2->0 multi-touch; batch layouts/help; authoritative difficulty/volume settings. Physical hardware NOT_TESTED.`);
   } finally {if(socket)socket.close();chrome.kill();}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

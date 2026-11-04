@@ -298,23 +298,25 @@ void AudioHAL::NotifyExternalPlayback() {
     playback_priority_.External(uint32_t(esp_timer_get_time()/1000));
 }
 
-esp_err_t AudioHAL::TryPlayGamePcm(const int16_t* data,size_t count) {
-    if(!data || !count || count>160 || !initialized_ || !tx_chan_)return ESP_ERR_INVALID_STATE;
-    if(!playback_priority_.GameAllowed(uint32_t(esp_timer_get_time()/1000)))return ESP_ERR_TIMEOUT;
-    if(!playback_mutex_ || xSemaphoreTake(playback_mutex_,0)!=pdTRUE)return ESP_ERR_TIMEOUT;
-    esp_err_t result=ESP_ERR_TIMEOUT;
+arcade::AudioWriteResult AudioHAL::TryPlayGamePcm(const int16_t* data,size_t count) {
+    using State=arcade::AudioWriteState;
+    if(!data || !count || count>160 || !initialized_ || !tx_chan_)return {0,State::Fault};
+    if(!playback_priority_.GameAllowed(uint32_t(esp_timer_get_time()/1000)))return {0,State::Preempted};
+    if(!playback_mutex_ || xSemaphoreTake(playback_mutex_,0)!=pdTRUE)return {0,State::Busy};
+    arcade::AudioWriteResult result{0,State::Preempted};
     if(playback_priority_.GameAllowed(uint32_t(esp_timer_get_time()/1000))) {
         if(spk_power_timer_)esp_timer_stop(spk_power_timer_);
-        result=EnableSpeaker(true);
-        if(result==ESP_OK) {
+        esp_err_t error=EnableSpeaker(true);
+        if(error==ESP_OK) {
             for(size_t i=0;i<count;++i) {
                 int64_t value=int64_t(data[i])*volume_factor_;
                 tx_buffer_[2*i]=tx_buffer_[2*i+1]=int32_t(value);
             }
             size_t written=0;
-            result=i2s_channel_write(tx_chan_,tx_buffer_,count*2*sizeof(int32_t),&written,0);
-            if(result==ESP_OK && written!=count*2*sizeof(int32_t))result=ESP_ERR_TIMEOUT;
-        }
+            error=i2s_channel_write(tx_chan_,tx_buffer_,count*2*sizeof(int32_t),&written,0);
+            result=arcade::GameWriteFromBytes(count,written,
+                error==ESP_OK?State::Ready:error==ESP_ERR_TIMEOUT?State::Busy:State::Fault);
+        } else result={0,State::Fault};
         ResetSpeakerTimer();
     }
     xSemaphoreGive(playback_mutex_);return result;

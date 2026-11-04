@@ -125,6 +125,11 @@
     "class": "Game034Pacman"
   },
   {
+    "id": 35,
+    "module": "game_035_boulder_dash",
+    "class": "Game035BoulderDash"
+  },
+  {
     "id": 38,
     "module": "game_038_bomberman",
     "class": "Game038Bomberman"
@@ -185,6 +190,16 @@
     "class": "Game055MirrorLaser"
   },
   {
+    "id": 57,
+    "module": "game_057_rush_hour",
+    "class": "Game057RushHour"
+  },
+  {
+    "id": 58,
+    "module": "game_058_program_robot",
+    "class": "Game058ProgramRobot"
+  },
+  {
     "id": 62,
     "module": "game_062_reversi",
     "class": "Game062Reversi"
@@ -240,6 +255,11 @@
     "class": "Game076MiniGolf"
   },
   {
+    "id": 81,
+    "module": "game_081_qix",
+    "class": "Game081Qix"
+  },
+  {
     "id": 83,
     "module": "game_083_tower_defense",
     "class": "Game083TowerDefense"
@@ -293,5 +313,10 @@
     "id": 97,
     "module": "game_097_frogger",
     "class": "Game097Frogger"
+  },
+  {
+    "id": 98,
+    "module": "game_098_lunar_lander",
+    "class": "Game098LunarLander"
   }
 ]

@@ -1,5 +1,7 @@
 # Intelligent Lighting Control System — Pro
 
+**2026-11-04 Phase B2:** five new targets (035/057/058/081/098) bring the registry to **64/100**. Three-tier input-only full rounds, Mirror Laser's four stages and bounded short-write/priority audio policies have software evidence; physical acceptance remains pending. [Scope](docs/ARCADE_PHASE_B2.md).
+
 **2026-11-04 Phase B1:** fixed-step timing and nonblocking shared sound infrastructure; 017/085/092/095 have three real difficulty tiers and full-round host checks. Registry remains 59; physical/audio acceptance pending. [Details](docs/ARCADE_PHASE_B1.md).
 
 **2026-11-04 handoff / A.1:** 59 target cartridges are software-integrated; 41 remain unregistered. Disposable readback lanes, explicit Pong player selection and safe first-pair retries are implemented. See [scope and acceptance boundaries](docs/ARCADE_HANDOFF_A1.md). Physical tests remain pending.

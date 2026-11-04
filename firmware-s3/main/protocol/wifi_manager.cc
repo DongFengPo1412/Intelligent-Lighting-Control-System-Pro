@@ -421,6 +421,12 @@ void WifiManager::UdpServerTaskLoop()
                     cJSON_AddNumberToObject(arc_obj,"sound_played",arcade::Sounds().played.load());
                     cJSON_AddNumberToObject(arc_obj,"sound_dropped",arcade::Sounds().dropped.load());
                     cJSON_AddNumberToObject(arc_obj,"sound_preempted",arcade::Sounds().preempted.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_busy",arcade::Sounds().busy.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_short_writes",arcade::Sounds().short_writes.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_late",arcade::Sounds().late.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_faults",arcade::Sounds().faults.load());
+                    cJSON_AddNumberToObject(arc_obj,"sound_duplicates",arcade::Sounds().duplicates.load());
+
                     cJSON_AddNumberToObject(arc_obj,"timing_dropped_ms",snapshot.dropped_time_ms);
                     if (st.player_count) cJSON_AddNumberToObject(arc_obj, "player_count", st.player_count);
                     cJSON_AddNumberToObject(arc_obj, "lives", st.lives);

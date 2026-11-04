@@ -1,3 +1,8 @@
+#include "game_035_boulder_dash.h"
+#include "game_057_rush_hour.h"
+#include "game_058_program_robot.h"
+#include "game_081_qix.h"
+#include "game_098_lunar_lander.h"
 // arcade_manager.cpp —— 统一街机游戏运行管理中枢
 #include "arcade_manager.h"
 #include "game_001_mario.h"
@@ -128,6 +133,12 @@ static Game094GrappleSwing s_game_094;
 static Game095SuperHexagon s_game_095;
 static Game097Frogger s_game_097;
 
+static Game035BoulderDash s_game_035;
+static Game057RushHour s_game_057;
+static Game058ProgramRobot s_game_058;
+static Game081Qix s_game_081;
+static Game098LunarLander s_game_098;
+
 ArcadeManager& ArcadeManager::GetInstance()
 {
     static ArcadeManager instance;
@@ -152,6 +163,12 @@ void ArcadeManager::Init()
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
 {
     switch (game_id) {
+        case 35: return &s_game_035;
+        case 57: return &s_game_057;
+        case 58: return &s_game_058;
+        case 81: return &s_game_081;
+        case 98: return &s_game_098;
+
         case 1: return &s_game_001;
         case 2: return &s_game_002;
         case 3: return &s_game_003;

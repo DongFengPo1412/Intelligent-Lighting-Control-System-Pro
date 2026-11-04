@@ -1122,6 +1122,12 @@
     const gNum = Number(gid || state.arcadeGid || 1);
     const help=document.querySelector(".mario-help");
     const specificHelp={
+      35:"方向键挖土、收集8颗青色宝石，再进入右下出口；可水平推石，提防头顶落石。三档改变落石速度和限时。",
+      55:"方向键移动光标，A 旋转镜面并进入安全预览；B 确认发射/停止。只有发射才会充能或引爆炸弹；暂停与重新开局使用上方按钮。共四关。",
+      57:"A 选择下一辆车，B 上一辆；白点标示当前车辆。横车用左右，竖车用上下；让红车到达右侧出口。移动次数有限。",
+      58:"先编程：↑追加前进，←追加左转，→追加右转，↓追加等待；A 执行，B 撤销末条（执行时中止）。踩黄开关打开红门，再到绿出口。顶行显示指令，白点为执行位置。",
+      81:"沿蓝色安全区移动；A 开启画线，再进入空白区并回到安全区闭合。粉色敌人碰到黄线或自己折返碰线会失败；圈占50/60/70%获胜。",
+      98:"左右旋转，A 或 ↑ 喷气；黄色顶条是燃料。缓慢、近乎竖直地落在绿色平台，岩地或高速接触会坠毁。支持转向与喷气同时按住。",
       17:"四轨对应 1/2/3/4 或 ←/↓/↑/→；在下方判定线击中音符。三拍预滚，完成64音符；乱按会扣容错。音效会让路于语音/音乐/收音。",
       85:"方向键移动光标，A 给附近行走旅鼠分配技能，B 按 阻挡→搭桥→挖掘 循环；默认挖掘。顶端亮点提示所选技能；三关均须达到救援目标。",
       92:"方向键移动刀光，A/B 挥刀，也可在灯板预览上划动；挥刀存在短冷却。切够40个水果，避开红色脉冲炸弹。",
@@ -1162,6 +1168,21 @@
       if (gNum === 41 || gNum === 42) {
         if (btnA_sub) btnA_sub.textContent = "旋转";
         if (btnB_sub) btnB_sub.textContent = "快降";
+      } else if(gNum===55) {
+        if(btnA_sub)btnA_sub.textContent="旋转/预览";
+        if(btnB_sub)btnB_sub.textContent="发射/停止";
+      } else if(gNum===57) {
+        if(btnA_sub)btnA_sub.textContent="下一辆";
+        if(btnB_sub)btnB_sub.textContent="上一辆";
+      } else if(gNum===58) {
+        if(btnA_sub)btnA_sub.textContent="执行程序";
+        if(btnB_sub)btnB_sub.textContent="撤销/中止";
+      } else if(gNum===81) {
+        if(btnA_sub)btnA_sub.textContent="开/关画线";
+        if(keyB)keyB.style.display="none";
+      } else if(gNum===98) {
+        if(btnA_sub)btnA_sub.textContent="喷气";
+        if(keyB)keyB.style.display="none";
       } else if(gNum===85) {
         if(btnA_sub)btnA_sub.textContent="分配技能";
         if(btnB_sub)btnB_sub.textContent="切换技能";

@@ -1,5 +1,8 @@
 # Phase B1: shared infrastructure and four-game quality batch
 
+Historical B1 scope below. The current audio retry/dedup contract and registry
+count are superseded by [Phase B2](ARCADE_PHASE_B2.md); B1's evidence remains valid.
+
 This milestone retains 59 registered target cartridges; the remaining 41 are
 not added here. It does not certify all 59 as finished products.
 

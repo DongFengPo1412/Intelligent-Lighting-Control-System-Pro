@@ -18,6 +18,7 @@ static void test_phase_b_complete_rounds() {
     Sounds().SetClock(sound_clock);Sounds().Configure(true,25);Sounds().Invalidate();
     constexpr float dt=16667.f/1000000.f;
     for(unsigned level=0;level<3;++level) {
+        Sounds().Invalidate(); // Separate direct-cartridge test sessions, like manager selection.
         Game017RhythmLanes rhythm;rhythm.SetDifficulty(level);rhythm.Init();rhythm.Start();
         uint8_t health_frame[768];rhythm.Render(health_frame);unsigned health_pixels=0;
         for(int x=0;x<16;++x)if(health_frame[3*x]==80 && health_frame[3*x+1]==230 && health_frame[3*x+2]==140)++health_pixels;
@@ -117,7 +118,7 @@ static void test_phase_b_foundations() {
     assert(clock.Advance(elapsed-1,[&](float){assert(false);})==0);
     arcade::SoundBus bus(sound_clock);arcade::SoundEvent event;
     sound_now=100;assert(bus.Emit(arcade::Sound::Beat,17,0));
-    assert(!bus.Emit(arcade::Sound::Beat,17,0));assert(bus.Pop(event));
+    assert(bus.Emit(arcade::Sound::Beat,17,0));assert(bus.Pop(event));assert(bus.Pop(event));
     int peak=0;for(unsigned i=0;i<1000;++i)peak=std::max(peak,std::abs(int(arcade::SoundSample(event,i,100))));
     assert(peak>1000 && peak<=4000);
     sound_now+=60;assert(bus.Emit(arcade::Sound::Win,17));bus.Invalidate();assert(!bus.Pop(event));

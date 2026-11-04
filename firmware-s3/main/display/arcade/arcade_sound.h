@@ -8,26 +8,29 @@ enum class Sound : uint8_t { Select,Start,Pause,Score,Hurt,Win,Lose,Action,Beat,
 struct SoundEvent {Sound kind;uint8_t game,detail;uint32_t generation,at;};
 
 // No heap allocation or waiting in the game/display producer. An occupied lock,
-// full queue, stale event or too frequent repeat is deliberately dropped.
+// full queue, stale event or repeated explicit operation identity is dropped.
 class SoundBus {
 public:
     using Clock=uint32_t(*)();
     explicit SoundBus(Clock clock=nullptr):clock_(clock) {}
     void SetClock(Clock clock) {clock_=clock;} // Before starting the worker only.
-    void Configure(bool enabled,uint8_t volume) {enabled_=enabled;volume_=volume;if(!enabled)Invalidate();}
+    void Configure(bool enabled,uint8_t volume) {enabled_=enabled;volume_=volume;if(!enabled || !volume)Invalidate();}
     bool Enabled() const {return enabled_;}
     uint8_t Volume() const {return volume_;}
     uint32_t Generation() const {return generation_;}
     void Invalidate() {++generation_;if(!lock_.test_and_set(std::memory_order_acquire)){head_=count_=0;lock_.clear(std::memory_order_release);}}
-    bool Emit(Sound kind,uint8_t game,uint8_t detail=0) {
+    bool Emit(Sound kind,uint8_t game,uint8_t detail=0,uint32_t operation=0) {
         if(!enabled_ || !volume_ || kind>=Sound::Count)return false;
         if(lock_.test_and_set(std::memory_order_acquire)){++dropped;return false;}
         uint32_t now=clock_?clock_():0;
-        auto i=unsigned(kind);
-        bool rapid=seen_[i] && uint32_t(now-last_[i])<(kind==Sound::Beat?30u:45u);
-        bool accepted=count_<kCapacity && !rapid;
-        if(accepted){events_[(head_+count_)%kCapacity]={kind,game,detail,generation_,now};++count_;last_[i]=now;seen_[i]=true;++queued;}
-        else ++dropped;
+        bool duplicate=false;
+        // Zero denotes a fresh gameplay event: rapid hits/chords remain distinct.
+        // Explicit identities are optional local operation IDs, scoped to this session.
+        if(operation)for(auto& key:recent_)if(key.id==operation && key.game==game && key.kind==kind && key.detail==detail && key.generation==generation_)duplicate=true;
+        bool accepted=count_<kCapacity && !duplicate;
+        if(accepted){events_[(head_+count_)%kCapacity]={kind,game,detail,generation_,now};++count_;++queued;
+            if(operation){recent_[recent_pos_]={operation,generation_,game,detail,kind};recent_pos_=(recent_pos_+1)%kCapacity;}}
+        else {++dropped;if(duplicate)++duplicates;}
         lock_.clear(std::memory_order_release);return accepted;
     }
     bool Pop(SoundEvent& out) {
@@ -40,12 +43,13 @@ public:
         }
         lock_.clear(std::memory_order_release);return found;
     }
-    std::atomic<uint32_t> queued{0},dropped{0},played{0},preempted{0};
+    std::atomic<uint32_t> queued{0},dropped{0},played{0},preempted{0},busy{0},short_writes{0},late{0},faults{0},duplicates{0};
 private:
     static constexpr unsigned kCapacity=16;
     std::atomic_flag lock_=ATOMIC_FLAG_INIT;
     SoundEvent events_[kCapacity]={};unsigned head_=0,count_=0;
-    uint32_t last_[unsigned(Sound::Count)]={};bool seen_[unsigned(Sound::Count)]={};
+    struct Identity {uint32_t id=0,generation=0;uint8_t game=0,detail=0;Sound kind=Sound::Select;};
+    Identity recent_[kCapacity]{};unsigned recent_pos_=0;
     std::atomic<bool> enabled_{true};std::atomic<uint8_t> volume_{25};
     std::atomic<uint32_t> generation_{1};Clock clock_;
 };

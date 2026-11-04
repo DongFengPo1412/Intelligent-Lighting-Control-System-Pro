@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "audio_priority.h"
+#include "game_audio_stream.h"
 
 class AudioHAL {
 public:
@@ -37,7 +38,7 @@ public:
     esp_err_t PlayMonoPcm(const int16_t* mono_samples, size_t count);
     void NotifyExternalPlayback();
     void GuardGameAudioForCapture(bool active){playback_priority_.Capture(active);if(active)NotifyExternalPlayback();}
-    esp_err_t TryPlayGamePcm(const int16_t* mono_samples,size_t count);
+    arcade::AudioWriteResult TryPlayGamePcm(const int16_t* mono_samples,size_t count);
 
     // 从 INMP441 读取一段麦克风采样数据 (16kHz 16-bit 单声道)
     esp_err_t ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms = 200);
