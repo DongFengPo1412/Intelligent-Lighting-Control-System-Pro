@@ -136,6 +136,18 @@ from arcade.game_050_mini_sudoku import Game050MiniSudoku
 
 from arcade.game_056_sliding_puzzle import Game056SlidingPuzzle
 
+from arcade.game_059_cut_rope import Game059CutRope
+
+from arcade.game_060_portal_puzzle import Game060PortalPuzzle
+
+from arcade.game_061_connect_four import Game061ConnectFour
+
+from arcade.game_068_mastermind import Game068Mastermind
+
+from arcade.game_069_nim import Game069Nim
+
+from arcade.game_070_flood_it import Game070FloodIt
+
 KEY_MAP = {
     "left": KEY_LEFT,
     "right": KEY_RIGHT,
@@ -258,6 +270,12 @@ class ArcadeSession:
         self.cartridges[49]=Game049LightsOut()
         self.cartridges[50]=Game050MiniSudoku()
         self.cartridges[56]=Game056SlidingPuzzle()
+        self.cartridges[59]=Game059CutRope()
+        self.cartridges[60]=Game060PortalPuzzle()
+        self.cartridges[61]=Game061ConnectFour()
+        self.cartridges[68]=Game068Mastermind()
+        self.cartridges[69]=Game069Nim()
+        self.cartridges[70]=Game070FloodIt()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None

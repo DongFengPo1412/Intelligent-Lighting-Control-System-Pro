@@ -17,6 +17,12 @@
 #include "game_049_lights_out.h"
 #include "game_050_mini_sudoku.h"
 #include "game_056_sliding_puzzle.h"
+#include "game_059_cut_rope.h"
+#include "game_060_portal_puzzle.h"
+#include "game_061_connect_four.h"
+#include "game_068_mastermind.h"
+#include "game_069_nim.h"
+#include "game_070_flood_it.h"
 #include <vector>
 namespace arcade {
 struct B3Probe {
@@ -118,6 +124,45 @@ struct B3Probe {
             return {double(g.blank),    double(g.moves),    double(g.board[0]), double(g.board[1]),
                     double(g.board[2]), double(g.board[3]), double(g.board[4]), double(g.board[5]),
                     double(g.board[6]), double(g.board[7]), double(g.board[8])};
+        }
+        case 59: {
+            const auto &g = *static_cast<const Game059CutRope *>(game);
+            return {double(g.x),  double(g.y),   double(g.vx),
+                    double(g.vy), double(g.cut), double(g.tries)};
+        }
+        case 60: {
+            const auto &g = *static_cast<const Game060PortalPuzzle *>(game);
+            return {double(g.x), double(g.y), double(g.moves), double(g.gate), double(g.teleports)};
+        }
+        case 61: {
+            const auto &g = *static_cast<const Game061ConnectFour *>(game);
+            return {
+                double(g.column),    double(g.turns),     double(g.board[0]),  double(g.board[1]),
+                double(g.board[2]),  double(g.board[3]),  double(g.board[4]),  double(g.board[5]),
+                double(g.board[6]),  double(g.board[7]),  double(g.board[8]),  double(g.board[9]),
+                double(g.board[10]), double(g.board[11]), double(g.board[12]), double(g.board[13]),
+                double(g.board[14]), double(g.board[15]), double(g.board[16]), double(g.board[17]),
+                double(g.board[18]), double(g.board[19]), double(g.board[20]), double(g.board[21]),
+                double(g.board[22]), double(g.board[23]), double(g.board[24]), double(g.board[25]),
+                double(g.board[26]), double(g.board[27]), double(g.board[28]), double(g.board[29]),
+                double(g.board[30]), double(g.board[31]), double(g.board[32]), double(g.board[33]),
+                double(g.board[34]), double(g.board[35]), double(g.board[36]), double(g.board[37]),
+                double(g.board[38]), double(g.board[39]), double(g.board[40]), double(g.board[41])};
+        }
+        case 68: {
+            const auto &g = *static_cast<const Game068Mastermind *>(game);
+            return {double(g.slot),     double(g.tries),    double(g.exact),    double(g.near),
+                    double(g.guess[0]), double(g.guess[1]), double(g.guess[2]), double(g.guess[3])};
+        }
+        case 69: {
+            const auto &g = *static_cast<const Game069Nim *>(game);
+            return {double(g.pile),     double(g.take),     double(g.turns),
+                    double(g.piles[0]), double(g.piles[1]), double(g.piles[2])};
+        }
+        case 70: {
+            const auto &g = *static_cast<const Game070FloodIt *>(game);
+            return {double(g.color), double(g.selected), double(g.moves), double(g.count),
+                    double(g.flooded)};
         }
         default:
             return {};

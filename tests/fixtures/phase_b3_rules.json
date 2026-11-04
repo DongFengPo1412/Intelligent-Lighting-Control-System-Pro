@@ -305,7 +305,10 @@
       "by[0]"
     ],
     "control": 3,
-    "lives": null
+    "lives": null,
+    "help": "左右选择落点，A 放下水果。相同等级碰撞合并，异级会堆叠；合成四级大西瓜完成一轮。顶端堆满或弹数耗尽失败。",
+    "a": "落下",
+    "b": ""
   },
   "47": {
     "id": 47,
@@ -324,7 +327,10 @@
       "cleared"
     ],
     "control": 3,
-    "lives": null
+    "lives": null,
+    "help": "6×6棋盘自由放置，A 放置，B 切换剩余形状；每盘三个形状全部用完才补充。满行、满列或3×3区域同时消除，达到目标清除数获胜。",
+    "a": "放置",
+    "b": "换形状"
   },
   "48": {
     "id": 48,
@@ -341,7 +347,10 @@
       "board_hash"
     ],
     "control": 3,
-    "lives": null
+    "lives": null,
+    "help": "方向键选格，A 放草。三个相邻同级物体合成升级，可连锁；建成三级房屋获胜，岩石不可用，棋盘占满失败。",
+    "a": "放草",
+    "b": ""
   },
   "49": {
     "id": 49,
@@ -357,7 +366,10 @@
       "moves"
     ],
     "control": 3,
-    "lives": null
+    "lives": null,
+    "help": "方向键选灯，A 翻转本格及上下左右。全部熄灭获胜，顶端操作预算用尽失败；三档均由合法按灯序列生成。",
+    "a": "切换邻域",
+    "b": ""
   },
   "50": {
     "id": 50,
@@ -392,7 +404,10 @@
     "lives": [
       "max(0,self.attempts)",
       "std::max(0,attempts)"
-    ]
+    ],
+    "help": "方向键选格，A 在空白/红/蓝/绿/黄中轮换，B 检查。每行、列、2×2宫各色恰好一次；灰角是不可修改的已知格，错误检查消耗机会。",
+    "a": "填色",
+    "b": "检查"
   },
   "56": {
     "id": 56,
@@ -415,6 +430,176 @@
       "board[8]"
     ],
     "control": 2,
-    "lives": null
+    "lives": null,
+    "help": "方向键移动空格，与相邻数字交换。恢复1至8的顺序并将空格移到右下角；三档打乱步数和预算不同。",
+    "a": "移动空格",
+    "b": ""
+  },
+  "59": {
+    "id": 59,
+    "slug": "cut_rope",
+    "cls": "Game059CutRope",
+    "name": "割绳子",
+    "en": "Cut the Rope",
+    "core": "A rope constrains a swinging candy; cut at the correct time and preserve tangential momentum to feed the target.",
+    "keys": [
+      "x",
+      "y",
+      "vx",
+      "vy",
+      "cut",
+      "tries"
+    ],
+    "control": 0,
+    "lives": [
+      "max(0,self.tries)",
+      "std::max(0,tries)"
+    ],
+    "help": "糖果被绳长约束摆动，A 切绳后保留切向速度并受重力下落；投进右下绿色嘴巴获胜，失误扣机会。",
+    "a": "切绳",
+    "b": ""
+  },
+  "60": {
+    "id": 60,
+    "slug": "portal_puzzle",
+    "cls": "Game060PortalPuzzle",
+    "name": "传送门谜题",
+    "en": "Portal Puzzle",
+    "core": "Linked floor portals cross a sealed wall; a remote switch unlocks the exit gate.",
+    "keys": [
+      "x",
+      "y",
+      "moves",
+      "gate",
+      "teleports"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "方向键走格，站在蓝/橙传送门按 A 穿越。去右侧紫色开关解锁横向门，再到右上绿色出口；左右区域不能直接穿墙。",
+    "a": "穿越传送门",
+    "b": ""
+  },
+  "61": {
+    "id": 61,
+    "slug": "connect_four",
+    "cls": "Game061ConnectFour",
+    "name": "四子棋",
+    "en": "Connect Four",
+    "core": "Seven columns obey gravity; alternating player and tactical AI must connect four before the opponent.",
+    "keys": [
+      "column",
+      "turns",
+      "board[0]",
+      "board[1]",
+      "board[2]",
+      "board[3]",
+      "board[4]",
+      "board[5]",
+      "board[6]",
+      "board[7]",
+      "board[8]",
+      "board[9]",
+      "board[10]",
+      "board[11]",
+      "board[12]",
+      "board[13]",
+      "board[14]",
+      "board[15]",
+      "board[16]",
+      "board[17]",
+      "board[18]",
+      "board[19]",
+      "board[20]",
+      "board[21]",
+      "board[22]",
+      "board[23]",
+      "board[24]",
+      "board[25]",
+      "board[26]",
+      "board[27]",
+      "board[28]",
+      "board[29]",
+      "board[30]",
+      "board[31]",
+      "board[32]",
+      "board[33]",
+      "board[34]",
+      "board[35]",
+      "board[36]",
+      "board[37]",
+      "board[38]",
+      "board[39]",
+      "board[40]",
+      "board[41]"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "左右选列，A 落子。重力堆叠，黄子是你、红子是AI，横竖斜四连获胜。普通AI会封堵，困难AI增加威胁判断。",
+    "a": "落子",
+    "b": ""
+  },
+  "68": {
+    "id": 68,
+    "slug": "mastermind",
+    "cls": "Game068Mastermind",
+    "name": "颜色密码",
+    "en": "Mastermind",
+    "core": "Guess a hidden four-colour code; exact and misplaced matches account for duplicates without double counting.",
+    "keys": [
+      "slot",
+      "tries",
+      "exact",
+      "near",
+      "guess[0]",
+      "guess[1]",
+      "guess[2]",
+      "guess[3]"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "左右选密码槽，上下切换六色，A 提交。白色数表示颜色及位置正确，橙色数表示颜色正确位置错误；允许重复颜色。",
+    "a": "提交猜测",
+    "b": ""
+  },
+  "69": {
+    "id": 69,
+    "slug": "nim",
+    "cls": "Game069Nim",
+    "name": "取石子",
+    "en": "Nim",
+    "core": "Choose one heap and a positive take count; alternating normal-play Nim rewards taking the last stone.",
+    "keys": [
+      "pile",
+      "take",
+      "turns",
+      "piles[0]",
+      "piles[1]",
+      "piles[2]"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "左右选石堆，上下改变取子数，A 从该堆取走。双方轮流，取最后一颗者获胜；普通/困难AI使用异或策略。",
+    "a": "取石子",
+    "b": ""
+  },
+  "70": {
+    "id": 70,
+    "slug": "flood_it",
+    "cls": "Game070FloodIt",
+    "name": "连通染色",
+    "en": "Flood-It",
+    "core": "Recolour the connected top-left region, expanding only across adjacent matching cells within a move limit.",
+    "keys": [
+      "color",
+      "selected",
+      "moves",
+      "count",
+      "flooded"
+    ],
+    "control": 3,
+    "lives": null,
+    "help": "左右选色，A 将左上连通块染色并吞并相邻同色色块。限定步数覆盖全部6×6棋盘。",
+    "a": "扩张染色",
+    "b": ""
   }
 }

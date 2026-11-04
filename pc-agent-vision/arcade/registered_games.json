@@ -290,6 +290,21 @@
     "class": "Game058ProgramRobot"
   },
   {
+    "id": 59,
+    "module": "game_059_cut_rope",
+    "class": "Game059CutRope"
+  },
+  {
+    "id": 60,
+    "module": "game_060_portal_puzzle",
+    "class": "Game060PortalPuzzle"
+  },
+  {
+    "id": 61,
+    "module": "game_061_connect_four",
+    "class": "Game061ConnectFour"
+  },
+  {
     "id": 62,
     "module": "game_062_reversi",
     "class": "Game062Reversi"
@@ -318,6 +333,21 @@
     "id": 67,
     "module": "game_067_quoridor",
     "class": "Game067Quoridor"
+  },
+  {
+    "id": 68,
+    "module": "game_068_mastermind",
+    "class": "Game068Mastermind"
+  },
+  {
+    "id": 69,
+    "module": "game_069_nim",
+    "class": "Game069Nim"
+  },
+  {
+    "id": 70,
+    "module": "game_070_flood_it",
+    "class": "Game070FloodIt"
   },
   {
     "id": 72,
