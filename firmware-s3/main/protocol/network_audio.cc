@@ -1,5 +1,6 @@
 #include "network_audio.h"
 #include "command_dispatcher.h"
+#include "network_auth.h"
 #include <freertos/task.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -8,7 +9,7 @@
 #include <string.h>
 
 namespace {
-const char hello[]="pcm16le/16000/mono/v1";
+const char hello[]="pcm16le/16000/mono/v2";
 bool read_all(int fd,void* output,size_t length) {
     auto* p=(uint8_t*)output;while(length){int n=recv(fd,p,length,0);if(n<=0)return false;p+=n;length-=n;}return true;
 }
@@ -44,15 +45,27 @@ void NetworkAudio::Run(){
         int no_delay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&no_delay,sizeof(no_delay));
         timeval timeout={2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
         timeout={0,200000};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
-        xSemaphoreTake(tx_,portMAX_DELAY);client_=fd;xSemaphoreGive(tx_);
         uint8_t header[7],payload[2048];
+        // Authenticate BEFORE assigning the mic/output connection. Unpaired peers
+        // cannot capture audio or displace the active authenticated connection.
+        if (!read_all(fd,header,sizeof(header))) { close(fd); continue; }
+        size_t first_size=((size_t)header[5]<<8)|header[6];
+        const size_t prefix = strlen(hello);
+        if (memcmp(header,"KAP1",4) || header[4]!=4 || first_size!=prefix+1+64 ||
+            !read_all(fd,payload,first_size) || memcmp(payload,hello,prefix) || payload[prefix]!='|') {
+            close(fd); continue;
+        }
+        payload[first_size]=0;
+        if (!NetworkAuth::GetInstance().Check((const char*)payload+prefix+1)) { close(fd); continue; }
+        xSemaphoreTake(tx_,portMAX_DELAY);client_=fd;xSemaphoreGive(tx_);
+        if (!Send(4,hello,prefix)) {
+            xSemaphoreTake(tx_,portMAX_DELAY);client_=-1;close(fd);xSemaphoreGive(tx_);continue;
+        }
+        ready_=true;
         while(read_all(fd,header,sizeof(header))){
             size_t bytes=((size_t)header[5]<<8)|header[6];
             if(memcmp(header,"KAP1",4)||bytes>sizeof(payload)||!bytes||!read_all(fd,payload,bytes))break;
-            if(header[4]==4 && bytes==strlen(hello) && !memcmp(payload,hello,bytes)){
-                if(!Send(4,hello,strlen(hello)))break;
-                ready_=true;
-            } else if(header[4]==1 && ready_ && bytes%2==0){
+            if(header[4]==1 && ready_ && bytes%2==0){
                 CommandDispatcher::GetInstance().EnqueuePcm(payload,bytes);
             } else if(header[4]==5 && ready_){
                 if(!Send(5,payload,bytes))break;

@@ -4,6 +4,8 @@
 #include "display_manager.h"
 #include "board_led.h"
 #include "audio_hal.h"
+#include "network_auth.h"
+#include "arcade_protocol.h"
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -418,12 +420,19 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     }
     // {"cmd":"arcade", "action":"select"|"input"|"start"|"pause"|"resume"|"reset"|"exit"}
     else if (strcasecmp(cmd, "arcade") == 0) {
+        if (!arcade_protocol::Valid(root)) { cJSON_Delete(root); return false; }
+        cJSON* action = cJSON_GetObjectItemCaseSensitive(root, "action");
+        if (strcmp(action->valuestring, "select") && strcmp(action->valuestring, "status") &&
+            strcmp(action->valuestring, "exit") && !dm.SnapshotArcade().active) {
+            cJSON_Delete(root); return false;
+        }
         cJSON* act_item = cJSON_GetObjectItem(root, "action");
         if (cJSON_IsString(act_item)) {
             const char* act = act_item->valuestring;
             if (strcasecmp(act, "select") == 0) {
                 cJSON* gid_item = cJSON_GetObjectItem(root, "game_id");
-                if (cJSON_IsNumber(gid_item)) {
+                  if (cJSON_IsNumber(gid_item) && gid_item->valuedouble == gid_item->valueint &&
+                      gid_item->valueint > 0 && gid_item->valueint <= 255) {
                     bool ok = dm.ArcadeSelectGame((uint8_t)gid_item->valueint);
                     cJSON_Delete(root);
                     return ok;
@@ -470,6 +479,17 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
             cJSON_Delete(root);
             return true;
         }
+    }
+    // Explicit physical USB pairing; this credential is NEVER returned over UDP.
+    else if (strcasecmp(cmd, "pair") == 0) {
+        if (!reply_serial) { cJSON_Delete(root); return false; }
+        cJSON* pairing = cJSON_CreateObject();
+        const char* key = NetworkAuth::GetInstance().TokenForUsbPairing();
+        cJSON_AddStringToObject(pairing, "status", key[0] ? "ok" : "error");
+        cJSON_AddStringToObject(pairing, "control_token", key);
+        char* text = cJSON_PrintUnformatted(pairing);
+        if (text) { SendReply(text); SendReply("\n"); cJSON_free(text); }
+        cJSON_Delete(pairing); cJSON_Delete(root); return key[0] != 0;
     }
     // {"cmd":"status"}
     else if (strcasecmp(cmd, "status") == 0) {

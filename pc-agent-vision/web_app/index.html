@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#111316" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -823,7 +824,8 @@
     </form>
   </dialog>
   <script src="matrix3d.js?v=20261025u"></script>
-  <script src="app.js?v=20261103_mario_touch_v6"></script>
+  <script src="arcade_transport.js?v=20261104"></script>
+  <script src="app.js?v=20261104"></script>
 </body>
 
 </html>

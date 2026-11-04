@@ -7,6 +7,7 @@
 #include "spectrum_engine.h"
 #include "fingertip_tracker.h"
 #include "interaction_engine.h"
+#include "arcade_cartridge.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
@@ -67,6 +68,14 @@ public:
     void ArcadeReset();
     void ArcadeExit();
     void ArcadeHeartbeat();
+    struct ArcadeSnapshot {
+        bool active;
+        uint8_t game_id;
+        arcade::ControlType control_type;
+        arcade::CartridgeStatus status;
+        const char* name;
+    };
+    ArcadeSnapshot SnapshotArcade() const;
 
     // 获取底层组件 (高级扩展用)
     DisplayHAL& GetHAL() { return hal_; }

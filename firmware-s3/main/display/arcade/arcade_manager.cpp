@@ -55,6 +55,7 @@ void ArcadeManager::Init()
     last_heartbeat_time_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
     is_network_disconnected_ = false;
     watchdog_enabled_ = true;
+    control_paused_ = false;
 }
 
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
@@ -85,9 +86,10 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
         return false;
     }
 
-    current_game_ = cart;
-    current_game_->Init(); // 重新加载 NVS 最高分并初始化游戏状态
     ArcadeScoreStore::Flush(); // 落盘上一款游戏尚未保存的最高分
+    current_game_ = cart;
+    control_paused_ = false;
+    current_game_->Init(); // Only selected after app_main has initialized NVS.
     last_state_ = (CartridgeState)current_game_->GetStatus().state;
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
@@ -102,20 +104,28 @@ bool ArcadeManager::SelectGame(uint8_t game_id)
 void ArcadeManager::Start()
 {
     if (current_game_) {
+        FeedHeartbeat();
+        control_paused_ = false;
         current_game_->Start();
     }
 }
 
 void ArcadeManager::Pause()
 {
+    current_keys_down_ = current_keys_pressed_ = 0;
     if (current_game_) {
+        auto state = current_game_->GetStatus().state;
+        control_paused_ = state == STATE_PLAYING || state == STATE_PAUSED;
         current_game_->Pause();
+        ArcadeScoreStore::Flush();
     }
 }
 
 void ArcadeManager::Resume()
 {
     if (current_game_) {
+        FeedHeartbeat();
+        control_paused_ = false;
         current_game_->Resume();
     }
 }
@@ -125,6 +135,7 @@ void ArcadeManager::Reset()
     if (current_game_) {
         ArcadeScoreStore::Flush();
         current_game_->Reset();
+        control_paused_ = false;
         current_keys_down_ = 0;
         current_keys_pressed_ = 0;
         last_state_ = (CartridgeState)current_game_->GetStatus().state;
@@ -138,6 +149,7 @@ void ArcadeManager::Exit()
     }
     ArcadeScoreStore::Flush();
     current_game_ = nullptr;
+    control_paused_ = false;
     current_keys_down_ = 0;
     current_keys_pressed_ = 0;
     is_network_disconnected_ = false;
@@ -147,6 +159,10 @@ void ArcadeManager::Exit()
 void ArcadeManager::HandleInput(uint16_t keys_down, uint16_t keys_pressed)
 {
     FeedHeartbeat();
+    if (!current_game_ || control_paused_ || current_game_->GetStatus().state == STATE_PAUSED) {
+        current_keys_down_ = current_keys_pressed_ = 0;
+        return; // Only an explicit lifecycle resume/start may leave safe pause.
+    }
     current_keys_down_ = keys_down;
     current_keys_pressed_ |= keys_pressed;
 }
@@ -174,13 +190,14 @@ void ArcadeManager::Update(float dt)
         // 第一阶段安全阈值 (500ms)：释放长按键，防止因偶发丢包导致小人持续前冲
         if (elapsed_since_hb > 500) {
             current_keys_down_ = 0;
+            current_keys_pressed_ = 0;
         }
 
         // 第二阶段安全阈值 (1000ms)：确认 Wi-Fi 控制链路断开，强制进入安全暂停
         if (elapsed_since_hb > 1000 && !is_network_disconnected_) {
             is_network_disconnected_ = true;
             if (current_game_->GetStatus().state == STATE_PLAYING) {
-                current_game_->Pause();
+                Pause();
                 ESP_LOGW(TAG, "Wi-Fi control timed out (>1000ms)! Game automatically entered SAFE PAUSE");
             }
         }
@@ -188,6 +205,7 @@ void ArcadeManager::Update(float dt)
 
     uint16_t pressed = current_keys_pressed_;
     current_keys_pressed_ = 0; // 消费单次触发键
+    if (control_paused_) return;
 
     current_game_->Update(dt, current_keys_down_, pressed);
 
@@ -221,7 +239,9 @@ ControlType ArcadeManager::GetCurrentControlType() const
 CartridgeStatus ArcadeManager::GetCurrentStatus() const
 {
     if (current_game_) {
-        return current_game_->GetStatus();
+        auto status = current_game_->GetStatus();
+        if (control_paused_) status.state = STATE_PAUSED;
+        return status;
     }
     CartridgeStatus st;
     st.score = 0;

@@ -86,163 +86,50 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => ($("toast").hidden = true), 6500);
   }
+  const nativeMode = location.protocol === "file:";
+  const arcadeTransport = new window.ArcadeTransport(nativeMode ? window.arcadeNativeExchange(window.AmadeusNative) :
+    async (command, id, policy) => {
+      const path = command.cmd === "frame" ? "/api/arcade/frame" : "/api/arcade";
+      const data = command.cmd === "frame" ? undefined : {...command};
+      const reply = await httpApi(path,data,data ? "POST" : "GET",3000);
+      if (!reply || reply.status === "error") throw Error(reply?.error || "无效服务回执");
+      return reply;
+    });
   async function api(path, data, method = "POST", timeout = 15000) {
-  let activeKeyMask = 0;
-
-  function dispatchNativeUdp(host, port, message, timeoutMs) {
-    if (window.AmadeusNative && typeof window.AmadeusNative.sendUdpAsync === "function") {
-      return new Promise((resolve, reject) => {
-        const cbId = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
-        if (!window.__amadeusUdpCallbacks) window.__amadeusUdpCallbacks = {};
-        const timer = setTimeout(() => {
-          delete window.__amadeusUdpCallbacks[cbId];
-          reject(new Error("ESP32 UDP 响应超时 (1500ms)"));
-        }, timeoutMs + 300);
-        window.__amadeusUdpCallbacks[cbId] = (replyStr) => {
-          clearTimeout(timer);
-          try {
-            const parsed = JSON.parse(replyStr);
-            resolve(parsed);
-          } catch (e) {
-            reject(new Error("ESP32 UDP 报文解析失败: " + e.message));
-          }
-        };
-        try {
-          window.AmadeusNative.sendUdpAsync(host, port, message, timeoutMs, cbId);
-        } catch (e) {
-          clearTimeout(timer);
-          delete window.__amadeusUdpCallbacks[cbId];
-          reject(e);
-        }
-      });
-    } else if (window.AmadeusNative && typeof window.AmadeusNative.sendUdp === "function") {
-      return new Promise((resolve, reject) => {
-        try {
-          const replyStr = window.AmadeusNative.sendUdp(host, port, message, timeoutMs);
-          const parsed = JSON.parse(replyStr);
-          resolve(parsed);
-        } catch (e) {
-          reject(new Error("ESP32 UDP 同步请求失败: " + e.message));
-        }
-      });
-    }
-    return Promise.reject(new Error("未检测到原生 UDP 支持"));
-  }
-
-  async function api(path, data, method = "POST", timeout = 15000) {
-    if (location.protocol === "file:") {
-      if (window.AmadeusNative && path.startsWith("/api/arcade")) {
-        const host = localStorage.getItem("esp32_ip") || "192.168.4.1";
-        const port = 8888;
-        const reqId = "req_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-        let cmd = null;
-
-        // 统一解析 path-based 与 action-based 请求
-        let action = "";
-        let gameId = undefined;
-        let keyName = undefined;
-        let isDown = false;
-
-        if (path === "/api/arcade" && data && data.action) {
-          action = String(data.action).toLowerCase();
-          gameId = data.game_id;
-          keyName = data.key;
-          isDown = data.down !== undefined ? Boolean(data.down) : Boolean(data.is_down);
-        } else if (path.startsWith("/api/arcade/")) {
-          action = path.replace("/api/arcade/", "").toLowerCase();
-          if (data) {
-            gameId = data.game_id;
-            keyName = data.key;
-            isDown = data.down !== undefined ? Boolean(data.down) : Boolean(data.is_down);
-          }
-        }
-
-        if (action === "select") {
-          cmd = { cmd: "arcade", action: "select", game_id: Number(gameId) };
-        } else if (action === "start") {
-          cmd = { cmd: "arcade", action: "start" };
-        } else if (action === "pause") {
-          cmd = { cmd: "arcade", action: "pause" };
-        } else if (action === "resume") {
-          cmd = { cmd: "arcade", action: "resume" };
-        } else if (action === "reset") {
-          cmd = { cmd: "arcade", action: "reset" };
-        } else if (action === "stop" || action === "exit") {
-          activeKeyMask = 0;
-          cmd = { cmd: "arcade", action: "exit" };
-        } else if (action === "key" || action === "input") {
-          const KEY_BITS = { left: 1, right: 2, up: 4, down: 8, a: 16, b: 32, start: 64, select: 128 };
-          const mask = KEY_BITS[(keyName || "").toLowerCase()] || 0;
-          if (isDown) {
-            activeKeyMask |= mask;
-          } else {
-            activeKeyMask &= ~mask;
-          }
-          cmd = { cmd: "arcade", action: "input", down: activeKeyMask, pressed: isDown ? mask : 0 };
-        } else if (action === "heartbeat" || action === "status") {
-          cmd = { cmd: "arcade", action: "heartbeat" };
-        } else if (action === "frame") {
-          cmd = { cmd: "frame" };
-        }
-
-        if (cmd) {
-          const envelope = { request_id: reqId, command: JSON.stringify(cmd) };
-          const rawReply = await dispatchNativeUdp(host, port, JSON.stringify(envelope), 1500);
-
-          if (!rawReply || typeof rawReply !== "object") {
-            throw new Error("ESP32 UDP 返回了空数据或非 JSON 格式");
-          }
-          if (rawReply.status === "error") {
-            throw new Error(rawReply.error || "ESP32 硬件响应错误");
-          }
-
-          // 结构转换：使 Web 界面 HUD 和渲染引擎真实获取 ESP32 状态
-          const result = {
-            status: "ok",
-            source: "esp32_hardware",
-            request_id: rawReply.request_id || reqId,
-            mode: rawReply.mode,
-          };
-
-          if (rawReply.arcade) {
-            result.game_status = {
-              active: Boolean(rawReply.arcade.active),
-              game_id: Number(rawReply.arcade.game_id),
-              name: String(rawReply.arcade.name || ""),
-              state: Number(rawReply.arcade.state),
-              score: Number(rawReply.arcade.score),
-              high_score: Number(rawReply.arcade.high_score),
-              lives: Number(rawReply.arcade.lives),
-              progress: Number(rawReply.arcade.progress),
-              control_type: Number(rawReply.arcade.control_type),
-            };
-            result.arcade = rawReply.arcade;
-          }
-
-          if (rawReply.pixels || rawReply.hex) {
-            result.hex = rawReply.hex || rawReply.pixels;
-            result.pixels = rawReply.pixels || rawReply.hex;
-            result.frame_id = rawReply.frame_id;
-            result.source = rawReply.frame_source || "esp32_hardware";
-          }
-
-          return result;
-        }
+    if (path === "/api/arcade" || path.startsWith("/api/arcade/")) return arcadeTransport.call(path,data);
+    if (nativeMode) {
+      if (path === "/api/status") {
+        const r=await window.arcadeNativeExchange(window.AmadeusNative)({cmd:"status"},"status_"+Date.now(),{timeout:400,retries:0});
+        return {...r,status:"online",is_connected:true,simulated:false};
       }
-      throw Error("尚未连接电脑服务，请打开连接设置");
+      throw Error("此功能需要电脑服务；街机可直接连接灯板");
     }
+    return httpApi(path,data,method,timeout);
+  }
+  let pairingPrompt = false;
+  async function httpApi(path, data, method = "POST", timeout = 15000) {
     const abort = new AbortController(),
       timer = setTimeout(() => abort.abort(), timeout);
     try {
       const r = await fetch(path, {
         method,
-        headers:
-          data === undefined ? {} : { "Content-Type": "application/json" },
+        headers: {
+          ...(data === undefined ? {} : {"Content-Type":"application/json"}),
+          ...(sessionStorage.getItem("kurisu_access_token") ? {Authorization:"Bearer "+sessionStorage.getItem("kurisu_access_token")} : {})
+        },
         body: data === undefined ? undefined : JSON.stringify(data),
         signal: abort.signal,
         cache: "no-store",
       });
       const v = await r.json();
+      if (r.status === 401 && !pairingPrompt) {
+        pairingPrompt=true;
+        const token=window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）");
+        if (token) {
+          sessionStorage.setItem("kurisu_access_token",token.trim());
+          await fetch("/api/pair",{method:"POST",headers:{Authorization:"Bearer "+token.trim()}});
+        }
+      }
       if (!r.ok || v.status === "error")
         throw Error(v.error || v.message || `请求失败 (${r.status})`);
       return v;
@@ -281,6 +168,7 @@
   }
   function navigate(page, anchor) {
     if (!names[page]) page = "overview";
+    if (state.arcadeActive && page !== "interaction") releaseArcadeControls();
     state.page = page;
     $$(".page").forEach((p) => {
       p.hidden = p.id !== "page-" + page;
@@ -1032,6 +920,14 @@
         { method: "POST", body: file },
       );
       const v = await r.json();
+      if (r.status === 401 && !pairingPrompt) {
+        pairingPrompt=true;
+        const token=window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）");
+        if (token) {
+          sessionStorage.setItem("kurisu_access_token",token.trim());
+          await fetch("/api/pair",{method:"POST",headers:{Authorization:"Bearer "+token.trim()}});
+        }
+      }
       if (!r.ok) throw Error(v.error || "上传失败");
       notice(state.simulated ? "模拟音源已提交" : "音乐已开始");
       lastPro = 0;
@@ -1362,35 +1258,36 @@
   }
 
   // 手机触屏手柄按键绑定
+  const resetArcadeButtons=[];
+  function releaseArcadeControls() {
+    resetArcadeButtons.forEach(reset=>reset());
+    return arcadeTransport.suspend();
+  }
   function bindArcadeTouchKey(btn, keyName) {
     if (!btn) return;
-    let isPressed = false;
-
-    const press = (e) => {
-      e?.preventDefault?.();
-      if (isPressed) return;
-      isPressed = true;
-      btn.classList.add("pressed", "active");
-      if (navigator.vibrate) {
-        try { navigator.vibrate(10); } catch (_) {}
-      }
-      api("/api/arcade", { action: "key", key: keyName, down: true }).catch(() => {});
+    const pointers=new Set();
+    resetArcadeButtons.push(()=>{pointers.clear();btn.classList.remove("pressed","active");});
+    btn.style.touchAction="none";
+    btn.addEventListener("pointerdown",e=>{
+      e.preventDefault();
+      if(pointers.has(e.pointerId))return;
+      pointers.add(e.pointerId);btn.setPointerCapture(e.pointerId);
+      if(pointers.size!==1)return;
+      btn.classList.add("pressed","active");
+      if(navigator.vibrate)navigator.vibrate(10);
+      api("/api/arcade",{action:"key",key:keyName,down:true}).catch(error=>{
+        pointers.clear();btn.classList.remove("pressed","active");notice(error.message);
+      });
+    });
+    const release=e=>{
+      e.preventDefault();
+      if(!pointers.delete(e.pointerId)||pointers.size)return;
+      btn.classList.remove("pressed","active");
+      api("/api/arcade",{action:"key",key:keyName,down:false}).catch(error=>notice(error.message));
     };
-
-    const release = (e) => {
-      e?.preventDefault?.();
-      if (!isPressed) return;
-      isPressed = false;
-      btn.classList.remove("pressed", "active");
-      api("/api/arcade", { action: "key", key: keyName, down: false }).catch(() => {});
-    };
-
-    btn.addEventListener("touchstart", press, { passive: false });
-    btn.addEventListener("touchend", release, { passive: false });
-    btn.addEventListener("touchcancel", release, { passive: false });
-    btn.addEventListener("mousedown", press);
-    btn.addEventListener("mouseup", release);
-    btn.addEventListener("mouseleave", release);
+    btn.addEventListener("pointerup",release);
+    btn.addEventListener("pointercancel",release);
+    btn.addEventListener("lostpointercapture",release);
   }
 
   $$("[data-mario-key]").forEach((btn) => {
@@ -1519,19 +1416,19 @@
   });
 
   // 15 FPS 实时画布回读与 HUD 同步 (严密对齐硬件帧源)
+  let arcadeFrameBusy=false;
   setInterval(async () => {
-    if (state.arcadeActive && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
+    if (!arcadeFrameBusy && !document.hidden && state.arcadeActive && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
       try {
+        arcadeFrameBusy=true;
         const res = await api("/api/arcade/frame", undefined, "GET", 1500);
         if (res && res.hex && $("marioCanvas")) {
           drawMarioFrame($("marioCanvas"), res.hex);
         }
-        if (res && res.status) {
-          updateArcadeHud(res.status);
-        }
-      } catch (_) {}
+        if (res?.game_status || (res?.status && typeof res.status === "object")) updateArcadeHud(res.game_status || res.status);
+      } catch (_) {} finally { arcadeFrameBusy=false; }
     }
-  }, 66);
+  }, 100);
   $("difficulty").oninput = () => {
     $("difficultyValue").textContent =
       Number($("difficulty").value) < 0.35
@@ -1795,6 +1692,7 @@
     return poll();
   });
   bind("retryConnection", () => {
+    pairingPrompt = false;
     lastGeneral = lastPro = 0;
     return poll();
   });
@@ -1809,8 +1707,9 @@
         state.general = s;
         connection(s);
         lastGeneral = now;
-        openSocket();
+        if (!nativeMode) openSocket();
       }
+      if (nativeMode) { $("status").textContent="APK 直连 ESP32；语音、音乐和视觉需要电脑服务"; return; }
       stage = "features";
       if (now - lastPro > 1500) {
         const p = await api("/api/pro/status", undefined, "GET", 6000);
@@ -1859,14 +1758,20 @@
   }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
+      if (state.arcadeActive) releaseArcadeControls();
+      clearInterval(arcadeHeartbeatTimer);
       clearTimeout(pollTimer);
       state.socket?.close();
     } else {
       lastGeneral = lastPro = 0;
+      if (state.arcadeActive) startArcadeHeartbeat();
       poll();
     }
   });
+  window.addEventListener("blur", () => { if (state.arcadeActive) releaseArcadeControls(); });
   window.addEventListener("pagehide", () => {
+    if (state.arcadeActive) releaseArcadeControls();
+    clearInterval(arcadeHeartbeatTimer);
     clearTimeout(pollTimer);
     state.socket?.close();
     cancelCalibration();

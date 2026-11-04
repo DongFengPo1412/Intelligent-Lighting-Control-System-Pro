@@ -17,7 +17,10 @@ static const char* TAG = "ArcadeScore";
 static uint32_t s_pending[256];
 static bool s_dirty[256];
 static bool s_any_dirty = false;
+static bool s_ready = false;
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
+
+void ArcadeScoreStore::SetReady(bool ready) { s_ready = ready; }
 
 static void MakeKey(uint8_t game_id, char* key, size_t len)
 {
@@ -28,7 +31,7 @@ uint32_t ArcadeScoreStore::LoadHighScore(uint8_t game_id)
 {
     uint32_t score = 0;
     nvs_handle_t handle;
-    if (nvs_open("arcade_hs", NVS_READONLY, &handle) == ESP_OK) {
+    if (s_ready && nvs_open("arcade_hs", NVS_READONLY, &handle) == ESP_OK) {
         char key[16];
         MakeKey(game_id, key, sizeof(key));
         if (nvs_get_u32(handle, key, &score) != ESP_OK) {
@@ -74,7 +77,7 @@ void ArcadeScoreStore::Flush()
     static bool dirty[256];
     static bool s_flushing = false;
     portENTER_CRITICAL(&s_lock);
-    if (!s_any_dirty || s_flushing) {
+    if (!s_ready || !s_any_dirty || s_flushing) {
         portEXIT_CRITICAL(&s_lock);
         return;
     }
@@ -107,7 +110,11 @@ void ArcadeScoreStore::Flush()
         char key[16];
         MakeKey((uint8_t)i, key, sizeof(key));
         uint32_t existing = 0;
-        nvs_get_u32(handle, key, &existing);
+        err = nvs_get_u32(handle, key, &existing);
+        if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+            // Keep the entire snapshot dirty on any read/write/commit failure.
+            break;
+        }
         if (snapshot[i] > existing) {
             err = nvs_set_u32(handle, key, snapshot[i]);
             if (err == ESP_OK) {
@@ -116,18 +123,26 @@ void ArcadeScoreStore::Flush()
                          (unsigned int)snapshot[i]);
             } else {
                 ESP_LOGE(TAG, "Failed to write high score #%03d: %s", i, esp_err_to_name(err));
+                break;
             }
         }
     }
-    if (wrote) {
+    bool failed = err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND;
+    if (wrote && !failed) {
         err = nvs_commit(handle);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to commit high scores to NVS: %s", esp_err_to_name(err));
+            failed = true;
         }
     }
     nvs_close(handle);
 
     portENTER_CRITICAL(&s_lock);
+    if (failed) {
+        for (int i = 0; i < 256; ++i) {
+            if (dirty[i]) { s_dirty[i] = true; s_any_dirty = true; }
+        }
+    }
     s_flushing = false;
     portEXIT_CRITICAL(&s_lock);
 }

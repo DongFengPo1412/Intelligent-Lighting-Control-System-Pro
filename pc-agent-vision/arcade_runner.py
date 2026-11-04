@@ -8,6 +8,9 @@ Python 模拟器仅在显式请求或离线仿真时运行，明确标记来源�
 import asyncio
 import json
 import time
+import threading
+import inspect
+from functools import wraps
 from typing import Dict, Any, Optional
 from arcade.base_cartridge import (
     BaseCartridge,
@@ -63,10 +66,19 @@ STATE_NAMES = {
 }
 
 
+def synchronized(method):
+    @wraps(method)
+    def call(self,*args,**kwargs):
+        with self._lock:
+            return method(self,*args,**kwargs)
+    return call
+
+
 class ArcadeSession:
     """街机调度会话：硬件优先，ESP32 唯一权威"""
 
     def __init__(self, controller=None, broadcast_fn=None):
+        self._lock = threading.RLock()
         self.controller = controller
         self.broadcast_fn = broadcast_fn
         self.cartridges: Dict[int, BaseCartridge] = {
@@ -114,10 +126,11 @@ class ArcadeSession:
             return bool(self.controller.control_connected)
         return True
 
+    @synchronized
     def select_game(self, game_id: int, force_simulation: bool = False) -> Dict[str, Any]:
         """选择卡带：向 ESP32 下发正式指令或在显式离线模拟时切换本地卡带"""
         valid_ids = [1, 9, 10, 20, 21, 26, 33, 34, 38, 41, 54, 74, 97]
-        if game_id not in valid_ids:
+        if type(game_id) is not int or game_id not in valid_ids:
             return {"status": "error", "error": "invalid_game_id", "message": f"不支持的街机编号: {game_id}"}
 
         # 切换游戏时，彻底清除旧游戏的长按与瞬按键状态
@@ -162,6 +175,7 @@ class ArcadeSession:
             "simulated": False,
         }
 
+    @synchronized
     def start(self, force_simulation: bool = False) -> Dict[str, Any]:
         if not self.simulated_mode:
             if not self.is_hardware_available():
@@ -178,6 +192,7 @@ class ArcadeSession:
             return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
         return {"status": "error", "error": "no_cartridge_selected"}
 
+    @synchronized
     def pause(self) -> Dict[str, Any]:
         if not self.simulated_mode:
             if not self.is_hardware_available():
@@ -194,6 +209,7 @@ class ArcadeSession:
             return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
         return {"status": "error", "error": "no_cartridge_selected"}
 
+    @synchronized
     def resume(self) -> Dict[str, Any]:
         if not self.simulated_mode:
             if not self.is_hardware_available():
@@ -210,6 +226,7 @@ class ArcadeSession:
             return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
         return {"status": "error", "error": "no_cartridge_selected"}
 
+    @synchronized
     def reset(self) -> Dict[str, Any]:
         self.keys_down = 0
         self.keys_pressed = 0
@@ -228,20 +245,22 @@ class ArcadeSession:
             return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
         return {"status": "error", "error": "no_cartridge_selected"}
 
+    @synchronized
     def stop(self) -> Dict[str, Any]:
         self.is_running = False
         self.keys_down = 0
         self.keys_pressed = 0
         if self.task and not self.task.done():
-            self.task.cancel()
+            self.task.get_loop().call_soon_threadsafe(self.task.cancel)
 
         if not self.simulated_mode:
             if not self.is_hardware_available():
                 return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "exit"})
-            self.status["state"] = STATE_TITLE
-            self.status["state_name"] = "TITLE"
-            return {"status": "ok", "source": "esp32_hardware", "simulated": False}
+            if res.get("status") != "ok":
+                return {"status":"error","error":res.get("error","stop_failed"),"simulated":False}
+            self._update_status_from_hardware(res.get("arcade", {}))
+            return {"status":"ok","source":"esp32_hardware","simulated":False,"game_status":self.status}
 
         if self.current_cartridge:
             self.current_cartridge.pause()
@@ -249,6 +268,7 @@ class ArcadeSession:
         self.status["state_name"] = "TITLE"
         return {"status": "ok", "source": "simulator", "simulated": True}
 
+    @synchronized
     def key(self, key_name: str, is_down: bool) -> Dict[str, Any]:
         mask = KEY_MAP.get(key_name.lower(), 0)
         if not mask:
@@ -286,6 +306,41 @@ class ArcadeSession:
             return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
         return {"status": "error", "error": "no_cartridge_selected"}
 
+    @synchronized
+    def input_state(self, down, pressed):
+        if any(type(v) is not int or not 0 <= v <= 255 for v in (down,pressed)):
+            return {"status":"error","error":"invalid_input"}
+        self.keys_down, self.keys_pressed = down, pressed
+        if self.simulated_mode:
+            if not self.current_cartridge:
+                return {"status":"error","error":"no_cartridge_selected"}
+            self.current_cartridge.update(0.,down,pressed)
+            self.keys_pressed=0
+            self._refresh_simulator_status()
+            return {"status":"ok","source":"simulator","simulated":True,"game_status":self.status}
+        if not self.is_hardware_available():
+            self.keys_down=self.keys_pressed=0
+            return {"status":"error","error":"device_offline","simulated":False}
+        reply=self._send_esp32_command({"cmd":"arcade","action":"input","down":down,"pressed":pressed})
+        self.keys_pressed=0
+        if reply.get("status") != "ok":
+            self.keys_down=0
+            return {"status":"error","error":reply.get("error","input_failed"),"simulated":False}
+        self._update_status_from_hardware(reply["arcade"])
+        return {"status":"ok","source":"esp32_hardware","simulated":False,"game_status":self.status}
+
+    @synchronized
+    def read_status(self):
+        if self.simulated_mode:
+            self._refresh_simulator_status()
+            return {"status":"ok","game_status":self.status,"source":"simulator","simulated":True}
+        reply=self._send_esp32_command({"cmd":"arcade","action":"status"})
+        if reply.get("status") != "ok":
+            return {"status":"error","error":reply.get("error","device_offline"),"simulated":False}
+        self._update_status_from_hardware(reply['arcade'])
+        return {"status":"ok","game_status":self.status,"source":"esp32_hardware","simulated":False}
+
+    @synchronized
     def heartbeat(self) -> Dict[str, Any]:
         """心跳保活与状态回传"""
         if not self.simulated_mode:
@@ -300,6 +355,7 @@ class ArcadeSession:
         # 模拟模式心跳
         return {"status": "ok", "source": "simulator", "simulated": True, "game_status": self.status}
 
+    @synchronized
     def get_frame(self) -> Dict[str, Any]:
         """获取当前帧缓冲与 HUD 状态"""
         if not self.simulated_mode:
@@ -315,7 +371,7 @@ class ArcadeSession:
                 }
             # 从真实硬件快照帧缓冲 (hardware_pwm)
             res = self._send_esp32_command({"cmd": "frame"})
-            if res.get("status") == "ok" and "pixels" in res:
+            if res.get("status") == "ok" and isinstance(res.get("pixels"),str) and len(res["pixels"]) == 1536 and all(c in "0123456789abcdefABCDEF" for c in res["pixels"]):
                 self.current_hex = res.get("pixels", "")
                 return {
                     "running": self.is_running,
@@ -326,8 +382,11 @@ class ArcadeSession:
                     "simulated": False,
                 }
 
-        # 离线模拟器渲染
-        if self.current_cartridge:
+            return {"running":False,"status":"error","error":res.get("error","invalid_frame"),
+                    "source":"hardware_offline","hex":"","simulated":False}
+
+        # Render a simulator ONLY when explicitly selected.
+        if self.simulated_mode and self.current_cartridge:
             fb = self.current_cartridge.render()
             self.current_hex = fb.hex()
             self._refresh_simulator_status()
@@ -353,10 +412,17 @@ class ArcadeSession:
             return {"status": "error", "error": "no_controller"}
         try:
             if hasattr(self.controller, "command_result"):
-                return self.controller.command_result(payload)
+                reply=self.controller.command_result(payload)
+                if not isinstance(reply,dict):
+                    return {"status":"error","error":"invalid_hardware_reply"}
+                if reply.get("status") == "ok" and payload.get("cmd") == "arcade":
+                    st=reply.get("arcade")
+                    if not isinstance(st,dict) or type(st.get("game_id")) is not int or type(st.get("state")) is not int:
+                        return {"status":"error","error":"invalid_arcade_reply"}
+                return reply
             elif hasattr(self.controller, "send_json"):
                 ok = self.controller.send_json(payload)
-                return {"status": "ok" if ok else "error"}
+                return {"status":"error","error":"ack_state_unavailable" if ok else "send_failed"}
         except Exception as e:
             return {"status": "error", "error": str(e)}
         return {"status": "error", "error": "unsupported_transport"}
@@ -404,38 +470,28 @@ class ArcadeSession:
         names = {1: "超级马里奥", 33: "经典贪吃蛇", 41: "俄罗斯方块"}
         return names.get(gid, f"游戏 #{gid:03d}")
 
+    @synchronized
+    def _simulator_step(self,dt):
+        if not self.simulated_mode or not self.current_cartridge:
+            return None
+        self.current_cartridge.update(dt,self.keys_down,self.keys_pressed)
+        self.keys_pressed=0
+        self.current_hex=self.current_cartridge.render().hex()
+        self._refresh_simulator_status()
+        return {"type":"arcade_frame","hex":self.current_hex,"status":dict(self.status),"simulated":True}
+
     async def run_loop(self):
-        """仅在显式模拟模式下驱动 Python 卡带"""
-        self.is_running = True
-        last_time = time.monotonic()
+        """Explicit simulator only; serialize physics with input/switch/snapshot calls."""
+        self.is_running=True
+        last_time=time.monotonic()
         while self.is_running:
-            if not self.simulated_mode:
-                # 硬件模式下不运行 Python 物理模拟循环，避免产生两套独立游戏状态！
-                await asyncio.sleep(0.1)
-                continue
-
-            now = time.monotonic()
-            dt = now - last_time
-            last_time = now
-
-            if self.current_cartridge:
-                self.current_cartridge.update(dt, self.keys_down, self.keys_pressed)
-                self.keys_pressed = 0
-                fb = self.current_cartridge.render()
-                self.current_hex = fb.hex()
-                self._refresh_simulator_status()
-
-                if self.broadcast_fn:
-                    try:
-                        self.broadcast_fn({
-                            "type": "arcade_frame",
-                            "hex": self.current_hex,
-                            "status": self.status,
-                            "simulated": True,
-                        })
-                    except Exception:
-                        pass
-            await asyncio.sleep(0.033)
+            now=time.monotonic();dt=now-last_time;last_time=now
+            frame=await asyncio.to_thread(self._simulator_step,dt)
+            if frame and self.broadcast_fn:
+                result=self.broadcast_fn(frame)
+                if inspect.isawaitable(result):
+                    await result
+            await asyncio.sleep(.033)
 
 
 _session: Optional[ArcadeSession] = None

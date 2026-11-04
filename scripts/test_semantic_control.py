@@ -46,7 +46,12 @@ class PlanningTests(unittest.TestCase):
         import re
         source = (Path(__file__).resolve().parents[1] / 'firmware-s3/main/display/display_types.h').read_text(encoding='utf-8')
         block = source.split('enum class DisplayMode', 1)[1].split('};', 1)[0]
-        self.assertEqual(set(EFFECTS), {int(value) for value in re.findall(r'=\s*(\d+)', block)})
+        modes = {name:int(value) for name,value in re.findall(r'(\w+)\s*=\s*(\d+)', block)}
+        # ARCADE_GAME is entered through validated cartridge selection, not a
+        # generic light-mode plan. Keep every other physical effect covered.
+        self.assertEqual(set(EFFECTS), {value for name,value in modes.items() if name != 'ARCADE_GAME'})
+        from pro_control import DIRECT_MODES
+        self.assertNotIn(modes['ARCADE_GAME'], DIRECT_MODES)
 
     def test_contradictory_timer_never_reaches_hardware(self):
         wire = to_wire(actions=[{'tool': 'start_countdown', 'value': 180}])

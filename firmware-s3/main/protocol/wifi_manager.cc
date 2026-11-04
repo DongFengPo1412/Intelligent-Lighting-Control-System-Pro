@@ -12,6 +12,10 @@
 #include "command_dispatcher.h"
 #include "display_manager.h"
 #include "arcade_manager.h"
+#include "network_auth.h"
+#include "udp_request_guard.h"
+#include <mbedtls/sha256.h>
+#include <math.h>
 #include "board_led.h"
 #include "audio_hal.h"
 
@@ -124,11 +128,7 @@ esp_err_t WifiManager::InitAndConnect(const char* sta_ssid, const char* sta_pass
 
     // 1. 初始化 NVS 存储区 (WiFi 协议栈必需)
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    if (ret != ESP_OK) return ret; // Preserve user NVS; USB/display remain usable.
 
     // 2. 初始化网络接口与系统事件分发循环 (同时创建 STA 与 AP 双接口)
     ESP_ERROR_CHECK(esp_netif_init());
@@ -200,17 +200,7 @@ void WifiManager::UdpServerTaskTrampoline(void* arg)
 
 void WifiManager::UdpServerTaskLoop()
 {
-    // Keep recent results so lost ACKs can be retried without restarting a timer
-    // or repeating a game move. IDs are scoped to the sending host.
-    struct CachedReply {
-        uint32_t sender;
-        char id[65];
-        uint32_t command_hash;
-        TickType_t tick;
-        char response[1024];
-    };
-    static CachedReply recent[16] = {};
-    size_t next_reply = 0;
+    static UdpRequestGuard recent;
     static char rx_buffer[4096];
     struct sockaddr_in server_addr = {};
     server_addr.sin_family = AF_INET;
@@ -219,6 +209,8 @@ void WifiManager::UdpServerTaskLoop()
 
     int sock = -1;
     TickType_t last_beacon_tick = 0;
+    TickType_t rate_window = 0;
+    unsigned rate_count = 0;
 
     while (1) {
         // 创建 UDP 套接字
@@ -284,14 +276,19 @@ void WifiManager::UdpServerTaskLoop()
 
         struct sockaddr_in source_addr;
         socklen_t socklen = sizeof(source_addr);
-        int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr*)&source_addr, &socklen);
+        int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer), 0, (struct sockaddr*)&source_addr, &socklen);
 
         if (len < 0) {
             // 超时继续轮询
             continue;
         }
 
+        if (len >= (int)sizeof(rx_buffer) || memchr(rx_buffer, 0, len)) continue;
+        TickType_t received_at = xTaskGetTickCount();
+        if (received_at - rate_window >= pdMS_TO_TICKS(1000)) { rate_window=received_at; rate_count=0; }
+        if (++rate_count > 200) continue; // Bound unauthenticated parsing/reply work as well.
         rx_buffer[len] = '\0';
+        if (strstr(rx_buffer, "\\u0000")) continue; // cJSON strings are NUL terminated.
 
         // 去除末尾换行符并执行指令
         while (len > 0 && (rx_buffer[len - 1] == '\r' || rx_buffer[len - 1] == '\n' || rx_buffer[len - 1] == ' ')) {
@@ -301,45 +298,62 @@ void WifiManager::UdpServerTaskLoop()
         if (len > 0) {
             char sender_ip[16];
             inet_ntoa_r(source_addr.sin_addr, sender_ip, sizeof(sender_ip));
-            ESP_LOGD(TAG, "[WiFi UDP 来自 %s]: %s", sender_ip, rx_buffer);
-
-            cJSON* envelope = cJSON_Parse(rx_buffer);
-            if (envelope && cJSON_GetObjectItem(envelope, "event")) {
-                cJSON_Delete(envelope); // Ignore our own broadcast beacons.
-                continue;
+            // Do not log the raw credential-bearing envelope.
+            const char* parse_end = nullptr;
+            cJSON* envelope = cJSON_ParseWithOpts(rx_buffer, &parse_end, true);
+            if (envelope && cJSON_GetObjectItemCaseSensitive(envelope, "event")) {
+                cJSON_Delete(envelope); continue;
             }
-            cJSON* id_item = envelope ? cJSON_GetObjectItem(envelope, "request_id") : nullptr;
-            cJSON* command_item = envelope ? cJSON_GetObjectItem(envelope, "command") : nullptr;
-            const bool wrapped = id_item || command_item;
-            const char* id = cJSON_IsString(id_item) ? id_item->valuestring : "";
-            bool valid_envelope = !wrapped || (
-                strlen(id) > 0 && strlen(id) <= 64 &&
-                strspn(id, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == strlen(id) &&
-                cJSON_IsString(command_item) && command_item->valuestring[0]);
-            if (!valid_envelope) id = "";
-            const char* command = wrapped && valid_envelope ? command_item->valuestring : rx_buffer;
-            uint32_t hash = 2166136261u;
-            for (const unsigned char* p = (const unsigned char*)command; *p; ++p) hash = (hash ^ *p) * 16777619u;
-
+            auto& auth = NetworkAuth::GetInstance();
+            auto item = [&](const char* key) { return cJSON_GetObjectItemCaseSensitive(envelope, key); };
+            auto text = [&](const char* key) { auto v = item(key); return cJSON_IsString(v) ? v->valuestring : ""; };
+            const char* id = text("request_id");
+            const char* client = text("client_id");
+            const char* command = text("command");
+            const char* error = nullptr;
+            auto identifier = [](const char* v, size_t maximum) {
+                size_t n = strlen(v);
+                return n && n <= maximum && strspn(v, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == n;
+            };
+            if (!cJSON_IsObject(envelope) || !identifier(id, 64)) { error = "invalid_envelope"; id = ""; }
+            else if (!auth.Check(text("token"))) error = "pairing_required";
+            else if (strcmp(text("boot_id"), auth.BootId())) error = "boot_changed";
+            else if (!identifier(client, 32) || !command[0] || strlen(command) > 2048) error = "invalid_envelope";
+            cJSON* seq_item = item("seq");
+            uint64_t seq = 0;
+            if (!error) {
+                if (!cJSON_IsNumber(seq_item) || !isfinite(seq_item->valuedouble) ||
+                    seq_item->valuedouble < 1 || seq_item->valuedouble > 9007199254740991.0 ||
+                    floor(seq_item->valuedouble) != seq_item->valuedouble) error = "invalid_sequence";
+                else seq = (uint64_t)seq_item->valuedouble;
+            }
+            uint8_t digest[32] = {};
             const char* cached = nullptr;
-            bool conflict = false;
-            if (wrapped && valid_envelope) {
-                for (const auto& entry : recent) {
-                    if (entry.sender == source_addr.sin_addr.s_addr && strcmp(entry.id, id) == 0 &&
-                        xTaskGetTickCount() - entry.tick < pdMS_TO_TICKS(30000)) {
-                        if (entry.command_hash == hash) cached = entry.response;
-                        else conflict = true;
-                        break;
-                    }
+            if (!error) {
+                mbedtls_sha256((const unsigned char*)command, strlen(command), digest, 0);
+                auto decision = recent.Check(source_addr.sin_addr.s_addr, client, id, seq, digest, &cached);
+                if (decision == UdpRequestGuard::Replay) {
+                    sendto(sock, cached, strlen(cached), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+                    cJSON_Delete(envelope); continue;
                 }
+                if (decision == UdpRequestGuard::Conflict) error = "request_id_conflict";
+                else if (decision == UdpRequestGuard::Stale) error = "stale_request";
+                else if (decision == UdpRequestGuard::Capacity) error = "client_capacity";
             }
-            if (cached) {
-                sendto(sock, cached, strlen(cached), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
-                cJSON_Delete(envelope);
-                continue;
+            if (error) {
+                char rejected[256];
+                snprintf(rejected, sizeof(rejected), "{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"%s\",\"boot_id\":\"%s\"}", id, error, auth.BootId());
+                sendto(sock, rejected, strlen(rejected), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+                cJSON_Delete(envelope); continue;
             }
-
-            bool ok = valid_envelope && !conflict && CommandDispatcher::GetInstance().ProcessLine(command, false);
+            // JSON must be complete. Retain authenticated legacy text commands
+            // (e.g. BANDS) used by the existing music pipeline.
+            cJSON* validated = cJSON_ParseWithOpts(command, nullptr, true);
+            bool json_command = command[0] == '{' || command[0] == '[';
+            bool ok = !strchr(command, '\n') && !strchr(command, '\r') &&
+                (!json_command || cJSON_IsObject(validated)) &&
+                CommandDispatcher::GetInstance().ProcessLine(command, false);
+            cJSON_Delete(validated);
             auto& dm = DisplayManager::GetInstance();
             auto& dispatcher = CommandDispatcher::GetInstance();
 
@@ -358,7 +372,7 @@ void WifiManager::UdpServerTaskLoop()
             char ack[512];
             snprintf(ack, sizeof(ack),
                      "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u}\n",
-                     id, ok ? "ok" : "error", ok ? "" : (conflict ? "request_id_conflict" : "invalid_command"),
+                     id, ok ? "ok" : "error", ok ? "" : "invalid_command",
                      (int)dm.GetMode(), dm.IsCountdownActive() ? "true" : "false",
                      (unsigned)dm.GetCountdownRemainingSeconds(),
                      dispatcher.IsMicStreaming() ? "true" : "false", AudioHAL::GetInstance().GetVolume(),
@@ -371,55 +385,50 @@ void WifiManager::UdpServerTaskLoop()
             static char arcade_ack[1024];
 
             if (ok && frame_query) {
+                snprintf(frame_ack,sizeof(frame_ack),"{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"frame_encoding_failed\"}",id);
+                send_buf=frame_ack;
                 static char hex[1537];
                 uint32_t frame_id = dm.SnapshotFrame(hex, sizeof(hex));
                 cJSON* frame = cJSON_Parse(ack);
                 if (frame) {
                     cJSON_AddStringToObject(frame, "pixels", hex);
-                    cJSON_AddStringToObject(frame, "hex", hex);
                     cJSON_AddNumberToObject(frame, "frame_id", frame_id);
                     cJSON_AddStringToObject(frame, "frame_source", "hardware_pwm");
-                    if (cJSON_PrintPreallocated(frame, frame_ack, sizeof(frame_ack), false)) {
-                        sendto(sock, frame_ack, strlen(frame_ack), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+                    static char encoded_frame[UdpRequestGuard::kReplySize];
+                    if (cJSON_GetObjectItemCaseSensitive(frame,"pixels") && cJSON_PrintPreallocated(frame, encoded_frame, sizeof(encoded_frame), false)) {
+                        strcpy(frame_ack,encoded_frame);
                     }
                     cJSON_Delete(frame);
                 }
-                cJSON_Delete(envelope);
-                continue;
             } else if (arcade_cmd) {
-                auto& am = arcade::ArcadeManager::GetInstance();
-                auto st = am.GetCurrentStatus();
+                snprintf(arcade_ack,sizeof(arcade_ack),"{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"status_encoding_failed\"}",id);
+                send_buf=arcade_ack;
+                auto snapshot = dm.SnapshotArcade();
+                auto st = snapshot.status;
                 cJSON* ack_json = cJSON_Parse(ack);
                 if (ack_json) {
                     cJSON* arc_obj = cJSON_CreateObject();
-                    cJSON_AddBoolToObject(arc_obj, "active", am.IsActive());
-                    cJSON_AddNumberToObject(arc_obj, "game_id", am.GetCurrentGameId());
-                    cJSON_AddStringToObject(arc_obj, "name", am.GetCurrentGameName() ? am.GetCurrentGameName() : "");
+                    cJSON_AddBoolToObject(arc_obj, "active", snapshot.active);
+                    cJSON_AddNumberToObject(arc_obj, "game_id", snapshot.game_id);
+                    cJSON_AddStringToObject(arc_obj, "name", snapshot.name ? snapshot.name : "");
                     cJSON_AddNumberToObject(arc_obj, "state", st.state);
                     cJSON_AddNumberToObject(arc_obj, "score", st.score);
                     cJSON_AddNumberToObject(arc_obj, "high_score", st.high_score);
                     cJSON_AddNumberToObject(arc_obj, "lives", st.lives);
                     cJSON_AddNumberToObject(arc_obj, "progress", st.progress);
-                    cJSON_AddNumberToObject(arc_obj, "control_type", (int)am.GetCurrentControlType());
+                    cJSON_AddNumberToObject(arc_obj, "control_type", (int)snapshot.control_type);
                     cJSON_AddItemToObject(ack_json, "arcade", arc_obj);
 
-                    if (cJSON_PrintPreallocated(ack_json, arcade_ack, sizeof(arcade_ack), false)) {
-                        send_buf = arcade_ack;
+                    static char encoded_status[1024];
+                    if (cJSON_PrintPreallocated(ack_json, encoded_status, sizeof(encoded_status), false)) {
+                        strcpy(arcade_ack,encoded_status);
                     }
                     cJSON_Delete(ack_json);
                 }
             }
 
-            if (wrapped && valid_envelope && !conflict) {
-                auto& entry = recent[next_reply++ % 16];
-                entry.sender = source_addr.sin_addr.s_addr;
-                strncpy(entry.id, id, sizeof(entry.id) - 1);
-                entry.id[sizeof(entry.id) - 1] = '\0';
-                entry.command_hash = hash;
-                entry.tick = xTaskGetTickCount();
-                strncpy(entry.response, send_buf, sizeof(entry.response) - 1);
-                entry.response[sizeof(entry.response) - 1] = '\0';
-            }
+            // Every accepted request, including full frames and failures, is cached.
+            recent.Store(source_addr.sin_addr.s_addr, client, id, seq, digest, send_buf);
             sendto(sock, send_buf, strlen(send_buf), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
             cJSON_Delete(envelope);
         }

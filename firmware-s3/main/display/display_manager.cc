@@ -472,6 +472,14 @@ bool DisplayManager::ArcadeSelectGame(uint8_t game_id)
     return ok;
 }
 
+DisplayManager::ArcadeSnapshot DisplayManager::SnapshotArcade() const
+{
+    DisplayLock lock(mutex_);
+    auto& am = arcade::ArcadeManager::GetInstance();
+    return {am.IsActive(), am.GetCurrentGameId(), am.GetCurrentControlType(),
+            am.GetCurrentStatus(), am.GetCurrentGameName()};
+}
+
 void DisplayManager::ArcadeInput(uint16_t down, uint16_t pressed)
 {
     DisplayLock lock(mutex_);

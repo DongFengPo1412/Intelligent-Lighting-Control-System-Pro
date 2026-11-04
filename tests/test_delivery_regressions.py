@@ -26,6 +26,10 @@ class DeliveryTests(unittest.TestCase):
         gateway._pending = {}
         gateway.is_running = True
         gateway.port = 8888
+        gateway.control_token = 'a' * 64
+        gateway.boot_id = 'b' * 32
+        gateway.client_id = 'c' * 32
+        gateway._sequence = 0
         gateway.get_target_ips = lambda: ['FAKE_TARGET']
         packets = []
 

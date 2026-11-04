@@ -9,6 +9,7 @@ from .base_cartridge import (
     CTRL_TAP_SINGLE,
     KEY_A,
     KEY_UP,
+    KEY_DOWN,
     KEY_B,
     KEY_SELECT,
     KEY_START,

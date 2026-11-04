@@ -4,6 +4,8 @@ A local PC voice agent and one ESP32-S3 drive a 16×16 light matrix, a Kurisu pi
 
 [简体中文](README_ZH.md) · **English** · [日本語](README_JA.md)
 
+**2026-11-04 Phase A:** the arcade development branch adds paired Android-to-ESP32 UDP control and restricts PC Web access by default. See [pairing, migration and validation boundaries](docs/PHASE_A_NETWORK.md) before updating clients or enabling LAN access. Physical phone/board acceptance remains pending.
+
 **2026-10-25: one responsive Amadeus interface now serves desktop and mobile.** `/` contains Overview, Lights, Music, Interaction and Settings; `/pro.html` redirects to it. Android packages the same web source. [UI details and validation limits](docs/UNIFIED_WEB.md) · [APK build](android-app/README.md).
 
 **2026-10-24: source and offline checks are supplemented by limited board records; full-system hardware acceptance remains incomplete.** The [current implementation and deployment guide](docs/PRO_FEATURES.en.md) maps all 18 historical requirements to code and explicitly records differences.

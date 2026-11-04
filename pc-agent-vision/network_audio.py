@@ -11,7 +11,7 @@ import threading
 import time
 
 MAGIC = b"KAP1"
-HELLO = b"pcm16le/16000/mono/v1"
+HELLO = b"pcm16le/16000/mono/v2"
 
 
 def packet(kind, payload):
@@ -69,7 +69,10 @@ class WiFiPcmClient:
             )
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(3)
-            sock.sendall(packet(4, HELLO))
+            token = gateway.control_token
+            if len(token) != 64:
+                raise ValueError("Board pairing required (KURISU_CONTROL_TOKEN)")
+            sock.sendall(packet(4, HELLO + b"|" + token.encode("ascii")))
             if receive(sock) != (4, HELLO):
                 raise ValueError("Unsupported PCM protocol")
             self.sock = sock

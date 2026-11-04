@@ -29,7 +29,18 @@ public class MainActivity extends Activity {
     private NsdManager nsd;
     private NsdManager.DiscoveryListener discovery;
     private ValueCallback<Uri[]> fileCallback;
-    private String serverOrigin = "";
+    private volatile String serverOrigin = "";
+    private volatile boolean bridgeTrusted=false, backgrounded=false, destroyed=false;
+    private final java.util.concurrent.atomic.AtomicInteger bridgeEpoch=new java.util.concurrent.atomic.AtomicInteger();
+    private final DeviceUdpClient udpClient=new DeviceUdpClient();
+    private final java.util.concurrent.ThreadPoolExecutor udpExecutor=new java.util.concurrent.ThreadPoolExecutor(
+        1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(64));
+    private static final class DeviceTarget {
+        final String host,token;
+        DeviceTarget(String host,String token) {this.host=host;this.token=token;}
+    }
+    private volatile DeviceTarget deviceTarget=new DeviceTarget("","");
+    private String clientId="";
     private String pendingExport;
     private static final int PICK_FILE = 10, SAVE_CANVAS = 11;
     private static final String OFFLINE = "file:///android_asset/www/index.html";
@@ -50,9 +61,13 @@ public class MainActivity extends Activity {
             return insets.consumeSystemWindowInsets();
         });
         root.requestApplyInsets();
+        deviceTarget=new DeviceTarget(getSharedPreferences("config",MODE_PRIVATE).getString("device_host",""),
+            getSharedPreferences("config",MODE_PRIVATE).getString("device_token",""));
+        clientId=getSharedPreferences("config",MODE_PRIVATE).getString("device_client",java.util.UUID.randomUUID().toString().replace("-",""));
+        getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_client",clientId).apply();
         initWebSettings();
         String saved = getSharedPreferences("config", MODE_PRIVATE).getString("server_url", "");
-        if (saved.isEmpty()) { webView.loadUrl(OFFLINE); configureServer(); }
+        if (saved.isEmpty()) { webView.loadUrl(OFFLINE); if(deviceTarget.host.isEmpty())configureConnection(); }
         else connectServer(saved);
     }
 
@@ -68,6 +83,25 @@ public class MainActivity extends Activity {
         webView.loadUrl(serverOrigin + "/");
     }
 
+    private void configureConnection() {
+        new AlertDialog.Builder(this).setTitle("连接方式").setItems(new String[]{"ESP32 街机直连（无需电脑）","电脑服务（语音／音乐／视觉）"},
+            (dialog,which)->{if(which==0)configureDevice();else configureServer();}).show();
+    }
+    private void configureDevice() {
+        android.widget.LinearLayout layout=new android.widget.LinearLayout(this);layout.setOrientation(1);
+        DeviceTarget target=deviceTarget;
+        EditText host=new EditText(this);host.setHint("ESP32 IPv4（AP 或 STA 地址）");host.setText(target.host.isEmpty()?"192.168.4.1":target.host);
+        EditText token=new EditText(this);token.setHint("USB pair 指令返回的 control_token");token.setText(target.token);
+        token.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        layout.addView(host);layout.addView(token);
+        new AlertDialog.Builder(this).setTitle("配对灯板").setView(layout).setPositiveButton("保存直连",(d,w)->{
+            String ip=host.getText().toString().trim(),key=token.getText().toString().trim();
+            if(!BridgePolicy.privateIpv4(ip)||!BridgePolicy.token(key)) {Toast.makeText(this,"需要内网 IPv4 和 64 位十六进制凭据",Toast.LENGTH_LONG).show();return;}
+            releaseDeviceInput();deviceTarget=new DeviceTarget(ip,key);serverOrigin="";
+            getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_host",ip).putString("device_token",key).remove("server_url").apply();
+            webView.loadUrl(OFFLINE);
+        }).setNegativeButton("取消",null).show();
+    }
     private void configureServer() {
         EditText input = new EditText(this);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
@@ -82,7 +116,7 @@ public class MainActivity extends Activity {
     private boolean trustedPage(WebView view) {
         String current = view.getUrl();
         if (current == null) return false;
-        if (current.startsWith(OFFLINE)) return true;
+        if (isOfflinePage(current)) return true;
         Uri uri = Uri.parse(current);
         String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         return !serverOrigin.isEmpty() && serverOrigin.equals(origin);
@@ -91,7 +125,7 @@ public class MainActivity extends Activity {
     private boolean navigate(WebView view, Uri uri) {
         if ("amadeus".equals(uri.getScheme())) {
             if (!trustedPage(view)) return true;
-            if ("settings".equals(uri.getHost())) configureServer();
+            if ("settings".equals(uri.getHost())) configureConnection();
             if ("export".equals(uri.getHost())) {
                 String hex = uri.getQueryParameter("hex");
                 if (hex != null && hex.matches("[0-9a-fA-F]{1536}")) {
@@ -103,7 +137,7 @@ public class MainActivity extends Activity {
             }
             return true;
         }
-        if ("file".equals(uri.getScheme())) return !uri.toString().startsWith(OFFLINE);
+        if ("file".equals(uri.getScheme())) return !isOfflinePage(uri.toString());
         if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))) return true;
         String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         if (serverOrigin.equals(origin)) return false;
@@ -115,8 +149,8 @@ public class MainActivity extends Activity {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setAllowFileAccess(true);
-        s.setAllowContentAccess(true);
+        s.setAllowFileAccess(false); // android_asset still works; arbitrary local files do not.
+        s.setAllowContentAccess(false);
         s.setAllowFileAccessFromFileURLs(false);
         s.setAllowUniversalAccessFromFileURLs(false);
         s.setMediaPlaybackRequiresUserGesture(true);
@@ -127,6 +161,22 @@ public class MainActivity extends Activity {
         webView.setBackgroundColor(0xff111316);
         webView.addJavascriptInterface(new NativeUdpBridge(), "AmadeusNative");
         webView.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
+                if(bridgeTrusted)releaseDeviceInput();
+                bridgeTrusted=false;bridgeEpoch.incrementAndGet();udpClient.interrupt();
+                super.onPageStarted(view,url,favicon);
+            }
+            @Override public void onPageFinished(WebView view,String url) {
+                bridgeTrusted=isOfflinePage(url);super.onPageFinished(view,url);
+            }
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request) {
+                String url=request.getUrl().toString();
+                // The bridge is injected into all frames: packaged pages may load
+                // packaged assets only. CSP also prohibits frames/objects entirely.
+                if(serverOrigin.isEmpty() && !url.startsWith("file:///android_asset/www/"))
+                    return new android.webkit.WebResourceResponse("text/plain","utf-8",new java.io.ByteArrayInputStream(new byte[0]));
+                return null;
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return request.isForMainFrame() && navigate(view, request.getUrl());
             }
@@ -194,88 +244,62 @@ public class MainActivity extends Activity {
         webView.postDelayed(this::stopDiscovery,15000);
     }
     private void stopDiscovery() { NsdManager.DiscoveryListener current=discovery;discovery=null;if(nsd!=null&&current!=null)try{nsd.stopServiceDiscovery(current);}catch(IllegalArgumentException ignored){} }
-    @Override protected void onPause() { webView.onPause();super.onPause(); }
-    @Override protected void onResume() { super.onResume();if(webView!=null)webView.onResume(); }
-    @Override protected void onDestroy() { stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
+    @Override protected void onPause() {
+        backgrounded=true;releaseDeviceInput();
+        webView.evaluateJavascript("window.dispatchEvent(new Event('blur'))",null);
+        webView.onPause();super.onPause();
+    }
+    @Override protected void onResume() { super.onResume();backgrounded=false;if(webView!=null)webView.onResume(); }
+    @Override protected void onDestroy() { releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
 
-    private final java.util.concurrent.ExecutorService udpExecutor = java.util.concurrent.Executors.newCachedThreadPool();
-
+    private static boolean isOfflinePage(String url) {
+        if(url==null)return false;
+        Uri uri=Uri.parse(url);
+        return "file".equals(uri.getScheme()) && (uri.getAuthority()==null || uri.getAuthority().isEmpty()) && "/android_asset/www/index.html".equals(uri.getPath());
+    }
+    private void releaseDeviceInput() {
+        bridgeEpoch.incrementAndGet();udpClient.interrupt();
+        final DeviceTarget target=deviceTarget;
+        if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.token(target.token))return;
+        final String host=target.host,key=target.token;
+        try { udpExecutor.execute(()->{
+            for(String command:new String[]{"{\"cmd\":\"arcade\",\"action\":\"input\",\"down\":0,\"pressed\":0}","{\"cmd\":\"arcade\",\"action\":\"pause\"}"}) {
+                String id="release_"+java.util.UUID.randomUUID().toString().replace("-","");
+                try {
+                    org.json.JSONObject envelope=new org.json.JSONObject();envelope.put("request_id",id);envelope.put("command",command);
+                    udpClient.request(host,key,clientId,envelope.toString(),200,1,id);
+                }catch(Exception ignored){}
+            }
+        }); } catch(java.util.concurrent.RejectedExecutionException ignored) { /* Board watchdog releases/pause in 500/1000ms. */ }
+    }
     public class NativeUdpBridge {
-        private boolean isOriginAndTargetSafe(String host, int port) {
-            String currentUrl = webView != null ? webView.getUrl() : null;
-            if (currentUrl != null && !currentUrl.startsWith("file://") &&
-                !currentUrl.startsWith("http://localhost") &&
-                !currentUrl.startsWith("http://127.0.0.1") &&
-                !currentUrl.startsWith("http://192.168.")) {
-                return false;
-            }
-            if (port != 8888) return false;
-            if (host == null) return false;
-            return host.equals("192.168.4.1") || host.startsWith("192.168.") || host.equals("127.0.0.1");
-        }
-
         @android.webkit.JavascriptInterface
-        public void sendUdpAsync(final String host, final int port, final String message, final int timeoutMs, final String callbackId) {
-            if (!isOriginAndTargetSafe(host, port)) {
-                dispatchResult(callbackId, "{\"status\":\"error\",\"error\":\"forbidden_target\"}");
-                return;
+        public void sendUdpAsync(final String message,final int timeoutMs,final int retries,final String callbackId) {
+            if(!BridgePolicy.requestId(callbackId))return;
+            final int epoch=bridgeEpoch.get();
+            final DeviceTarget target=deviceTarget;
+            if(!bridgeTrusted||backgrounded||destroyed||message==null||message.length()>3000) {
+                dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"forbidden_page"));return;
             }
-            udpExecutor.execute(() -> {
-                String result;
-                try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
-                    socket.setSoTimeout(timeoutMs > 0 ? timeoutMs : 1000);
-                    byte[] data = message.getBytes(StandardCharsets.UTF_8);
-                    java.net.InetAddress addr = java.net.InetAddress.getByName(host);
-                    java.net.DatagramPacket packet = new java.net.DatagramPacket(data, data.length, addr, port);
-                    socket.send(packet);
-
-                    byte[] rxBuf = new byte[4096];
-                    java.net.DatagramPacket rxPacket = new java.net.DatagramPacket(rxBuf, rxBuf.length);
-                    socket.receive(rxPacket);
-                    result = new String(rxPacket.getData(), 0, rxPacket.getLength(), StandardCharsets.UTF_8);
-                } catch (Exception e) {
-                    result = "{\"status\":\"error\",\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
-                }
-                dispatchResult(callbackId, result);
+            if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.token(target.token)) {
+                dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"pairing_required"));return;
+            }
+            try { udpExecutor.execute(()->{
+                if(epoch!=bridgeEpoch.get()||backgrounded||destroyed)return;
+                String result=udpClient.request(target.host,target.token,clientId,message,timeoutMs,retries,callbackId);
+                dispatchResult(epoch,callbackId,result);
+            }); } catch(java.util.concurrent.RejectedExecutionException full) {
+                dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"queue_full"));
+            }
+        }
+        private void dispatchResult(final int epoch,final String id,final String raw) {
+            if(destroyed||webView==null)return;
+            webView.post(()->{
+                if(epoch!=bridgeEpoch.get()||!bridgeTrusted||backgrounded||destroyed)return;
+                String key=org.json.JSONObject.quote(id),payload=org.json.JSONObject.quote(raw);
+                webView.evaluateJavascript("if(window.__amadeusUdpCallbacks&&window.__amadeusUdpCallbacks["+key+"])window.__amadeusUdpCallbacks["+key+"]("+payload+");",null);
             });
-        }
-
-        private void dispatchResult(final String callbackId, final String rawJson) {
-            if (webView == null || callbackId == null) return;
-            webView.post(() -> {
-                String safeJson = rawJson.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "").replace("\r", "");
-                String js = "if (window.__amadeusUdpCallbacks && window.__amadeusUdpCallbacks['" + callbackId + "']) { "
-                          + "window.__amadeusUdpCallbacks['" + callbackId + "']('" + safeJson + "'); "
-                          + "delete window.__amadeusUdpCallbacks['" + callbackId + "']; }";
-                webView.evaluateJavascript(js, null);
-            });
-        }
-
-        @android.webkit.JavascriptInterface
-        public String sendUdp(String host, int port, String message, int timeoutMs) {
-            if (!isOriginAndTargetSafe(host, port)) {
-                return "{\"status\":\"error\",\"error\":\"forbidden_target\"}";
-            }
-            try (java.net.DatagramSocket socket = new java.net.DatagramSocket()) {
-                socket.setSoTimeout(timeoutMs > 0 ? timeoutMs : 1000);
-                byte[] data = message.getBytes(StandardCharsets.UTF_8);
-                java.net.InetAddress addr = java.net.InetAddress.getByName(host);
-                java.net.DatagramPacket packet = new java.net.DatagramPacket(data, data.length, addr, port);
-                socket.send(packet);
-
-                byte[] rxBuf = new byte[4096];
-                java.net.DatagramPacket rxPacket = new java.net.DatagramPacket(rxBuf, rxBuf.length);
-                socket.receive(rxPacket);
-                return new String(rxPacket.getData(), 0, rxPacket.getLength(), StandardCharsets.UTF_8);
-            } catch (Exception e) {
-                return "{\"status\":\"error\",\"error\":\"" + e.getMessage() + "\"}";
-            }
-        }
-
-        @android.webkit.JavascriptInterface
-        public boolean isNative() {
-            return true;
         }
     }
 }

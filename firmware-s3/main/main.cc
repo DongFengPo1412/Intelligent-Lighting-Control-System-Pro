@@ -9,6 +9,8 @@
 #include "audio_hal.h"
 #include "wifi_manager.h"
 #include "arcade_manager.h"
+#include "arcade_score_store.h"
+#include "network_auth.h"
 #include <nvs_flash.h>
 #if __has_include("wifi_config.private.h")
 #include "wifi_config.private.h"
@@ -32,11 +34,10 @@ extern "C" void app_main(void)
     // 1. 初始化显示引擎 (挂载至 GPIO 17，优先获取 RMT Channel 0 与硬件 GDMA)
     // 0. 初始化 NVS 非易失性存储 (街机最高分持久化与 Wi-Fi 凭据)
     esp_err_t nvs_ret = nvs_flash_init();
-    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        nvs_ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(nvs_ret);
+    // Never silently erase scores, pairing keys, or Wi-Fi credentials.
+    if (nvs_ret != ESP_OK) ESP_LOGE(TAG, "NVS unavailable: %s; back up/recover it explicitly", esp_err_to_name(nvs_ret));
+    arcade::ArcadeScoreStore::SetReady(nvs_ret == ESP_OK);
+    NetworkAuth::GetInstance().Init(nvs_ret == ESP_OK);
 
     // 显式在 NVS 就绪后初始化统一街机管理器
     arcade::ArcadeManager::GetInstance().Init();
@@ -71,9 +72,10 @@ extern "C" void app_main(void)
 
     // 6. 启动全时无线 WiFi APSTA 双模共存与 UDP 8888 监听 (脱离 USB 数据线，外部电源供电依然100%互联！)
     WifiManager& wifi = WifiManager::GetInstance();
-    wifi.InitAndConnect(KURISU_WIFI_STA_SSID, KURISU_WIFI_STA_PASSWORD,
+    esp_err_t wifi_ret = wifi.InitAndConnect(KURISU_WIFI_STA_SSID, KURISU_WIFI_STA_PASSWORD,
                         KURISU_WIFI_AP_SSID, KURISU_WIFI_AP_PASSWORD, 8888);
-    if(!NetworkAudio::GetInstance().Start())ESP_LOGE(TAG,"Wi-Fi PCM server failed to start");
+    if (wifi_ret != ESP_OK) ESP_LOGE(TAG,"Wi-Fi unavailable: %s; USB/display remain available",esp_err_to_name(wifi_ret));
+    else if(!NetworkAudio::GetInstance().Start())ESP_LOGE(TAG,"Wi-Fi PCM server failed to start");
 
     // 7. 初始默认展示：牧濑红莉栖桌宠伴侣 (同时保留模式 14 经典圆形变脸特效)
     display.SetMode(DisplayMode::KURISU_DESK_PET);

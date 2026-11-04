@@ -225,9 +225,14 @@ class FakeSocket:
 class TransportTests(unittest.TestCase):
     def gateway(self, ack_on=1, status='ok'):
         import uuid
-        cls = load_nodes('wifi_gateway.py', {'WiFiGateway'}, socket=socket, uuid=uuid)['WiFiGateway']
+        import re
+        cls = load_nodes('wifi_gateway.py', {'WiFiGateway'}, socket=socket, uuid=uuid, re=re)['WiFiGateway']
         obj = cls.__new__(cls)
         obj.port = 8888
+        obj.control_token = 'a' * 64
+        obj.boot_id = 'b' * 32
+        obj.client_id = 'c' * 32
+        obj._sequence = 0
         obj.is_running = True
         obj._pending = {}
         obj._pending_lock = threading.Lock()
@@ -246,6 +251,7 @@ class TransportTests(unittest.TestCase):
         gw = self.gateway(2)
         self.assertTrue(gw.send_command('countdown 10', timeout=.001))
         self.assertEqual(len({request['request_id'] for request in gw.sock.sent}), 1)
+        self.assertEqual(gw.sock.sent[0], gw.sock.sent[1])
 
     def test_board_rejection_is_not_success(self):
         gw = self.gateway(status='error')

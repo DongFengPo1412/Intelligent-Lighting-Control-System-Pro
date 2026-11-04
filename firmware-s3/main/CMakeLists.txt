@@ -43,6 +43,7 @@ idf_component_register(
         "protocol/command_dispatcher.cc"
         "protocol/interaction_commands.cc"
         "protocol/network_audio.cc"
+        "protocol/network_auth.cc"
         "protocol/wifi_manager.cc"
         "audio/audio_hal.cc"
     INCLUDE_DIRS
@@ -64,6 +65,8 @@ idf_component_register(
         esp_netif
         nvs_flash
         lwip
+        mbedtls
+        bootloader_support
     )
 
 target_compile_definitions(${COMPONENT_LIB} PUBLIC

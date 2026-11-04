@@ -7,7 +7,9 @@ namespace arcade {
 
 Game001Mario::Game001Mario()
 {
-    Init();
+    // Static cartridges must not touch NVS (or hardware) before app_main.
+    high_score_ = 0;
+    anim_timer_ = 0.0f;
 }
 
 void Game001Mario::Init()
@@ -70,6 +72,8 @@ void Game001Mario::Update(float dt, uint16_t keys_down, uint16_t keys_pressed)
     } else {
         if (s.score > high_score_) {
             high_score_ = s.score;
+            // RAM only: pause/reset/exit must also retain a record earned in play.
+            ArcadeScoreStore::SaveHighScore(GetId(), high_score_);
         }
     }
 }

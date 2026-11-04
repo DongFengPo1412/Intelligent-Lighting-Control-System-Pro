@@ -505,54 +505,60 @@ async def handle_arcade(request: web.Request):
     """统一街机卡带系统 API 接口 (硬件优先，ESP32 唯一权威来源)"""
     try:
         data = await request.json()
+        if not isinstance(data, dict):
+            return web.json_response({"status":"error","error":"invalid_json_object"}, status=400)
         action = data.get("action", "")
-        force_sim = bool(data.get("simulated", False))
+        force_sim = data.get("simulated", False)
+        if type(force_sim) is not bool:
+            return web.json_response({"status":"error","error":"invalid_simulation_flag"}, status=400)
         from arcade_runner import get_arcade_session
         arcade = get_arcade_session(controller, broadcast_ws)
 
         if action == "select":
             raw_gid = data.get("game_id", 1)
             try:
-                gid = int(raw_gid)
+                if type(raw_gid) is not int:
+                    raise ValueError("game_id must be an integer")
+                gid = raw_gid
             except (ValueError, TypeError):
                 return web.json_response({"status": "error", "error": "invalid_game_id", "message": "游戏ID格式错误"}, status=400)
-            res = arcade.select_game(gid, force_simulation=force_sim)
+            res = await asyncio.to_thread(arcade.select_game, gid, force_simulation=force_sim)
             if res.get("status") != "ok":
                 status_code = 400 if res.get("error") == "invalid_game_id" else 503
                 return web.json_response(res, status=status_code)
-            if arcade.simulated_mode and not arcade.is_running:
+            if arcade.simulated_mode and (not arcade.task or arcade.task.done()):
                 arcade.task = asyncio.create_task(arcade.run_loop())
             return web.json_response(res)
 
         elif action == "start":
-            res = arcade.start(force_simulation=force_sim)
-            if arcade.simulated_mode and not arcade.is_running:
+            res = await asyncio.to_thread(arcade.start, force_simulation=force_sim)
+            if arcade.simulated_mode and (not arcade.task or arcade.task.done()):
                 arcade.task = asyncio.create_task(arcade.run_loop())
             return web.json_response(res)
         elif action == "pause":
-            return web.json_response(arcade.pause())
+            return web.json_response(await asyncio.to_thread(arcade.pause))
         elif action == "resume":
-            return web.json_response(arcade.resume())
+            return web.json_response(await asyncio.to_thread(arcade.resume))
         elif action == "reset":
-            return web.json_response(arcade.reset())
+            return web.json_response(await asyncio.to_thread(arcade.reset))
         elif action == "stop" or action == "exit":
-            return web.json_response(arcade.stop())
+            return web.json_response(await asyncio.to_thread(arcade.stop))
         elif action == "key":
             k = data.get("key", "")
-            down = bool(data.get("down", True))
-            return web.json_response(arcade.key(k, down))
+            down = data.get("down", True)
+            if not isinstance(k,str) or type(down) is not bool:
+                return web.json_response({"status":"error","error":"invalid_key"},status=400)
+            return web.json_response(await asyncio.to_thread(arcade.key,k,down))
+        elif action == "input":
+            return web.json_response(await asyncio.to_thread(arcade.input_state,data.get("down"),data.get("pressed")))
         elif action == "heartbeat":
-            return web.json_response(arcade.heartbeat())
+            return web.json_response(await asyncio.to_thread(arcade.heartbeat))
         elif action == "status":
-            return web.json_response({
-                "status": "ok",
-                "running": arcade.is_running,
-                "game_status": arcade.status,
-                "source": arcade.status.get("source", "unknown"),
-                "simulated": arcade.simulated_mode,
-            })
+            return web.json_response(await asyncio.to_thread(arcade.read_status))
         else:
             return web.json_response({"status": "error", "error": "unknown_action"}, status=400)
+    except (ValueError, TypeError) as e:
+        return web.json_response({"status":"error", "error":str(e)}, status=400)
     except Exception as e:
         return web.json_response({"status": "error", "error": str(e)}, status=500)
 
@@ -560,7 +566,7 @@ async def handle_arcade_frame(request: web.Request):
     """获取街机卡带实时帧与 HUD 状态"""
     from arcade_runner import get_arcade_session
     arcade = get_arcade_session(controller, broadcast_ws)
-    frame_info = arcade.get_frame()
+    frame_info = await asyncio.to_thread(arcade.get_frame)
     return web.json_response(frame_info)
 
 async def handle_retry_warmup(request: web.Request):
@@ -662,7 +668,9 @@ async def handle_status(request: web.Request):
 # WebSocket 实时全双工长连接
 # ==========================================
 async def handle_ws(request: web.Request):
-    ws = web.WebSocketResponse()
+    if len(active_websockets) >= 32:
+        return web.json_response({"error":"websocket_capacity"}, status=503)
+    ws = web.WebSocketResponse(max_msg_size=64*1024)
     await ws.prepare(request)
     active_websockets.add(ws)
     from mcp_server import McpSession
@@ -678,6 +686,9 @@ async def handle_ws(request: web.Request):
 
     try:
         async for msg in ws:
+            if not request.app['access_policy'].allow_rate(request.remote or 'unknown'):
+                await ws.close(code=1008,message=b'Rate limit exceeded')
+                break
             if msg.type == web.WSMsgType.TEXT:
                 try:
                     payload = json.loads(msg.data)
@@ -1193,9 +1204,6 @@ async def no_cache_cors_middleware(request: web.Request, handler):
             response = await handler(request)
         except web.HTTPException as ex:
             response = ex
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, DELETE"
-    response.headers["Access-Control-Allow-Headers"] = "*"
     path = request.path.lower()
     if path.endswith((".html", ".js", ".css")) or path == "/" or path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -1208,7 +1216,11 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     check_reinit_allowed()
     global shutting_down
     shutting_down = False
-    app = web.Application(client_max_size=21*1024*1024, middlewares=[no_cache_cors_middleware])
+    from access_control import AccessPolicy, access_middleware, pair
+    app = web.Application(client_max_size=21*1024*1024, middlewares=[access_middleware, no_cache_cors_middleware])
+    app['access_policy'] = AccessPolicy(token=os.environ.get('KURISU_ACCESS_TOKEN'),
+        origins=filter(None, os.environ.get('KURISU_ALLOWED_ORIGINS','').split(',')))
+    app.router.add_post('/api/pair', pair)
     app['simulate']=simulate;app['no_audio']=no_audio
     warmup_abort_ev = threading.Event()
     app['warmup_state'] = {
@@ -1262,10 +1274,13 @@ if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('--simulate',action='store_true',help='No serial/UDP/camera/microphone/model/speaker access')
     parser.add_argument('--no-audio',action='store_true')
+    parser.add_argument('--host',default='127.0.0.1',help='Explicitly use 0.0.0.0 for paired LAN clients')
     parser.add_argument('--port',type=int,default=8080)
     args=parser.parse_args();WEB_PORT=args.port
     if args.simulate:os.environ['KURISU_SIMULATE']='1'
     if 'KURISU_MUSIC_GAIN' not in os.environ:os.environ['KURISU_MUSIC_GAIN']='0.62'
+    from access_control import load_access_token
+    os.environ['KURISU_ACCESS_TOKEN'] = load_access_token()
     app = create_app(args.simulate,args.no_audio)
     print("\n" + "="*60)
     print("  🚀 未来道具研究所 · 牧濑红莉栖具身中枢 (全时强制 WiFi 通信)")
@@ -1273,5 +1288,5 @@ if __name__ == "__main__":
     print(f"  ● 电脑本机访问: http://localhost:{WEB_PORT}")
     print("  ● 手机控制地址将在板端连接后显示")
     print("="*60 + "\n")
-    web.run_app(app, host="127.0.0.1" if args.simulate else "0.0.0.0", port=WEB_PORT)
+    web.run_app(app, host=args.host, port=WEB_PORT)
 

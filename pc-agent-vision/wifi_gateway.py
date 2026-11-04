@@ -6,6 +6,7 @@ import time
 import uuid
 import os
 import ipaddress
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -17,6 +18,23 @@ class WiFiGateway:
         self.is_running = False
         from pro_paths import data_dir
         self._state_path = data_dir() / 'device-state.json'
+        self.control_token = os.environ.get('KURISU_CONTROL_TOKEN', '').strip()
+        if not self.control_token:
+            try:
+                self.control_token = json.loads((data_dir() / 'control-pairing.json').read_text(encoding='utf-8'))['control_token']
+            except (OSError, ValueError, KeyError, TypeError):
+                self.control_token = ''
+        if not isinstance(self.control_token, str):
+            self.control_token = ''
+        self.boot_id = None
+        self.client_id = uuid.uuid4().hex
+        try:
+            saved = json.loads(self._state_path.read_text(encoding='utf-8'))
+            if isinstance(saved.get('client_id'), str) and len(saved['client_id']) == 32:
+                self.client_id = saved['client_id']
+        except (OSError, ValueError):
+            pass
+        self._sequence = int(time.time() * 1_000_000)
         self.board_sta_ip = os.environ.get('KURISU_BOARD_IP') or None
         if not self.board_sta_ip:
             try:
@@ -35,6 +53,7 @@ class WiFiGateway:
         self._pending = {}
         self._pending_lock = threading.Lock()
         self._send_lock = threading.RLock()
+        self._remember_board()
         self._init_socket()
         if self.is_running:
             self._receiver = threading.Thread(target=self._receiver_loop, daemon=True)
@@ -59,46 +78,47 @@ class WiFiGateway:
         while self.is_running and self.sock:
             try:
                 data, addr = self.sock.recvfrom(4096)
+                if len(data) >= 4096:
+                    continue
                 payload = json.loads(data.decode("utf-8"))
                 if not isinstance(payload, dict):
                     continue
                 if payload.get("event") in ("beacon", "board_online"):
-                    if payload.get("sta_ip") not in (None, "0.0.0.0"):
-                        self.board_sta_ip = payload["sta_ip"]
-                    elif addr[0] != "192.168.4.1" and not addr[0].startswith("127."):
-                        self.board_sta_ip = addr[0]
-                    self.board_ap_ip = payload.get("ap_ip", self.board_ap_ip)
-                    self.last_seen = time.monotonic()
-                    if "mode" in payload:
-                        self.last_mode = int(payload["mode"])
-                elif payload.get("request_id"):
+                    # Discovery is unauthenticated. Never send credentials to an
+                    # address advertised by an arbitrary beacon or trust it as online.
+                    continue
+                elif isinstance(payload.get("request_id"), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,64}', payload['request_id']):
+                    if 'mode' in payload and (type(payload['mode']) is not int or not 0 <= payload['mode'] <= 255):
+                        continue
                     with self._pending_lock:
                         pending = self._pending.get(payload["request_id"])
                         if pending and payload.get("status") in ("ok", "error"):
                             # A reply must come from the board port and one of the
                             # selected destinations (broadcast discovery may vary).
-                            if addr[1] != self.port or (addr[0] not in pending["targets"] and
-                                    "255.255.255.255" not in pending["targets"]):
+                            if addr[1] != self.port or addr[0] not in pending["targets"]:
                                 continue
                             pending["result"] = payload
-                            self.last_seen = time.monotonic()
+                            if payload.get('status') == 'ok':
+                                self.last_seen = time.monotonic()
                             if not addr[0].startswith("127.") and addr[0] != self.board_ap_ip:
                                 self.board_sta_ip = addr[0]
                             if "mode" in payload:
                                 self.last_mode = int(payload["mode"])
                             self._remember_board()
                             pending["event"].set()
-            except (socket.timeout, ValueError, UnicodeError):
+            except (socket.timeout, ValueError, UnicodeError, TypeError):
                 continue
             except OSError:
                 if self.is_running:
                     time.sleep(0.1)
 
     def _remember_board(self):
-        if self.board_sta_ip and self.board_sta_ip != getattr(self, '_saved_ip', None):
+        if (self.board_sta_ip != getattr(self, '_saved_ip', None) or
+                self.client_id != getattr(self, '_saved_client', None)):
             try:
-                self._state_path.write_text(json.dumps({'board_ip': self.board_sta_ip}), encoding='utf-8')
+                self._state_path.write_text(json.dumps({'board_ip': self.board_sta_ip, 'client_id': self.client_id}), encoding='utf-8')
                 self._saved_ip = self.board_sta_ip
+                self._saved_client = self.client_id
             except OSError:
                 pass
 
@@ -108,8 +128,7 @@ class WiFiGateway:
     def get_target_ips(self) -> List[str]:
         if self.board_sta_ip and self.is_online():
             return [self.board_sta_ip]
-        return list(dict.fromkeys(ip for ip in
-                    [self.board_sta_ip, self.board_ap_ip, "255.255.255.255"] if ip))
+        return [self.board_sta_ip or self.board_ap_ip]
 
     def send_command(self, cmd_str: str, timeout: float = 0.6, retries: int = 2,
                      request_id: Optional[str] = None) -> bool:
@@ -118,9 +137,51 @@ class WiFiGateway:
             if not self.sock or not self.is_running or not cmd_str.strip():
                 self.last_result = {"status": "error", "error": "transport_unavailable"}
                 return False
+            if len(self.control_token) != 64 or any(c not in '0123456789abcdef' for c in self.control_token):
+                self.last_result = {"status": "error", "error": "pairing_required"}
+                return False
+            if not self.boot_id:
+                # This probe only obtains a boot nonce. No command is executed.
+                probe_id = uuid.uuid4().hex
+                probe = {"event": threading.Event(), "result": None, "targets": self.get_target_ips()}
+                with self._pending_lock:
+                    self._pending[probe_id] = probe
+                try:
+                    wire = json.dumps({"request_id": probe_id}).encode('utf-8')
+                    for ip in probe['targets']:
+                        self.sock.sendto(wire, (ip, self.port))
+                    if not probe['event'].wait(timeout):
+                        self.last_result = {"status": "error", "error": "discovery_timeout"}
+                        return False
+                    self.boot_id = (probe['result'] or {}).get('boot_id')
+                    if not isinstance(self.boot_id, str) or len(self.boot_id) != 32:
+                        self.last_result = {"status": "error", "error": "invalid_boot_id"}
+                        self.boot_id = None
+                        return False
+                except OSError:
+                    self.last_result = {"status": "error", "error": "transport_unavailable"}
+                    return False
+                finally:
+                    with self._pending_lock:
+                        self._pending.pop(probe_id, None)
             rid = request_id or uuid.uuid4().hex
+            if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', rid):
+                self.last_result = {"status":"error","error":"invalid_request_id"}
+                return False
+            self._sequence += 1
+            rid = f'{self._sequence}_{rid}'
+            if len(rid) > 64:
+                self.last_result = {"status":"error","error":"invalid_request_id"}
+                return False
             pending = {"event": threading.Event(), "result": None, "targets": self.get_target_ips()}
-            data = json.dumps({"request_id": rid, "command": cmd_str.strip()}, separators=(",", ":")).encode("utf-8")
+            data = json.dumps({"request_id": rid, "command": cmd_str.strip(),
+                               "token": self.control_token, "boot_id": self.boot_id,
+                               "client_id": self.client_id, "seq": self._sequence}, separators=(",", ":")).encode("utf-8")
+            if len(cmd_str.encode('utf-8')) > 2048 or len(data) >= 4096:
+                self.last_result = {"status": "error", "error": "command_too_large"}
+                return False
+            timeout = max(0.05, min(float(timeout), 2.0))
+            retries = max(0, min(int(retries), 2))
             with self._pending_lock:
                 self._pending[rid] = pending
             try:
@@ -132,6 +193,8 @@ class WiFiGateway:
                             continue
                     if pending["event"].wait(timeout):
                         self.last_result = pending["result"] or {"status": "error", "error": "transport_closed"}
+                        if self.last_result.get('error') == 'boot_changed':
+                            self.boot_id = None # Next explicit request rediscovers, never replay an action on a reboot.
                         return self.last_result.get("status") == "ok"
                 self.last_result = {"request_id": rid, "status": "error", "error": "ack_timeout"}
                 return False

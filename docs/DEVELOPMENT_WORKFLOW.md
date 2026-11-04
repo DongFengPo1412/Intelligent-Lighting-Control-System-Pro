@@ -1,6 +1,6 @@
 # Git 与本地配置
 
-本项目仓库是 https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Pro 。按项目所有者要求，直接在 `main` 开发，完成并验证一个可回退节点后提交、推送到 `origin main`，不额外创建功能分支。不强推，不覆盖他人提交；推送前检查远程进度。
+本项目仓库是 https://github.com/DongFengPo1412/Intelligent-Lighting-Control-System-Pro 。依据所有者 2026-11-04 的新指令，本次街机修复继续在 `arcade-100-audit-and-elevation` 开发，保护已有提交及未提交文件。完成并验证可回退节点后提交到该分支；核对远端后只推送该开发分支。不切换、覆盖或擅自合并 `main`，不强推，不覆盖他人提交。当前任务仅执行 Phase A，完成后停止。
 
 2026-10-23：组员指尖模块已接入正式源码、模式26、track/track_cal、显示任务和构建。新增高阶功能与原SRS差异见 [PRO_FEATURES](PRO_FEATURES.md)，已完成离线构建与测试，尚未上板验收。
 

@@ -7,6 +7,8 @@ namespace arcade {
 
 class ArcadeScoreStore {
 public:
+    // Set once by app_main after nvs_flash_init; constructors only use RAM.
+    static void SetReady(bool ready);
     // 从 NVS 读取指定游戏编号的最高分 (同时考虑尚未落盘的 RAM 缓存, 取较大值; 未保存过返回 0)
     static uint32_t LoadHighScore(uint8_t game_id);
 
