@@ -18,7 +18,7 @@ void Game011DinoRunner::Tick(float dt, uint16_t, uint16_t pressed) {
     y = std::min(12.f, y + vy * dt);
     if (y >= 12)
         vy = 0;
-    float speed = std::min(8.f, base[difficulty_] + elapsed_ * .04f);
+    float speed = std::min(8.0, base[difficulty_] + elapsed_ * .04);
     distance += speed * dt;
     for (int i = 0; i < 3; ++i) {
         ob[i] -= speed * dt;

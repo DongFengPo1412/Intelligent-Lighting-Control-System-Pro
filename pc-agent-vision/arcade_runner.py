@@ -112,6 +112,18 @@ from arcade.game_013_pendulum_toss import Game013PendulumToss
 
 from arcade.game_023_air_hockey import Game023AirHockey
 
+from arcade.game_024_peggle import Game024Peggle
+
+from arcade.game_025_marble_maze import Game025MarbleMaze
+
+from arcade.game_032_defender import Game032Defender
+
+from arcade.game_036_dig_dug import Game036DigDug
+
+from arcade.game_037_qbert import Game037Qbert
+
+from arcade.game_039_fog_maze import Game039FogMaze
+
 KEY_MAP = {
     "left": KEY_LEFT,
     "right": KEY_RIGHT,
@@ -222,6 +234,12 @@ class ArcadeSession:
         self.cartridges[12]=Game012KnifeHit()
         self.cartridges[13]=Game013PendulumToss()
         self.cartridges[23]=Game023AirHockey()
+        self.cartridges[24]=Game024Peggle()
+        self.cartridges[25]=Game025MarbleMaze()
+        self.cartridges[32]=Game032Defender()
+        self.cartridges[36]=Game036DigDug()
+        self.cartridges[37]=Game037Qbert()
+        self.cartridges[39]=Game039FogMaze()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None

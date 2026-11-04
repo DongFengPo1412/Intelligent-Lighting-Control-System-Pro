@@ -58,7 +58,8 @@ class BatchCartridge : public Cartridge {
             Pause();
             return;
         }
-        elapsed_ += dt;
+        // Preserve the canonical microsecond step in long timed challenges.
+        elapsed_ += std::round(double(dt) * 1000000.0) / 1000000.0;
         repeat_ = std::max(0.f, repeat_ - dt);
         Tick(dt, down, pressed);
     }
@@ -88,7 +89,8 @@ class BatchCartridge : public Cartridge {
   protected:
     CartridgeState state_ = STATE_TITLE;
     uint32_t score_ = 0, high_ = 0;
-    float elapsed_ = 0, timer_ = 0, repeat_ = 0;
+    double elapsed_ = 0;
+    float timer_ = 0, repeat_ = 0;
     virtual void Setup() = 0;
     virtual void Tick(float, uint16_t, uint16_t) = 0;
     virtual void Draw(uint8_t *) = 0;

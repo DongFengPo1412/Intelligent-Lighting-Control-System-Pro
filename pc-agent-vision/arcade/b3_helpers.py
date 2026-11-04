@@ -4,6 +4,7 @@ from .batch_cartridge import BatchCartridge
 from .base_cartridge import *
 
 def clamp(v,lo,hi):return max(lo,min(hi,v))
+def quantize(v):return math.floor(v*1000000+.5)/1000000
 def wrap(v):return v%(2*math.pi)
 def angle_distance(a,b):return abs((a-b+math.pi)%(2*math.pi)-math.pi)
 def rng(seed):return (seed*1664525+1013904223)&0xffffffff

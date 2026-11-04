@@ -1,6 +1,7 @@
 #pragma once
 #include "arcade_batch_cartridge.h"
 namespace arcade {
+inline double B3Quantize(double v) { return std::floor(v * 1000000.0 + .5) / 1000000.0; }
 inline float B3Clamp(float v, float lo, float hi) { return std::max(lo, std::min(hi, v)); }
 inline float B3Wrap(float a) {
     while (a < 0)

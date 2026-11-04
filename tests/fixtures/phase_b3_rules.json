@@ -18,7 +18,10 @@
     "lives": [
       "max(0,self.hp)",
       "std::max(0,hp)"
-    ]
+    ],
+    "help": "左右移动，A 向下开火并反冲；黄点为弹药，落在绿色平台补弹。消灭三个敌人后落到底部。",
+    "a": "向下射击",
+    "b": ""
   },
   "8": {
     "id": 8,
@@ -37,7 +40,10 @@
       "grounded"
     ],
     "control": 3,
-    "lives": null
+    "lives": null,
+    "help": "地面按住 A 蓄力，左右确定起跳方向；松开 A 后按真实弹道飞行，空中不能改轨。逐级登顶，失误会掉落。",
+    "a": "按住蓄力/松开跳",
+    "b": ""
   },
   "11": {
     "id": 11,
@@ -56,7 +62,10 @@
       "ob[2]"
     ],
     "control": 0,
-    "lives": null
+    "lives": null,
+    "help": "自动跑动，轻触 A 跳过地面障碍；速度逐渐增加，越过12个障碍完成一轮挑战。",
+    "a": "跳跃",
+    "b": ""
   },
   "12": {
     "id": 12,
@@ -72,7 +81,10 @@
       "flying"
     ],
     "control": 0,
-    "lives": null
+    "lives": null,
+    "help": "轻触 A 向旋转目标投刀，避开已有刀具；完成8/10/12次有效命中。飞行期间不能重复发射。",
+    "a": "投刀",
+    "b": ""
   },
   "13": {
     "id": 13,
@@ -95,7 +107,10 @@
     "lives": [
       "max(0,self.balls)",
       "std::max(0,balls)"
-    ]
+    ],
+    "help": "观察摆锤，A 松开小球并保留切向速度。依次投入三个绿色篮筐，顶端蓝点显示剩余球。",
+    "a": "释放小球",
+    "b": ""
   },
   "23": {
     "id": 23,
@@ -119,6 +134,141 @@
     "lives": [
       "max(0,3-self.against)",
       "std::max(0,3-against)"
+    ],
+    "help": "方向键在己方半场二维移动球拍，A 近距离重击；白球入对方球门得分，先得三分获胜。",
+    "a": "近距重击",
+    "b": ""
+  },
+  "24": {
+    "id": 24,
+    "slug": "peggle",
+    "cls": "Game024Peggle",
+    "name": "弹珠撞靶",
+    "en": "Peggle",
+    "core": "Aim a finite supply of gravity-driven balls; collide with and remove every peg.",
+    "keys": [
+      "aim",
+      "x",
+      "y",
+      "vx",
+      "vy",
+      "mask",
+      "balls",
+      "flying"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,self.balls)",
+      "std::max(0,balls)"
     ]
+  },
+  "25": {
+    "id": 25,
+    "slug": "marble_maze",
+    "cls": "Game025MarbleMaze",
+    "name": "滚珠平衡迷宫",
+    "en": "Marble Maze",
+    "core": "Tilt acceleration and inertia, wall bounces, lethal pits and a low-speed finish.",
+    "keys": [
+      "x",
+      "y",
+      "vx",
+      "vy"
+    ],
+    "control": 3,
+    "lives": null
+  },
+  "32": {
+    "id": 32,
+    "slug": "defender",
+    "cls": "Game032Defender",
+    "name": "横向防卫",
+    "en": "Defender",
+    "core": "Wraparound horizontal flight and lasers protect four humans from abducting landers.",
+    "keys": [
+      "x",
+      "y",
+      "hp",
+      "kills",
+      "ey[0]",
+      "ey[1]",
+      "ey[2]",
+      "ey[3]",
+      "human[0]",
+      "human[1]",
+      "human[2]",
+      "human[3]",
+      "carrying[0]"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,self.hp)",
+      "std::max(0,hp)"
+    ]
+  },
+  "36": {
+    "id": 36,
+    "slug": "dig_dug",
+    "cls": "Game036DigDug",
+    "name": "地下充气战",
+    "en": "Dig Dug",
+    "core": "Dig tunnels, aim a held pump at pursuing monsters, maintain inflation until they burst.",
+    "keys": [
+      "x",
+      "y",
+      "face",
+      "hp",
+      "kills",
+      "ex[0]",
+      "ey[0]",
+      "inflate[0]",
+      "ex[1]",
+      "ey[1]",
+      "ex[2]",
+      "ey[2]"
+    ],
+    "control": 3,
+    "lives": [
+      "max(0,self.hp)",
+      "std::max(0,hp)"
+    ]
+  },
+  "37": {
+    "id": 37,
+    "slug": "qbert",
+    "cls": "Game037Qbert",
+    "name": "染色跳格",
+    "en": "Qbert",
+    "core": "Diagonal hops on a triangular pyramid, persistent tile colours and a pursuing chaser.",
+    "keys": [
+      "row",
+      "col",
+      "er",
+      "ec",
+      "hp",
+      "mask"
+    ],
+    "control": 2,
+    "lives": [
+      "max(0,self.hp)",
+      "std::max(0,hp)"
+    ]
+  },
+  "39": {
+    "id": 39,
+    "slug": "fog_maze",
+    "cls": "Game039FogMaze",
+    "name": "迷雾探索迷宫",
+    "en": "Fog Maze",
+    "core": "A deterministic perfect maze with restricted vision, remembered explored walls and a hidden exit.",
+    "keys": [
+      "x",
+      "y",
+      "moves",
+      "explored",
+      "layout_hash"
+    ],
+    "control": 2,
+    "lives": null
   }
 }

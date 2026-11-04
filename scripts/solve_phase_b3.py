@@ -28,6 +28,7 @@ def pendulum_landing(g):
 
 def policy(g,won,context):
     gid=g.game_id
+    if gid in POLICIES:return POLICIES[gid](g,won,context)
     if not won:
         if gid==8:
             context['n']=context.get('n',0)+1
@@ -114,4 +115,8 @@ def main():
     Path(a.output).write_text(json.dumps(dict(dt_us=16667,cases=cases),separators=(',',':'))+'\n',encoding='utf-8')
 
 
+import importlib
+for _group in range(2,7):
+    if Path(__file__).with_name(f'b3_policies_{_group}.py').is_file():
+        POLICIES.update(importlib.import_module(f'b3_policies_{_group}').POLICIES)
 if __name__=='__main__':main()

@@ -99,7 +99,7 @@ int main(int argc,char** argv) {
     std::thread producer([]{for(unsigned i=1;i<=500;++i)Store::SaveHighScore(97,i);});
     for(int i=0;i<30;++i)Store::Flush();producer.join();Store::Flush();assert(durable["hs_097"]==500);
     auto& manager=arcade::ArcadeManager::GetInstance();manager.Init();
-    const int ids[]={1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,26,27,28,29,30,31,33,34,35,38,40,41,42,43,44,45,51,52,53,54,55,57,58,62,63,64,65,66,67,72,73,74,75,76,81,83,84,85,86,87,88,92,93,94,95,97,98};
+    const int ids[]={1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,51,52,53,54,55,57,58,62,63,64,65,66,67,72,73,74,75,76,81,83,84,85,86,87,88,92,93,94,95,97,98};
     for(auto id:ids){
         assert(manager.SelectGame(id));assert(manager.GetCurrentGameId()==id);manager.Start();
         std::vector<uint8_t> guarded(800,0xa5);
