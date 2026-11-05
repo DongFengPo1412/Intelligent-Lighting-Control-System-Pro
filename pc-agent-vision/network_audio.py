@@ -80,6 +80,7 @@ class WiFiPcmClient:
                 raise ValueError("Unsupported PCM protocol")
             self.sock = sock
             self.connected = True
+            self.last_error = None
             self.closed = threading.Event()
             threading.Thread(target=self._read, args=(sock, self.closed), daemon=True).start()
             threading.Thread(target=self._heartbeat, args=(sock, self.closed), daemon=True).start()

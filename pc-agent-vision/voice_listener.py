@@ -99,6 +99,9 @@ class VoiceListener:
             self.controller.echo_canceller = EchoCanceller(delay_samples=int(os.environ.get('KURISU_ECHO_DELAY_MS','120'))*16)
         self.has_board_audio = False
         self._last_board_frame_time = 0.0
+        self._last_pcm_recovery = 0.0
+        self.pcm_recoveries = 0
+        self.last_capture_error = None
         self._resume_warmup_frames = 0
 
         # WebRTC VAD mode follows Mid's mode 0; accuracy still needs listening tests.
@@ -314,6 +317,7 @@ class VoiceListener:
             return
         self.has_board_audio = True
         self._last_board_frame_time = time.time()
+        self.last_capture_error = None
         try:
             self._pcm_queue.put_nowait(pcm_bytes)
         except queue.Full:
@@ -800,6 +804,33 @@ class VoiceListener:
         self._update_board_led("listening")
         return True
 
+    def _recover_board_capture(self):
+        """Bounded reconnect in the existing capture worker; never fake freshness."""
+        if not self.is_listening or self.is_paused or self._stop_event.is_set():return False
+        if time.time()-self._last_board_frame_time <= 6:return False
+        now=time.monotonic()
+        if now-getattr(self, '_last_pcm_recovery', 0) < 5:return False
+        audio=getattr(self.controller, '_network_audio', None)
+        if getattr(audio, 'playback_active', False):return False
+        generation=self._session_generation
+        self._last_pcm_recovery=now
+        self.pcm_recoveries=getattr(self, 'pcm_recoveries', 0)+1
+        self.last_capture_error='板载音频停流，正在重新连接PCM'
+        print('[收音恢复] '+self.last_capture_error)
+        try:
+            if audio is not None:audio.close()
+            if not self.controller.connect_audio():raise RuntimeError('PCM重连失败')
+            if (not self.is_listening or self.is_paused or self._stop_event.is_set()
+                    or generation!=self._session_generation):return False
+            if self.controller.enable_mic(True) is False:raise RuntimeError('麦克风开启未获确认')
+            # Only _on_board_pcm can advance _last_board_frame_time or clear
+            # this error. A successful TCP/UDP handshake is not received audio.
+            return True
+        except Exception as exc:
+            self.last_capture_error=str(exc)
+            print('[收音恢复失败] '+self.last_capture_error)
+            return False
+
     def _process_loop(self):
         """
         板载麦克风实时音频流处理与工业级 VAD 端点检测中枢
@@ -840,14 +871,12 @@ class VoiceListener:
                 if self._stop_event.is_set():
                     break
                 if self.is_listening and not self.is_paused and (time.time() - self._last_board_frame_time > 6.0):
-                    self._last_board_frame_time = time.time()
                     self._speech_active = False
                     is_speaking = False
                     speech_frames.clear()
                     preroll_frames.clear()
                     raw_stream_buffer.clear()
-                    if self.controller.audio_connected:
-                        self.controller.enable_mic(True)
+                    self._recover_board_capture()
                 continue
 
             if self.is_paused:

@@ -214,6 +214,49 @@ class ListenerLifecycleTests(unittest.TestCase):
         with patch.dict(os.environ, {'KURISU_VAD_MODE':'4'}):
             with self.assertRaises(ValueError):listener._configure_vad()
 
+    def test_capture_reconnect_does_not_forge_freshness_and_only_pcm_clears_error(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener._last_board_frame_time = 1
+        events = []
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False,
+            close=lambda:events.append('close'))
+        listener.controller.connect_audio = lambda:events.append('connect') or True
+        listener.controller.enable_mic = lambda enabled:events.append(('mic',enabled)) or True
+        with patch('voice_listener.time.time', return_value=10), patch('voice_listener.time.monotonic', return_value=100):
+            self.assertTrue(listener._recover_board_capture())
+            self.assertEqual(listener._last_board_frame_time, 1)
+            self.assertTrue(listener.last_capture_error)
+            self.assertFalse(listener._recover_board_capture())  # Finite retry rate.
+            self.assertEqual(events, ['close','connect',('mic',True)])
+            listener._on_board_pcm(bytes(960))
+            self.assertEqual(listener._last_board_frame_time, 10)
+            self.assertIsNone(listener.last_capture_error)
+
+    def test_capture_recovery_respects_pause_stop_and_active_playback(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener._last_board_frame_time = 0
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=True,
+            close=lambda:self.fail('Do not close active playback'))
+        self.assertFalse(listener._recover_board_capture())
+        listener.controller._network_audio.playback_active=False
+        listener.is_paused=True
+        self.assertFalse(listener._recover_board_capture())
+        listener.is_paused=False
+        listener._stop_event.set()
+        self.assertFalse(listener._recover_board_capture())
+
+    def test_pause_during_pcm_reconnect_does_not_reenable_microphone(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener._last_board_frame_time = 0
+        def connect():listener.is_paused=True;return True
+        listener.controller.connect_audio=connect
+        listener.controller.enable_mic=lambda enabled:self.fail('A concurrent pause owns capture')
+        with patch('voice_listener.time.monotonic', return_value=100):
+            self.assertFalse(listener._recover_board_capture())
+
     def test_text_only_wake_cannot_interrupt_without_acoustic_evidence(self):
         listener = self._create_isolated_listener()
         listener.is_listening = listener.is_paused = listener.duplex = True
