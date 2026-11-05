@@ -241,9 +241,11 @@ class VoiceListener:
         self.pause()
         self.last_wake_error = None
         try:
-            pcm = getattr(self, 'wake_reply_pcms', {}).get(keyword) or getattr(self, 'wake_reply_pcm', None)
-            if pcm and (len(pcm) % 2 or len(pcm) > 128000):
-                raise ValueError('唤醒短应答必须为16kHz PCM16，且不超过4秒')
+            prepared = getattr(self, 'wake_reply_pcms', {})
+            pcm = prepared.get(keyword) or getattr(self, 'wake_reply_pcm', None)
+            limit = 261760 if keyword in prepared else 128000  # 4s + .18s + 4s
+            if pcm and (len(pcm) % 2 or len(pcm) > limit):
+                raise ValueError('唤醒应答必须为16kHz PCM16；单语不超过4秒，双语不超过8.18秒')
             self._update_board_led('speaking')
             chime = getattr(self.controller, '_chime_pcm', None)
             if pcm and chime and hasattr(self.controller, 'play_audio_stream'):

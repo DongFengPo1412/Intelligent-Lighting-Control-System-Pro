@@ -641,6 +641,7 @@ async def handle_status(request: web.Request):
         "asr_backend": getattr(listener, 'asr_backend', None),
         "wake_reply_ready": isinstance(getattr(listener, 'wake_reply_pcm', None), bytes) and bool(listener.wake_reply_pcm),
         "wake_reply_error": getattr(listener, 'last_wake_error', None),
+        "wake_japanese_errors": getattr(voice, 'wake_reply_errors', {}),
         "wake_words": ['助手', '红莉栖', '牧濑红莉栖', '克里斯', '克里斯蒂娜'],
         "kws_status": kws_status,
         "tts_status": tts_status,

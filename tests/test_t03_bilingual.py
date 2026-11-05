@@ -704,13 +704,26 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             calls = []
             eng._single_language_bundle = lambda text, lang: (calls.append((text,lang)) or bytes(64000), b'')
             replies = eng.prepare_wake_replies()
+            chinese = [text for text,lang in calls if lang == 'zh']
             self.assertEqual(set(replies), {'助手','红莉栖','牧濑红莉栖','克里斯','克里斯蒂娜'})
-            self.assertIn('不是你的助手', calls[0][0])
-            self.assertEqual(calls[1][0], calls[2][0])
-            self.assertIn('名字', calls[3][0])
-            self.assertIn('蒂娜', calls[4][0])
-            self.assertEqual({language for _,language in calls}, {'zh'})
+            self.assertIn('不是你的助手', chinese[0])
+            self.assertEqual(chinese[1], chinese[2])
+            self.assertIn('名字', chinese[3])
+            self.assertIn('蒂娜', chinese[4])
+            self.assertEqual([lang for _,lang in calls], ['zh','ja']*5)
+            self.assertTrue(all(len(pcm)==133760 for pcm in replies.values()))
             self.assertEqual(eng.played_pcm, [])
+
+    def test_wake_japanese_failure_keeps_prepared_chinese(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            def synth(text, lang):
+                if lang == 'ja':raise RuntimeError('Japanese unavailable')
+                return bytes(32000), b''
+            eng._single_language_bundle = synth
+            replies = eng.prepare_wake_replies()
+            self.assertTrue(all(pcm == bytes(32000) for pcm in replies.values()))
+            self.assertEqual(set(eng.wake_reply_errors), set(replies))
 
     def test_long_chinese_starts_playing_before_later_chunks_are_synthesized(self):
         with _temp_dir() as tmp:

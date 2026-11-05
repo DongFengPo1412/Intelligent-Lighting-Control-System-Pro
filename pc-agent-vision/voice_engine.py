@@ -481,8 +481,29 @@ class VoiceEngine:
         return pcm
 
     def prepare_wake_replies(self):
-        return {name:self.prepare_wake_reply(name) for name in
-                ('助手','红莉栖','牧濑红莉栖','克里斯','克里斯蒂娜')}
+        # Fixed, paired style greetings avoid a model/translation request on
+        # each wake. Keep the valid Chinese greeting if Japanese fails.
+        japanese = {
+            '助手':'助手じゃないわ。用があるなら話して。',
+            '红莉栖':'うん、何か用かしら？',
+            '牧濑红莉栖':'うん、何か用かしら？',
+            '克里斯':'ちゃんと名前で呼んで。',
+            '克里斯蒂娜':'ティーナって付けないで。何の用？',
+        }
+        replies = {}
+        self.wake_reply_errors = {}
+        for name, text in japanese.items():
+            zh = self.prepare_wake_reply(name)
+            replies[name] = zh
+            try:
+                ja, _ = self._single_language_bundle(text, 'ja')
+                if not ja or len(ja) % 2 or len(ja) > 128000:
+                    raise ValueError('日语唤醒短句为空、格式不符或超过4秒')
+                replies[name] = zh + bytes(5760) + ja  # 180ms, 16kHz PCM16
+            except Exception as exc:
+                self.wake_reply_errors[name] = str(exc)
+                print(f'[唤醒日语准备失败] {name}: {exc}；保留中文')
+        return replies
 
     def _speak_chinese_first(self, text, cancelled=None):
         from light_controller import get_light_controller
