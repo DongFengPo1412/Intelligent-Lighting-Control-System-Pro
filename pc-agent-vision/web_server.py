@@ -636,6 +636,7 @@ async def handle_status(request: web.Request):
         "translation_error": agent.last_translation_error,
         "tts_error": tts_error,
         "asr_status": asr_status,
+        "asr_backend": getattr(listener, 'asr_backend', None),
         "kws_status": kws_status,
         "tts_status": tts_status,
         "listener_listening": bool(listener and listener.is_listening and listener_healthy),

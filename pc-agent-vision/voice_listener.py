@@ -111,6 +111,14 @@ class VoiceListener:
 
         # 初始化本地 faster-whisper 极速离线 ASR 模型 (base 模型：高精度音节辨别，NVIDIA RTX CUDA 加速)
         self.whisper_model = None
+        self.asr_backend = os.environ.get('KURISU_ASR_BACKEND', 'whisper').strip().lower()
+        if self.asr_backend == 'sensevoice':
+            from local_asr import SenseVoiceASR
+            self.whisper_model = SenseVoiceASR(os.environ.get('KURISU_SENSEVOICE_DIR'))
+            print('[VoiceListener] 本地SenseVoice中文识别已就绪（CPU；未更换角色声线）')
+            return
+        if self.asr_backend != 'whisper':
+            raise ValueError('KURISU_ASR_BACKEND must be whisper or sensevoice')
         torch_lib = r'C:\Users\Liu\anaconda3\envs\ai_cv_env\Lib\site-packages\torch\lib'
         if os.path.exists(torch_lib):
             if hasattr(os, 'add_dll_directory'):
@@ -357,7 +365,7 @@ class VoiceListener:
 
                         text = "".join(parts).strip()
                         dt_asr = (time.perf_counter() - t_asr_start) * 1000.0
-                        if scores:
+                        if scores or getattr(self, 'asr_backend', '') == 'sensevoice':
                             # Keep only the most recent command for local ASR diagnosis.
                             try:
                                 from pro_paths import cache_dir
@@ -369,7 +377,8 @@ class VoiceListener:
                                     recording.setsampwidth(2)
                                     recording.setframerate(16000)
                                     recording.writeframes(pcm_bytes)
-                                stats = {'text': text, 'acoustic_keyword': acoustic_keyword, 'avg_logprob': sum(scores) / len(scores),
+                                stats = {'text': text, 'asr_backend': getattr(self, 'asr_backend', 'whisper'),
+                                         'acoustic_keyword': acoustic_keyword, 'avg_logprob': sum(scores) / len(scores) if scores else None,
                                          'duration': len(audio_np) / 16000,
                                          'rms': float(np.sqrt(np.mean(audio_np ** 2))),
                                          'clipped_fraction': float(np.mean(np.abs(audio_np) >= .999))}
