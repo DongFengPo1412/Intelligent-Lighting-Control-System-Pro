@@ -162,6 +162,18 @@ class ListenerLifecycleTests(unittest.TestCase):
             listener._process_utterance(bytes(1600))
             self.assertEqual(heard, ['助手'] if expected_ack else ['command:住手。'])
 
+    def test_wake_with_attached_question_acknowledges_before_dispatch_in_both_states(self):
+        for awake in (False, True):
+            listener = self._create_isolated_listener()
+            listener.is_awake = awake
+            listener.wake_detector.detect = lambda pcm: '助手'
+            listener.whisper_model.transcribe = lambda *a, **k: ([types.SimpleNamespace(text='助手，你是谁？')], object())
+            events = []
+            listener._acknowledge_wake = lambda keyword=None: events.append(('wake', keyword))
+            listener.callback = lambda text: events.append(('question', text))
+            listener._process_utterance(bytes(1600))
+            self.assertEqual(events, [('wake', '助手'), ('question', '你是谁')])
+
     def test_waiting_led_matches_mid_listening_and_retries_rejected_update(self):
         listener = self._create_isolated_listener()
         del listener.__dict__['_update_board_led']
@@ -799,7 +811,7 @@ class ListenerLifecycleTests(unittest.TestCase):
                 self._last_board_frame_time = time.time()
                 self.start_return_value = True
 
-            def start(self):
+            def start(self, ready_callback=None):
                 self.start_calls += 1
                 if self.start_return_value:
                     self.is_listening = True

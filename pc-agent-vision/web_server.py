@@ -648,6 +648,7 @@ async def handle_status(request: web.Request):
         "listener_listening": bool(listener and listener.is_listening and listener_healthy),
         "listener_healthy": listener_healthy,
         "listener_start_error": getattr(listener, 'last_start_error', None) if listener else None,
+        "voice_startup_state": request.app.get('voice_startup_state', 'disabled'),
         "listener_threads": listener_threads,
         "listener_threads_alive": bool(listener and listener.has_live_threads()),
         "listener_paused": bool(listener and listener.is_paused),
@@ -723,10 +724,12 @@ async def handle_ceremony(request: web.Request):
         if owns_pause:
             await loop.run_in_executor(None, listener.pause)
         try:
-            await device_call(controller.run_boot_ceremony, False)
+            ok = await device_call(controller.run_boot_ceremony, False)
         finally:
             if owns_pause:
                 await loop.run_in_executor(None, listener.resume)
+    if not ok:
+        return web.json_response({'status': 'error', 'error': 'ready_sound_not_confirmed'}, status=503)
     await broadcast_ws({"type": "ceremony_started"})
     return web.json_response({"status": "ok", "message": "Boot ceremony triggered"})
 
@@ -815,15 +818,14 @@ async def on_startup(app: web.Application):
     pro_api.start()
     if app['simulate']:return
 
-    # 1. 触发上电与配对连接成功正向反馈仪式感
+    # Network availability is not voice readiness. Mid announces success after
+    # activation, not before loading the recognizer/model and capture pipeline.
+    app['voice_startup_state'] = 'connecting'
     t_phase0 = time.perf_counter()
     loop = asyncio.get_running_loop()
     if await loop.run_in_executor(None, controller.wait_for_control, 8.0):
-        if not app['no_audio']:
-            try:
-                await loop.run_in_executor(None, controller.run_boot_ceremony, False)
-            except Exception as cer_err:
-                print(f"[WebServer] 启动仪式执行跳过: {cer_err}")
+        await loop.run_in_executor(None, controller.set_board_led, 'connected')
+        print('[语音状态] initializing: Wi-Fi控制回执已确认，准备语音；暂不播放就绪提示音')
     else:
         print("[WebServer] 尚未收到板端 Wi-Fi 回执，未宣告配对成功。")
     t_handshake = (time.perf_counter() - t_phase0) * 1000.0
@@ -837,19 +839,16 @@ async def on_startup(app: web.Application):
     print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
 
     if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
+        app['voice_startup_state'] = 'preparing_voice'
         try:
             t_synth0 = time.perf_counter()
             if hasattr(voice, 'warmup'):
                 if not await loop.run_in_executor(None, voice.warmup):
                     raise RuntimeError('角色语音真实预热失败')
-            from semantic_control import describe_action
-            for mode in (1, 2, 3, 7, 23):
-                lines = describe_action({'tool': 'set_light_mode', 'value': mode})
-                await loop.run_in_executor(None, voice.synthesize_speech_bundle, '\n'.join(lines))
             t_synth = (time.perf_counter() - t_synth0) * 1000.0
-            print(f"[WebServer 启动耗时] 阶段2 动作语音预合成: {t_synth:.1f}ms")
+            print(f"[WebServer 启动耗时] 阶段2 角色语音预热: {t_synth:.1f}ms")
         except Exception as synth_err:
-            print(f"[WebServer] 动作语音预合成跳过或异常: {synth_err}")
+            print(f"[WebServer] 角色语音预热异常: {synth_err}")
 
         # 2. 初始化全自动麦克风免触拾音监听
         try:
@@ -870,6 +869,8 @@ async def on_startup(app: web.Application):
             print(f"[WebServer] 语音监听器初始化失败 (保持降级运行，网页直接控制可用): {listen_err}")
             listener = None
 
+    app['voice_startup_state'] = 'disabled' if app.get('no_audio') or app.get('xiaozhi_bridge') else 'warming_model'
+
     # 3. 异步解耦后台模型预热与自动恢复任务，解耦 Web 主服务启动 (仅在非模拟模式下启动)
     if not app.get('simulate'):
         app['warmup_task'] = asyncio.create_task(background_model_warmup(app))
@@ -877,7 +878,7 @@ async def on_startup(app: web.Application):
 
 async def background_model_warmup(app: web.Application, max_retries: int = 5, initial_backoff: float = 1.0):
     """后台解耦预热语义模型，并在失败时受控重试；成功后自动使能语音监听"""
-    global listener, agent
+    global listener, agent, controller
     if not agent or not getattr(agent, 'semantic', None):
         return
 
@@ -933,11 +934,21 @@ async def background_model_warmup(app: web.Application, max_retries: int = 5, in
                 if getattr(listener, 'is_paused', False):
                     print("[WebServer] 模型已就绪，但语音监听处于暂停状态，保持暂停。")
                 elif not listener.is_listening:
-                    started = listener.start()
+                    if not app.get('no_audio') and not app.get('xiaozhi_bridge') and not getattr(listener, 'wake_reply_pcm', None):
+                        app['voice_startup_state'] = 'error'
+                        print('[WebServer] 唤醒应答未准备好，不播放成功音、不放行自动语音；网页灯控仍可用。')
+                        return
+                    app['voice_startup_state'] = 'starting_capture'
+                    # Keep startup under the existing lifecycle owner; do not
+                    # leave an untracked start thread behind on app shutdown.
+                    started = listener.start(ready_callback=controller.run_boot_ceremony)
+                    app['voice_startup_state'] = 'waiting_wake' if started else 'error'
                     if started:
                         print("[WebServer] 语音监听已随模型就绪自动启动。")
                     else:
                         print("[WebServer] 语音监听自动启动失败 (上组线程退出中或硬件忙)。")
+                else:
+                    app['voice_startup_state'] = 'waiting_wake'
             return
         except (asyncio.CancelledError, InterruptedError):
             print("[WebServer] 后台模型预热任务被取消/中断。")

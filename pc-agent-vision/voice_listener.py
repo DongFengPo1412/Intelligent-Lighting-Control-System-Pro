@@ -53,6 +53,7 @@ class VoiceListener:
         self.stop_pending = False
         self.stop_pending_threads: List[str] = []
         self.last_start_error = None
+        self.ready_callback = None
         self._pending_prefix = ""
         self._speech_active = False
 
@@ -277,6 +278,13 @@ class VoiceListener:
     def _on_board_pcm(self, pcm_bytes: bytes):
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
         if not self.is_listening:
+            # Startup can confirm a real incoming PCM frame without exposing
+            # ready-sound echo or pre-ready speech to wake/command processing.
+            event = getattr(self, '_startup_pcm_event', None)
+            if getattr(self, '_starting_capture', False) and event is not None and pcm_bytes and len(pcm_bytes) % 2 == 0:
+                self.has_board_audio = True
+                self._last_board_frame_time = time.time()
+                event.set()
             return
         audio = getattr(self.controller, '_network_audio', None)
         # Never make standby/ordinary listening depend on experimental AEC.
@@ -536,6 +544,7 @@ class VoiceListener:
                     self._pending_prefix = ""
                     self.is_awake = True
                     self.last_awake_time = time.time()
+                    self._acknowledge_wake(acoustic_keyword)
 
                     # 情况 1: 一句话指令 (例如: "克里斯，把灯调成烈焰模式" / "克里斯蒂娜，开灯")
                     if len(stripped_cmd) >= 2:
@@ -554,7 +563,6 @@ class VoiceListener:
                         return
 
                     # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖")
-                    self._acknowledge_wake(acoustic_keyword)
                     print(f"[等待指令]: 红莉栖已就绪，等待对话（空闲 {self.awake_timeout:g} 秒后待机）...")
                     return
 
@@ -570,10 +578,10 @@ class VoiceListener:
                         acoustic_keyword = detector.detect(pcm_bytes) if detector else ''
                         text = self._normalize_acoustic_name(text, acoustic_keyword)
                     is_wake, stripped_cmd = self._check_wake_word(text)
-                    if is_wake and not stripped_cmd.strip('，,。！？!? '):
+                    if is_wake:
                         match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
                         self._acknowledge_wake(match.group() if match else None)
-                        return
+                        if not stripped_cmd.strip('，,。！？!? '):return
                     cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
 
                     # 提取纯汉字与字母数字有效字符
@@ -1035,13 +1043,17 @@ class VoiceListener:
         """判断是否有任一底层线程（含硬件收尾）仍在运行（供资源清理与回收等待使用）"""
         return any(th and th.is_alive() for th in (self._process_thread, self._worker_thread, self._watchdog_thread, self._teardown_thread, getattr(self, '_barge_thread', None)))
 
-    def start(self) -> bool:
+    def start(self, ready_callback=None) -> bool:
         with self._lifecycle_lock:
             if self.is_listening:
                 return True
             if not self.check_stopped():
                 print(f"[VoiceListener] 拒绝重复启动：上一组线程或硬件收尾仍在退出中 ({self.stop_pending_threads})")
                 return False
+
+            if ready_callback is not None:
+                self.ready_callback = ready_callback
+            ready_callback = getattr(self, 'ready_callback', None)
 
             self.stop_pending = False
             self.stop_pending_threads = []
@@ -1072,6 +1084,10 @@ class VoiceListener:
 
             started_threads = []
             try:
+                if self.wake_detector is None or self.whisper_model is None:
+                    raise RuntimeError('唤醒检测或语音识别未就绪，不能进入等待唤醒状态')
+                self._startup_pcm_event = threading.Event()
+                self._starting_capture = True
                 self.controller.on_mic_data = self._on_board_pcm
                 if not self.controller.connect_audio():
                     raise RuntimeError("Audio transport connection failed")
@@ -1091,11 +1107,25 @@ class VoiceListener:
                 self._watchdog_thread.start()
                 started_threads.append(self._watchdog_thread)
 
+                # Like Mid's activation-complete path: announce readiness only
+                # after prerequisites succeed. Workers remain behind the gate
+                # throughout the sound, so it cannot wake the recognizer itself.
+                if ready_callback is not None:
+                    if not self._startup_pcm_event.wait(1.5):
+                        raise RuntimeError('未收到板载麦克风PCM，不播放就绪提示音')
+                    if ready_callback() is False:
+                        raise RuntimeError('语音就绪提示未完成，监听未放行')
+                while not self._pcm_queue.empty():
+                    try:self._pcm_queue.get_nowait()
+                    except queue.Empty:break
                 # 只有全部组件和线程均已成功启动，才最终置位 is_listening = True 并触发启动屏障放行工作线程
                 self.is_listening = True
+                self._starting_capture = False
                 self._ready_event.set()
+                print('[语音状态] standby: 初始化完成，等待唤醒词；唤醒后才接收问题')
                 return True
             except Exception as start_ex:
+                self._starting_capture = False
                 # 出现任何异常（连接失败、线程启动失败等），执行完整原子级回滚
                 print(f"[VoiceListener] 启动过程异常，执行完整失败回滚: {start_ex}")
                 self.last_start_error = str(start_ex)

@@ -25,7 +25,8 @@ class LightController(ProControlMixin):
         self._mic_enabled = False
         self.on_mic_data: Optional[Callable[[bytes], None]] = None
         self.on_status_data: Optional[Callable[[Dict[str, Any]], None]] = None
-        self._chime_pcm: bytes = self._create_chime_pcm()
+        self._chime_pcm: bytes = self._load_mid_sound('popup') or self._create_chime_pcm()
+        self._ready_pcm: bytes = self._load_mid_sound('success')
         # Normal operation is wireless even with USB power attached. USB audio
         # remains an explicit diagnostic choice; never silently fall back to it.
         self.audio_transport = os.environ.get('KURISU_AUDIO_TRANSPORT', 'wifi').strip().lower()
@@ -341,8 +342,26 @@ class LightController(ProControlMixin):
         except Exception:
             return b""
 
+    @staticmethod
+    def _load_mid_sound(name):
+        """Decoded Mid/XiaoZhi notifications, retaining source level and timing."""
+        import wave
+        from pathlib import Path
+        path = Path(__file__).parent / 'assets' / 'audio' / f'mid_{name}.wav'
+        try:
+            with wave.open(str(path), 'rb') as sound:
+                if (sound.getnchannels(), sound.getsampwidth(), sound.getframerate()) != (1, 2, 16000):
+                    raise ValueError('notification must be mono PCM16/16000Hz')
+                pcm = sound.readframes(sound.getnframes())
+                if not pcm or len(pcm) > 64000 or len(pcm) % 2:
+                    raise ValueError('notification must be nonempty and at most 2 seconds')
+                return pcm
+        except (OSError, ValueError, wave.Error) as exc:
+            print(f'[提示音资源不可用] {name}: {exc}')
+            return b''
+
     def play_beep(self) -> bool:
-        """触发硬件板载提示音 (优先通过 I2S 直推清脆灵动上扬和弦，兼发硬件蜂鸣)"""
+        """Play Mid's wake popup over paired PCM, retaining the diagnostic fallback."""
         if hasattr(self, '_chime_pcm') and self._chime_pcm:
             return self.play_audio_pcm(self._chime_pcm)
         return self.send_json({"cmd": "beep"})
@@ -369,27 +388,24 @@ class LightController(ProControlMixin):
         return ok
 
     def run_boot_ceremony(self, async_mode: bool = False):
-        """
-        执行系统上电与配对连接成功正向反馈仪式感 (严格遵循用户交互规范):
-        1. 上电进入配对模式：ESP32-S3 板载独立 LED (GPIO 48) 幽蓝呼吸灯呈现搜寻配对状态
-        2. 灯板 (16x16 矩阵) 保持 17 号牧濑红莉栖半身桌宠立绘 (亮度 150)
-        3. 配对握手校验成功：
-           - 板载 LED 瞬间切换为【常亮幽蓝】确认连接
-           - 板载扬声器发出清脆提示音 (play_beep) 确认物理连接确立
-        4. 仪式完毕，板载 LED 进入【微光暗红】(listening) 待命状态，绝不自动播报长语音，静默静候唤醒词！
+        """Confirm paired control/audio, play ready sound, then await wake.
+
+        The voice startup owner calls this only after models and capture workers
+        are prepared. It does not configure Wi-Fi or change the matrix/volume.
         """
         def _ceremony():
             if not self.wait_for_control(3.0):
                 print("[配对失败] 未收到 Wi-Fi 回执")
                 return False
-            if not self.set_board_led("pairing"):
+            if not self.connect_audio():
+                print('[语音启动失败] 板载音频未连接，不播放就绪提示音')
                 return False
-            time.sleep(0.4)
             if not self.set_board_led("connected"):
                 return False
-            if not self.play_beep():
-                print("[配对] 控制已连接，但提示音播放失败")
-            time.sleep(0.2)
+            ready_pcm = getattr(self, '_ready_pcm', b'')
+            if not (self.play_audio_pcm(ready_pcm) if ready_pcm else self.play_beep()):
+                print("[语音启动失败] 就绪提示音播放未获确认")
+                return False
             return self.set_board_led("listening")
 
         if async_mode:
