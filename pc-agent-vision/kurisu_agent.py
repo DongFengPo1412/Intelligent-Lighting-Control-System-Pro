@@ -42,6 +42,7 @@ class KurisuAgent:
         self.last_translation_error = None
         self.last_tts_error = None
         self.model_recovery_guidance = None
+        self.last_turn_timings = {}
 
         self.memory = memory if memory is not None else configured_memory()
         # Persistent user-controlled facts and recent conversational context.
@@ -89,11 +90,17 @@ class KurisuAgent:
             self.last_model_error = None
             self.last_translation_error = None
             self.last_tts_error = None
+            self.last_turn_timings = {}
+            turn_started = time.perf_counter()
+            self._turn_started = turn_started
             # Keep complete user turns so tool messages are never orphaned.
             users = [i for i, msg in enumerate(self.history) if msg.get("role") == "user"]
             if len(users) >= 12:
                 self.history = self.history[:1] + self.history[users[-11]:]
-            return self._chat_locked(user_message)
+            try:
+                return self._chat_locked(user_message)
+            finally:
+                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000,1)
 
     def _chat_locked(self, user_message: str) -> str:
         context = self.history[1:]
@@ -139,7 +146,9 @@ class KurisuAgent:
                 return self._finish_reply(music_result['reply'], speak=music_result['speak'],
                                           speech_text=music_result.get('spoken_reply'))
         try:
+            planning_started = time.perf_counter()
             plan = self.semantic.plan(user_message, context)
+            self.last_turn_timings['planning_ms'] = round((time.perf_counter()-planning_started)*1000,1)
             print(f'[语义控制计划]: {json.dumps(plan, ensure_ascii=False)}')
         except Exception as error:
             self.last_model_error = str(error)
@@ -174,8 +183,19 @@ class KurisuAgent:
         if speak and getattr(self,'_speak_turn',True):
             if hasattr(self.voice, 'last_tts_error'):
                 self.voice.last_tts_error = None
+            dispatch_started = time.perf_counter()
             self.voice.speak(speech_text or reply, block=True)
+            first_pcm = getattr(self.voice, 'last_speech_timings', {}).get('first_pcm_ms')
+            if first_pcm is not None:
+                self.last_turn_timings['first_audio_dispatch_ms'] = round(
+                    (dispatch_started-self._turn_started)*1000 + first_pcm, 1)
             self.last_tts_error = getattr(self.voice, 'last_tts_error', None)
+            self.last_translation_error = getattr(self.voice, 'last_translation_error', None)
+            if getattr(self.voice, 'chinese_first', False) and not speech_text:
+                spoken = getattr(self.voice, 'last_spoken_text', '')
+                if spoken:
+                    reply = spoken
+                    self.history[-1]['content'] = reply
         return reply
 
     def _search_lore(self, query: str, limit: int = 2):
@@ -250,6 +270,8 @@ class KurisuAgent:
                 address_profile = None
 
         system_sections = [self.history[0]['content']]
+        if getattr(self.voice, 'chinese_first', False) and getattr(self, '_speak_turn', True):
+            system_sections.append('【语音对话】普通问题先用不超过60个汉字的两三句短句说明核心信息，避免长定语和重复解释；用户要求详细说明时再展开。对疑似识别错误或不认识的名称，先确认，不编造。')
 
         provider = getattr(self, 'sensor_context', None)
         if provider:
@@ -325,14 +347,19 @@ class KurisuAgent:
         )
         try:
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            generation_started = time.perf_counter()
             with opener.open(request, timeout=40) as response:
                 result = json.loads(response.read().decode('utf-8'))
+            self.last_turn_timings['generation_ms'] = round((time.perf_counter()-generation_started)*1000,1)
             message = result.get('message') or result.get('choices', [{}])[0].get('message', {})
             raw_content = re.sub(r'<tool_call>.*?</tool_call>', '', message.get('content', ''), flags=re.S).strip()
             zh_cand, ja_cand = split_bilingual_text(raw_content)
             zh = clean_production_prose(zh_cand or raw_content, lang='zh')
             if not zh:
                 raise ValueError('Empty model response')
+
+            if getattr(self.voice, 'chinese_first', False) and getattr(self, '_speak_turn', True):
+                return self._finish_reply(zh)
 
             ja = ''
             if ja_cand:
@@ -342,8 +369,10 @@ class KurisuAgent:
                     ja = ja_clean
 
             if not ja:
+                translation_started = time.perf_counter()
                 raw_ja = self.voice._translate_zh_to_ja_kurisu(zh)
                 ja = clean_production_prose(raw_ja, lang='ja') if raw_ja else ''
+                self.last_turn_timings['translation_ms'] = round((time.perf_counter()-translation_started)*1000,1)
 
             if not ja:
                 self.last_translation_error = (

@@ -13,7 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parents[1] / "pc-agent-vision"))
 from memory_store import MemoryStore
 from mcp_server import McpSession
-from network_audio import packet, receive
+from network_audio import packet, receive, WiFiPcmClient
 from music_engine import MusicFeatures
 from visual_features import GazeCalibration
 from conversation_session import ConversationSession
@@ -30,6 +30,46 @@ def task_directory():
 
 
 class RuntimeContracts(unittest.TestCase):
+    def test_incremental_pcm_uses_one_counter_check_and_one_mic_pause(self):
+        import types
+        sent = []
+        mic = []
+        queries = []
+        def status(payload):
+            queries.append(payload)
+            count = sum(map(len, sent)) // 2
+            return dict(status='ok', audio_rx=count, audio_played=count, audio_dropped=0, audio_errors=0)
+        ctrl = types.SimpleNamespace(_mic_enabled=True, enable_mic=lambda state: mic.append(state) or True,
+                                     command_result=status)
+        client = WiFiPcmClient(ctrl)
+        client.connect = lambda: True
+        client._send = lambda kind, data: sent.append(data)
+        self.assertTrue(client.play_stream(iter([bytes(64), bytes(96)])))
+        self.assertEqual(b''.join(sent), bytes(160))
+        self.assertEqual(len(queries), 2)
+        self.assertEqual(mic, [False, True])
+
+    def test_incremental_pcm_never_accepts_missing_final_samples(self):
+        import types
+        sent = []
+        def status(payload):
+            count = sum(map(len, sent)) // 2
+            return dict(status='ok', audio_rx=count, audio_played=max(0,count-1), audio_dropped=0, audio_errors=0)
+        ctrl = types.SimpleNamespace(_mic_enabled=False, enable_mic=lambda state: True, command_result=status)
+        client = WiFiPcmClient(ctrl)
+        client.connect = lambda: True
+        client._send = lambda kind, data: sent.append(data)
+        self.assertFalse(client.play_stream(iter([bytes(64), bytes(96)])))
+        self.assertEqual(client.last_error['expected'], 80)
+
+    def test_silent_voice_volume_control_remains_available(self):
+        voice = SilentVoice()
+        voice.set_volume(0)
+        self.assertEqual(voice.volume, 0)
+        voice.set_volume(70)
+        self.assertEqual(voice.volume, 70)
+        self.assertTrue(voice.is_silent)
+
     def test_memory_survives_restart_and_can_be_forgotten(self):
         with task_directory() as d:
             p = Path(d) / "memory.sqlite3"

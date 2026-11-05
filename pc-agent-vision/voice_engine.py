@@ -60,6 +60,10 @@ class VoiceEngine:
         self.backend: Optional[str] = os.environ.get("KURISU_LLM_BACKEND")
         self.last_translation_error: Optional[str] = None
         self.last_tts_error: Optional[str] = None
+        # Owner-selected live policy: Chinese first; a failed Japanese stage
+        # must never suppress an otherwise valid Chinese response.
+        self.chinese_first = True
+        self.last_spoken_text = ''
 
         # 模型与提示音频路径
         self.model_dir = os.path.join(repo_root, "models", "kurisu_tts")
@@ -87,10 +91,10 @@ class VoiceEngine:
             return
 
         try:
+            import torch
             # Explicit process-wide compatibility profile for mismatched local
             # cuDNN DLLs. Model weights, voice and signal processing stay unchanged.
             if os.environ.get('KURISU_TTS_CUDNN', '1') == '0':
-                import torch
                 torch.backends.cudnn.enabled = False
                 print("[VoiceEngine] 已显式禁用本进程 cuDNN 后端，保留可用的 CUDA 运算。")
             print("[VoiceEngine] 正在载入牧濑红莉栖 (CV: 今井麻美) 专属中日双语大模型...")
@@ -108,6 +112,19 @@ class VoiceEngine:
             }
             cfg = TTS_Config(custom_config)
             self.tts = TTS(cfg)
+            encoder_device = os.environ.get('KURISU_TTS_BERT_DEVICE', 'inherit')
+            if encoder_device not in ('inherit', 'cpu', 'cuda'):
+                raise ValueError('KURISU_TTS_BERT_DEVICE must be inherit/cpu/cuda')
+            if encoder_device != 'inherit':
+                # TextPreprocessor returns features to the synthesis pipeline,
+                # which already transfers them to the configured acoustic device.
+                # Offloading this text encoder leaves the character/acoustic
+                # weights and signal processing unchanged while freeing VRAM.
+                self.tts.bert_model.to(encoder_device)
+                self.tts.text_preprocessor.device = torch.device(encoder_device)
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                print(f'[VoiceEngine] BERT文本编码器设备: {encoder_device}')
             actual_device = getattr(self.tts.configs, 'device', 'unknown')
             print(f"[VoiceEngine] 牧濑红莉栖专属神经声学模型已就绪 (耗时: {time.time()-t0:.2f}s, device={actual_device})")
         except Exception as e:
@@ -147,8 +164,9 @@ class VoiceEngine:
             self.last_translation_error = "待翻译中文为空"
             return ""
 
-        from bilingual_guard import translate_zh_to_ja
-        ja, err = translate_zh_to_ja(
+        from bilingual_guard import translate_zh_to_ja, translate_zh_to_ja_segmented
+        translate = translate_zh_to_ja_segmented if getattr(self, 'chinese_first', False) else translate_zh_to_ja
+        ja, err = translate(
             zh_text,
             api_base=getattr(self, "api_base", None),
             model=getattr(self, "model", "kurisu") or "kurisu",
@@ -201,6 +219,17 @@ class VoiceEngine:
         except Exception as e:
             print(f"[VoiceEngine 异常] GPT-SoVITS 合成异常 ({text[:15]}...): {e}")
             return None
+
+    def warmup(self):
+        """Exercise real text/phoneme/acoustic paths without cache hits or playback."""
+        if not self.tts:
+            return False
+        with self._lock:
+            for text, lang in [('你好。', 'zh'), ('こんにちは。', 'ja')]:
+                audio = self._synthesize_raw(text, lang)
+                if audio is None or not len(audio):
+                    return False
+        return True
 
     def _postprocess_audio_32k(self, audio_32k: np.ndarray) -> np.ndarray:
         """
@@ -405,6 +434,118 @@ class VoiceEngine:
         bundle = self.synthesize_speech_bundle(text)
         return bundle[0] if bundle else None
 
+    def _single_language_bundle(self, text, lang):
+        """Same voice/postprocessing as strict bundles, with per-language cache."""
+        from pro_paths import cache_dir
+        profile = os.environ.get('KURISU_TTS_BERT_DEVICE', 'inherit')
+        key = hashlib.sha256(f'single-v1:{profile}:{self.current_volume}:{lang}:{text}'.encode()).hexdigest()
+        folder = cache_dir() / 'voice-single'
+        path = folder / (key + '.wav')
+        with self._lock:
+            if path.exists():
+                wav = path.read_bytes()
+                with wave.open(io.BytesIO(wav), 'rb') as w:
+                    audio = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2')
+            else:
+                if not self.tts:
+                    raise RuntimeError('角色TTS模型未加载')
+                raw = self._synthesize_language_chunks(text, lang)
+                if raw is None or not len(raw):
+                    raise RuntimeError(f'{lang}语音合成失败')
+                audio = self._postprocess_audio_32k(raw)
+                stream = io.BytesIO()
+                with wave.open(stream, 'wb') as w:
+                    w.setnchannels(1); w.setsampwidth(2); w.setframerate(32000)
+                    w.writeframes(audio.astype('<i2').tobytes())
+                wav = stream.getvalue()
+                folder.mkdir(parents=True, exist_ok=True)
+                if len(list(folder.glob('*.wav'))) < 128:
+                    temporary = path.with_suffix(f'.{os.getpid()}.tmp')
+                    temporary.write_bytes(wav); temporary.replace(path)
+            pcm = scipy.signal.resample_poly(audio.astype(np.float32), 1, 2)
+            return np.clip(pcm, -32768, 32767).astype('<i2').tobytes(), wav
+
+    def _speak_chinese_first(self, text):
+        from light_controller import get_light_controller
+        from bilingual_guard import validate_bilingual_alignment, chunk_sentences_safe
+        self.last_tts_error = None
+        self.last_translation_error = None
+        self.last_spoken_text = ''
+        self.last_speech_timings = {}
+        speech_started = time.perf_counter()
+        zh, ja = self._split_zh_ja(text)
+        if not zh:
+            self.last_tts_error = '中文基准为空，未播放'
+            return
+        ctrl = get_light_controller()
+        try:
+            for lang in ('zh', 'ja'):
+                if lang == 'ja':
+                    started = time.perf_counter()
+                    if ja and not validate_bilingual_alignment(zh, ja)[0]:
+                        ja = ''
+                    if not ja:
+                        ja = self._translate_zh_to_ja_kurisu(zh)
+                    self.last_speech_timings['translation_ms'] = round((time.perf_counter()-started)*1000,1)
+                    if not ja:
+                        # Keep the Chinese response and the visible translation
+                        # error; never substitute an unrelated Japanese phrase.
+                        return
+                segments = chunk_sentences_safe(zh, max_chars=32) if lang == 'zh' else [ja]
+                if lang == 'zh' and hasattr(ctrl, 'play_audio_stream'):
+                    from concurrent.futures import ThreadPoolExecutor
+                    def synth_segment(segment):
+                        started = time.perf_counter()
+                        pcm, _ = self._single_language_bundle(segment, 'zh')
+                        key = 'zh_synthesis_ms'
+                        self.last_speech_timings[key] = round(self.last_speech_timings.get(key,0)+(time.perf_counter()-started)*1000,1)
+                        return pcm
+                    def audio_segments():
+                        # Exactly one pending synthesis, overlapped with current
+                        # playback; no unbounded PCM queue or extra audio owner.
+                        with ThreadPoolExecutor(max_workers=1, thread_name_prefix='kurisu_tts') as pool:
+                            pending = pool.submit(synth_segment, segments[0])
+                            for index in range(len(segments)):
+                                pcm = pending.result()
+                                if index+1 < len(segments):
+                                    pending = pool.submit(synth_segment, segments[index+1])
+                                if 'first_pcm_ms' not in self.last_speech_timings:
+                                    self.last_speech_timings['first_pcm_ms'] = round((time.perf_counter()-speech_started)*1000,1)
+                                yield pcm
+                    ctrl.set_board_led('speaking')
+                    started = time.perf_counter()
+                    generator = audio_segments()
+                    try:
+                        if not ctrl.play_audio_stream(generator):
+                            raise RuntimeError('中文连续播放未获确认')
+                    finally:
+                        generator.close()
+                    self.last_speech_timings['zh_stream_ms'] = round((time.perf_counter()-started)*1000,1)
+                    self.last_spoken_text = zh
+                    continue
+                played = []
+                for segment in segments:
+                    started = time.perf_counter()
+                    pcm, _ = self._single_language_bundle(segment, lang)
+                    key = f'{lang}_synthesis_ms'
+                    self.last_speech_timings[key] = round(self.last_speech_timings.get(key,0)+(time.perf_counter()-started)*1000,1)
+                    if not (ctrl.audio_connected or ctrl.connect_audio()):
+                        raise RuntimeError('板载WiFi音频未连接')
+                    ctrl.set_board_led('speaking')
+                    started = time.perf_counter()
+                    if lang == 'zh' and 'first_pcm_ms' not in self.last_speech_timings:
+                        self.last_speech_timings['first_pcm_ms'] = round((started-speech_started)*1000,1)
+                    if not ctrl.play_audio_pcm(pcm):
+                        raise RuntimeError(f'{lang}板载播放未获确认')
+                    key = f'{lang}_playback_ms'
+                    self.last_speech_timings[key] = round(self.last_speech_timings.get(key,0)+(time.perf_counter()-started)*1000,1)
+                    played.append(segment)
+                    self.last_spoken_text = ''.join(played) if lang == 'zh' else zh + '\n' + ja
+                if lang == 'zh':
+                    time.sleep(.18)
+        except Exception as exc:
+            self.last_tts_error = str(exc) + ('；中文已播放' if self.last_spoken_text else '')
+
     def speak(self, text: str, block: bool = True, to_board: bool = True):
         """
         合成并播放对白:
@@ -419,7 +560,13 @@ class VoiceEngine:
             threading.Thread(target=self.speak, args=(text, True, to_board), daemon=True).start()
             return
 
+        if to_board and getattr(self, 'chinese_first', False):
+            return self._speak_chinese_first(text)
+
+        self.last_speech_timings = {}
+        synth_started = time.perf_counter()
         bundle = self.synthesize_speech_bundle(text)
+        self.last_speech_timings['synthesis_ms'] = round((time.perf_counter()-synth_started)*1000,1)
         if not bundle:
             return
 
@@ -433,9 +580,11 @@ class VoiceEngine:
 
         if to_board and board_ready:
             # One physical output avoids delayed PC/board copies sounding like echo.
+            playback_started = time.perf_counter()
             if not ctrl.play_audio_pcm(pcm_16k):
                 self.last_tts_error = "板载语音流发送或播放失败"
                 print('[VoiceEngine] 板载语音播放失败')
+            self.last_speech_timings['playback_ms'] = round((time.perf_counter()-playback_started)*1000,1)
             return
         try:
             import winsound

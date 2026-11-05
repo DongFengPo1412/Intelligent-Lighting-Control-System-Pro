@@ -196,6 +196,16 @@ class LightController(ProControlMixin):
         from wifi_gateway import get_wifi_gateway
         return get_wifi_gateway().request(json.dumps(payload, separators=(',', ':')))
 
+    def play_audio_stream(self, chunks, chunk_samples=512):
+        """Keep one WiFi playback session across incremental speech segments."""
+        if self.audio_transport != 'wifi':
+            return self.play_audio_pcm(b''.join(chunks), chunk_samples)
+        if not self.connect_audio():
+            return False
+        ok = self._network_audio.play_stream(chunks, chunk_samples)
+        self.last_audio_error = self._network_audio.last_error if not ok else None
+        return ok
+
     def play_audio_pcm(self, pcm_data: bytes, chunk_samples: int = 512) -> bool:
         """
         向板载 MAX98357A 扬声器下行直推 16kHz 16-bit 单声道 PCM 音频流

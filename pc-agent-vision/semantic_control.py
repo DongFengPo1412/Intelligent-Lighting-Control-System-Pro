@@ -139,6 +139,14 @@ def validate_plan(plan):
     return {'kind': 'control', 'actions': normalized}
 
 
+def plain_knowledge_question(text):
+    """Conservative chat-only route; compound/device requests still use the planner."""
+    compact = re.sub(r'[，,。.!！\s]', '', text)
+    knowledge = re.match(r'^(?:请|能否|可以)?(?:给我|帮我)?(?:介绍|解释|讲解|说明|什么是|为什么)', compact)
+    device_terms = r'灯|亮度|音量|模式|倒计时|定时|播放|暂停|恢复|继续|停止|启动|开始|切换|设置|调节|开关|桌宠|世界线|摄像头|麦克风|游戏'
+    return bool(knowledge and not re.search(device_terms, compact))
+
+
 def exact_plan(text):
     """Fast path for an entire literal command; everything else uses semantic planning."""
     compact = re.sub(r'[，,。.!！\s]', '', text)
@@ -249,6 +257,8 @@ class SemanticControl:
         direct = exact_plan(text)
         if direct:
             return direct
+        if plain_knowledge_question(text):
+            return {'kind': 'chat', 'actions': []}
         parameters = explicit_parameters(text)
         catalog = '\n'.join(f'{mode}: {entry[0]} — {entry[2]}' for mode, entry in EFFECTS.items())
         prompt = """你是灯板控制语义解析器。只输出规定JSON，不扮演角色。

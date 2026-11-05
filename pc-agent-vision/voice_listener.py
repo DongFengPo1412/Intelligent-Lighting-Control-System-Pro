@@ -83,7 +83,11 @@ class VoiceListener:
         self._music_suspended = False
         self.music_wake_ready = False
         self.last_awake_time = 0.0
-        self.awake_timeout = 10.0 # 唤醒后等待具体指令的时间窗口 (10秒)
+        # Match an ongoing conversation rather than demanding a wake word
+        # between ordinary questions. Still expire safely after real inactivity.
+        self.awake_timeout = float(os.environ.get('KURISU_CONVERSATION_IDLE_SECONDS', '60'))
+        if not 10 <= self.awake_timeout <= 300:
+            raise ValueError('KURISU_CONVERSATION_IDLE_SECONDS must be 10..300')
 
         # 硬件控制器引用
         self.controller = get_light_controller()
@@ -281,6 +285,21 @@ class VoiceListener:
             finally:
                 self._is_processing = False
 
+    def _asr_prompt(self):
+        # A catalogue of singers biases ordinary conversation toward music and
+        # can itself be emitted as recognised speech. Scope it to music sessions.
+        prompt = "以下是中文对话。助手，克里斯，红莉栖，牧濑红莉栖。"
+        controller = getattr(self, 'controller', None)
+        player = getattr(controller, '_music_player', None)
+        music_active = bool(getattr(player, 'running', False) or
+                            getattr(self, '_music_monitor', False))
+        library = getattr(controller, '_music_library', None)
+        if music_active and library:
+            hints = library.speech_hints()
+            if hints:
+                prompt += "音乐相关专名：" + hints[:200] + "。"
+        return prompt
+
     def _process_utterance(self, pcm_bytes: bytes):
         """同步且单线程处理一段完整用户语音，严格遵循唤醒词与指令状态机"""
         with self._work_lock:
@@ -306,16 +325,16 @@ class VoiceListener:
 
                         t_asr_start = time.perf_counter()
                         # 注入唤醒词与基础意图先验，杜绝 Whisper 对短音节猜想出 '呵呵'
-                        prompt = "助手，克里斯，红莉栖，牧濑红莉栖，你好小智，开灯，关灯，调亮，调暗。我想看蓝灯，我想看红灯，我想看绿灯，换成蓝色，切换成红色。播放歌曲，下一首，上一首，停止音乐，单曲循环。"
-                        library = getattr(getattr(self, 'controller', None), '_music_library', None)
-                        if self.is_awake and library:
-                            prompt += '歌手名字：' + library.speech_hints() + '。'
+                        prompt = self._asr_prompt()
                         segments, info = self.whisper_model.transcribe(
                             audio_np,
                             language="zh",
                             beam_size=5,
                             temperature=0.0,
-                            initial_prompt=prompt if self.is_awake else None,
+                            # This runs only after an independent acoustic wake
+                            # hit (or in an already awake session). Proper-name
+                            # hints help Whisper spell the character's name.
+                            initial_prompt=prompt,
                             without_timestamps=True,
                             condition_on_previous_text=False,
                             vad_filter=False, # 关键：由外部 WebRTC VAD 精准切分，严禁内部二次截断破坏音节！
@@ -338,22 +357,23 @@ class VoiceListener:
 
                         text = "".join(parts).strip()
                         dt_asr = (time.perf_counter() - t_asr_start) * 1000.0
-                        if self.is_awake and scores:
+                        if scores:
                             # Keep only the most recent command for local ASR diagnosis.
                             try:
                                 from pro_paths import cache_dir
                                 diagnostic_dir = str(cache_dir() / 'voice-diagnostics')
                                 os.makedirs(diagnostic_dir, exist_ok=True)
-                                with wave.open(os.path.join(diagnostic_dir, 'last_command.wav'), 'wb') as recording:
+                                stem = 'last_command' if self.is_awake else 'last_wake'
+                                with wave.open(os.path.join(diagnostic_dir, stem + '.wav'), 'wb') as recording:
                                     recording.setnchannels(1)
                                     recording.setsampwidth(2)
                                     recording.setframerate(16000)
                                     recording.writeframes(pcm_bytes)
-                                stats = {'text': text, 'avg_logprob': sum(scores) / len(scores),
+                                stats = {'text': text, 'acoustic_keyword': acoustic_keyword, 'avg_logprob': sum(scores) / len(scores),
                                          'duration': len(audio_np) / 16000,
                                          'rms': float(np.sqrt(np.mean(audio_np ** 2))),
                                          'clipped_fraction': float(np.mean(np.abs(audio_np) >= .999))}
-                                with open(os.path.join(diagnostic_dir, 'last_command.json'), 'w', encoding='utf-8') as diagnostic:
+                                with open(os.path.join(diagnostic_dir, stem + '.json'), 'w', encoding='utf-8') as diagnostic:
                                     json.dump(stats, diagnostic, ensure_ascii=False)
                                 print(f'[指令音频诊断]: {stats}')
                             except OSError as diagnostic_error:
@@ -379,6 +399,7 @@ class VoiceListener:
                 # 状态 A: 当前处于休眠待命状态 (未唤醒，严格等待唤醒词)
                 # =========================================================
                 if not self.is_awake:
+                    text = text.translate(str.maketrans({'紅':'红', '瀨':'濑', '棲':'栖'}))
                     # ASR cannot distinguish identical pronunciations on an isolated
                     # word. Correct spelling only after the independent acoustic gate.
                     spellings = {'助手': ('住手',), '红莉栖': ('红丽栖', '红利栖'),
@@ -423,7 +444,7 @@ class VoiceListener:
                         self._update_board_led("speaking") # 绿色 (语音播报中)
                         cur_dir = os.path.dirname(os.path.abspath(__file__))
                         wake_pcm = os.path.join(cur_dir, 'kurisu_wake_reply.pcm')
-                        if os.path.exists(wake_pcm):
+                        if os.environ.get('KURISU_WAKE_VOICE_REPLY', '0') == '1' and os.path.exists(wake_pcm):
                             with open(wake_pcm, 'rb') as source:
                                 self.controller.play_audio_pcm(source.read())
                     except Exception as ex:
@@ -432,7 +453,7 @@ class VoiceListener:
                         self.resume()
                         self.last_awake_time = time.time()
                         self._update_board_led("active") # 青蓝微呼吸，提示已唤醒，正在等待指令
-                        print("[等待指令]: 红莉栖已就绪，请在 10 秒内说出指令...")
+                        print(f"[等待指令]: 红莉栖已就绪，等待对话（空闲 {self.awake_timeout:g} 秒后待机）...")
                     return
 
                 # =========================================================
@@ -441,6 +462,9 @@ class VoiceListener:
                 else:
                     self.last_awake_time = time.time()
                     is_wake, stripped_cmd = self._check_wake_word(text)
+                    if is_wake and not stripped_cmd.strip('，,。！？!? '):
+                        self._update_board_led('active')
+                        return
                     cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
 
                     # 提取纯汉字与字母数字有效字符
@@ -600,7 +624,7 @@ class VoiceListener:
             return False
         if time.time() - self.last_awake_time <= self.awake_timeout:
             return False
-        print("\n[待命超时]: 空闲等待超过 10 秒，退回暗红待命状态。")
+        print(f"\n[待命超时]: 空闲等待超过 {self.awake_timeout:g} 秒，退回暗红待命状态。")
         self.is_awake = False
         self._pending_prefix = ""
         self._update_board_led("listening")

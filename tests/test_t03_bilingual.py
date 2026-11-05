@@ -146,6 +146,18 @@ class T02AddressPriorityTests(unittest.TestCase):
 
 
 class T03BilingualThirtyCasesTests(unittest.TestCase):
+    def test_category_article_is_not_a_playback_count(self):
+        self.assertTrue(validate_bilingual_alignment(
+            "这不是一首歌曲，而是一种统计学概念。",
+            "これは曲ではなく、統計学の概念よ。",
+        )[0])
+        self.assertFalse(validate_bilingual_alignment(
+            "播放两首歌曲。", "曲を一曲再生して。",
+        )[0])
+        self.assertFalse(validate_bilingual_alignment(
+            "播放一首歌曲。", "曲を再生して。",
+        )[0])
+
     """30-case offline contract suite: 10 general chat + 10 numbers/commands/negation + 10 long/names/failures."""
 
     # =========================================================================
@@ -584,6 +596,8 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
         from voice_engine import VoiceEngine
 
         eng = VoiceEngine.__new__(VoiceEngine)
+        # Legacy strict-bundle tests explicitly retain their all-or-nothing policy.
+        eng.chinese_first = False
         eng._lock = threading.RLock()
         eng.current_volume = 75
         eng.api_base = "http://127.0.0.1:11434/v1"
@@ -605,6 +619,99 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
         )
         eng.tts = types.SimpleNamespace(run=tts_fn) if tts_fn is not None else None
         return eng
+
+    def test_chinese_is_played_before_translation_and_survives_its_failure(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            order = []
+            eng._single_language_bundle = lambda text, lang: (order.append('synth-'+lang) or b'zh', b'')
+            eng.fake_ctrl.play_audio_pcm = lambda pcm: order.append('play') or True
+            def fail_translation(text):
+                order.append('translate')
+                eng.last_translation_error = 'translation unavailable'
+                return ''
+            eng._translate_zh_to_ja_kurisu = fail_translation
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。')
+            self.assertEqual(order, ['synth-zh', 'play', 'translate'])
+            self.assertEqual(eng.last_spoken_text, '你好。')
+            self.assertEqual(eng.last_translation_error, 'translation unavailable')
+
+    def test_japanese_synthesis_failure_does_not_erase_played_chinese(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            def synth(text, lang):
+                if lang == 'ja':
+                    raise RuntimeError('Japanese TTS failed')
+                return b'zh', b''
+            eng._single_language_bundle = synth
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。\nこんにちは。')
+            self.assertEqual(eng.played_pcm, [b'zh'])
+            self.assertEqual(eng.last_spoken_text, '你好。')
+            self.assertIn('中文已播放', eng.last_tts_error)
+
+    def test_chinese_then_valid_japanese_are_both_played(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            eng._single_language_bundle = lambda text, lang: (lang.encode(), b'')
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。\nこんにちは。')
+            self.assertEqual(eng.played_pcm, [b'zh', b'ja'])
+            self.assertEqual(eng.last_spoken_text, '你好。\nこんにちは。')
+
+    def test_real_warmup_bypasses_the_audio_cache(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), lambda req: iter(()))
+            calls = []
+            eng._synthesize_raw = lambda text, lang: calls.append(lang) or np.zeros(160, dtype=np.float32)
+            self.assertTrue(eng.warmup())
+            self.assertEqual(calls, ['zh', 'ja'])
+            self.assertEqual(eng.played_pcm, [])
+
+    def test_long_chinese_starts_playing_before_later_chunks_are_synthesized(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            order = []
+            eng._single_language_bundle = lambda text, lang: (order.append('synth-'+lang) or b'pcm', b'')
+            eng.fake_ctrl.play_audio_pcm = lambda pcm: order.append('play') or True
+            eng._translate_zh_to_ja_kurisu = lambda text: ''
+            text = '第一句话说明实验记录中只保留了成功的案例。第二句话说明我们还需要检查没有被保留下来的失败案例。'
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak(text)
+            self.assertEqual(order[:3], ['synth-zh', 'play', 'synth-zh'])
+            self.assertEqual(eng.last_spoken_text, text)
+
+    def test_incremental_speech_keeps_one_audio_stream_for_all_chinese_chunks(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            eng._single_language_bundle = lambda text, lang: (b'pc', b'')
+            eng._translate_zh_to_ja_kurisu = lambda text: ''
+            streams = []
+            def stream(chunks):
+                streams.append(list(chunks))
+                return True
+            eng.fake_ctrl.play_audio_stream = stream
+            text = '第一句话说明实验记录中只保留了成功的案例。第二句话说明我们还需要检查没有被保留下来的失败案例。'
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak(text)
+            self.assertEqual(len(streams), 1)
+            self.assertGreater(len(streams[0]), 1)
+            self.assertEqual(eng.last_spoken_text, text)
+
+    def test_segmented_translation_never_returns_partial_japanese_after_failure(self):
+        from bilingual_guard import translate_zh_to_ja_segmented
+        text = '第一句话说明实验记录中只保留了成功的案例。第二句话说明我们还需要检查没有被保留下来的失败案例。'
+        with patch('bilingual_guard.translate_zh_to_ja', side_effect=[('実験の記録よ。', None), ('', 'translation failed')]) as translator:
+            result, error = translate_zh_to_ja_segmented(text)
+        self.assertEqual(result, '')
+        self.assertEqual(error, 'translation failed')
+        self.assertEqual(translator.call_count, 2)
 
     def test_f08_tts_unavailable_fails_silently_without_sapi_and_sets_error(self):
         with _temp_dir() as tmp:

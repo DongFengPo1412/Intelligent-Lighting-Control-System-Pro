@@ -115,6 +115,17 @@ class WiFiPcmClient:
     def play(self, pcm, chunk_samples=512):
         if not pcm or len(pcm) % 2 or not 1 <= chunk_samples <= 1024:
             raise ValueError("Invalid PCM input")
+        return self.play_stream(iter([pcm]), chunk_samples)
+
+    def play_stream(self, chunks, chunk_samples=512):
+        """One paced utterance and one final counter check across TTS chunks."""
+        if not 1 <= chunk_samples <= 1024:
+            raise ValueError("Invalid PCM chunk size")
+        from itertools import chain
+        chunks = iter(chunks)
+        first = next(chunks, None)
+        if first is None:
+            return False
         with self.play_lock:
             if not self.connect():
                 return False
@@ -128,18 +139,26 @@ class WiFiPcmClient:
                 before = self.controller.command_result({"cmd": "status"})
                 start = time.monotonic()
                 self.controller.playback_started_at = start
-                for offset in range(0, len(pcm), chunk_samples * 2):
-                    if self.cancelled.is_set():
-                        return False
-                    wait = start + offset / 32000 - 0.12 - time.monotonic()
-                    if wait > 0 and self.cancelled.wait(wait):
-                        return False
-                    chunk = pcm[offset : offset + chunk_samples * 2]
-                    echo = getattr(self.controller, "echo_canceller", None)
-                    if echo is not None:
-                        echo.feed_reference(chunk)
-                    self._send(1, chunk)
-                if self.cancelled.wait(max(0, start + len(pcm) / 32000 + 0.35 - time.monotonic())):
+                total = 0
+                for pcm in chain([first], chunks):
+                    if not pcm or len(pcm) % 2:
+                        raise ValueError('Invalid generated PCM segment')
+                    # If synthesis really falls behind, pace from its arrival
+                    # rather than bursting stale scheduled data into the board.
+                    start += max(0, time.monotonic() - (start + total/32000 + .12))
+                    for offset in range(0, len(pcm), chunk_samples * 2):
+                        if self.cancelled.is_set():
+                            return False
+                        wait = start + (total+offset)/32000 - 0.12 - time.monotonic()
+                        if wait > 0 and self.cancelled.wait(wait):
+                            return False
+                        chunk = pcm[offset : offset + chunk_samples * 2]
+                        echo = getattr(self.controller, "echo_canceller", None)
+                        if echo is not None:
+                            echo.feed_reference(chunk)
+                        self._send(1, chunk)
+                    total += len(pcm)
+                if self.cancelled.wait(max(0, start + total / 32000 + 0.35 - time.monotonic())):
                     return False
                 after = self.controller.command_result({"cmd": "status"})
                 delta = {
@@ -149,11 +168,11 @@ class WiFiPcmClient:
                 valid = (
                     before.get("status") == "ok"
                     and after.get("status") == "ok"
-                    and delta["audio_rx"] == len(pcm) // 2 == delta["audio_played"]
+                    and delta["audio_rx"] == total // 2 == delta["audio_played"]
                     and not (delta["audio_dropped"] or delta["audio_errors"])
                 )
                 if not valid:
-                    self.last_error = dict(expected=len(pcm) // 2, **delta)
+                    self.last_error = dict(expected=total // 2, **delta)
                 return valid
             except (OSError, ValueError) as exc:
                 self.last_error = str(exc)

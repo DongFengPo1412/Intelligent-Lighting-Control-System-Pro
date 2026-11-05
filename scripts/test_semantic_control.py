@@ -7,7 +7,7 @@ import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pc-agent-vision'))
-from semantic_control import EFFECTS, SemanticControl, exact_plan, validate_plan, from_wire, to_wire, explicit_parameters
+from semantic_control import EFFECTS, SemanticControl, exact_plan, validate_plan, from_wire, to_wire, explicit_parameters, plain_knowledge_question
 
 
 CASES = [
@@ -31,6 +31,12 @@ CASES = [
 
 
 class PlanningTests(unittest.TestCase):
+    def test_knowledge_questions_skip_planning_without_swallowing_controls(self):
+        for query in ('给我介绍一下胆小鬼博弈。', '请解释幸存者偏差。'):
+            self.assertEqual(SemanticControl().plan(query), {'kind':'chat','actions':[]})
+        for query in ('请解释量子力学，然后开灯。', '为什么灯不亮，切换成绿色。'):
+            self.assertFalse(plain_knowledge_question(query))
+
     def test_worldline_mode_and_tool_do_not_create_a_false_conflict(self):
         wire=to_wire(actions=[{'tool':'set_light_mode','value':28},{'tool':'trigger_steins_gate_worldline','value':0}])
         self.assertEqual(from_wire(wire),{'kind':'control','actions':[{'tool':'trigger_steins_gate_worldline','value':0}]})

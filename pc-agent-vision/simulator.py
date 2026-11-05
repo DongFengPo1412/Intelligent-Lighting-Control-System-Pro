@@ -258,6 +258,10 @@ class SilentVoice:
         self.last_translation_error = None
         self.last_tts_error = None
 
+    def set_volume(self, pct):
+        """Keep the shared voice-control interface available without synthesis."""
+        self.volume = max(0, min(100, int(pct)))
+
     def speak(self, text, block=True, to_board=True):
         bundle = self.synthesize_speech_bundle(text)
         if not bundle:

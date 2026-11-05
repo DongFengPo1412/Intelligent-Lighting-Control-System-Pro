@@ -39,6 +39,13 @@ def load_nodes(filename, names, **scope):
 
 
 class VoiceRegressionTests(unittest.TestCase):
+    def test_repeating_only_the_wake_word_does_not_become_a_chat_question(self):
+        listener = self.listener(iter(['助手。']))
+        listener._check_wake_word = lambda text: (True, '')
+        listener._process_utterance(bytes(960))
+        self.assertEqual(listener.commands, [])
+        self.assertTrue(listener.is_awake)
+
     def test_whisper_text_cannot_wake_without_acoustic_keyword(self):
         listener = self.listener(iter(['助手']))
         listener.is_awake = False

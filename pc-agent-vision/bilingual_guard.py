@@ -339,6 +339,13 @@ def _extract_expected_numbers(zh_text: str) -> Tuple[Set[str], Set[int]]:
         # Skip idiomatic Chinese indefinite/aspect uses ("一个时光机", "一点") that are not numeric counts
         if raw_num == "一" and unit in ("个", "点"):
             continue
+        # Copular category descriptions use an indefinite article, e.g.
+        # "不是一首歌曲" -> "曲ではない". Playback counts remain exact.
+        prefix = zh_text[:m.start()].rstrip()
+        if (raw_num == "一" and unit in ("种", "首") and
+                re.search(r"(?:不是|并非|而非|是)$", prefix) and
+                not re.search(r"(?:仅|只)是$", prefix)):
+            continue
         val = _parse_small_cn_int(raw_num)
         if val is not None:
             ints.add(val)
@@ -742,10 +749,14 @@ def translate_zh_to_ja(
         return "", "待翻译中文为空"
 
     endpoint, is_ollama = _resolve_chat_endpoint(api_base, backend=backend)
-    base_messages: List[Dict[str, str]] = [{"role": "system", "content": TRANSLATION_SYSTEM_PROMPT}]
-    for fs_zh, fs_ja in _TRANSLATION_FEW_SHOT:
-        base_messages.append({"role": "user", "content": f"次の中国語の台詞を日本語1行に忠実に翻訳してください（日本語のみ出力）：\n{fs_zh}"})
-        base_messages.append({"role": "assistant", "content": fs_ja})
+    # Ordinary questions should not inherit unrelated character catchphrases or
+    # mixed-language examples. Keep the translation task short and monolingual.
+    base_messages: List[Dict[str, str]] = [{"role": "system", "content": (
+        "Translate the user's Chinese text into natural spoken Japanese. Output only the Japanese translation on one line. "
+        "Preserve the full meaning, negation, numbers, units, names and point of view. Use 私 for first person. "
+        "Do not answer the user, add facts, repeat Chinese words, invent English words or romanize Japanese. "
+        "Keep English proper names only when present in the source. Do not add insults or character catchphrases."
+    )}]
 
     last_reason: Optional[str] = None
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -818,3 +829,26 @@ def translate_zh_to_ja(
         last_reason = reason
 
     return "", f"日语翻译未通过等义校验（{last_reason}），未使用固定台词替代"
+
+
+def translate_zh_to_ja_segmented(zh_text: str, **options) -> Tuple[str, Optional[str]]:
+    """Bounded clause translation for live speech; validate every part and whole."""
+    import time
+    clean = clean_production_prose(zh_text, lang='zh')
+    chunks = chunk_sentences_safe(clean, max_chars=45)
+    if len(chunks) <= 1:
+        return translate_zh_to_ja(clean, **options)
+    deadline = time.monotonic() + float(options.get('timeout', 15))
+    translated = []
+    for chunk in chunks:
+        remaining = deadline-time.monotonic()
+        if remaining <= .2:
+            return '', '日文分段翻译超时；中文回复保留'
+        kwargs = dict(options, timeout=min(3.0, remaining/2))
+        ja, error = translate_zh_to_ja(chunk, **kwargs)
+        if error:
+            return '', error
+        translated.append(ja)
+    result = ''.join(translated)
+    ok, reason = validate_bilingual_alignment(clean, result)
+    return (result, None) if ok else ('', f'日文分段整体校验失败：{reason}')

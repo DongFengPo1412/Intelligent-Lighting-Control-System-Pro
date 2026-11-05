@@ -316,6 +316,8 @@ async def run_chat(message: str):
                     "model_error": getattr(agent, 'last_model_error', None),
                     "translation_error": getattr(agent, 'last_translation_error', None),
                     "tts_error": getattr(agent, 'last_tts_error', None),
+                    "timings": dict(getattr(agent, 'last_turn_timings', {}),
+                                    **getattr(voice, 'last_speech_timings', {})),
                 }
             except asyncio.CancelledError:
                 if job:
@@ -746,6 +748,7 @@ async def process_voice_interaction(speech_text: str):
         result = await run_chat(speech_text)
         reply = result["reply"]
         print(f"[免触语音回复]: {reply}")
+        print(f"[语音分段耗时]: {json.dumps(result.get('timings', {}), ensure_ascii=False)}")
 
         await broadcast_ws({
             "type": "chat_reply",
@@ -820,6 +823,9 @@ async def on_startup(app: web.Application):
     if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
         try:
             t_synth0 = time.perf_counter()
+            if hasattr(voice, 'warmup'):
+                if not await loop.run_in_executor(None, voice.warmup):
+                    raise RuntimeError('角色语音真实预热失败')
             from semantic_control import describe_action
             for mode in (1, 2, 3, 7, 23):
                 lines = describe_action({'tool': 'set_light_mode', 'value': mode})

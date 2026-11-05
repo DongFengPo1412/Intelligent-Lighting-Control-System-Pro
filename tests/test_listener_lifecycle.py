@@ -40,6 +40,18 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_music_vocabulary_does_not_bias_ordinary_conversation(self):
+        listener = VoiceListener.__new__(VoiceListener)
+        library = types.SimpleNamespace(speech_hints=lambda: "Alan Walker," * 100)
+        player = types.SimpleNamespace(running=False)
+        listener.controller = types.SimpleNamespace(_music_library=library, _music_player=player)
+        listener._music_monitor = False
+        self.assertNotIn("Alan Walker", listener._asr_prompt())
+        player.running = True
+        prompt = listener._asr_prompt()
+        self.assertIn("Alan Walker", prompt)
+        self.assertLess(len(prompt), 260)
+
     def setUp(self):
         tmp_base = os.environ.get("KURISU_TEST_TMP") or tempfile.gettempdir()
         self.tmp_dir = tempfile.mkdtemp(dir=tmp_base, prefix="lifecycle_test_")
