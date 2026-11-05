@@ -658,6 +658,8 @@ async def handle_status(request: web.Request):
         "volume": wifi_info.get('last_command', {}).get('volume', 70),
         "last_audio_error": getattr(controller, 'last_audio_error', None),
         "wake_detector_ready": bool(listener and listener.wake_detector and listener_healthy),
+        "wake_attempts": getattr(listener, 'wake_attempts', 0),
+        "last_wake_probe": getattr(listener, 'last_wake_probe', None),
         "world_line": "1.048596%"
     })
 

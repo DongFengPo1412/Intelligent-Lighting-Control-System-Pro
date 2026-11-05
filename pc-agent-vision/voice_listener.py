@@ -116,6 +116,9 @@ class VoiceListener:
         self.wake_reply_pcm = None
         self.wake_reply_pcms = {}
         self.last_wake_error = None
+        self.wake_attempts = 0
+        self.last_wake_probe = None
+        self._wake_diagnostic_saved = 0
         self.asr_backend = os.environ.get('KURISU_ASR_BACKEND', 'whisper').strip().lower()
         if self.asr_backend == 'sensevoice':
             from local_asr import SenseVoiceASR
@@ -173,6 +176,53 @@ class VoiceListener:
             text = re.sub(r'^(你好[，, ]*)?' + re.escape(spelling),
                           lambda m:(m.group(1) or '')+keyword, text, count=1)
         return text
+
+    def _probe_wake(self, pcm, phase='standby'):
+        """Report the acoustic gate even on rejection; recording is opt-in/bounded.
+
+        Rejected speech is never sent to ASR or the agent as a wake fallback.
+        At most five local diagnostic utterances can be retained per process.
+        """
+        started = time.monotonic()
+        error = None
+        try:
+            keyword = self.wake_detector.detect(pcm)
+        except Exception as exc:
+            keyword = ''
+            error = f'{type(exc).__name__}: {exc}'
+            self.last_wake_error = f'声学检测失败: {error}'
+        samples = np.frombuffer(pcm, dtype='<i2').astype(np.float32)
+        self.wake_attempts = getattr(self, 'wake_attempts', 0) + 1
+        probe = dict(attempt=self.wake_attempts, phase=phase, keyword=keyword,
+                     duration_seconds=round(len(pcm)/32000, 3),
+                     rms=round(float(np.sqrt(np.mean(samples**2))), 1) if samples.size else 0,
+                     clipped_fraction=round(float(np.mean(np.abs(samples)>=32767)), 6) if samples.size else 0,
+                     detection_ms=round((time.monotonic()-started)*1000, 1))
+        if error:probe['error'] = error
+        self.last_wake_probe = probe
+        if phase == 'standby' or keyword:
+            print('[声学唤醒检测] ' + json.dumps(probe, ensure_ascii=False))
+        try:
+            limit = max(0, min(5, int(os.environ.get('KURISU_WAKE_DIAGNOSTIC_SAMPLES', '0'))))
+            arm_file = os.environ.get('KURISU_WAKE_DIAGNOSTIC_ARM_FILE')
+            if arm_file:
+                from pathlib import Path
+                if not Path(arm_file).is_file():limit = 0
+            saved = getattr(self, '_wake_diagnostic_saved', 0)
+            if phase == 'standby' and saved < limit and 0 < len(pcm) <= 160000:
+                from pro_paths import cache_dir
+                folder = cache_dir() / 'voice-diagnostics' / f'wake-probe-{os.getpid()}'
+                folder.mkdir(parents=True, exist_ok=True)
+                name = f'attempt-{saved+1:02d}'
+                with wave.open(str(folder / (name+'.wav')), 'wb') as recording:
+                    recording.setnchannels(1);recording.setsampwidth(2);recording.setframerate(16000)
+                    recording.writeframes(pcm)
+                (folder / (name+'.json')).write_text(json.dumps(probe,ensure_ascii=False),encoding='utf-8')
+                self._wake_diagnostic_saved = saved + 1
+                print(f'[本地唤醒诊断] 已保存{saved+1}/{limit}段: {folder/name}；不上传、不作为唤醒证据')
+        except (OSError, ValueError) as exc:
+            print(f'[唤醒诊断保存失败] {exc}')
+        return keyword
 
     def _check_wake_word(self, text: str) -> Tuple[bool, str]:
         # Exact configured names at the beginning; never substrings or homophones.
@@ -374,7 +424,7 @@ class VoiceListener:
                     if detector is None:
                         self._update_board_led('listening')
                         return
-                    acoustic_keyword = detector.detect(pcm_bytes)
+                    acoustic_keyword = self._probe_wake(pcm_bytes)
                     if not acoustic_keyword:
                         self._update_board_led('listening')
                         return
@@ -575,7 +625,7 @@ class VoiceListener:
 
     def _check_barge_locked(self, pcm):
         started = time.monotonic()
-        keyword = self.wake_detector.detect(pcm)
+        keyword = self._probe_wake(pcm, phase='interrupt')
         if keyword and self.whisper_model is not None:
             audio_np=np.frombuffer(pcm,dtype=np.int16).astype(np.float32)/32768
             try:

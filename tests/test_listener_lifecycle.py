@@ -40,6 +40,46 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_rejected_wake_probe_is_visible_without_asr_or_callback(self):
+        listener = self._create_isolated_listener()
+        listener.is_awake = False
+        listener.whisper_model.transcribe = lambda *a, **k: self.fail('Rejected wake must stay outside ASR')
+        listener.callback = lambda text: self.fail('Rejected wake must not execute')
+        listener._process_utterance(bytes(1600))
+        self.assertEqual(listener.wake_attempts, 1)
+        self.assertEqual(listener.last_wake_probe['keyword'], '')
+        self.assertEqual(listener.last_wake_probe['phase'], 'standby')
+        self.assertFalse(listener.is_awake)
+
+    def test_wake_diagnostic_recordings_are_opt_in_and_bounded(self):
+        listener = self._create_isolated_listener()
+        with patch.dict(os.environ, {'KURISU_CACHE_DIR':self.tmp_dir,'KURISU_WAKE_DIAGNOSTIC_SAMPLES':'2'}):
+            for _ in range(3):listener._probe_wake(bytes(1600))
+        folder = Path(self.tmp_dir) / 'voice-diagnostics' / f'wake-probe-{os.getpid()}'
+        self.assertEqual(len(list(folder.glob('*.wav'))), 2)
+        self.assertEqual(len(list(folder.glob('*.json'))), 2)
+        self.assertEqual(listener.wake_attempts, 3)
+        self.assertEqual(listener._wake_diagnostic_saved, 2)
+
+    def test_armed_diagnostics_do_not_use_the_sample_budget_during_preparation(self):
+        listener = self._create_isolated_listener()
+        arm_file = Path(self.tmp_dir) / 'sample-ready.flag'
+        with patch.dict(os.environ, {'KURISU_CACHE_DIR':self.tmp_dir,
+                'KURISU_WAKE_DIAGNOSTIC_SAMPLES':'1','KURISU_WAKE_DIAGNOSTIC_ARM_FILE':str(arm_file)}):
+            listener._probe_wake(bytes(1600))
+            self.assertEqual(getattr(listener, '_wake_diagnostic_saved', 0), 0)
+            arm_file.write_text('ready',encoding='utf-8')
+            listener._probe_wake(bytes(1600))
+            self.assertEqual(listener._wake_diagnostic_saved, 1)
+
+    def test_wake_detector_error_does_not_fall_back_to_transcription(self):
+        listener = self._create_isolated_listener()
+        def fail(pcm):raise RuntimeError('recognizer unavailable')
+        listener.wake_detector.detect = fail
+        self.assertEqual(listener._probe_wake(bytes(1600)), '')
+        self.assertIn('recognizer unavailable', listener.last_wake_probe['error'])
+        self.assertIn('声学检测失败', listener.last_wake_error)
+
     def test_cancelled_inference_never_executes_its_late_control_plan(self):
         cancelled = threading.Event()
         memory = MemoryStore(Path(self.tmp_dir) / 'cancelled.sqlite3')
