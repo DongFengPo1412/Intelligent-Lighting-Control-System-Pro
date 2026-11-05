@@ -178,6 +178,8 @@ async function main() {
     await evaluate('window.fetch=window.__healthyFetch');
     await until('document.getElementById("frameTag").textContent==="模拟预览"');
     fs.writeFileSync(path.join(work,'preview-fault.json'),JSON.stringify({controlsEnabled:!fault.disabled,connection:fault.connection,pixelsRetained:fault.pixels===previewBefore},null,2));
+    await call('Page.navigate',{url:base+'/mario_controller.html'});
+    await until('location.pathname.endsWith("/index.html")&&location.hash==="#interaction"&&document.getElementById("arcadeGameTitle").textContent.includes("[#001]")&&document.querySelector(".mario-help").textContent===window.ARCADE_GAME_GUIDES[1].help');
     fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,batchLayouts,descriptions,exceptions},null,2));
     if(exceptions.length)throw Error(JSON.stringify(exceptions));
     console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; Pong 36->4->0 and Lander 18->2->0 multi-touch; batch layouts/help; authoritative difficulty/volume settings. Physical hardware NOT_TESTED.`);

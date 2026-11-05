@@ -6,10 +6,12 @@ const legacyPages = {
   matrix: "lights",
   arcade: "interaction",
   system: "settings",
+  mario: "mario",
+  marioContainer: "mario",
 };
-const requested = location.hash.slice(1);
+const requested = location.pathname.endsWith("/mario_controller.html") ? "mario" : location.hash.slice(1);
 location.replace(
-  "./#" +
+  "./index.html#" +
     (legacyPages[requested] ||
       (["overview", "lights", "interaction", "settings"].includes(requested)
         ? requested
