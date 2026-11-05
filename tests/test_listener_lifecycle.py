@@ -66,7 +66,7 @@ class ListenerLifecycleTests(unittest.TestCase):
             self.assertTrue(finish.wait(2))
         listener.callback = callback
         listener.pause = lambda: setattr(listener, 'is_paused', True)
-        def acknowledge():
+        def acknowledge(keyword=None):
             order.append('acknowledge')
             listener.is_paused = False
             listener._utterance_queue.put_nowait(b'new question')
@@ -90,6 +90,31 @@ class ListenerLifecycleTests(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertEqual(listener._utterance_queue.get_nowait(), b'new question')
         self.assertFalse(listener.is_paused)
+
+    def test_continuous_listening_repairs_assistant_spelling_only_with_acoustic_gate(self):
+        for acoustic, expected_ack in [('助手', True), ('', False)]:
+            listener = self._create_isolated_listener()
+            listener.is_awake = True
+            listener.whisper_model.transcribe = lambda *a, **k: ([types.SimpleNamespace(text='住手。')], object())
+            listener.wake_detector.detect = lambda pcm: acoustic
+            heard = []
+            listener._acknowledge_wake = lambda keyword=None: heard.append(keyword)
+            listener.callback = lambda text: heard.append('command:'+text)
+            listener._process_utterance(bytes(1600))
+            self.assertEqual(heard, ['助手'] if expected_ack else ['command:住手。'])
+
+    def test_waiting_led_matches_mid_listening_and_retries_rejected_update(self):
+        listener = self._create_isolated_listener()
+        del listener.__dict__['_update_board_led']
+        listener._current_led_mode = 'speaking'
+        calls = []
+        listener.controller.set_board_led = lambda mode: calls.append(mode) or False
+        listener._update_board_led('active')
+        self.assertEqual(listener._current_led_mode, 'speaking')
+        listener.controller.set_board_led = lambda mode: calls.append(mode) or True
+        listener._update_board_led('active')
+        self.assertEqual(listener._current_led_mode, 'listening')
+        self.assertEqual(calls, ['listening', 'listening'])
 
     def test_text_only_wake_cannot_interrupt_without_acoustic_evidence(self):
         listener = self._create_isolated_listener()
@@ -120,17 +145,31 @@ class ListenerLifecycleTests(unittest.TestCase):
         self.assertEqual(order, ['pause', 'chime', 'greeting', 'resume'])
         self.assertIsNone(listener.last_wake_error)
 
+    def test_name_specific_greeting_and_chime_share_one_complete_stream(self):
+        listener = self._create_isolated_listener()
+        listener.wake_reply_pcm = bytes(4)
+        listener.wake_reply_pcms = {'助手':bytes(96000)}
+        captured = []
+        listener.controller = types.SimpleNamespace(
+            _chime_pcm=b'cc',
+            play_audio_stream=lambda chunks: captured.extend(list(chunks)) or True,
+            play_beep=lambda: self.fail('Do not open a second chime playback'),
+        )
+        listener._acknowledge_wake('助手')
+        self.assertEqual(captured, [b'cc', bytes(2560), bytes(96000)])
+        self.assertIsNone(listener.last_wake_error)
+
     def test_oversized_wake_greeting_is_rejected_without_truncation(self):
         listener = self._create_isolated_listener()
         calls = []
-        listener.wake_reply_pcm = bytes(80002)
+        listener.wake_reply_pcm = bytes(128002)
         listener.resume = lambda: calls.append('resume')
         listener.controller = types.SimpleNamespace(
             play_beep=lambda: True,
             play_audio_pcm=lambda pcm: self.fail('Oversized speech must not play'),
         )
         listener._acknowledge_wake()
-        self.assertIn('2.5', listener.last_wake_error)
+        self.assertIn('4秒', listener.last_wake_error)
         self.assertEqual(calls, ['resume'])
 
     def test_full_christina_name_is_not_split_into_a_spurious_command(self):

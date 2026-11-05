@@ -114,6 +114,7 @@ class VoiceListener:
         # 初始化本地 faster-whisper 极速离线 ASR 模型 (base 模型：高精度音节辨别，NVIDIA RTX CUDA 加速)
         self.whisper_model = None
         self.wake_reply_pcm = None
+        self.wake_reply_pcms = {}
         self.last_wake_error = None
         self.asr_backend = os.environ.get('KURISU_ASR_BACKEND', 'whisper').strip().lower()
         if self.asr_backend == 'sensevoice':
@@ -152,12 +153,26 @@ class VoiceListener:
 
     def _update_board_led(self, mode: str):
         """板载指示灯状态去重发送 (严格只在状态跳变时发送单条指令，杜绝频繁冲击)"""
-        if self._current_led_mode != mode:
-            self._current_led_mode = mode
+        # In listener code, active means waiting for the user's next sentence.
+        # Firmware's historical active alias means thinking, so use listening.
+        if mode == 'active':mode = 'listening'
+        actual = getattr(self.controller, '_last_board_led_mode', self._current_led_mode)
+        if self._current_led_mode != mode or actual != mode:
             try:
-                self.controller.set_board_led(mode)
+                if self.controller.set_board_led(mode) is not False:
+                    self._current_led_mode = mode
             except Exception:
                 pass
+
+    @staticmethod
+    def _normalize_acoustic_name(text, keyword):
+        text = text.translate(str.maketrans({'紅':'红', '瀨':'濑', '棲':'栖'}))
+        spellings = {'助手': ('住手',), '红莉栖': ('红丽栖', '红利栖'),
+                     '克里斯': ('克莉丝', '克里丝')}
+        for spelling in spellings.get(keyword, ()):
+            text = re.sub(r'^(你好[，, ]*)?' + re.escape(spelling),
+                          lambda m:(m.group(1) or '')+keyword, text, count=1)
+        return text
 
     def _check_wake_word(self, text: str) -> Tuple[bool, str]:
         # Exact configured names at the beginning; never substrings or homophones.
@@ -170,22 +185,30 @@ class VoiceListener:
             return False, ''
         return True, remaining
 
-    def _acknowledge_wake(self):
+    def _acknowledge_wake(self, keyword=None):
         """Short chime and a prepared character greeting, then resume capture."""
         self._wake_ack_active = True
         self.pause()
         self.last_wake_error = None
         try:
-            if self.controller.play_beep() is False:
-                raise RuntimeError('唤醒提示音未获播放确认')
-            pcm = getattr(self, 'wake_reply_pcm', None)
-            if pcm:
-                if len(pcm) % 2 or len(pcm) > 80000:
-                    raise ValueError('唤醒短应答必须为16kHz PCM16，且不超过2.5秒')
-                self._update_board_led('speaking')
+            pcm = getattr(self, 'wake_reply_pcms', {}).get(keyword) or getattr(self, 'wake_reply_pcm', None)
+            if pcm and (len(pcm) % 2 or len(pcm) > 128000):
+                raise ValueError('唤醒短应答必须为16kHz PCM16，且不超过4秒')
+            self._update_board_led('speaking')
+            chime = getattr(self.controller, '_chime_pcm', None)
+            if pcm and chime and hasattr(self.controller, 'play_audio_stream'):
+                # One utterance avoids two independent counter checks and the
+                # extra end-of-playback pause between chime and greeting.
+                if self.controller.play_audio_stream(iter([chime, bytes(2560), pcm])) is False:
+                    raise RuntimeError(f'唤醒提示与短应答未完整播放: {getattr(self.controller,"last_audio_error",None)}')
+            elif pcm:
+                if self.controller.play_beep() is False:
+                    raise RuntimeError('唤醒提示音未获播放确认')
                 if self.controller.play_audio_pcm(pcm) is False:
                     raise RuntimeError('唤醒短应答未获播放确认')
             else:
+                if self.controller.play_beep() is False:
+                    raise RuntimeError('唤醒提示音未获播放确认')
                 self.last_wake_error = '角色唤醒短应答尚未准备；仅播放提示音'
         except Exception as exc:
             self.last_wake_error = str(exc)
@@ -209,7 +232,7 @@ class VoiceListener:
             if (self.duplex or getattr(self, '_music_monitor', False)) and not getattr(self, '_wake_ack_active', False):
                 self._barge_audio.extend(pcm_bytes)
                 self._barge_audio=self._barge_audio[-64000:]
-                if len(self._barge_audio)>=32000 and time.monotonic()-self._barge_last>.7 and not(self._barge_thread and self._barge_thread.is_alive()):
+                if len(self._barge_audio)>=16000 and time.monotonic()-self._barge_last>.3 and not(self._barge_thread and self._barge_thread.is_alive()):
                     self._barge_last=time.monotonic()
                     self._barge_thread=threading.Thread(target=self._check_barge,args=(bytes(self._barge_audio),),daemon=True)
                     self._barge_thread.start()
@@ -441,14 +464,7 @@ class VoiceListener:
                 # 状态 A: 当前处于休眠待命状态 (未唤醒，严格等待唤醒词)
                 # =========================================================
                 if not self.is_awake:
-                    text = text.translate(str.maketrans({'紅':'红', '瀨':'濑', '棲':'栖'}))
-                    # ASR cannot distinguish identical pronunciations on an isolated
-                    # word. Correct spelling only after the independent acoustic gate.
-                    spellings = {'助手': ('住手',), '红莉栖': ('红丽栖', '红利栖'),
-                                 '克里斯': ('克莉丝', '克里丝')}
-                    for spelling in spellings.get(acoustic_keyword, ()):
-                        text = re.sub(r'^(你好[，, ]*)?' + re.escape(spelling),
-                                      lambda match: (match.group(1) or '') + acoustic_keyword, text, count=1)
+                    text = self._normalize_acoustic_name(text, acoustic_keyword)
                     is_wake, stripped_cmd = self._check_wake_word(text)
                     if not is_wake or acoustic_keyword not in text:
                         # 【铁律】：未检测到唤醒词，绝对不作任何语音应答！指示灯严格保持微光暗红
@@ -479,7 +495,7 @@ class VoiceListener:
                         return
 
                     # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖")
-                    self._acknowledge_wake()
+                    self._acknowledge_wake(acoustic_keyword)
                     print(f"[等待指令]: 红莉栖已就绪，等待对话（空闲 {self.awake_timeout:g} 秒后待机）...")
                     return
 
@@ -488,9 +504,16 @@ class VoiceListener:
                 # =========================================================
                 else:
                     self.last_awake_time = time.time()
+                    # A name can be misspelled during continuous listening too.
+                    # Correct only with fresh acoustic evidence, never from text alone.
+                    if re.match(r'^(?:你好[，, ]*)?(?:住手|红丽栖|红利栖|克莉丝|克里丝)', text):
+                        detector = getattr(self, 'wake_detector', None)
+                        acoustic_keyword = detector.detect(pcm_bytes) if detector else ''
+                        text = self._normalize_acoustic_name(text, acoustic_keyword)
                     is_wake, stripped_cmd = self._check_wake_word(text)
                     if is_wake and not stripped_cmd.strip('，,。！？!? '):
-                        self._acknowledge_wake()
+                        match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
+                        self._acknowledge_wake(match.group() if match else None)
                         return
                     cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
 
@@ -551,6 +574,7 @@ class VoiceListener:
             self._work_lock.release()
 
     def _check_barge_locked(self, pcm):
+        started = time.monotonic()
         keyword = self.wake_detector.detect(pcm)
         if keyword and self.whisper_model is not None:
             audio_np=np.frombuffer(pcm,dtype=np.int16).astype(np.float32)/32768
@@ -558,9 +582,8 @@ class VoiceListener:
                 segments,_=self.whisper_model.transcribe(audio_np,language='zh',beam_size=1,temperature=0.0,
                     initial_prompt=None,condition_on_previous_text=False,without_timestamps=True)
                 text=''.join(s.text for s in segments).strip()
-                if keyword == '助手':
-                    # Same acoustically gated homophone correction as standby.
-                    text=re.sub(r'^(你好[，, ]*)?住手', lambda m:(m.group(1) or '')+'助手', text, count=1)
+                print(f'[打断识别] 声学={keyword} ASR={text!r} 耗时={(time.monotonic()-started)*1000:.0f}ms')
+                text = self._normalize_acoustic_name(text, keyword)
                 confirmed,command=self._check_wake_word(text)
             except Exception:return
             if (not confirmed or keyword not in text or not self.is_paused
@@ -576,12 +599,20 @@ class VoiceListener:
             self.controller.playback_cancel.set()
             music = getattr(self.controller, '_music_player', None)
             if music and music.running:music.cancel.set()
-            self.controller.send_json({'cmd':'audio_abort'})
+            if audio and hasattr(audio, 'abort'):
+                if not audio.abort():
+                    self.last_wake_error = f'旧播放停止未确认: {audio.last_error}'
+                    print(f'[打断失败] {self.last_wake_error}')
+                    self._barge_woke = False
+                    return
+            else:
+                self.controller.send_json({'cmd':'audio_abort'})
             if hasattr(self, '_barge_audio'):self._barge_audio.clear()
             print(f'[语音状态] interrupted: 声学与识别均确认 {keyword}；取消旧轮次')
+            if not self.is_listening or self._stop_event.is_set():return
             if self.duplex and not getattr(self, '_music_monitor', False):
                 self.is_awake = True
-                self._acknowledge_wake()
+                self._acknowledge_wake(keyword)
                 if self._barge_pending:
                     try:self._utterance_queue.put_nowait(self._barge_pending)
                     except queue.Full:pass

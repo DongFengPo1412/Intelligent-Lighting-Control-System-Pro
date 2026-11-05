@@ -364,7 +364,9 @@ class LightController(ProControlMixin):
         - "off": 熄灭
         """
         print(f"[LightController] 设置板载指示灯 (GPIO 48): {mode}")
-        return self.send_json({"cmd": "board_led", "mode": mode})
+        ok = self.send_json({"cmd": "board_led", "mode": mode})
+        if ok:self._last_board_led_mode = mode
+        return ok
 
     def run_boot_ceremony(self, async_mode: bool = False):
         """

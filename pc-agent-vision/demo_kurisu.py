@@ -59,6 +59,7 @@ def main():
         print("[听觉就绪] 正在启动麦克风实时拾音...")
         voice_listener = get_voice_listener(callback=on_voice_heard)
         voice_listener.wake_reply_pcm = voice.prepare_wake_reply()
+        voice_listener.wake_reply_pcms = voice.prepare_wake_replies()
         voice_listener.start()
 
     print("\n[系统就绪] 硬件端口: COM9 | 无线网关: UDP 8888 | 离线神经语音: 就绪")

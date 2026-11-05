@@ -30,6 +30,41 @@ def task_directory():
 
 
 class RuntimeContracts(unittest.TestCase):
+    def test_audio_abort_fences_old_tcp_before_udp_and_settles_counters(self):
+        import types
+        order = []
+        def command(payload):
+            order.append(payload['cmd'])
+            return dict(status='ok', audio_rx=100, audio_played=80, audio_dropped=20, audio_errors=0)
+        client = WiFiPcmClient(types.SimpleNamespace(command_result=command))
+        def send(kind, marker):
+            self.assertEqual(kind, 5)
+            order.append('tcp_echo')
+            client._barriers[marker].set()
+        client._send = send
+        self.assertTrue(client.abort(.5))
+        self.assertEqual(order[:2], ['tcp_echo', 'audio_abort'])
+        self.assertGreaterEqual(order.count('status'), 2)
+
+    def test_audio_abort_without_tcp_barrier_ack_cannot_report_ready(self):
+        import types
+        client = WiFiPcmClient(types.SimpleNamespace(
+            command_result=lambda cmd: self.fail('UDP abort must wait for TCP barrier')))
+        client._send = lambda *args: None
+        self.assertFalse(client.abort(.02))
+        self.assertEqual(client.last_error, 'audio_abort_barrier_timeout')
+        self.assertEqual(client._barriers, {})
+
+    def test_audio_abort_waits_for_old_producer_with_finite_budget(self):
+        import types
+        client = WiFiPcmClient(types.SimpleNamespace())
+        client.play_lock.acquire()
+        try:
+            self.assertFalse(client.abort(.02))
+            self.assertEqual(client.last_error, 'audio_abort_producer_timeout')
+        finally:
+            client.play_lock.release()
+
     def test_cancelled_turn_cannot_restart_network_pcm_after_new_wake(self):
         import threading
         import types

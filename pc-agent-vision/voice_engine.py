@@ -465,12 +465,24 @@ class VoiceEngine:
             pcm = scipy.signal.resample_poly(audio.astype(np.float32), 1, 2)
             return np.clip(pcm, -32768, 32767).astype('<i2').tobytes(), wav
 
-    def prepare_wake_reply(self):
+    def prepare_wake_reply(self, keyword=None):
         """Prepare the short Chinese wake greeting once, never during capture."""
-        pcm, _ = self._single_language_bundle('我在，请说。', 'zh')
-        if not pcm or len(pcm) % 2 or len(pcm) > 80000:
-            raise ValueError('角色唤醒应答生成失败或超过2.5秒')
+        # Crafted style responses, not quotes presented as verified game lines.
+        replies = {
+            '助手':'我不是你的助手，有什么事就说吧。',
+            '红莉栖':'嗯，你找我什么事？',
+            '牧濑红莉栖':'嗯，你找我什么事？',
+            '克里斯':'叫我的名字就好了。',
+            '克里斯蒂娜':'不要擅自加上蒂娜，有什么事？',
+        }
+        pcm, _ = self._single_language_bundle(replies.get(keyword, replies['红莉栖']), 'zh')
+        if not pcm or len(pcm) % 2 or len(pcm) > 128000:
+            raise ValueError('角色唤醒应答生成失败或超过4秒')
         return pcm
+
+    def prepare_wake_replies(self):
+        return {name:self.prepare_wake_reply(name) for name in
+                ('助手','红莉栖','牧濑红莉栖','克里斯','克里斯蒂娜')}
 
     def _speak_chinese_first(self, text, cancelled=None):
         from light_controller import get_light_controller
@@ -490,6 +502,7 @@ class VoiceEngine:
             for lang in ('zh', 'ja'):
                 if cancelled is not None and cancelled.is_set():return
                 print(f'[语音状态] {lang}: ' + ('翻译与日语播报' if lang == 'ja' else '中文合成与播报'))
+                ctrl.set_board_led('thinking')
                 if lang == 'ja':
                     started = time.perf_counter()
                     if ja and not validate_bilingual_alignment(zh, ja)[0]:
@@ -524,8 +537,8 @@ class VoiceEngine:
                                     pending = pool.submit(synth_segment, segments[index+1])
                                 if 'first_pcm_ms' not in self.last_speech_timings:
                                     self.last_speech_timings['first_pcm_ms'] = round((time.perf_counter()-speech_started)*1000,1)
+                                    ctrl.set_board_led('speaking')
                                 yield pcm
-                    ctrl.set_board_led('speaking')
                     started = time.perf_counter()
                     generator = audio_segments()
                     try:

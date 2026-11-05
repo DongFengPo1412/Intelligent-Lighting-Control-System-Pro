@@ -78,7 +78,7 @@ class VoiceRegressionTests(unittest.TestCase):
         obj._update_board_led = lambda mode: None
         obj.pause = lambda: None
         obj.resume = lambda: None
-        obj._acknowledge_wake = lambda: None
+        obj._acknowledge_wake = lambda keyword=None: None
         obj._check_wake_word = lambda text: (False, text)
         obj.commands = []
         obj.callback = obj.commands.append

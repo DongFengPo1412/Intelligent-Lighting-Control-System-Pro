@@ -856,6 +856,8 @@ async def on_startup(app: web.Application):
             if hasattr(voice, 'prepare_wake_reply'):
                 try:
                     listener.wake_reply_pcm = await loop.run_in_executor(None, voice.prepare_wake_reply)
+                    if hasattr(voice, 'prepare_wake_replies'):
+                        listener.wake_reply_pcms = await loop.run_in_executor(None, voice.prepare_wake_replies)
                 except Exception as exc:
                     listener.last_wake_error = f'唤醒短应答准备失败: {exc}'
                     print(f'[WebServer] {listener.last_wake_error}')

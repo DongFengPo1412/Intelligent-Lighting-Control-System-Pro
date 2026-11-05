@@ -50,6 +50,8 @@ class WiFiPcmClient:
         self.closed = threading.Event()
         self.last_error = None
         self.state = threading.RLock()
+        self._barrier_lock = threading.Lock()
+        self._barriers = {}
 
     def connect(self):
         with self.state:
@@ -99,6 +101,11 @@ class WiFiPcmClient:
                 kind, data = receive(sock)
                 if kind == 2 and self.controller.on_mic_data:
                     self.controller.on_mic_data(data)
+                elif kind == 5:
+                    with self._barrier_lock:
+                        event = self._barriers.get(data)
+                    if event is not None:
+                        event.set()
         except (OSError, ValueError) as exc:
             self.last_error = str(exc)
         finally:
@@ -116,6 +123,61 @@ class WiFiPcmClient:
         if not pcm or len(pcm) % 2 or not 1 <= chunk_samples <= 1024:
             raise ValueError("Invalid PCM input")
         return self.play_stream(iter([pcm]), chunk_samples, cancelled=cancelled)
+
+    def abort(self, timeout=1.2):
+        """Stop the old producer, fence TCP PCM, then drain board playback.
+
+        UDP abort alone can overtake old TCP audio. The existing kind-5 echo
+        fences those bytes without changing firmware or accepting a send as ACK.
+        """
+        self.cancelled.set()
+        deadline = time.monotonic() + timeout
+        if not self.play_lock.acquire(timeout=max(0, deadline-time.monotonic())):
+            self.last_error = 'audio_abort_producer_timeout'
+            return False
+        marker = f'barrier:{time.monotonic_ns()}'.encode('ascii')
+        event = threading.Event()
+        try:
+            with self._barrier_lock:
+                self._barriers[marker] = event
+            self._send(5, marker)
+            if not event.wait(max(0, deadline-time.monotonic())):
+                self.last_error = 'audio_abort_barrier_timeout'
+                return False
+            result = self.controller.command_result({'cmd':'audio_abort'})
+            if result.get('status') != 'ok':
+                self.last_error = 'audio_abort_not_acknowledged'
+                return False
+            # One block may already be in I2S. Require accounting to settle
+            # before the next utterance's exact sample-count baseline is taken.
+            previous = None
+            stable_since = time.monotonic()
+            while time.monotonic() < deadline:
+                result = self.controller.command_result({'cmd':'status'})
+                if result.get('status') != 'ok':
+                    self.last_error = 'audio_abort_status_unavailable'
+                    return False
+                counts = tuple(result.get(k) for k in ('audio_rx','audio_played','audio_dropped','audio_errors'))
+                if any(value is None for value in counts):
+                    self.last_error = 'audio_abort_counters_missing'
+                    return False
+                if counts != previous:
+                    stable_since = time.monotonic()
+                    previous = counts
+                elif time.monotonic()-stable_since >= .12:
+                    self.last_error = None
+                    print('[WiFi音频] 旧PCM传输屏障、停止回执与播放计数稳定已确认')
+                    return True
+                time.sleep(.03)
+            self.last_error = 'audio_abort_drain_timeout'
+            return False
+        except (OSError, ValueError) as exc:
+            self.last_error = str(exc)
+            return False
+        finally:
+            with self._barrier_lock:
+                self._barriers.pop(marker, None)
+            self.play_lock.release()
 
     def play_stream(self, chunks, chunk_samples=512, cancelled=None):
         """One paced utterance and one final counter check across TTS chunks."""
