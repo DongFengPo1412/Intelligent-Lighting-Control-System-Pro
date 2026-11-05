@@ -538,6 +538,79 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_translation_repair_translates_acknowledgement_without_copying_examples(self):
+        replies = iter(['好的、生活の例を挙げるわ。', "Sure, I'll give an example from everyday life.", 'わかったわ。生活の例を挙げるわ。'])
+        requests = []
+        class Resp:
+            def __enter__(self):return self
+            def __exit__(self, *args):pass
+            def read(self):
+                return json.dumps({'message': {'content': next(replies)}}).encode('utf-8')
+        def opened(req, **kwargs):
+            requests.append(json.loads(req.data))
+            return Resp()
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=opened)):
+            ja, error = translate_zh_to_ja('好的，举一个生活中的例子。')
+        self.assertIsNone(error)
+        self.assertEqual(ja, 'わかったわ。生活の例を挙げるわ。')
+        self.assertEqual(len(requests), 3)
+        self.assertIn('English', requests[1]['messages'][0]['content'])
+        self.assertEqual(requests[1]['messages'][1]['content'], '好的，举一个生活中的例子。')
+        self.assertIn('Japanese', requests[2]['messages'][0]['content'])
+        self.assertEqual(requests[2]['messages'][1]['content'], "Sure, I'll give an example from everyday life.")
+        self.assertNotIn('明天见', requests[1]['messages'][1]['content'])
+
+    def test_pivot_repair_cannot_bypass_original_number_checks(self):
+        replies = iter(['好的、60秒よ。', 'Okay, wait for 60 seconds.', 'わかったわ、60分待って。'])
+        class Resp:
+            def __enter__(self):return self
+            def __exit__(self, *args):pass
+            def read(self):
+                return json.dumps({'message': {'content': next(replies)}}).encode('utf-8')
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=lambda *a, **k: Resp())):
+            ja, error = translate_zh_to_ja('好的，等60秒。')
+        self.assertEqual(ja, '')
+        self.assertIn('未通过等义校验', error)
+
+    def test_whole_translation_rejects_a_summary_that_omits_the_example(self):
+        replies = iter(['成功例だけを見ると偏るわ。',
+            'Looking only at successes is biased. For example, failed experiments must also be counted.',
+            '成功例だけを見ると偏るわ。例えば失敗した実験も数える必要があるわ。'])
+        class Resp:
+            def __enter__(self):return self
+            def __exit__(self, *args):pass
+            def read(self):return json.dumps({'message': {'content': next(replies)}}).encode()
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=lambda *a, **k: Resp())):
+            ja, error = translate_zh_to_ja('只看成功案例会有偏差。比如失败的实验也应该统计。')
+        self.assertIsNone(error)
+        self.assertIn('失敗した実験', ja)
+        self.assertEqual(ja.count('。'), 2)
+
+    def test_translation_pivot_shares_deadline_and_rejects_truncated_output(self):
+        requests = []
+        responses = iter(['好的、60秒よ。', 'Okay, 60 seconds.'])
+        class Resp:
+            def __enter__(self):return self
+            def __exit__(self, *args):pass
+            def read(self):
+                return json.dumps({'message': {'content': next(responses)}}).encode()
+        def opened(req, **kwargs):
+            requests.append(kwargs['timeout'])
+            return Resp()
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=opened)), patch(
+            'bilingual_guard.time.monotonic', side_effect=[0, .1, .2, 16]):
+            ja, error = translate_zh_to_ja('好的，等60秒。', timeout=15)
+        self.assertEqual(ja, '')
+        self.assertIn('时间预算', error)
+        self.assertEqual(len(requests), 2)
+        self.assertLess(requests[1], requests[0])
+        class Truncated(Resp):
+            def read(self):return json.dumps({'message': {'content': '60秒よ。'}, 'done_reason': 'length'}).encode()
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=lambda *a, **k: Truncated())):
+            ja, error = translate_zh_to_ja('等60秒。')
+        self.assertEqual(ja, '')
+        self.assertIn('截断', error)
+
     def test_f06_translation_unaligned_after_retry_is_fail_silent(self):
         bad_resp = {"message": {"content": "今日の午後は真由理と買い物に行くわ、バカ！"}}
 
@@ -744,7 +817,7 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             eng = self._build_stub_voice_engine(Path(tmp), None)
             eng.chinese_first = True
             eng._single_language_bundle = lambda text, lang: (b'pc', b'')
-            eng._translate_zh_to_ja_kurisu = lambda text: ''
+            eng._request_japanese_translation = lambda text: ('', 'translation unavailable')
             streams = []
             def stream(chunks):
                 streams.append(list(chunks))
@@ -756,6 +829,104 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             self.assertEqual(len(streams), 1)
             self.assertGreater(len(streams[0]), 1)
             self.assertEqual(eng.last_spoken_text, text)
+
+    def test_japanese_is_prepared_during_chinese_and_uses_the_same_stream(self):
+        import threading
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            translation_started = threading.Event()
+            first_chinese_played = threading.Event()
+            japanese_ready = threading.Event()
+            synthesized = []
+            def translate(text):
+                translation_started.set()
+                self.assertTrue(first_chinese_played.wait(2))
+                return 'こんにちは。', None
+            def synth(text, lang):
+                synthesized.append(lang)
+                if lang == 'ja':japanese_ready.set()
+                return lang.encode(), b''
+            eng._request_japanese_translation = translate
+            eng._single_language_bundle = synth
+            streams = []
+            def stream(chunks):
+                first = next(chunks)
+                self.assertEqual(first, b'zh')
+                self.assertTrue(translation_started.wait(2))
+                first_chinese_played.set()
+                # Model work proceeds while the board is consuming Chinese.
+                self.assertTrue(japanese_ready.wait(2))
+                streams.append([first, *chunks])
+                return True
+            eng.fake_ctrl.play_audio_stream = stream
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。')
+            self.assertEqual(synthesized, ['zh', 'ja'])
+            self.assertEqual(streams, [[b'zh', bytes(5760), b'ja']])
+            self.assertEqual(eng.last_spoken_text, '你好。\nこんにちは。')
+            self.assertLess(eng.last_speech_timings['language_gap_wait_ms'], 100)
+
+    def test_stream_translation_failure_keeps_chinese_and_reports_the_reason(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            eng._request_japanese_translation = lambda text: ('', 'untranslated Chinese rejected')
+            eng._single_language_bundle = lambda text, lang: (lang.encode(), b'')
+            played = []
+            eng.fake_ctrl.play_audio_stream = lambda chunks: played.extend(chunks) or True
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。')
+            self.assertEqual(played, [b'zh'])
+            self.assertEqual(eng.last_spoken_text, '你好。')
+            self.assertIn('rejected', eng.last_translation_error)
+
+    def test_stream_japanese_synthesis_failure_still_confirms_chinese(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            def synth(text, lang):
+                if lang == 'ja':raise RuntimeError('Japanese unavailable')
+                return b'zh', b''
+            eng._single_language_bundle = synth
+            eng._request_japanese_translation = lambda text: ('こんにちは。', None)
+            played = []
+            eng.fake_ctrl.play_audio_stream = lambda chunks: played.extend(chunks) or True
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。')
+            self.assertEqual(played, [b'zh'])
+            self.assertEqual(eng.last_spoken_text, '你好。')
+            self.assertIn('中文已播放', eng.last_tts_error)
+
+    def test_cancelled_prefetch_does_not_wait_for_translation_or_publish_stale_error(self):
+        import threading
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            cancelled, release, completed = threading.Event(), threading.Event(), threading.Event()
+            eng._single_language_bundle = lambda text, lang: (lang.encode(), b'')
+            def translate(text):
+                release.wait(3)
+                completed.set()
+                return '', 'old turn error'
+            eng._request_japanese_translation = translate
+            played = []
+            def stream(chunks, **options):
+                played.append(next(chunks))
+                cancelled.set()
+                played.extend(chunks)
+                return False
+            eng.fake_ctrl.play_audio_stream = stream
+            try:
+                with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                    eng.speak('你好。', cancelled=cancelled)
+                self.assertFalse(completed.is_set())
+                self.assertEqual(played, [b'zh'])
+                eng.last_translation_error = 'next turn state'
+            finally:
+                release.set()
+                self.assertTrue(completed.wait(2))
+            self.assertEqual(eng.last_translation_error, 'next turn state')
 
     def test_segmented_translation_never_returns_partial_japanese_after_failure(self):
         from bilingual_guard import translate_zh_to_ja_segmented

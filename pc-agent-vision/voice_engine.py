@@ -1,8 +1,8 @@
 """
 VoiceEngine: 牧濑红莉栖 (Makise Kurisu, CV: 今井麻美) 开源神经声学语音引擎
 - 核心模型: 基于开源 GPT-SoVITS (v2Pro) 架构 + 牧濑红莉栖中日双语权重 (kurisu-e15.ckpt + kurisu_e4_s972.pth)
-- 语言处理: 以确定的中文语义为基准先合成中文，经 180ms 换气停顿后合成等义日文译文（不使用固定日语台词替代）
-- 铁律约束: 坚决禁用任何 Microsoft (SAPI/OneCore/系统机械音) 语音包；角色 TTS 或翻译失败时保持静默 (Fail-Silent) 并记录可见错误
+- 语言处理: 中文先播，播放期间提前准备日语，以 180ms 换气衔接（不使用固定日语台词替代）
+- 铁律约束: 禁用 Microsoft (SAPI/OneCore/系统机械音)；失败语言不播放并记录错误，普通对话保留已成功的中文
 - 音频链路: 32kHz 声学滤波与电平塑形后，经多相重采样输出 16kHz 16-bit 单声道线性 PCM 推送至 ESP32-S3 MAX98357A I2S 硬件
 """
 
@@ -164,20 +164,25 @@ class VoiceEngine:
             self.last_translation_error = "待翻译中文为空"
             return ""
 
-        from bilingual_guard import translate_zh_to_ja, translate_zh_to_ja_segmented
-        translate = translate_zh_to_ja_segmented if getattr(self, 'chinese_first', False) else translate_zh_to_ja
-        ja, err = translate(
+        ja, err = self._request_japanese_translation(zh_text)
+        if err:
+            self.last_translation_error = err
+            print(f"[VoiceEngine 动态中译日未通过]: {err}")
+            return ""
+        return ja
+
+    def _request_japanese_translation(self, zh_text):
+        # Return errors to the owning turn. A cancelled background request must
+        # never overwrite the next turn's visible translation state.
+        from bilingual_guard import translate_zh_to_ja
+        # Keep sentence context for translation; only PCM synthesis is chunked.
+        return translate_zh_to_ja(
             zh_text,
             api_base=getattr(self, "api_base", None),
             model=getattr(self, "model", "kurisu") or "kurisu",
             backend=getattr(self, "backend", None),
             timeout=15.0,
         )
-        if err:
-            self.last_translation_error = err
-            print(f"[VoiceEngine 动态中译日未通过]: {err}")
-            return ""
-        return ja
 
     def _split_zh_ja(self, text: str):
         """将输入文本按行与完整句边界拆分为中文段落与日文段落，避免换行先被合并导致串语"""
@@ -505,6 +510,132 @@ class VoiceEngine:
                 print(f'[唤醒日语准备失败] {name}: {exc}；保留中文')
         return replies
 
+    def _speak_bilingual_stream(self, ctrl, zh, ja, cancelled, speech_started):
+        """Translate during Chinese playback; serialize all synthesis and PCM.
+
+        One pending TTS chunk bounds memory and keeps the existing GPT-SoVITS
+        instance single-owner. Japanese starts preparing as the last Chinese
+        chunk plays, rather than after the board has finished the whole reply.
+        """
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+        from bilingual_guard import chunk_sentences_safe, validate_bilingual_alignment
+
+        timings = self.last_speech_timings
+        stopped = lambda: cancelled is not None and cancelled.is_set()
+        translation_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='kurisu_translate')
+        synthesis_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='kurisu_tts')
+        outcome = {'ja': '', 'translation_error': None, 'tts_error': None}
+
+        def translated():
+            started = time.perf_counter()
+            if ja and validate_bilingual_alignment(zh, ja)[0]:
+                result, error = ja, None
+            else:
+                result, error = self._request_japanese_translation(zh)
+            timings['translation_ms'] = round((time.perf_counter()-started)*1000, 1)
+            return result, error
+
+        def wait(future):
+            # Do not hold the PCM producer/abort lock for a full HTTP or GPU
+            # request when a new wake has cancelled this turn.
+            while not stopped():
+                try:
+                    return future.result(timeout=.05)
+                except TimeoutError:
+                    if future.done():
+                        raise
+            return None
+
+        def synth(segment, lang):
+            if stopped():
+                return None
+            started = time.perf_counter()
+            pcm, _ = self._single_language_bundle(segment, lang)
+            key = f'{lang}_synthesis_ms'
+            timings[key] = round(timings.get(key, 0)+(time.perf_counter()-started)*1000, 1)
+            return pcm
+
+        translation = translation_pool.submit(translated)
+
+        def japanese_first_chunk():
+            result = wait(translation)
+            if result is None:
+                return None
+            text, error = result
+            if error or not text:
+                outcome['translation_error'] = error or '日语译文为空；中文回复保留'
+                return None
+            segments = chunk_sentences_safe(text, max_chars=32)
+            return text, segments, synth(segments[0], 'ja')
+
+        def audio_segments():
+            segments = chunk_sentences_safe(zh, max_chars=32)
+            pending = synthesis_pool.submit(synth, segments[0], 'zh')
+            for index in range(len(segments)):
+                pcm = wait(pending)
+                if stopped():
+                    return
+                if index+1 < len(segments):
+                    pending = synthesis_pool.submit(synth, segments[index+1], 'zh')
+                else:
+                    # The last Chinese PCM is now ready. Its playback gives
+                    # Japanese's first chunk time to synthesize without racing
+                    # Chinese for the shared model lock.
+                    pending = synthesis_pool.submit(japanese_first_chunk)
+                if 'first_pcm_ms' not in timings:
+                    timings['first_pcm_ms'] = round((time.perf_counter()-speech_started)*1000, 1)
+                    ctrl.set_board_led('speaking')
+                yield pcm
+            started = time.perf_counter()
+            try:
+                prepared = wait(pending)
+            except Exception as exc:
+                outcome['tts_error'] = f'日语准备失败: {exc}；中文已播放'
+                return
+            timings['language_gap_wait_ms'] = round((time.perf_counter()-started)*1000, 1)
+            if stopped() or prepared is None:
+                return
+            text, segments, pcm = prepared
+            print('[语音状态] ja: 日语首段已准备，接续中文播放')
+            yield bytes(5760)  # A deliberate 180ms language boundary, not thinking.
+            for index in range(len(segments)):
+                if stopped():
+                    return
+                if index+1 < len(segments):
+                    pending = synthesis_pool.submit(synth, segments[index+1], 'ja')
+                yield pcm
+                if index+1 < len(segments):
+                    try:
+                        pcm = wait(pending)
+                    except Exception as exc:
+                        outcome['tts_error'] = f'日语合成中断: {exc}；中文已播放'
+                        return
+            outcome['ja'] = text
+
+        generator = audio_segments()
+        try:
+            print('[语音状态] zh: 中文播放；后台准备日语')
+            ctrl.set_board_led('thinking')
+            options = {'cancelled': cancelled} if cancelled is not None else {}
+            ok = ctrl.play_audio_stream(generator, **options)
+            if stopped():
+                return
+            if not ok:
+                raise RuntimeError('双语连续播放未获确认')
+            self.last_spoken_text = zh + ('\n'+outcome['ja'] if outcome['ja'] else '')
+            self.last_translation_error = outcome['translation_error']
+            self.last_tts_error = outcome['tts_error']
+            if self.last_translation_error:
+                print(f'[VoiceEngine 动态中译日未通过]: {self.last_translation_error}')
+        except Exception as exc:
+            if not stopped():
+                self.last_tts_error = str(exc)
+        finally:
+            generator.close()
+            translation_pool.shutdown(wait=not stopped(), cancel_futures=True)
+            synthesis_pool.shutdown(wait=not stopped(), cancel_futures=True)
+            timings['bilingual_stream_ms'] = round((time.perf_counter()-speech_started)*1000, 1)
+
     def _speak_chinese_first(self, text, cancelled=None):
         from light_controller import get_light_controller
         from bilingual_guard import validate_bilingual_alignment, chunk_sentences_safe
@@ -518,6 +649,8 @@ class VoiceEngine:
             self.last_tts_error = '中文基准为空，未播放'
             return
         ctrl = get_light_controller()
+        if hasattr(ctrl, 'play_audio_stream'):
+            return self._speak_bilingual_stream(ctrl, zh, ja, cancelled, speech_started)
         playback_options = {'cancelled': cancelled} if cancelled is not None else {}
         try:
             for lang in ('zh', 'ja'):
@@ -537,40 +670,6 @@ class VoiceEngine:
                         return
                     if cancelled is not None and cancelled.is_set():return
                 segments = chunk_sentences_safe(zh, max_chars=32) if lang == 'zh' else [ja]
-                if lang == 'zh' and hasattr(ctrl, 'play_audio_stream'):
-                    from concurrent.futures import ThreadPoolExecutor
-                    def synth_segment(segment):
-                        started = time.perf_counter()
-                        pcm, _ = self._single_language_bundle(segment, 'zh')
-                        key = 'zh_synthesis_ms'
-                        self.last_speech_timings[key] = round(self.last_speech_timings.get(key,0)+(time.perf_counter()-started)*1000,1)
-                        return pcm
-                    def audio_segments():
-                        # Exactly one pending synthesis, overlapped with current
-                        # playback; no unbounded PCM queue or extra audio owner.
-                        with ThreadPoolExecutor(max_workers=1, thread_name_prefix='kurisu_tts') as pool:
-                            pending = pool.submit(synth_segment, segments[0])
-                            for index in range(len(segments)):
-                                if cancelled is not None and cancelled.is_set():return
-                                pcm = pending.result()
-                                if cancelled is not None and cancelled.is_set():return
-                                if index+1 < len(segments):
-                                    pending = pool.submit(synth_segment, segments[index+1])
-                                if 'first_pcm_ms' not in self.last_speech_timings:
-                                    self.last_speech_timings['first_pcm_ms'] = round((time.perf_counter()-speech_started)*1000,1)
-                                    ctrl.set_board_led('speaking')
-                                yield pcm
-                    started = time.perf_counter()
-                    generator = audio_segments()
-                    try:
-                        if not ctrl.play_audio_stream(generator, **playback_options):
-                            if cancelled is not None and cancelled.is_set():return
-                            raise RuntimeError('中文连续播放未获确认')
-                    finally:
-                        generator.close()
-                    self.last_speech_timings['zh_stream_ms'] = round((time.perf_counter()-started)*1000,1)
-                    self.last_spoken_text = zh
-                    continue
                 played = []
                 for segment in segments:
                     started = time.perf_counter()
