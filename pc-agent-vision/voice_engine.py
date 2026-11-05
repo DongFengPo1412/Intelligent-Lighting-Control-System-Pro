@@ -465,6 +465,13 @@ class VoiceEngine:
             pcm = scipy.signal.resample_poly(audio.astype(np.float32), 1, 2)
             return np.clip(pcm, -32768, 32767).astype('<i2').tobytes(), wav
 
+    def prepare_wake_reply(self):
+        """Prepare the short Chinese wake greeting once, never during capture."""
+        pcm, _ = self._single_language_bundle('我在，请说。', 'zh')
+        if not pcm or len(pcm) % 2 or len(pcm) > 80000:
+            raise ValueError('角色唤醒应答生成失败或超过2.5秒')
+        return pcm
+
     def _speak_chinese_first(self, text):
         from light_controller import get_light_controller
         from bilingual_guard import validate_bilingual_alignment, chunk_sentences_safe

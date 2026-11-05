@@ -637,6 +637,9 @@ async def handle_status(request: web.Request):
         "tts_error": tts_error,
         "asr_status": asr_status,
         "asr_backend": getattr(listener, 'asr_backend', None),
+        "wake_reply_ready": isinstance(getattr(listener, 'wake_reply_pcm', None), bytes) and bool(listener.wake_reply_pcm),
+        "wake_reply_error": getattr(listener, 'last_wake_error', None),
+        "wake_words": ['助手', '红莉栖', '牧濑红莉栖', '克里斯', '克里斯蒂娜'],
         "kws_status": kws_status,
         "tts_status": tts_status,
         "listener_listening": bool(listener and listener.is_listening and listener_healthy),
@@ -841,6 +844,12 @@ async def on_startup(app: web.Application):
             t_listen0 = time.perf_counter()
             from voice_listener import get_voice_listener
             listener = get_voice_listener(on_voice_detected)
+            if hasattr(voice, 'prepare_wake_reply'):
+                try:
+                    listener.wake_reply_pcm = await loop.run_in_executor(None, voice.prepare_wake_reply)
+                except Exception as exc:
+                    listener.last_wake_error = f'唤醒短应答准备失败: {exc}'
+                    print(f'[WebServer] {listener.last_wake_error}')
             t_listen = (time.perf_counter() - t_listen0) * 1000.0
             print(f"[WebServer 启动耗时] 阶段3 语音监听器初始化: {t_listen:.1f}ms")
         except Exception as listen_err:

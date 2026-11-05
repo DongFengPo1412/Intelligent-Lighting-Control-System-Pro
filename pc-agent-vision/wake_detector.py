@@ -19,6 +19,7 @@ class WakeDetector:
             'zh ù sh ǒu @助手\n'
             'h óng l ì q ī @红莉栖\n'
             'k è l ǐ s ī @克里斯\n'
+            'k è l ǐ s ī d ì n à @克里斯蒂娜\n'
             'm ù l ài h óng l ì q ī @牧濑红莉栖\n', encoding='utf-8')
         suffix = '-epoch-12-avg-2-chunk-16-left-64.int8.onnx'
         self.spotter = sherpa_onnx.KeywordSpotter(

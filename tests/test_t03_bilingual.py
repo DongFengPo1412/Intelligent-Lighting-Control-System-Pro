@@ -672,6 +672,15 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             self.assertEqual(calls, ['zh', 'ja'])
             self.assertEqual(eng.played_pcm, [])
 
+    def test_wake_greeting_is_prepared_once_with_existing_chinese_voice(self):
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            calls = []
+            eng._single_language_bundle = lambda text, lang: (calls.append((text,lang)) or bytes(32000), b'')
+            self.assertEqual(len(eng.prepare_wake_reply()), 32000)
+            self.assertEqual(calls, [('我在，请说。', 'zh')])
+            self.assertEqual(eng.played_pcm, [])
+
     def test_long_chinese_starts_playing_before_later_chunks_are_synthesized(self):
         with _temp_dir() as tmp:
             eng = self._build_stub_voice_engine(Path(tmp), None)

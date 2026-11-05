@@ -111,6 +111,8 @@ class VoiceListener:
 
         # 初始化本地 faster-whisper 极速离线 ASR 模型 (base 模型：高精度音节辨别，NVIDIA RTX CUDA 加速)
         self.whisper_model = None
+        self.wake_reply_pcm = None
+        self.last_wake_error = None
         self.asr_backend = os.environ.get('KURISU_ASR_BACKEND', 'whisper').strip().lower()
         if self.asr_backend == 'sensevoice':
             from local_asr import SenseVoiceASR
@@ -157,7 +159,7 @@ class VoiceListener:
 
     def _check_wake_word(self, text: str) -> Tuple[bool, str]:
         # Exact configured names at the beginning; never substrings or homophones.
-        match = re.match(r'^(?:你好[，, ]*)?(牧濑红莉栖|红莉栖|克里斯|助手)(?:[，,。！!？?\s]*)', text.strip())
+        match = re.match(r'^(?:你好[，, ]*)?(牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手)(?:[，,。！!？?\s]*)', text.strip())
         if not match:
             return False, ''
         remaining = text.strip()[match.end():].strip('，,。！!？? ')
@@ -165,6 +167,30 @@ class VoiceListener:
         if remaining.startswith(('是什么', '的', '这个词', '这两个字', '不是', '怎么写', '什么意思')):
             return False, ''
         return True, remaining
+
+    def _acknowledge_wake(self):
+        """Short chime and a prepared character greeting, then resume capture."""
+        self.pause()
+        self.last_wake_error = None
+        try:
+            if self.controller.play_beep() is False:
+                raise RuntimeError('唤醒提示音未获播放确认')
+            pcm = getattr(self, 'wake_reply_pcm', None)
+            if pcm:
+                if len(pcm) % 2 or len(pcm) > 80000:
+                    raise ValueError('唤醒短应答必须为16kHz PCM16，且不超过2.5秒')
+                self._update_board_led('speaking')
+                if self.controller.play_audio_pcm(pcm) is False:
+                    raise RuntimeError('唤醒短应答未获播放确认')
+            else:
+                self.last_wake_error = '角色唤醒短应答尚未准备；仅播放提示音'
+        except Exception as exc:
+            self.last_wake_error = str(exc)
+            print(f'[唤醒应答异常]: {exc}')
+        finally:
+            self.resume()
+            self.last_awake_time = time.time()
+            self._update_board_led('active')
 
     def _on_board_pcm(self, pcm_bytes: bytes):
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
@@ -296,7 +322,7 @@ class VoiceListener:
     def _asr_prompt(self):
         # A catalogue of singers biases ordinary conversation toward music and
         # can itself be emitted as recognised speech. Scope it to music sessions.
-        prompt = "以下是中文对话。助手，克里斯，红莉栖，牧濑红莉栖。"
+        prompt = "以下是中文对话。助手，克里斯，克里斯蒂娜，红莉栖，牧濑红莉栖。"
         controller = getattr(self, 'controller', None)
         player = getattr(controller, '_music_player', None)
         music_active = bool(getattr(player, 'running', False) or
@@ -447,22 +473,8 @@ class VoiceListener:
                         return
 
                     # 情况 2: 仅呼唤了名字 (例如: "克里斯" / "牧濑红莉栖")
-                    self.pause()
-                    try:
-                        self.controller.play_beep()
-                        self._update_board_led("speaking") # 绿色 (语音播报中)
-                        cur_dir = os.path.dirname(os.path.abspath(__file__))
-                        wake_pcm = os.path.join(cur_dir, 'kurisu_wake_reply.pcm')
-                        if os.environ.get('KURISU_WAKE_VOICE_REPLY', '0') == '1' and os.path.exists(wake_pcm):
-                            with open(wake_pcm, 'rb') as source:
-                                self.controller.play_audio_pcm(source.read())
-                    except Exception as ex:
-                        print(f"[唤醒应答异常]: {ex}")
-                    finally:
-                        self.resume()
-                        self.last_awake_time = time.time()
-                        self._update_board_led("active") # 青蓝微呼吸，提示已唤醒，正在等待指令
-                        print(f"[等待指令]: 红莉栖已就绪，等待对话（空闲 {self.awake_timeout:g} 秒后待机）...")
+                    self._acknowledge_wake()
+                    print(f"[等待指令]: 红莉栖已就绪，等待对话（空闲 {self.awake_timeout:g} 秒后待机）...")
                     return
 
                 # =========================================================
@@ -472,7 +484,7 @@ class VoiceListener:
                     self.last_awake_time = time.time()
                     is_wake, stripped_cmd = self._check_wake_word(text)
                     if is_wake and not stripped_cmd.strip('，,。！？!? '):
-                        self._update_board_led('active')
+                        self._acknowledge_wake()
                         return
                     cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
 

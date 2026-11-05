@@ -40,6 +40,38 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_short_wake_reply_orders_chime_greeting_and_capture(self):
+        listener = self._create_isolated_listener()
+        order = []
+        listener.pause = lambda: order.append('pause')
+        listener.resume = lambda: order.append('resume')
+        listener.wake_reply_pcm = bytes(32000)
+        listener.controller = types.SimpleNamespace(
+            play_beep=lambda: order.append('chime') or True,
+            play_audio_pcm=lambda pcm: order.append('greeting') or True,
+        )
+        listener._acknowledge_wake()
+        self.assertEqual(order, ['pause', 'chime', 'greeting', 'resume'])
+        self.assertIsNone(listener.last_wake_error)
+
+    def test_oversized_wake_greeting_is_rejected_without_truncation(self):
+        listener = self._create_isolated_listener()
+        calls = []
+        listener.wake_reply_pcm = bytes(80002)
+        listener.resume = lambda: calls.append('resume')
+        listener.controller = types.SimpleNamespace(
+            play_beep=lambda: True,
+            play_audio_pcm=lambda pcm: self.fail('Oversized speech must not play'),
+        )
+        listener._acknowledge_wake()
+        self.assertIn('2.5', listener.last_wake_error)
+        self.assertEqual(calls, ['resume'])
+
+    def test_full_christina_name_is_not_split_into_a_spurious_command(self):
+        listener = self._create_isolated_listener()
+        self.assertEqual(listener._check_wake_word('克里斯蒂娜。'), (True, ''))
+        self.assertEqual(listener._check_wake_word('克里斯蒂娜，你好。'), (True, '你好'))
+
     def test_music_vocabulary_does_not_bias_ordinary_conversation(self):
         listener = VoiceListener.__new__(VoiceListener)
         library = types.SimpleNamespace(speech_hints=lambda: "Alan Walker," * 100)
