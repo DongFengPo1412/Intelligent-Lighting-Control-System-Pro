@@ -71,8 +71,10 @@ static void test_protocol() {
 #include "phase_b2_core_test.h"
 #include "phase_b3_core_test.h"
 #include "phase_c_native_test.h"
+#include "final_closure_host.h"
 
 int main(int argc,char** argv) {
+    TestFinalClosure();
     assert(opens==0); // Production static constructors must not touch NVS.
     if(argc==3&&std::string(argv[1])=="capture"){
         file=argv[2];initialized=true;arcade::ArcadeScoreStore::SetReady(true);

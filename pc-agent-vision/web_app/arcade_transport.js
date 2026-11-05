@@ -6,8 +6,22 @@
   const ACTIONS = new Set(["select","start","pause","resume","reset","exit","input","heartbeat","status","frame","players","config"]);
   const requestId = () => "r_" + (root.crypto?.randomUUID?.() || Date.now().toString(36) + "_" + Math.random().toString(36).slice(2));
 
+  class DeviceHealth {
+    constructor(){this.failures=0;this.last=null;this.lastGood=0;}
+    observe(status,now=Date.now()) {
+      if(status?.is_connected){this.last=status;this.lastGood=now;this.failures=0;return status;}
+      ++this.failures;
+      // Preview failures never call observe. Only explicit control health checks
+      // can enter this grace period; the board input watchdog stays independent.
+      if(this.last && this.failures<3 && now-this.lastGood<12000)
+        return {...this.last,control_retrying:true};
+      return status;
+    }
+  }
+
   function nativeExchange(bridge) {
     return (command, id, policy) => new Promise((resolve, reject) => {
+      if(command.cmd==="frame")command={...command,encoding:"base64"};
       if (!bridge || typeof bridge.sendUdpAsync !== "function") return reject(Error("需要支持异步 UDP 的新版 APK"));
       const callbacks = root.__amadeusUdpCallbacks ||= Object.create(null);
       const timer = setTimeout(() => { delete callbacks[id]; reject(Error("设备离线或 UDP 回执超时")); }, policy.timeout * (policy.retries + 1) + 1800);
@@ -17,6 +31,12 @@
           const reply = JSON.parse(raw);
           if (!reply || reply.request_id !== id) throw Error("UDP 请求编号不匹配");
           if (reply.status !== "ok") throw Error(reply.error || "ESP32 拒绝操作");
+          if(command.cmd==="frame" && reply.pixels_b64!==undefined) {
+            if(typeof reply.pixels_b64!=="string" || !/^[A-Za-z0-9+/]{1024}$/.test(reply.pixels_b64))throw Error("不完整的灯板帧");
+            const bytes=atob(reply.pixels_b64);
+            if(bytes.length!==768)throw Error("不完整的灯板帧");
+            reply.pixels=Array.from(bytes,c=>c.charCodeAt(0).toString(16).padStart(2,"0")).join("");
+          }
           if (command.cmd === "frame" && !/^[0-9a-f]{1536}$/i.test(reply.pixels || "")) throw Error("不完整的灯板帧");
           if (command.cmd === "arcade" && (!reply.arcade || !Number.isInteger(reply.arcade.game_id) ||
               !Number.isInteger(reply.arcade.state))) throw Error("缺少有效街机状态");
@@ -58,7 +78,7 @@
       if (!command || Object.keys(data).some(k=>!allowed.includes(k))) throw Error("此操作或参数不受直连模式支持；AI、音乐和视觉需要电脑服务");
       const read=["status","frame"].includes(command.cmd),id=requestId();
       const send=async()=>{
-        const reply=await exchange(command,id,read?{timeout:200,retries:0}:{timeout:700,retries:1});
+        const reply=await exchange(command,id,read?{timeout:450,retries:0}:{timeout:700,retries:1});
         if (!reply || reply.status!=="ok" || !(mode(reply.mode)||reply.mode===32)) throw Error("设备回执缺少有效模式");
         if (command.cmd==="frame") {
           if(!/^[0-9a-f]{1536}$/i.test(reply.hex||reply.pixels||""))throw Error("不完整的灯板帧");
@@ -99,7 +119,7 @@
         this.readBusy=true;
         const epoch=this.epoch, revision=this.revision;
         const command=action==="frame"?{cmd:"frame"}:{cmd:"arcade",action:"status"};
-        return Promise.resolve().then(()=>this.exchange(command,requestId(),{timeout:150,retries:0}))
+        return Promise.resolve().then(()=>this.exchange(command,requestId(),{timeout:450,retries:0}))
           .then(reply=>{
             if(epoch!==this.epoch || revision!==this.revision) throw Error("stale_reply");
             return reply;
@@ -160,13 +180,16 @@
     async suspend() {
       this.down=0;
       try { await this.call("/api/arcade",{action:"input",down:0,pressed:0}); } catch (_) {}
-      try { await this.call("/api/arcade",{action:"pause"}); } catch (_) {}
+      let reply;
+      try { reply=await this.call("/api/arcade",{action:"pause"}); } catch (_) {}
       this.blocked=true;
+      return reply;
     }
   }
   ArcadeTransport.registeredIds=Object.freeze([...IDS]);
   root.ArcadeTransport=ArcadeTransport;
   root.arcadeNativeExchange=nativeExchange;
   root.nativeDeviceApi=nativeDeviceApi;
-  if (typeof module !== "undefined") module.exports={ArcadeTransport,nativeExchange,nativeDeviceApi};
+  root.DeviceHealth=DeviceHealth;
+  if (typeof module !== "undefined") module.exports={ArcadeTransport,nativeExchange,nativeDeviceApi,DeviceHealth};
 })(typeof window !== "undefined" ? window : globalThis);

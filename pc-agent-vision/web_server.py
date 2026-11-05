@@ -447,59 +447,34 @@ async def handle_cmd(request: web.Request):
         return web.json_response({"error": str(e)}, status=500)
 
 async def handle_game(request: web.Request):
-    """掌上街机手柄搓键信号直通"""
+    """Deprecated endpoint: compatibility only, formal ArcadeManager authority."""
     try:
-        data = await request.json()
-        game = data.get("game")
-        loop = asyncio.get_running_loop()
-
-        if game == "snake":
-            dx = data.get("dx", 0)
-            dy = data.get("dy", 0)
-            await device_call(controller.snake_move, dx, dy)
-        elif game == "tetris":
-            action = str(data.get("action", "rot"))
-            await device_call(controller.tetris_action, action)
-        elif game == "mario":
-            from mario_runner import get_mario_session
-            mario = get_mario_session(controller, broadcast_ws)
-            action = data.get("action")
-            if action == "start":
-                await mario.start()
-            elif action == "stop":
-                await mario.stop()
-            elif action == "reset":
-                mario.reset()
-            elif action == "key":
-                k = data.get("key", "")
-                down = bool(data.get("down", True))
-                mario.key(k, down)
-            return web.json_response({
-                "status": "ok",
-                "running": mario.is_running,
-                "game_status": mario.status,
-                "hex": mario.current_hex
-            })
-        else:
-            return web.json_response({"error": "Unknown game"}, status=400)
-
-        return web.json_response({"status": "ok"})
-    except (ValueError, TypeError) as e:
-        return web.json_response({"error": str(e)}, status=400)
-    except ConnectionError as e:
-        return web.json_response({"error": str(e)}, status=503)
-    except Exception as e:
-        return web.json_response({"error": str(e)}, status=500)
+        data=await request.json()
+        if not isinstance(data,dict):raise ValueError('Expected JSON object')
+        gid={'mario':1,'snake':33,'tetris':41}.get(data.get('game'))
+        if gid is None:raise ValueError('Unknown game')
+        action=data.get('action','rot' if gid==41 else 'pulse');key=data.get('key');down=data.get('down',True)
+        if type(down) is not bool:raise ValueError('Invalid key state')
+        if gid==33 and action=='pulse':
+            dx,dy=data.get('dx',0),data.get('dy',0)
+            if type(dx) is not int or type(dy) is not int:raise ValueError('Invalid direction')
+            key={(-1,0):'left',(1,0):'right',(0,-1):'up',(0,1):'down'}.get((dx,dy))
+            if not key:raise ValueError('Invalid direction')
+        elif gid==41 and action in ('left','right','rot','drop'):
+            key={'left':'left','right':'right','rot':'up','drop':'b'}[action];action='pulse'
+        from arcade_runner import get_arcade_session
+        arcade=get_arcade_session(controller,broadcast_ws)
+        if hasattr(controller,'_arbiter'):controller._arbiter.claim_user()
+        result=await asyncio.to_thread(arcade.legacy_control,gid,action,key,down)
+        if arcade.simulated_mode and (not arcade.task or arcade.task.done()):
+            arcade.task=asyncio.create_task(arcade.run_loop())
+        return web.json_response(result,status=200 if result.get('status')=='ok' else 409)
+    except (ValueError,TypeError) as e:
+        return web.json_response({'status':'error','error':str(e)},status=400)
 
 async def handle_mario_frame(request: web.Request):
-    """获取马里奥实时帧与状态"""
-    from mario_runner import get_mario_session
-    mario = get_mario_session(controller, broadcast_ws)
-    return web.json_response({
-        "running": mario.is_running,
-        "status": mario.status,
-        "hex": mario.current_hex
-    })
+    """Old URL reads the same formal card; cannot start a second renderer."""
+    return await handle_arcade_frame(request)
 
 async def handle_arcade(request: web.Request):
     """统一街机卡带系统 API 接口 (硬件优先，ESP32 唯一权威来源)"""
@@ -513,6 +488,8 @@ async def handle_arcade(request: web.Request):
             return web.json_response({"status":"error","error":"invalid_simulation_flag"}, status=400)
         from arcade_runner import get_arcade_session
         arcade = get_arcade_session(controller, broadcast_ws)
+        if action not in ('status','frame','heartbeat') and hasattr(controller,'_arbiter'):
+            controller._arbiter.claim_user()
 
         if action == "select":
             raw_gid = data.get("game_id", 1)
@@ -639,13 +616,15 @@ async def handle_status(request: web.Request):
              model_error=agent.last_model_error,translation_error=agent.last_translation_error,tts_error=tts_error))
     from wifi_gateway import get_wifi_gateway
     gw = get_wifi_gateway()
+    probe=await asyncio.to_thread(gw.request,'{"cmd":"status"}')
     wifi_info = gw.get_status()
 
     return web.json_response({
         "status": "online",
         "host_ip": get_local_ip(wifi_info.get("board_sta_ip")),
         "port": controller.port,
-        "is_connected": wifi_info["wifi_online"],
+        "is_connected": probe.get('status')=='ok' or (probe.get('error')=='telemetry_busy' and wifi_info['wifi_online']),
+        "control_probe": probe.get('error') or probe.get('status'),
         "audio_usb_connected": controller.is_connected,
         "board_audio_recent": bool(listener and listener.has_board_audio and time.time() - listener._last_board_frame_time < 3),
         "model_error": agent.last_model_error,

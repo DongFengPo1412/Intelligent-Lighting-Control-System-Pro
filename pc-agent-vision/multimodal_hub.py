@@ -84,8 +84,8 @@ class MultimodalHub:
             "identity": {17},
             "fingertip": {26},
             "sandbox": {27},
-            "gesture_game": {19, 21},
-            "gaze_game": {19, 21},
+            "gesture_game": {19, 21, 32},
+            "gaze_game": {19, 21, 32},
         }
         self.automatic_enabled = mode in compatible[self.mode]
 
@@ -221,7 +221,13 @@ class MultimodalHub:
                     hand.get("pinch", False),
                     bool(hand),
                 )
-        elif self.mode in ("gaze_game", "gesture_game") and mode in (19, 21):
+        elif self.mode in ("gaze_game", "gesture_game") and mode in (19, 21,32):
+            game_mode=mode
+            if mode==32:
+                from arcade_runner import get_arcade_session
+                gid=get_arcade_session(self.controller).status.get('game_id')
+                if gid not in (33,41):return
+                game_mode=19 if gid==33 else 21
             x = observation.get("gaze_x", 0.5) if self.mode == "gaze_game" else hand.get("x", 0.5)
             y = observation.get("gaze_y", 0.5) if self.mode == "gaze_game" else hand.get("y", 0.5)
             valid = (
@@ -255,7 +261,7 @@ class MultimodalHub:
                 self.controller.performance(
                     reaction, observation.get("frustration", 0), game_success
                 )
-                if mode == 19:
+                if game_mode == 19:
                     dx, dy = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}[
                         direction
                     ]

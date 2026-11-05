@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original project monogram: no third-party character artwork. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="128" android:viewportHeight="128">
+    <path android:fillColor="#161519" android:pathData="M28,0L100,0Q128,0 128,28L128,100Q128,128 100,128L28,128Q0,128 0,100L0,28Q0,0 28,0Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#B77758" android:strokeWidth="2" android:pathData="M110,64A46,46 0,1 1,18 64A46,46 0,1 1,110 64" />
+    <path android:fillColor="#00000000" android:strokeColor="#EDB478" android:strokeWidth="3" android:pathData="M64,13L64,25M115,64L103,64M64,115L64,103M13,64L25,64" />
+    <path android:fillColor="#00000000" android:strokeColor="#C85C6A" android:strokeWidth="9" android:strokeLineJoin="round" android:pathData="M35,89L64,36L93,89M46,70L82,70" />
+    <path android:fillColor="#EDB478" android:pathData="M99,34A6,6 0,1 1,87 34A6,6 0,1 1,99 34" />
+</vector>

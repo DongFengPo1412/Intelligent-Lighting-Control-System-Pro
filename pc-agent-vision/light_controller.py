@@ -418,6 +418,11 @@ class LightController(ProControlMixin):
             raise ValueError("Mode must be an integer")
         if mode_num not in DIRECT_MODES:
             raise ValueError("Invalid display mode")
+        if mode_num in (19,21):
+            from arcade_runner import get_arcade_session
+            if hasattr(self,'_arbiter'):self._arbiter.claim_user()
+            if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(32)
+            return get_arcade_session(self).legacy_control(33 if mode_num==19 else 41,'start').get('status')=='ok'
         if hasattr(self,'_arbiter'):self._arbiter.claim_user()
         if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(mode_num)
         ok = self.send_json({"cmd": "mode", "val": mode_num})
@@ -430,12 +435,15 @@ class LightController(ProControlMixin):
         """贪吃蛇方向输入 (dx: -1, 0, 1; dy: -1, 0, 1)"""
         integer(dx,-1,1);integer(dy,-1,1)
         if abs(dx)+abs(dy)!=1:raise ValueError('Snake direction must be one cardinal step')
-        return self.send_json({"cmd": "game", "name": "snake", "dx": dx, "dy": dy})
+        from arcade_runner import get_arcade_session
+        key={(-1,0):'left',(1,0):'right',(0,-1):'up',(0,1):'down'}[(dx,dy)]
+        return get_arcade_session(self).legacy_control(33,'pulse',key).get('status')=='ok'
 
     def tetris_action(self, action: str) -> bool:
         """俄罗斯方块动作控制 (left, right, rot, drop)"""
         if action not in ('left','right','rot','drop'):raise ValueError('Invalid Tetris action')
-        return self.send_json({"cmd": "game", "name": "tetris", "action": action})
+        from arcade_runner import get_arcade_session
+        return get_arcade_session(self).legacy_control(41,'pulse',{'rot':'up','drop':'b'}.get(action,action)).get('status')=='ok'
 
     def set_theme(self, theme: str) -> bool:
         """设置视觉主题 (支持英文别名、数字编号、以及语义意象词汇)"""

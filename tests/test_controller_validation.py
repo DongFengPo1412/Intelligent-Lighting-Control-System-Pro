@@ -24,9 +24,18 @@ class Tests(unittest.TestCase):
     def tearDown(self):self.output.__exit__(None,None,None)
 
     def test_direct_mode_set(self):
-        for mode in list(range(18))+list(range(19,25))+list(range(26,32)):
+        # Game aliases now go through the formal cartridge adapter, not a raw mode.
+        for mode in list(range(18))+[20,22,23,24]+list(range(26,32)):
             self.assertTrue(self.client.set_mode(mode))
-        self.assertEqual(len(self.commands),30)
+        self.assertEqual(len(self.commands),28)
+
+    def test_legacy_game_modes_select_formal_cards_and_propagate_failure(self):
+        session=types.SimpleNamespace(legacy_control=lambda gid,action:{'status':'ok' if gid==33 else 'error'})
+        with patch('arcade_runner.get_arcade_session',return_value=session) as factory:
+            self.assertTrue(self.client.set_mode(19))
+            self.assertFalse(self.client.set_mode(21))
+            self.assertEqual(factory.call_count,2)
+        self.assertEqual(self.commands,[]) # no simultaneous legacy engine or fallback
 
     def test_countdown_requires_its_parameterized_command(self):
         with self.assertRaises(ValueError):self.client.set_mode(25)

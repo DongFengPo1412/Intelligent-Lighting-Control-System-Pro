@@ -9,6 +9,7 @@ import ipaddress
 import re
 import copy
 import hashlib
+import base64
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -58,6 +59,10 @@ class WiFiGateway:
         self._read_lock = threading.Lock()
         self._read_sequence = self._sequence
         self._read_boot = None
+        self._status_lock=threading.Lock()
+        self._status_sequence=self._sequence
+        self._status_boot=None
+        self._metrics={}
         self._remember_board()
         self._init_socket()
         if self.is_running:
@@ -93,6 +98,16 @@ class WiFiGateway:
                     # address advertised by an arbitrary beacon or trust it as online.
                     continue
                 elif isinstance(payload.get("request_id"), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,64}', payload['request_id']):
+                    if 'pixels_b64' in payload:
+                        try:
+                            encoded=payload['pixels_b64']
+                            if not isinstance(encoded,str) or len(encoded)!=1024:
+                                raise ValueError('invalid frame length')
+                            pixels=base64.b64decode(encoded,validate=True)
+                            if len(pixels)!=768: raise ValueError('invalid RGB888 frame')
+                            payload['pixels']=pixels.hex()
+                        except (ValueError,TypeError):
+                            payload={'request_id':payload['request_id'],'status':'error','error':'invalid_frame'}
                     if 'mode' in payload and (type(payload['mode']) is not int or not 0 <= payload['mode'] <= 255):
                         continue
                     with self._pending_lock:
@@ -103,6 +118,7 @@ class WiFiGateway:
                             if addr[1] != self.port or addr[0] not in pending["targets"]:
                                 continue
                             pending["result"] = payload
+                            pending["reply_bytes"]=len(data)
                             if payload.get('status') == 'ok':
                                 self.last_seen = time.monotonic()
                             if not addr[0].startswith("127.") and addr[0] != self.board_ap_ip:
@@ -190,7 +206,10 @@ class WiFiGateway:
             with self._pending_lock:
                 self._pending[rid] = pending
             try:
+                started=time.monotonic()
+                attempts=0
                 for _ in range(retries + 1):
+                    attempts+=1
                     for ip in pending["targets"]:
                         try:
                             self.sock.sendto(data, (ip, self.port))
@@ -200,8 +219,10 @@ class WiFiGateway:
                         self.last_result = pending["result"] or {"status": "error", "error": "transport_closed"}
                         if self.last_result.get('error') == 'boot_changed':
                             self.boot_id = None # Next explicit request rediscovers, never replay an action on a reboot.
+                        self._record_readback(cmd_str,started,attempts,len(data),pending.get('reply_bytes',0),self.last_result)
                         return self.last_result.get("status") == "ok"
                 self.last_result = {"request_id": rid, "status": "error", "error": "ack_timeout"}
+                self._record_readback(cmd_str,started,attempts,len(data),0,self.last_result)
                 return False
             finally:
                 with self._pending_lock:
@@ -209,6 +230,20 @@ class WiFiGateway:
 
     def broadcast_command(self, cmd_str: str) -> bool:
         return self.send_command(cmd_str)
+
+    def _record_readback(self,command,started,attempts,wire_bytes,reply_bytes,result):
+        try: kind=json.loads(command).get('cmd','text')
+        except (ValueError,AttributeError): kind='text'
+        if kind not in ('frame','status'): kind='control'
+        if not hasattr(self,'_metrics'):return
+        with self._pending_lock:
+            m=self._metrics.setdefault(kind,dict(requests=0,timeouts=0,errors=0,attempts=0,max_reply_bytes=0,max_ms=0))
+            m['requests']+=1;m['attempts']+=attempts
+            m['timeouts']+=int(result.get('error')=='ack_timeout')
+            m['errors']+=int(result.get('status')!='ok')
+            m['last_ms']=round((time.monotonic()-started)*1000,1)
+            m['max_ms']=max(m['max_ms'],m['last_ms'])
+            m['request_bytes']=wire_bytes;m['max_reply_bytes']=max(m['max_reply_bytes'],reply_bytes)
 
     def request(self, command):
         try:
@@ -219,22 +254,31 @@ class WiFiGateway:
             query=None
             read_only=False
         if read_only:
+            health=query.get('cmd')=='status'
+            if health and not hasattr(self,'_status_lock'):
+                self._status_lock=threading.Lock();self._status_sequence=self._sequence;self._status_boot=None
             # Share the receiver/pending table, but never the control wait lock,
             # result slot or replay sequence. The identity is stable per client.
-            if not self._read_lock.acquire(blocking=False):
+            lane=self._status_lock if health else self._read_lock
+            if not lane.acquire(blocking=False):
                 return {"status":"error","error":"telemetry_busy"}
             try:
                 channel=copy.copy(self)
                 channel._send_lock=threading.RLock()
-                channel.client_id=hashlib.sha256((self.client_id+':read').encode()).hexdigest()[:32]
-                channel._sequence=self._read_sequence
-                channel.boot_id=self._read_boot
-                channel.send_command(command,timeout=0.15,retries=0)
-                self._read_sequence=channel._sequence
-                self._read_boot=channel.boot_id
+                channel.client_id=hashlib.sha256((self.client_id+(':status' if health else ':read')).encode()).hexdigest()[:32]
+                channel._sequence=self._status_sequence if health else self._read_sequence
+                channel.boot_id=self._status_boot if health else self._read_boot
+                if query.get('cmd')=='frame':
+                    query['encoding']='base64'
+                    command=json.dumps(query,separators=(',',':'))
+                # Measured hotspot readbacks take up to 375 ms. One bounded
+                # disposable read, no retry storm; controls never take this lock.
+                channel.send_command(command,timeout=0.45,retries=0)
+                if health:self._status_sequence=channel._sequence;self._status_boot=channel.boot_id
+                else:self._read_sequence=channel._sequence;self._read_boot=channel.boot_id
                 return dict(channel.last_result)
             finally:
-                self._read_lock.release()
+                lane.release()
         with self._send_lock:
             if isinstance(query,dict) and query.get('cmd')=='arcade' and query.get('action') in ('input','heartbeat'):
                 self.send_command(command,timeout=0.2,retries=1)
@@ -246,10 +290,13 @@ class WiFiGateway:
         return self.send_command(json.dumps(payload, separators=(",", ":")))
 
     def get_status(self) -> Dict[str, Any]:
+        with self._pending_lock:
+            metrics=copy.deepcopy(getattr(self,'_metrics',{}))
         return {"wifi_online": self.is_online(), "board_sta_ip": self.board_sta_ip,
                 "board_ap_ip": self.board_ap_ip, "port": self.port,
                 "last_seen_sec": round(time.monotonic() - self.last_seen, 1) if self.last_seen else -1,
-                "last_mode": self.last_mode, "last_command": dict(self.last_result)}
+                "last_mode": self.last_mode, "last_command": dict(self.last_result),
+                "diagnostics":metrics}
 
     def close(self):
         self.is_running = False

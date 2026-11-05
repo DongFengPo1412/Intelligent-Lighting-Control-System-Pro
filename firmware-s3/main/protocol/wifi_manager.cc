@@ -14,6 +14,7 @@
 #include "arcade_manager.h"
 #include "network_auth.h"
 #include "udp_request_guard.h"
+#include "frame_encoding.h"
 #include <mbedtls/sha256.h>
 #include <math.h>
 #include "board_led.h"
@@ -357,17 +358,19 @@ void WifiManager::UdpServerTaskLoop()
             bool ok = !strchr(command, '\n') && !strchr(command, '\r') &&
                 (!json_command || cJSON_IsObject(validated)) &&
                 CommandDispatcher::GetInstance().ProcessLine(command, false);
-            cJSON_Delete(validated);
             auto& dm = DisplayManager::GetInstance();
             auto& dispatcher = CommandDispatcher::GetInstance();
 
             char cmd_name[32] = {0};
-            cJSON* parsed_command = cJSON_Parse(command);
+            bool compact_frame=false;
+            cJSON* parsed_command = validated;
             if (parsed_command) {
                 cJSON* parsed_name = cJSON_GetObjectItem(parsed_command, "cmd");
                 if (cJSON_IsString(parsed_name) && parsed_name->valuestring) {
                     strncpy(cmd_name, parsed_name->valuestring, sizeof(cmd_name) - 1);
                 }
+                cJSON* encoding=cJSON_GetObjectItemCaseSensitive(parsed_command,"encoding");
+                compact_frame=cJSON_IsString(encoding) && !strcmp(encoding->valuestring,"base64");
                 cJSON_Delete(parsed_command);
             }
             bool frame_query = (strcmp(cmd_name, "frame") == 0);
@@ -392,17 +395,25 @@ void WifiManager::UdpServerTaskLoop()
                 snprintf(frame_ack,sizeof(frame_ack),"{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"frame_encoding_failed\"}",id);
                 send_buf=frame_ack;
                 static char hex[1537];
+                static char encoded_frame[UdpRequestGuard::kReplySize];
                 uint32_t frame_id = dm.SnapshotFrame(hex, sizeof(hex));
+                if(compact_frame) {
+                    char* b64=encoded_frame;
+                    if(frame_encoding::HexToBase64(hex,b64,sizeof(encoded_frame)))
+                        snprintf(frame_ack,sizeof(frame_ack),"{\"request_id\":\"%.64s\",\"status\":\"ok\",\"mode\":%d,\"brightness\":%u,\"frame_id\":%u,\"frame_source\":\"hardware_pwm\",\"pixels_b64\":\"%.1024s\"}",id,(int)dm.GetMode(),unsigned(dm.GetBrightness()),unsigned(frame_id),b64);
+                    // <= 1300 bytes even with a maximum-length request ID: no
+                    // IP fragmentation on a standard 1500-byte Wi-Fi MTU.
+                } else {
                 cJSON* frame = cJSON_Parse(ack);
                 if (frame) {
                     cJSON_AddStringToObject(frame, "pixels", hex);
                     cJSON_AddNumberToObject(frame, "frame_id", frame_id);
                     cJSON_AddStringToObject(frame, "frame_source", "hardware_pwm");
-                    static char encoded_frame[UdpRequestGuard::kReplySize];
                     if (cJSON_GetObjectItemCaseSensitive(frame,"pixels") && cJSON_PrintPreallocated(frame, encoded_frame, sizeof(encoded_frame), false)) {
                         strcpy(frame_ack,encoded_frame);
                     }
                     cJSON_Delete(frame);
+                }
                 }
             } else if (arcade_cmd) {
                 snprintf(arcade_ack,sizeof(arcade_ack),"{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"status_encoding_failed\"}",id);

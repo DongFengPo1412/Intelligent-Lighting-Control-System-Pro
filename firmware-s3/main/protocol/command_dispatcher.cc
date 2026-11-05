@@ -6,21 +6,28 @@
 #include "audio_hal.h"
 #include "network_auth.h"
 #include "arcade_protocol.h"
+#include "usb_json_reply.h"
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <cJSON.h>
 #include <esp_log.h>
 #include <driver/usb_serial_jtag.h>
+#include <driver/usb_serial_jtag_vfs.h>
 
 static const char* TAG = "CmdDispatcher";
 
 static void SendReply(const char* msg)
 {
     if (!msg) return;
-    usb_serial_jtag_write_bytes(msg, strlen(msg), pdMS_TO_TICKS(100));
-    printf("%s", msg);
-    fflush(stdout);
+    size_t length=strlen(msg),offset=0;
+    while(offset<length) {
+        int written=usb_serial_jtag_write_bytes(msg+offset,length-offset,pdMS_TO_TICKS(100));
+        if(written<=0){ESP_LOGW(TAG,"USB reply incomplete");break;}
+        offset+=size_t(written);
+    }
+    // Replies have one physical USB owner. printf is also mirrored to USB when
+    // the secondary console is enabled, duplicating bytes (and pairing tokens).
 }
 
 CommandDispatcher& CommandDispatcher::GetInstance()
@@ -246,6 +253,12 @@ void CommandDispatcher::SerialTaskLoop()
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "usb_serial_jtag_driver_install: %s (might already be installed)", esp_err_to_name(err));
     }
+    if (usb_serial_jtag_is_driver_installed()) {
+        // The secondary console must share the installed driver's FIFO owner.
+        // Leaving VFS on its polling backend races direct driver replies and
+        // burns CPU waiting on an unread USB console during Wi-Fi commands.
+        usb_serial_jtag_vfs_use_driver();
+    }
 
     char line_buf[256];
     int line_idx = 0;
@@ -362,7 +375,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
     while (*line == ' ' || *line == '\t') line++;
     if (*line == '\0') return false;
 
-    ESP_LOGD(TAG, ">>> [收到外部指令]: %s", line);
+    ESP_LOGD(TAG, "External command received");
 
     // 1. 旧版音乐频谱流 (兼容中阶 "f,beat,b0,b1...")
     if (strncmp(line, "f,", 2) == 0) {
@@ -371,6 +384,28 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
 
     // 2. JSON 格式指令
     if (*line == '{') {
+        if (reply_serial) {
+            cJSON* request=cJSON_ParseWithOpts(line,nullptr,true);
+            cJSON* name=cJSON_GetObjectItemCaseSensitive(request,"cmd");
+            const bool pair=cJSON_IsString(name) && !strcasecmp(name->valuestring,"pair");
+            const bool status=cJSON_IsString(name) && !strcasecmp(name->valuestring,"status");
+            const char* key=pair ? NetworkAuth::GetInstance().TokenForUsbPairing() : "";
+            const bool ok=usb_json_reply::ValidId(request) && (pair ? key[0]!=0 : request && ProcessJsonCommand(line,false));
+            cJSON* response=cJSON_CreateObject();
+            cJSON_AddStringToObject(response,"status",ok?"ok":"error");
+            if(pair && ok)cJSON_AddStringToObject(response,"control_token",key);
+            if(status && ok) {
+                auto& dm=DisplayManager::GetInstance();
+                cJSON_AddStringToObject(response,"type","status");
+                cJSON_AddNumberToObject(response,"mode",(int)dm.GetMode());
+                cJSON_AddBoolToObject(response,"countdown_active",dm.IsCountdownActive());
+                cJSON_AddNumberToObject(response,"countdown_remaining",dm.GetCountdownRemainingSeconds());
+            }
+            if(!ok)cJSON_AddStringToObject(response,"error","invalid_command");
+            usb_json_reply::Send(response,request,SendReply);
+            cJSON_Delete(response);cJSON_Delete(request);
+            return ok;
+        }
         if (ProcessJsonCommand(line, reply_serial)) {
             if (reply_serial) SendReply("{\"status\":\"ok\"}\r\n");
             return true;
@@ -378,8 +413,11 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
     }
 
     // 3. 极速纯文本短语指令
-    if (*line != '{' && ProcessTextCommand(line, reply_serial)) {
-        if (reply_serial) SendReply("{\"status\":\"ok\"}\r\n");
+    if (*line != '{' && ProcessTextCommand(line, false)) {
+        if (reply_serial) {
+            if(!strcasecmp(line,"status"))SendStatus();
+            else SendReply("{\"status\":\"ok\"}\r\n");
+        }
         return true;
     }
 
@@ -392,7 +430,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
 {
     cJSON* root = cJSON_Parse(json_str);
     if (!root) {
-        ESP_LOGE(TAG, "JSON parse error: %s", json_str);
+        ESP_LOGE(TAG, "JSON parse error");
         return false;
     }
 
@@ -404,9 +442,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
 
     const char* cmd = cmd_item->valuestring;
     // Avoid USB-console backpressure on continuous Wi-Fi control streams.
-    if(strcmp(cmd,"mir")&&strcmp(cmd,"track")&&strcmp(cmd,"hand")&&
-       strcmp(cmd,"frame")&&strcmp(cmd,"pet_context"))
-        ESP_LOGI(TAG, ">>> [收到外部指令]: %s", json_str);
+    ESP_LOGD(TAG, "Command: %s", cmd);
     DisplayManager& dm = DisplayManager::GetInstance();
     if(!strcmp(cmd,"audio_abort")){AbortAudio();cJSON_Delete(root);return true;}
     int extended=HandleInteractionCommand(cmd,root,dm);
@@ -502,14 +538,8 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     }
     // Explicit physical USB pairing; this credential is NEVER returned over UDP.
     else if (strcasecmp(cmd, "pair") == 0) {
-        if (!reply_serial) { cJSON_Delete(root); return false; }
-        cJSON* pairing = cJSON_CreateObject();
-        const char* key = NetworkAuth::GetInstance().TokenForUsbPairing();
-        cJSON_AddStringToObject(pairing, "status", key[0] ? "ok" : "error");
-        cJSON_AddStringToObject(pairing, "control_token", key);
-        char* text = cJSON_PrintUnformatted(pairing);
-        if (text) { SendReply(text); SendReply("\n"); cJSON_free(text); }
-        cJSON_Delete(pairing); cJSON_Delete(root); return key[0] != 0;
+        // Handled only by the physical SerialTask/ProcessLine reply path.
+        cJSON_Delete(root); return false;
     }
     // {"cmd":"status"}
     else if (strcasecmp(cmd, "status") == 0) {

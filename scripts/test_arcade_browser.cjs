@@ -113,6 +113,8 @@ async function main() {
         b:getComputedStyle(document.getElementById("marioKeyB")).display})`);
       if(layout.help.length<5 || (([35,55,57,58,81,98].includes(gid)||Object.hasOwn(JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8")),gid))&&layout.help.length<30) || (gid===35&&layout.actions!=="none") || ([81,98].includes(gid)&&layout.b!=="none"))throw Error("Incorrect batch control layout: "+JSON.stringify(layout));
       const guide=await evaluate(`window.ARCADE_GAME_GUIDES[${gid}]`);
+      if([21,74].includes(gid) && layout.actions==='none')throw Error('Required launch/speed action hidden: '+gid);
+      if([9,10,14,18].includes(gid) && !await evaluate('document.getElementById("arcadeTapBig").textContent.trim().length>0'))throw Error('Missing tap/hold label: '+gid);
       if(!guide||layout.help!==guide.help||!descriptions.find(d=>d.id===gid&&d.text===guide.help))throw Error("Missing or inconsistent game help: "+gid);
       const expected=JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8"))[gid];
       if(expected){
@@ -137,6 +139,7 @@ async function main() {
     await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===0');
     const batchPng=await call("Page.captureScreenshot",{format:"png"});
     fs.writeFileSync(path.join(work,"lander.png"),Buffer.from(batchPng.data,"base64"));
+    if(await evaluate('!!document.getElementById("gamepad")||!!document.getElementById("difficulty")||!!document.querySelector("[data-mode=\\\"19\\\"],[data-mode=\\\"21\\\"]")'))throw Error("Duplicate legacy game controls");
     // Inspect catalogue + selected help at phone and desktop sizes. These are
     // screenshots of production UI against the explicit simulator, not LEDs.
     for(const [name,width,height,mobile] of [["compact",360,800,true],["phone",390,844,true],["landscape",844,390,true],["desktop",1440,1000,false]]){
@@ -150,7 +153,31 @@ async function main() {
       await evaluate('document.querySelector(".mario-help").scrollIntoView({block:"center",behavior:"instant"})');
       const helpShot=await call("Page.captureScreenshot",{format:"png"});
       fs.writeFileSync(path.join(work,name+"-help.png"),Buffer.from(helpShot.data,"base64"));
+      for(const page of ['overview','lights','music','settings']) {
+        await evaluate(`document.querySelector('[data-page="${page}"]').click()`);
+        await sleep(120);
+        if(await evaluate('document.documentElement.scrollWidth>window.innerWidth+1'))throw Error('Page overflow: '+name+'/'+page);
+        const pageShot=await call('Page.captureScreenshot',{format:'png'});
+        fs.writeFileSync(path.join(work,name+'-'+page+'.png'),Buffer.from(pageShot.data,'base64'));
+      }
+      await evaluate('document.querySelector(\'[data-page="interaction"]\').click()');
     }
+    // Fault injection exercises the actual page polling catch path, not just a
+    // standalone health helper. A lost preview must retain both pixels and controls.
+    await evaluate('document.getElementById("marioStopBtn").click();document.querySelector(\'[data-page="lights"]\').click()');
+    await until('document.getElementById("marioContainer").style.display==="none"&&window.__replies.at(-1)?.status==="ok"');
+    await evaluate('document.querySelector(\'[data-page="lights"]\').click()');
+    await evaluate('document.querySelector(\'[data-mode="2"]\').click()');
+    await until('document.getElementById("modeName").textContent==="深蓝"');
+    await until('document.getElementById("frameTag").textContent==="模拟预览"');
+    const previewBefore=await evaluate('document.getElementById("matrixCanvas").toDataURL()');
+    await evaluate(`window.__healthyFetch=window.fetch;window.fetch=(url,options)=>url==="/api/pro/frame"?Promise.resolve(new Response('{"error":"injected_frame_timeout"}',{status:503})):window.__healthyFetch(url,options)`);
+    await until('document.getElementById("frameTag").textContent==="预览延迟"');
+    const fault=await evaluate(`({disabled:document.querySelector('[data-mode="2"]').disabled,connection:document.getElementById("connectionText").textContent,pixels:document.getElementById("matrixCanvas").toDataURL()})`);
+    if(fault.disabled||fault.pixels!==previewBefore)throw Error('Preview failure disabled controls or cleared pixels');
+    await evaluate('window.fetch=window.__healthyFetch');
+    await until('document.getElementById("frameTag").textContent==="模拟预览"');
+    fs.writeFileSync(path.join(work,'preview-fault.json'),JSON.stringify({controlsEnabled:!fault.disabled,connection:fault.connection,pixelsRetained:fault.pixels===previewBefore},null,2));
     fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,batchLayouts,descriptions,exceptions},null,2));
     if(exceptions.length)throw Error(JSON.stringify(exceptions));
     console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; Pong 36->4->0 and Lander 18->2->0 multi-touch; batch layouts/help; authoritative difficulty/volume settings. Physical hardware NOT_TESTED.`);

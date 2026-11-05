@@ -343,6 +343,29 @@ class ArcadeSession:
         return True
 
     @synchronized
+    def legacy_control(self,game_id,action,key=None,down=True):
+        """Compatibility routes share the formal cartridge; never launch another engine."""
+        if game_id not in (1,33,41):return {'status':'error','error':'invalid_game_id'}
+        if action=='start':
+            selected=self.select_game(game_id)
+            if selected.get('status')!='ok':return selected
+            return self.start()
+        # Input must never silently select or restart a different cartridge.
+        status=self.read_status()
+        if status.get('status')!='ok':return status
+        if status.get('game_status',{}).get('game_id')!=game_id:
+            return {'status':'error','error':'cartridge_not_selected'}
+        if action=='pulse':
+            if key not in KEY_MAP:return {'status':'error','error':'invalid_key'}
+            return self.input_state(self.keys_down,KEY_MAP[key])
+        if action=='key':
+            if not isinstance(key,str) or key not in KEY_MAP or type(down) is not bool:
+                return {'status':'error','error':'invalid_key'}
+            return self.key(key,down)
+        methods={'stop':self.stop,'exit':self.stop,'pause':self.pause,'resume':self.resume,'reset':self.reset,'status':self.read_status}
+        return methods[action]() if action in methods else {'status':'error','error':'unknown_action'}
+
+    @synchronized
     def select_game(self, game_id: int, force_simulation: bool = False) -> Dict[str, Any]:
         """选择卡带：向 ESP32 下发正式指令或在显式离线模拟时切换本地卡带"""
         valid_ids = self.cartridges

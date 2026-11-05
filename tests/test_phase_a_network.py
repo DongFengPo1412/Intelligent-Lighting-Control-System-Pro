@@ -145,6 +145,9 @@ class UdpIntegrationTests(unittest.TestCase):
                 if rid not in self.cache:
                     self.executions[rid]+=1
                     self.cache[rid]={'request_id':rid,'status':'ok','pixels':'ab'*768,'frame_id':1}
+                    if getattr(self,'compact_frames',False) and json.loads(value['command']).get('cmd')=='frame':
+                        import base64
+                        self.cache[rid]={'request_id':rid,'status':'ok','pixels_b64':base64.b64encode(bytes.fromhex('ab'*768)).decode(),'frame_id':1}
                     # Wrong IDs and malformed packets must never complete the request.
                     self.server.sendto(b'{bad json',addr)
                     self.server.sendto(b'{"request_id":["unhashable"],"status":"ok"}',addr)
@@ -183,6 +186,22 @@ class UdpIntegrationTests(unittest.TestCase):
             self.assertEqual(len(ids),2)
         finally:
             reader.join(2)
+
+    def test_compact_frames_decode_exactly_and_request_negotiates_encoding(self):
+        self.drop=False;self.compact_frames=True
+        reply=self.gateway.request('{"cmd":"frame"}')
+        self.assertEqual(reply['pixels'],'ab'*768)
+        self.assertEqual(json.loads(json.loads(self.wire[-1])['command'])['encoding'],'base64')
+
+    def test_dropped_preview_does_not_block_explicit_control_health_probe(self):
+        self.drop=False;self.drop_frames=True;self.frame_started=threading.Event()
+        result=[];reader=threading.Thread(target=lambda:result.append(self.gateway.request('{"cmd":"frame"}')))
+        reader.start()
+        try:
+            self.assertTrue(self.frame_started.wait(1))
+            self.assertEqual(self.gateway.request('{"cmd":"status"}')['status'],'ok')
+            self.assertTrue(reader.is_alive())
+        finally:reader.join(2)
 
 
 class ArcadeFailureTests(unittest.TestCase):

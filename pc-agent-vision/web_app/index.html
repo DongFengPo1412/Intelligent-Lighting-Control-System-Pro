@@ -8,9 +8,9 @@
   <meta name="theme-color" content="#111316" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Amadeus · 红莉栖的光影实验室</title>
-  <link rel="icon" href="assets/icon.png" type="image/png" />
+  <link rel="icon" href="assets/amadeus.svg" type="image/png" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20261105_guides" />
+  <link rel="stylesheet" href="style.css?v=20261105_closure" />
 </head>
 
 <body>
@@ -493,7 +493,7 @@
         <div class="two-columns">
           <article class="card arcade-card">
             <div class="card-heading">
-              <h2>掌上街机 · 100 合 1</h2>
+              <h2>LED Mini Arcade 100</h2>
               <span class="subtle-badge" id="gameState">选择游戏开始</span>
             </div>
             <div class="arcade-filter-bar" role="search" aria-label="100款街机分类与搜索">
@@ -629,8 +629,9 @@
                 <span id="marioSyncBadge" class="mario-sync-pill">🟢 ESP32 硬件模式</span>
               </div>
               <div class="mario-screen-housing">
-                <canvas id="marioCanvas" width="320" height="320" aria-label="16×16 马里奥游戏画面"></canvas>
+                <canvas id="marioCanvas" width="320" height="320" aria-label="当前街机卡带的16×16灯板回读"></canvas>
               </div>
+              <p id="arcadePreviewStatus" class="field-help" aria-live="polite">等待读取当前卡带画面</p>
               <div class="mario-progress-track">
                 <div id="marioProgFill" class="mario-progress-bar"></div>
               </div>
@@ -729,33 +730,7 @@
                 </p>
               </div>
             </div>
-            <div class="gamepad" id="gamepad" tabindex="0" role="group" aria-label="游戏手柄，支持方向键">
-              <div class="dpad">
-                <button data-direction="up" aria-label="向上 / 旋转" data-hardware>
-                  ↑</button><button data-direction="left" aria-label="向左" data-hardware>
-                  ←</button><span>+</span><button data-direction="right" aria-label="向右" data-hardware>
-                  →</button><button data-direction="down" aria-label="向下 / 快速下落" data-hardware>
-                  ↓
-                </button>
-              </div>
-              <div class="game-actions">
-                <button class="game-action" data-game-action="rot" data-hardware>
-                  A<small>旋转</small></button><button class="game-action alternative" data-game-action="drop"
-                  data-hardware>
-                  B<small>快速下落</small>
-                </button>
-              </div>
-            </div>
-            <p class="field-help">
-              操作在灯板上运行；也可以聚焦手柄后使用键盘方向键。
-            </p>
-            <div class="slider-control">
-              <label for="difficulty">旧版贪吃蛇／方块难度 <output id="difficultyValue">中等</output></label><input id="difficulty"
-                type="range" min="0" max="1" step=".05" value=".5" /><label class="switch-label"><input id="adaptive"
-                  type="checkbox" checked />自适应难度</label><button id="setDifficulty" class="secondary" data-hardware>
-                应用难度
-              </button>
-            </div>
+            <p class="field-help">所有游戏都在上方同一套卡带系统中运行。选择卡带后查看操作简介，再点击开始；离开页面会释放按键并安全暂停。</p>
           </article>
           <article class="card vision-card">
             <div class="card-heading">
@@ -937,10 +912,10 @@
   </dialog>
   <script src="matrix3d.js?v=20261025u"></script>
   <script src="paired_http.js?v=20261104"></script>
-  <script src="arcade_transport.js?v=20261104"></script>
+  <script src="arcade_transport.js?v=20261105_closure"></script>
   <script src="arcade_b3_rules.js"></script>
   <script src="arcade_game_guides.js"></script>
-  <script src="app.js?v=20261105_guides"></script>
+  <script src="app.js?v=20261105_closure"></script>
 </body>
 
 </html>
