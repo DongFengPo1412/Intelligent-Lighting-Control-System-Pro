@@ -1073,10 +1073,17 @@
       const item = ARCADE_CATALOG_100[gid - 1];
       const available=ArcadeTransport.registeredIds.includes(gid);
       btn.disabled=!available;
-      btn.title=available?"已接入软件，实机待验":"计划项目，尚未接入";
+      const guide=window.ARCADE_GAME_GUIDES?.[gid];
+      btn.title=guide?.help || "游玩说明尚未加载";
+      if(!btn.querySelector(".arcade-game-description")){
+        const name=document.createElement("strong");name.textContent=btn.textContent;
+        const description=document.createElement("span");description.className="arcade-game-description";
+        description.textContent=guide?.help || "游玩说明尚未加载";
+        btn.replaceChildren(name,description);
+      }
       btn.dataset.available=String(available);
       const matchCat = cat === "all" || btn.dataset.arcadeCat === cat;
-      const hay = `${btn.dataset.arcadeId} ${gid} ${item ? item[2] + " " + item[3] : btn.textContent}`.toLowerCase();
+      const hay = `${btn.dataset.arcadeId} ${gid} ${item ? item[2] + " " + item[3] : btn.textContent} ${guide?.help||""}`.toLowerCase();
       const show = matchCat && (!q || hay.includes(q));
       btn.hidden = !show;
       if (show) visible++;
@@ -1119,24 +1126,8 @@
     activeControlType = ct;
     const gNum = Number(gid || state.arcadeGid || 1);
     const help=document.querySelector(".mario-help");
-    const specificHelp={
-      ...Object.fromEntries(Object.entries(window.ARCADE_B3_RULES||{}).map(([id,v])=>[id,v.help])),
-      35:"方向键挖土、收集8颗青色宝石，再进入右下出口；可水平推石，提防头顶落石。三档改变落石速度和限时。",
-      55:"方向键移动光标，A 旋转镜面并进入安全预览；B 确认发射/停止。只有发射才会充能或引爆炸弹；暂停与重新开局使用上方按钮。共四关。",
-      57:"A 选择下一辆车，B 上一辆；白点标示当前车辆。横车用左右，竖车用上下；让红车到达右侧出口。移动次数有限。",
-      58:"先编程：↑追加前进，←追加左转，→追加右转，↓追加等待；A 执行，B 撤销末条（执行时中止）。踩黄开关打开红门，再到绿出口。顶行显示指令，白点为执行位置。",
-      81:"沿蓝色安全区移动；A 开启画线，再进入空白区并回到安全区闭合。粉色敌人碰到黄线或自己折返碰线会失败；圈占50/60/70%获胜。",
-      98:"左右旋转，A 或 ↑ 喷气；黄色顶条是燃料。缓慢、近乎竖直地落在绿色平台，岩地或高速接触会坠毁。支持转向与喷气同时按住。",
-      17:"四轨对应 1/2/3/4 或 ←/↓/↑/→；在下方判定线击中音符。三拍预滚，完成64音符；乱按会扣容错。音效会让路于语音/音乐/收音。",
-      85:"方向键移动光标，A 给附近行走旅鼠分配技能，B 按 阻挡→搭桥→挖掘 循环；默认挖掘。顶端亮点提示所选技能；三关均须达到救援目标。",
-      92:"方向键移动刀光，A/B 挥刀，也可在灯板预览上划动；挥刀存在短冷却。切够40个水果，避开红色脉冲炸弹。",
-      95:"左右绕核心移动白点，穿过墙壁缺口；通过30道墙或存活45秒获胜。"
-    };
-    if(help)help.textContent=specificHelp[gNum] || (gNum===20
-      ? "P1 使用 ↑/↓；本地双人模式的 P2 使用 A/B（键盘 J/K）。AI/双人切换保留比分与暂停状态。"
-      : gNum===1
-        ? "手机支持多点触控：左右移动、A 跳跃、B 加速；电脑使用方向键、空格和 Shift。"
-        : "按当前卡带的手柄操作；支持多点触控和独立松键。电脑可使用方向键、J/K 与空格。");
+    const selectedGuide=window.ARCADE_GAME_GUIDES?.[gNum];
+    if(help)help.textContent=selectedGuide?.help || "游玩说明尚未加载，请刷新页面。";
 
     if (ct === 0) {
       // CTRL_TAP_SINGLE (#009 Flappy, #010 Stack, #012 Knife Hit, #013 Pendulum, #014 Orbit Hop, #018 Red/Green Light)
@@ -1227,7 +1218,7 @@
       if (actions) actions.style.display = "none";
       if (versus) versus.style.display = "flex";
     }
-    const b3=window.ARCADE_B3_RULES?.[gNum];
+    const b3=selectedGuide;
     if(b3 && ct===3){if(btnA_sub)btnA_sub.textContent=b3.a||"确认";if(btnB_sub)btnB_sub.textContent=b3.b||"";if(keyB)keyB.style.display=b3.b?"inline-flex":"none";}
     if(b3 && ct===0 && tapBtn)tapBtn.textContent=b3.a;
 

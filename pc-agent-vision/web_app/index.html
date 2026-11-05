@@ -10,7 +10,7 @@
   <title>Amadeus · 红莉栖的光影实验室</title>
   <link rel="icon" href="assets/icon.png" type="image/png" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20261103_mario_touch_v6" />
+  <link rel="stylesheet" href="style.css?v=20261105_guides" />
 </head>
 
 <body>
@@ -519,6 +519,7 @@
               <input id="arcadeSearchInput" type="search" aria-label="搜索游戏编号或名称" placeholder="搜索 #001~#100 或名称…" maxlength="60" autocomplete="off" />
               <span class="subtle-badge" id="arcadeVisibleCount">100 / 100</span>
             </div>
+            <p class="arcade-catalog-note">先看玩法，再选卡带。网页与 APK 使用同一套手柄；实体灯板运行游戏，预览显示回读画面。</p>
             <div class="game-selection" id="arcadeGameGrid" role="group" aria-label="100款点阵街机游戏选择">
               <button class="secondary" data-arcade-id="001" data-arcade-cat="A" data-game="mario" id="btnArcade001">#001 超级马里奥</button>
               <button class="secondary" data-arcade-id="002" data-arcade-cat="A" id="btnArcade002">#002 涂鸦跳跃</button>
@@ -724,7 +725,7 @@
                   <p id="arcadeSettingsStatus" class="field-help">以设备回执为准；语音、音乐或收音占用时游戏音效让路。</p>
                 </fieldset>
                 <p class="field-help mario-help">
-                  📱 手机触屏直接畅玩（多点触控已优化，长按 A 跳更高，按住 B 加速冲刺）；电脑支持键盘 WASD / 方向键 / 空格。
+                  选择卡带后，这里会显示该游戏的操作与目标。手机支持多点触控，电脑可使用键盘。
                 </p>
               </div>
             </div>
@@ -749,7 +750,7 @@
               操作在灯板上运行；也可以聚焦手柄后使用键盘方向键。
             </p>
             <div class="slider-control">
-              <label for="difficulty">游戏难度 <output id="difficultyValue">中等</output></label><input id="difficulty"
+              <label for="difficulty">旧版贪吃蛇／方块难度 <output id="difficultyValue">中等</output></label><input id="difficulty"
                 type="range" min="0" max="1" step=".05" value=".5" /><label class="switch-label"><input id="adaptive"
                   type="checkbox" checked />自适应难度</label><button id="setDifficulty" class="secondary" data-hardware>
                 应用难度
@@ -938,7 +939,8 @@
   <script src="paired_http.js?v=20261104"></script>
   <script src="arcade_transport.js?v=20261104"></script>
   <script src="arcade_b3_rules.js"></script>
-  <script src="app.js?v=20261104"></script>
+  <script src="arcade_game_guides.js"></script>
+  <script src="app.js?v=20261105_guides"></script>
 </body>
 
 </html>

@@ -127,6 +127,14 @@ uint32_t GameEngine::RunSnake()
         else if(direction==2 && snake_dx_!=1){snake_dx_=-1;snake_dy_=0;}
         else if(direction==3 && snake_dy_!=-1){snake_dx_=0;snake_dy_=1;}
         else if(direction==4 && snake_dy_!=1){snake_dx_=0;snake_dy_=-1;}
+        const int next_x=snake_x_[0]+snake_dx_;
+        const int next_y=snake_y_[0]+snake_dy_;
+        // The classic rules match arcade #033: walls are lethal. Check before
+        // moving the body so an invalid head never reaches the renderer.
+        if(next_x<0 || next_x>=MATRIX_WIDTH || next_y<0 || next_y>=MATRIX_HEIGHT){
+            snake_game_over_=true;
+            return 50;
+        }
         int tail_x=snake_x_[snake_len_-1],tail_y=snake_y_[snake_len_-1];
 
         // 移动蛇身
@@ -135,9 +143,8 @@ uint32_t GameEngine::RunSnake()
             snake_y_[i] = snake_y_[i - 1];
         }
 
-        // 环形穿墙移动
-        snake_x_[0] = (snake_x_[0] + snake_dx_ + 16) % 16;
-        snake_y_[0] = (snake_y_[0] + snake_dy_ + 16) % 16;
+        snake_x_[0] = next_x;
+        snake_y_[0] = next_y;
 
         // 碰撞自噬检测
         for (int i = 1; i < snake_len_; i++) {

@@ -53,6 +53,8 @@ async function main() {
     await call("Emulation.setTouchEmulationEnabled",{enabled:true,maxTouchPoints:5});
     await call("Page.navigate",{url:base+"/"});
     await until('typeof ArcadeTransport!=="undefined"&&document.querySelectorAll("[data-available]").length===100');
+    const descriptions=await evaluate(`Array.from(document.querySelectorAll("#arcadeGameGrid [data-arcade-id]")).map(b=>({id:Number(b.dataset.arcadeId),text:b.querySelector(".arcade-game-description")?.textContent}))`);
+    if(descriptions.length!==100||descriptions.some(d=>!d.text||d.text.length<30))throw Error("Incomplete catalogue introductions");
     await evaluate(`window.__calls=[];window.__replies=[];window.__fetch=window.fetch;window.fetch=(url,options)=>{
       try{if(url==="/api/arcade")window.__calls.push(JSON.parse(options.body));}catch(_){}
       return window.__fetch(url,options).then(reply=>{if(url==="/api/arcade")reply.clone().json().then(v=>window.__replies.push(v));return reply;});
@@ -104,12 +106,14 @@ async function main() {
     const batchLayouts=[];
     for(const gid of [...Array.from({length:100},(_,i)=>i+1),98]) {
       await evaluate(`document.getElementById("btnArcade${String(gid).padStart(3,"0")}").click()`);
-      await until(`window.__replies.some(r=>r.game_status?.game_id===${gid}&&r.game_status.state===0)`);
+      await until(`window.__replies.at(-1)?.game_status?.game_id===${gid}&&document.getElementById("arcadeGameTitle").textContent.includes("[#${String(gid).padStart(3,"0")}]")&&document.querySelector(".mario-help").textContent===window.ARCADE_GAME_GUIDES[${gid}].help&&document.getElementById("marioStateTag").textContent.includes("TITLE")`);
       const layout=await evaluate(`({gid:${gid},help:document.querySelector(".mario-help").textContent,
         actions:getComputedStyle(document.getElementById("arcadeActions")).display,
         a:document.querySelector("#marioKeyA .btn-sub").textContent,
         b:getComputedStyle(document.getElementById("marioKeyB")).display})`);
       if(layout.help.length<5 || (([35,55,57,58,81,98].includes(gid)||Object.hasOwn(JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8")),gid))&&layout.help.length<30) || (gid===35&&layout.actions!=="none") || ([81,98].includes(gid)&&layout.b!=="none"))throw Error("Incorrect batch control layout: "+JSON.stringify(layout));
+      const guide=await evaluate(`window.ARCADE_GAME_GUIDES[${gid}]`);
+      if(!guide||layout.help!==guide.help||!descriptions.find(d=>d.id===gid&&d.text===guide.help))throw Error("Missing or inconsistent game help: "+gid);
       const expected=JSON.parse(fs.readFileSync(path.join(__dirname,"../tests/fixtures/phase_b3_rules.json"),"utf8"))[gid];
       if(expected){
         const b3=await evaluate(`window.ARCADE_B3_RULES[${gid}]`);
@@ -118,11 +122,13 @@ async function main() {
       }
       batchLayouts.push(layout);
     }
-    await evaluate('document.getElementById("arcadeDpad").scrollIntoView({block:"center",behavior:"instant"})');
-    const landerPoints=await evaluate(`["marioKeyRight","marioKeyA"].map((id,i)=>{
-      const r=document.getElementById(id).getBoundingClientRect();return {id:i+1,x:r.x+r.width/2,y:r.y+r.height/2,radiusX:1,radiusY:1,force:1};})`);
     await evaluate('document.getElementById("marioStartBtn").click()');
     await until('document.getElementById("marioStateTag").textContent.includes("PLAYING")');
+    await evaluate('document.getElementById("arcadeDpad").scrollIntoView({block:"center",behavior:"instant"})');
+    await sleep(150);
+    const landerPoints=await evaluate(`["marioKeyRight","marioKeyA"].map((id,i)=>{
+      const r=document.getElementById(id).getBoundingClientRect();return {id:i+1,x:r.x+r.width/2,y:r.y+r.height/2,radiusX:1,radiusY:1,force:1};})`);
+    if(landerPoints.some(p=>p.x<=0||p.y<70||p.y>850))throw Error("Lander controls outside viewport: "+JSON.stringify(landerPoints));
     await call("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:landerPoints});
     await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===18');
     await call("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[landerPoints[1]]});
@@ -131,7 +137,21 @@ async function main() {
     await until('window.__calls.filter(c=>c.action==="input").at(-1)?.down===0');
     const batchPng=await call("Page.captureScreenshot",{format:"png"});
     fs.writeFileSync(path.join(work,"lander.png"),Buffer.from(batchPng.data,"base64"));
-    fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,batchLayouts,exceptions},null,2));
+    // Inspect catalogue + selected help at phone and desktop sizes. These are
+    // screenshots of production UI against the explicit simulator, not LEDs.
+    for(const [name,width,height,mobile] of [["compact",360,800,true],["phone",390,844,true],["landscape",844,390,true],["desktop",1440,1000,false]]){
+      await call("Emulation.setDeviceMetricsOverride",{width,height,deviceScaleFactor:1,mobile});
+      await evaluate('document.getElementById("arcadeGameGrid").scrollIntoView({block:"start",behavior:"instant"})');
+      await sleep(150);
+      const overflow=await evaluate('document.documentElement.scrollWidth>window.innerWidth+1');
+      if(overflow)throw Error("Horizontal overflow: "+name);
+      const shot=await call("Page.captureScreenshot",{format:"png"});
+      fs.writeFileSync(path.join(work,name+"-catalogue.png"),Buffer.from(shot.data,"base64"));
+      await evaluate('document.querySelector(".mario-help").scrollIntoView({block:"center",behavior:"instant"})');
+      const helpShot=await call("Page.captureScreenshot",{format:"png"});
+      fs.writeFileSync(path.join(work,name+"-help.png"),Buffer.from(helpShot.data,"base64"));
+    }
+    fs.writeFileSync(path.join(work,"result.json"),JSON.stringify({result,configuration,batchLayouts,descriptions,exceptions},null,2));
     if(exceptions.length)throw Error(JSON.stringify(exceptions));
     console.log(`Chromium UI passed: ${result.registered} registered/${result.planned} planned; Pong 36->4->0 and Lander 18->2->0 multi-touch; batch layouts/help; authoritative difficulty/volume settings. Physical hardware NOT_TESTED.`);
   } finally {if(socket)socket.close();chrome.kill();}
