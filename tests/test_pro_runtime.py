@@ -30,6 +30,17 @@ def task_directory():
 
 
 class RuntimeContracts(unittest.TestCase):
+    def test_echo_reset_drops_previous_playback_reference_and_adaptation(self):
+        from echo_cancellation import EchoCanceller
+        echo = EchoCanceller(taps=4, delay_samples=8)
+        echo.feed_reference(bytes(32))
+        echo.weights.fill(1)
+        echo.history.fill(1)
+        echo.reset()
+        self.assertFalse(echo.weights.any())
+        self.assertFalse(echo.history.any())
+        self.assertEqual(list(echo.reference), [0.0]*8)
+
     def test_audio_abort_fences_old_tcp_before_udp_and_settles_counters(self):
         import types
         order = []
@@ -102,8 +113,12 @@ class RuntimeContracts(unittest.TestCase):
                                      command_result=status)
         client = WiFiPcmClient(ctrl)
         client.connect = lambda: True
-        client._send = lambda kind, data: sent.append(data)
+        def send(kind, data):
+            self.assertTrue(client.playback_active)
+            sent.append(data)
+        client._send = send
         self.assertTrue(client.play_stream(iter([bytes(64), bytes(96)])))
+        self.assertFalse(client.playback_active)
         self.assertEqual(b''.join(sent), bytes(160))
         self.assertEqual(len(queries), 2)
         self.assertEqual(mic, [False, True])

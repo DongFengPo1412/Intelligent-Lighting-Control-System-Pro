@@ -40,6 +40,25 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_duplex_standby_pcm_bypasses_experimental_echo_filter(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = listener.duplex = True
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False)
+        listener.controller.echo_canceller = types.SimpleNamespace(
+            process=lambda pcm:self.fail('Idle microphone must bypass AEC'))
+        pcm = bytes(960)
+        listener._on_board_pcm(pcm)
+        self.assertEqual(listener._pcm_queue.get_nowait(), pcm)
+
+    def test_echo_filter_only_processes_microphone_when_speaker_active(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = listener.duplex = True
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=True)
+        filtered = b'\x01\x00' * 480
+        listener.controller.echo_canceller = types.SimpleNamespace(process=lambda pcm:filtered)
+        listener._on_board_pcm(bytes(960))
+        self.assertEqual(listener._pcm_queue.get_nowait(), filtered)
+
     def test_rejected_wake_probe_is_visible_without_asr_or_callback(self):
         listener = self._create_isolated_listener()
         listener.is_awake = False

@@ -46,6 +46,7 @@ class WiFiPcmClient:
         self.connected = False
         self.tx = threading.Lock()
         self.play_lock = threading.Lock()
+        self.playback_active = False
         self.cancelled = threading.Event()
         self.closed = threading.Event()
         self.last_error = None
@@ -202,6 +203,7 @@ class WiFiPcmClient:
                     return False
                 before = self.controller.command_result({"cmd": "status"})
                 start = time.monotonic()
+                self.playback_active = True
                 self.controller.playback_started_at = start
                 total = 0
                 for pcm in chain([first], chunks):
@@ -242,6 +244,7 @@ class WiFiPcmClient:
                 self.last_error = str(exc)
                 return False
             finally:
+                self.playback_active = False
                 if restore and not duplex:
                     self.controller.enable_mic(True)
 

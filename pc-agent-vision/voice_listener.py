@@ -276,7 +276,11 @@ class VoiceListener:
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
         if not self.is_listening:
             return
-        if self.duplex or getattr(self, '_music_monitor', False):
+        audio = getattr(self.controller, '_network_audio', None)
+        # Never make standby/ordinary listening depend on experimental AEC.
+        # It is needed only while the physical speaker is actually playing.
+        if ((self.duplex or getattr(self, '_music_monitor', False))
+                and getattr(audio, 'playback_active', False)):
             pcm_bytes=self.controller.echo_canceller.process(pcm_bytes)
         if self.is_paused:
             if (self.duplex or getattr(self, '_music_monitor', False)) and not getattr(self, '_wake_ack_active', False):
@@ -336,6 +340,9 @@ class VoiceListener:
             self.controller.enable_mic(self._music_monitor)
             return
         time.sleep(0.25) # 等待房间声学混响自然衰减
+        echo = getattr(self.controller, 'echo_canceller', None)
+        if echo is not None and hasattr(echo, 'reset'):
+            echo.reset()
         while not self._pcm_queue.empty():
             try:
                 self._pcm_queue.get_nowait()

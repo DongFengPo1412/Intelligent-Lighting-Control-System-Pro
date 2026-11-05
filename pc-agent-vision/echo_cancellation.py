@@ -10,8 +10,17 @@ class EchoCanceller:
         self.weights = np.zeros(taps)
         self.history = np.zeros(taps)
         self.rate = rate
+        self.delay_samples = delay_samples
         self.reference = deque([0.0] * delay_samples)
         self.lock = threading.Lock()
+
+    def reset(self):
+        """Do not reuse discarded playback references in the next listen turn."""
+        with self.lock:
+            self.weights.fill(0)
+            self.history.fill(0)
+            self.reference.clear()
+            self.reference.extend([0.0] * self.delay_samples)
 
     def feed_reference(self, pcm):
         samples = np.frombuffer(pcm, dtype="<i2").astype(float) / 32768
