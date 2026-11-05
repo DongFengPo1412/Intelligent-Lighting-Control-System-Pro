@@ -406,7 +406,8 @@ class LightController(ProControlMixin):
             if not (self.play_audio_pcm(ready_pcm) if ready_pcm else self.play_beep()):
                 print("[语音启动失败] 就绪提示音播放未获确认")
                 return False
-            return self.set_board_led("listening")
+            waiting_question = getattr(getattr(self, '_voice_listener', None), 'is_awake', False)
+            return self.set_board_led('listening' if waiting_question else 'off')
 
         if async_mode:
             thread = threading.Thread(target=_ceremony, daemon=True)

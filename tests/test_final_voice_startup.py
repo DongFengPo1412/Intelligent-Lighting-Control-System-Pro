@@ -178,7 +178,7 @@ class VoiceStartupTests(unittest.TestCase):
                     set_board_led=lambda mode: events.append(mode) or True,
                     play_beep=lambda: events.append('beep') or sound)
                 self.assertEqual(LightController.run_boot_ceremony(ctrl), audio and sound)
-                self.assertEqual('listening' in events, audio and sound)
+                self.assertEqual('off' in events, audio and sound)
                 self.assertEqual('beep' in events, audio)
                 self.assertNotIn('pairing', events)  # Already authenticated, not re-pairing.
 

@@ -187,6 +187,33 @@ class ListenerLifecycleTests(unittest.TestCase):
         self.assertEqual(listener._current_led_mode, 'listening')
         self.assertEqual(calls, ['listening', 'listening'])
 
+    def test_mid_idle_led_does_not_flash_for_background_vad_before_wake(self):
+        listener = self._create_isolated_listener()
+        del listener.__dict__['_update_board_led']
+        listener._current_led_mode = 'speaking'
+        calls = []
+        listener.controller.set_board_led = lambda mode:calls.append(mode) or True
+        listener.is_awake = False
+        listener._update_board_led('listening')
+        listener._update_board_led('hearing')
+        self.assertEqual(calls, ['off'])
+        listener.is_awake = True
+        listener._update_board_led('listening')
+        listener._update_board_led('hearing')
+        self.assertEqual(calls, ['off', 'listening', 'hearing'])
+
+    def test_mid_vad_mode_zero_is_default_and_explicit_overrides_are_validated(self):
+        listener = self._create_isolated_listener()
+        with patch.dict(os.environ, {}, clear=True):
+            listener._configure_vad()
+            self.assertEqual(listener.vad_mode, 0)
+            self.assertFalse(listener.vad.is_speech(bytes(960), 16000))
+        with patch.dict(os.environ, {'KURISU_VAD_MODE':'2'}):
+            listener._configure_vad()
+            self.assertEqual(listener.vad_mode, 2)
+        with patch.dict(os.environ, {'KURISU_VAD_MODE':'4'}):
+            with self.assertRaises(ValueError):listener._configure_vad()
+
     def test_text_only_wake_cannot_interrupt_without_acoustic_evidence(self):
         listener = self._create_isolated_listener()
         listener.is_listening = listener.is_paused = listener.duplex = True

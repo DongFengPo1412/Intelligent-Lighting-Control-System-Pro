@@ -69,7 +69,7 @@ inline int16_t SoundSample(const SoundEvent& e,unsigned sample,uint8_t volume) {
     auto t=ToneFor(e);unsigned total=t.duration_ms*16;
     if(sample>=total || volume>100)return 0;
     float envelope=std::fmin(1.f,std::fmin(sample/48.f,(total-1-sample)/80.f));
-    float pitch=t.frequency;
+    float pitch=float(t.frequency);
     if(e.kind==Sound::Start || e.kind==Sound::Win)pitch*=1.f+0.3f*sample/total;
     if(e.kind==Sound::Lose || e.kind==Sound::Hurt)pitch*=1.f-0.35f*sample/total;
     return int16_t(std::sin(6.28318530718f*pitch*sample/16000.f)*4000.f*volume/100.f*envelope);

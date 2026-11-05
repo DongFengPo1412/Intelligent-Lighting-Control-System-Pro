@@ -558,9 +558,9 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
         if (!val_item) val_item = cJSON_GetObjectItem(root, "volume");
         if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && val_item->valueint >= 0 && val_item->valueint <= 100) {
-            AudioHAL::GetInstance().SetVolume(val_item->valueint);
+            const bool ok = AudioHAL::GetInstance().SetVolume(val_item->valueint) == ESP_OK;
             cJSON_Delete(root);
-            return true;
+            return ok;
         }
     }
     // {"cmd":"board_led", "mode":"green"} / {"cmd":"board_led", "val":"green"}
@@ -728,8 +728,7 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     int vol = 0;
     if (sscanf(text_str, "volume %d", &vol) == 1 || sscanf(text_str, "v %d", &vol) == 1) {
         if (vol < 0 || vol > 100) return false;
-        AudioHAL::GetInstance().SetVolume(vol);
-        return true;
+        return AudioHAL::GetInstance().SetVolume(vol) == ESP_OK;
     }
 
     // 5. 状态查询: "status"

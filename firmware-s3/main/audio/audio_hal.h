@@ -8,6 +8,7 @@
 #include <freertos/semphr.h>
 #include <cstdint>
 #include <cstddef>
+#include <atomic>
 #include "audio_priority.h"
 #include "game_audio_stream.h"
 
@@ -44,8 +45,8 @@ public:
     esp_err_t ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms = 200);
 
     // 扬声器音量控制 (0 - 100，默认 70，采用平方律 pow(vol/100, 2) * 65536 映射)
-    void SetVolume(int volume_percent);
-    int GetVolume() const { return output_volume_; }
+    esp_err_t SetVolume(int volume_percent);
+    int GetVolume() const { return output_volume_.load(); }
 
     // 扬声器通道动态启停 (自动休眠管理，彻底消除空闲时的 RMT 与地回路电磁杂音)
     esp_err_t EnableSpeaker(bool enable);
@@ -71,10 +72,12 @@ private:
     i2s_chan_handle_t rx_chan_; // INMP441 输入通道
     esp_timer_handle_t spk_power_timer_; // 扬声器自动休眠定时器
     SemaphoreHandle_t playback_mutex_;
+    SemaphoreHandle_t settings_mutex_;
     AudioPriorityGate playback_priority_;
-    int32_t tx_buffer_[480]; // Protected by playback_mutex_; never on a task's stack.
-    int output_volume_;
-    int64_t volume_factor_;
+    int32_t tx_buffer_[240]; // Mono; protected by playback_mutex_, off the task stack.
+    std::atomic<int> output_volume_;
+    std::atomic<uint32_t> volume_factor_;
+    int saved_volume_;
     bool initialized_;
     bool speaker_enabled_;
     bool mic_enabled_;

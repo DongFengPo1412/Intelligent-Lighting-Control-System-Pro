@@ -1,4 +1,6 @@
 #include "audio_hal.h"
+#include "audio_preferences.h"
+#include "audio_sample_format.h"
 #include <esp_log.h>
 #include <cmath>
 #include <vector>
@@ -18,8 +20,10 @@ AudioHAL::AudioHAL()
       rx_chan_(nullptr),
       spk_power_timer_(nullptr),
       playback_mutex_(xSemaphoreCreateMutex()),
+      settings_mutex_(xSemaphoreCreateMutex()),
       output_volume_(70),
       volume_factor_(32112),
+      saved_volume_(-1),
       initialized_(false),
       speaker_enabled_(false),
       mic_enabled_(false) {}
@@ -38,16 +42,25 @@ AudioHAL::~AudioHAL() {
         i2s_del_channel(rx_chan_);
     }
     if (playback_mutex_) vSemaphoreDelete(playback_mutex_);
+    if (settings_mutex_) vSemaphoreDelete(settings_mutex_);
 }
 
-void AudioHAL::SetVolume(int volume_percent) {
+esp_err_t AudioHAL::SetVolume(int volume_percent) {
     if (volume_percent < 0) volume_percent = 0;
     if (volume_percent > 100) volume_percent = 100;
-    output_volume_ = volume_percent;
-    // 平方律音量映射: 对齐中阶项目 NoAudioCodec: pow(vol / 100.0, 2) * 65536
-    double ratio = (double)output_volume_ / 100.0;
-    volume_factor_ = (int64_t)(ratio * ratio * 65536.0);
-    ESP_LOGI(TAG, ">>> [音量设定]: %d%% (volume_factor=%lld)", output_volume_, (long long)volume_factor_);
+    if (!settings_mutex_ || xSemaphoreTake(settings_mutex_, pdMS_TO_TICKS(500)) != pdTRUE)
+        return ESP_ERR_TIMEOUT;
+    output_volume_.store(volume_percent);
+    volume_factor_.store(audio_pcm::VolumeFactor(volume_percent));
+    esp_err_t error = ESP_OK;
+    if (saved_volume_ != volume_percent) {
+        error = audio_preferences::Save(volume_percent);
+        if (error == ESP_OK) saved_volume_ = volume_percent;
+    }
+    xSemaphoreGive(settings_mutex_);
+    if (error != ESP_OK) ESP_LOGW(TAG, "Volume applied in RAM but not saved: %s", esp_err_to_name(error));
+    ESP_LOGI(TAG, ">>> [音量设定]: %d%% (saved=%s)", volume_percent, error == ESP_OK ? "yes" : "no");
+    return error;
 }
 
 esp_err_t AudioHAL::EnableSpeaker(bool enable) {
@@ -77,8 +90,8 @@ esp_err_t AudioHAL::EnableSpeaker(bool enable) {
 void AudioHAL::ResetSpeakerTimer() {
     if (spk_power_timer_) {
         esp_timer_stop(spk_power_timer_);
-        // 800ms 无新数据写入则自动关断 BCLK，让 MAX98357A 彻底进入零底噪硬件休眠
-        esp_timer_start_once(spk_power_timer_, 800 * 1000);
+        // Mid AudioService uses a 15-second output idle timeout.
+        esp_timer_start_once(spk_power_timer_, 15000 * 1000);
     }
 }
 
@@ -103,7 +116,7 @@ esp_err_t AudioHAL::Init(
         mic_enabled_ = speaker_enabled_ = false;
         return error;
     };
-    if (!playback_mutex_) return failed(ESP_ERR_NO_MEM);
+    if (!playback_mutex_ || !settings_mutex_) return failed(ESP_ERR_NO_MEM);
 
     ESP_LOGI(TAG, "正在初始化 I2S 硬件音频驱动...");
     ESP_LOGI(TAG, "  - INMP441 麦克风: WS=%d, SCK=%d, DIN=%d", mic_ws, mic_sck, mic_din);
@@ -127,7 +140,7 @@ esp_err_t AudioHAL::Init(
         return failed(ret);
     }
 
-    // 采用标准飞利浦 Philips 格式 (left_align = false, bit_shift = true)
+    // Mid NoAudioCodecSimplex: mono, 32-bit left slot, Philips bit shift.
     i2s_std_config_t tx_std_cfg = {
         .clk_cfg = {
             .sample_rate_hz = 16000,
@@ -137,12 +150,12 @@ esp_err_t AudioHAL::Init(
         .slot_cfg = {
             .data_bit_width = I2S_DATA_BIT_WIDTH_32BIT,
             .slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO,
-            .slot_mode = I2S_SLOT_MODE_STEREO,
-            .slot_mask = I2S_STD_SLOT_BOTH,
+            .slot_mode = I2S_SLOT_MODE_MONO,
+            .slot_mask = I2S_STD_SLOT_LEFT,
             .ws_width = I2S_DATA_BIT_WIDTH_32BIT,
             .ws_pol = false,
             .bit_shift = true,
-            .left_align = false,
+            .left_align = true,
             .big_endian = false,
             .bit_order_lsb = false,
         },
@@ -242,8 +255,13 @@ esp_err_t AudioHAL::Init(
     }
     mic_enabled_ = true;
     ESP_LOGI(TAG, "INMP441 硬件麦克风 DMA 通道常驻使能就绪");
+    const auto volume = audio_preferences::Load();
+    output_volume_.store(volume.value);
+    volume_factor_.store(audio_pcm::VolumeFactor(volume.value));
+    saved_volume_ = volume.saved ? volume.value : -1;
     initialized_ = true;
-    ESP_LOGI(TAG, "I2S 硬件驱动初始化成功 (默认 70%% 音量 + 自动休眠静音防啸叫)");
+    ESP_LOGI(TAG, "I2S ready: mono left slot, 16kHz, volume=%d%% (%s)", volume.value,
+             volume.saved ? "restored from NVS" : "default; no saved valid volume");
 
     return ESP_OK;
 }
@@ -286,20 +304,14 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
     size_t written_total = 0;
 
     // 采用对齐中阶 NoAudioCodec 的音量平方律映射:
-    const int64_t v_factor = volume_factor_;
+    const uint32_t v_factor = volume_factor_.load();
 
     while (written_total < count) {
         size_t frames = std::min(chunk_size, count - written_total);
-        for (size_t i = 0; i < frames; i++) {
-            int64_t temp = (int64_t)mono_samples[written_total + i] * v_factor;
-            if (temp > INT32_MAX) temp = INT32_MAX;
-            else if (temp < INT32_MIN) temp = INT32_MIN;
-            bit32_buf[2 * i] = (int32_t)temp;
-            bit32_buf[2 * i + 1] = (int32_t)temp;
-        }
+        audio_pcm::PackMono(mono_samples + written_total, frames, v_factor, bit32_buf);
         size_t bytes_out = 0;
-        ret = i2s_channel_write(tx_chan_, bit32_buf, frames * 2 * sizeof(int32_t), &bytes_out, 200);
-        if (ret != ESP_OK || bytes_out != frames * 2 * sizeof(int32_t)) {
+        ret = i2s_channel_write(tx_chan_, bit32_buf, frames * audio_pcm::kI2sBytesPerSample, &bytes_out, 200);
+        if (ret != ESP_OK || bytes_out != frames * audio_pcm::kI2sBytesPerSample) {
             if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
             ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
             break;
@@ -326,14 +338,12 @@ arcade::AudioWriteResult AudioHAL::TryPlayGamePcm(const int16_t* data,size_t cou
         if(spk_power_timer_)esp_timer_stop(spk_power_timer_);
         esp_err_t error=EnableSpeaker(true);
         if(error==ESP_OK) {
-            for(size_t i=0;i<count;++i) {
-                int64_t value=int64_t(data[i])*volume_factor_;
-                tx_buffer_[2*i]=tx_buffer_[2*i+1]=int32_t(value);
-            }
+            audio_pcm::PackMono(data, count, volume_factor_.load(), tx_buffer_);
             size_t written=0;
-            error=i2s_channel_write(tx_chan_,tx_buffer_,count*2*sizeof(int32_t),&written,0);
+            error=i2s_channel_write(tx_chan_,tx_buffer_,count*audio_pcm::kI2sBytesPerSample,&written,0);
             result=arcade::GameWriteFromBytes(count,written,
-                error==ESP_OK?State::Ready:error==ESP_ERR_TIMEOUT?State::Busy:State::Fault);
+                error==ESP_OK?State::Ready:error==ESP_ERR_TIMEOUT?State::Busy:State::Fault,
+                audio_pcm::kI2sBytesPerSample);
         } else result={0,State::Fault};
         ResetSpeakerTimer();
     }

@@ -101,8 +101,8 @@ class VoiceListener:
         self._last_board_frame_time = 0.0
         self._resume_warmup_frames = 0
 
-        # WebRTC VAD 引擎 (模式 2: 工业标准人声/环境噪均衡模式，精准识别人声，彻底免疫风扇杂音)
-        self.vad = webrtcvad.Vad(2)
+        # WebRTC VAD mode follows Mid's mode 0; accuracy still needs listening tests.
+        self._configure_vad()
 
         self.wake_detector = None
         try:
@@ -155,11 +155,22 @@ class VoiceListener:
             self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
             print("[VoiceListener] >>> 本地离线 Whisper-Base ASR CPU int8 就绪 <<<")
 
+    def _configure_vad(self):
+        # Mid AfeAudioProcessor selects VAD_MODE_0. Keep Pro's independent
+        # acoustic wake gate and endpoint/preroll safeguards.
+        self.vad_mode = int(os.environ.get('KURISU_VAD_MODE', '0'))
+        if self.vad_mode not in range(4):
+            raise ValueError('KURISU_VAD_MODE must be 0..3')
+        self.vad = webrtcvad.Vad(self.vad_mode)
+
     def _update_board_led(self, mode: str):
         """板载指示灯状态去重发送 (严格只在状态跳变时发送单条指令，杜绝频繁冲击)"""
         # In listener code, active means waiting for the user's next sentence.
         # Firmware's historical active alias means thinking, so use listening.
-        if mode == 'active':mode = 'listening'
+        if mode == 'active':
+            mode = 'listening'
+        elif mode in ('listening', 'hearing') and not self.is_awake:
+            mode = 'off'  # Mid Idle: do not flash the VAD light before wake.
         actual = getattr(self.controller, '_last_board_led_mode', self._current_led_mode)
         if self._current_led_mode != mode or actual != mode:
             try:

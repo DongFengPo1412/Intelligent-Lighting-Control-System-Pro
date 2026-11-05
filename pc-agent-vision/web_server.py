@@ -639,6 +639,7 @@ async def handle_status(request: web.Request):
         "tts_error": tts_error,
         "asr_status": asr_status,
         "asr_backend": getattr(listener, 'asr_backend', None),
+        "vad_mode": getattr(listener, 'vad_mode', None),
         "wake_reply_ready": isinstance(getattr(listener, 'wake_reply_pcm', None), bytes) and bool(listener.wake_reply_pcm),
         "wake_reply_error": getattr(listener, 'last_wake_error', None),
         "wake_japanese_errors": getattr(voice, 'wake_reply_errors', {}),

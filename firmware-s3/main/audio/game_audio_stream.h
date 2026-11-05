@@ -10,10 +10,10 @@ struct AudioWriteResult {
     AudioWriteState state;
 };
 inline AudioWriteResult GameWriteFromBytes(unsigned requested, size_t bytes,
-                                           AudioWriteState state) {
-    if (bytes > requested * 8 || bytes % 8)
+                                           AudioWriteState state, unsigned frame_bytes = 8) {
+    if ((frame_bytes != 4 && frame_bytes != 8) || bytes / frame_bytes > requested || bytes % frame_bytes)
         return {0, AudioWriteState::Fault};
-    return {unsigned(bytes / 8), state}; // stereo int32 frame = one mono source sample
+    return {unsigned(bytes / frame_bytes), state}; // Mono or legacy stereo int32 I2S.
 }
 // One nonblocking write per Poll. Accepted prefixes are never replayed. Scheduling
 // follows the original sample clock, not "write duration + sleep duration".
