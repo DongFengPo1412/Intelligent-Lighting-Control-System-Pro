@@ -55,3 +55,37 @@ PC端已修正成功音过早的问题：本地模型、KWS、ASR、唤醒短应
 ## 继续验收的顺序
 
 已确认的身份问答与助手唤醒流程保留为相应历史场景PASS；1.2B播放中打断为PARTIAL，新指示灯/短句必须重新听验。先验短应答与收音灯状态，再验播放中打断，随后思考中打断、其他称呼、连续追问/退出和记忆/时间/天气。测试脚本与后续六模块顺序见[最终实机测试流程](PRO_HARDWARE_FINAL_TEST_PLAN.md)。人工问题框出现后代理停止工具操作，服务只维持本项所需的交互及日志，反馈后再读证据。
+
+## 用户认可后的音频参数核对（2026-11-05）
+
+用户对`3d3fad9`本场景的整体交互体验明确认可，表示有回到Mid的感觉，随后要求核对是否连音频参数都已完整照搬。记录为**USER_ACCEPTED_INTERACTION**；不是噪声、声压、所有唤醒词或整个模块的全面验收。本轮只读核对源码、当前状态及通知音数据，没有改动声音参数、重启服务、再次发声、刷写或更换模型。
+
+Mid只读基线为本地仓库`47133cdccb448b8d05c3c4545a5b581ab7880f62`，所比对音频源码未发现本地修改。根目录`sdkconfig`选择`BREAD_COMPACT_WIFI`；该目录没有可核对的原构建产物，因此以下是**当前本地Mid配置/源码**与Pro源码、现运行服务的比较，不能声称已读取当年Mid设备的NVS音量、云服务内部参数或旧模型分区。Pro的`audio_hal.cc`从已部署基线`7034d35`至本次没有源码差异；本轮没有更新设备固件。
+
+| 项目 | 本地Mid实现/配置 | 当前Pro实现/运行 | 结论 |
+| --- | --- | --- | --- |
+| 初始化后交互顺序 | 网络/激活完成后成功音，待机唤醒，回答后回Listening | 模型/KWS/ASR/真实上行PCM就绪后成功音，再放行唤醒；回答后继续监听 | 当前场景体验获用户认可；不能外推首次配网已完成 |
+| 成功提示音 | `success.ogg` | `mid_success.wav` | 解码PCM逐字节一致，16kHz单声道、16320采样、1.02秒 |
+| 唤醒短音 | `popup.ogg` | `mid_popup.wav` | 解码PCM逐字节一致，16kHz单声道、7680采样、0.48秒 |
+| 麦克风接线/格式 | WS4/SCK5/DIN6；I2S1、16kHz、32位左单声道 | 相同引脚、端口、采样率及接收格式 | 这些配置一致 |
+| 麦克风数据缩放 | `NoAudioCodec::Read()`右移12位后限幅 | `AudioHAL::ReadMic()`右移16位后限幅 | 不同：同一原始采样下前者约16倍；Pro保留原始PCM16余量，不能未经采样复核直接增加增益 |
+| 扬声器引脚 | DOUT7/BCLK15/LRCK16、I2S0 | 相同 | 一致 |
+| 扬声器音量曲线 | `pow(volume/100,2)*65536`后32位限幅 | 同一平方律及限幅 | 算法一致；Mid默认70且读取NVS，Pro当前真实状态70，不能推断Mid当年的NVS值 |
+| 输出采样率 | 板型配置24kHz，音频服务按需重采样 | 配对PCM链路16kHz；角色TTS32kHz生成后转16kHz | 不同；改为24kHz须同步修改上下行协议/播放适配，单改硬件时钟会改变音速/音高 |
+| I2S输出插槽 | 32位单声道左槽，硬件v2配置left_align=true | 32位双槽复制同一单声道，left_align=false | 不同，不代表Pro有两只实体扬声器 |
+| DMA | 输入/输出均6×240帧；输出24kHz下名义60ms | 输入6×240帧，输出12×240帧；输出16kHz下名义180ms | 输入配置相同，输出缓存不同；名义容量不是端到端延迟实测 |
+| 空闲关闭输出 | 15秒超时、每1秒检查 | 输出写入后800ms定时休眠 | 不同；开关BCLK策略不能代替真实底噪/抗电磁干扰测量 |
+| 唤醒与语音前端 | 板端ESP-SR AFE/WakeNet | PC端声学KWS及SenseVoice CPU识别 | 没有整套照搬；模型不可用时不放行自动语音 |
+| 降噪 | sdkconfig选择WebRTC NS/VAD，NSNet2未选；AudioProcessor根据NS模型存在与否设置ns_init，Wake AFE另有初始化路径 | PC WebRTC VAD负责端点；播音时可选实验回声处理 | 不同；VAD并非麦克风降噪，不能凭宏宣称旧板全部降噪实效已知 |
+| AGC/AEC | AudioProcessor明确agc_init=false；所读sdkconfig未见device-AEC启用项、server-AEC关闭；参考通道默认false | 未移植ESP-SR AFE/AGC；当前启用实验软件打断，普通监听绕过AEC，播音时使用128 taps、120ms参考延迟 | 不同；不能把Pro实验AEC或Mid代码出现aec_mode等同于已启用且实测有效的成熟全双工 |
+| 端点 | AFE VAD mode0、min_noise100ms | PC WebRTC VAD mode2、30ms帧、起始2帧，待机静音16帧/会话36帧 | 不同，当前交互体验已认可，不据此继续盲调 |
+| 语音传输/服务 | Opus及在线语音服务 | 配对Wi-Fi PCM16/16kHz，本地Qwen、SenseVoice、GPT-SoVITS | 不同；当前不是“仅替换声线与记忆”的完整原样Mid底座 |
+| 合成语音后处理 | 音频服务解码/重采样；本地未见Pro这组EQ链 | 32kHz上95Hz高通、可选stationary noisereduce、300Hz -3.5dB、3800Hz +3.5dB、14500Hz低通、电平75%×0.88，再转16kHz | 高阶角色输出专属处理；这里的noisereduce不是板载麦克风抗噪，也不是神经降噪模型 |
+
+通知音PCM SHA-256：success `a93009cc10b15424a5dd0dbe347d78f3522f264bdb9db5a733484ae29dcf8441`；popup `6323d754d79486c81d5c91d1a5fdec9c42f41e78f775b7f253dbd6c1c2eb4a00`。一致性只针对解码数据，不是扬声器声压/电信号或跨采样率输出的测量结论。
+
+主要依据：Mid `main/boards/bread-compact-wifi/config.h`、`main/audio/audio_codec.{h,cc}`、`main/audio/codecs/no_audio_codec.cc`、`main/audio/processors/afe_audio_processor.cc`、`main/audio/wake_words/afe_wake_word.cc`、`main/audio/audio_service.{h,cc}`；Pro `firmware-s3/main/audio/audio_hal.{h,cc}`、`pc-agent-vision/{light_controller,network_audio,voice_listener,echo_cancellation,local_asr,voice_engine}.py`及`assets/audio/`。
+
+### 本次处理结论
+
+冻结用户刚认可的运行基线，不通过改增益、输出时钟或降噪链来冒充“参数已全部复制”。提示音、可兼容的硬件参数及交互时序已复用；尚未复现的AFE、输入缩放、输出采样/缓存、首次配网等保留明确差异。若必须进一步达成相同音频底座，需要按整条采集/前端/编码/播放链路移植，并重新构建、获得具体固件写入授权后实测；云端控制台截图不能补足这些本地实现差异。后续角色提示词、记忆或音色设置对照需要时才请用户提供截图，本次不需要登录其小智账号。
