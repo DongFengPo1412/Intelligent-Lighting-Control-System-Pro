@@ -67,6 +67,7 @@ class VoiceRegressionTests(unittest.TestCase):
         cls = load_nodes('voice_listener.py', {'VoiceListener'}, re=re)['VoiceListener']
         obj = cls.__new__(cls)
         obj._work_lock = threading.Lock()
+        obj._stop_event = threading.Event()
         obj._pending_prefix = ''
         obj.session=ConversationSession()
         obj.is_awake = True
@@ -77,6 +78,7 @@ class VoiceRegressionTests(unittest.TestCase):
         obj._update_board_led = lambda mode: None
         obj.pause = lambda: None
         obj.resume = lambda: None
+        obj._acknowledge_wake = lambda: None
         obj._check_wake_word = lambda text: (False, text)
         obj.commands = []
         obj.callback = obj.commands.append
@@ -139,7 +141,7 @@ class VoiceRegressionTests(unittest.TestCase):
         self.assertFalse(listener.is_awake)
 
     def test_duplex_keyword_still_requires_exact_asr_confirmation(self):
-        listener=self.listener(iter(['住手']))
+        listener=self.listener(iter(['你好']))
         del listener.__dict__['_check_wake_word']
         listener.duplex=True;listener.is_paused=True;listener._barge_audio=bytearray()
         cancel=threading.Event()

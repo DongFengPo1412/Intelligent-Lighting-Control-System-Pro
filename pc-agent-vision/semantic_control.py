@@ -147,6 +147,20 @@ def plain_knowledge_question(text):
     return bool(knowledge and not re.search(device_terms, compact))
 
 
+def has_control_intent(text):
+    """Require a current request before letting a model propose physical actions.
+
+    Conversation history and a mention of a chime/reply are not instructions.
+    Literal mode names are handled separately by exact_plan().
+    """
+    return bool(re.search(
+        r'帮我|给我|我想|我要|想看|想玩|让|把|将|切换|换一|亮成|打开|开启|关闭|关掉|关灯|开灯|'
+        r'设为|设置|改成|换成|调[整节大小高低亮暗到成为]|开始|停止|暂停|继续|恢复|'
+        r'显示|展示|播放|来个|来点|来一|回到|返回|进入|退出|启动|结束|触发|'
+        r'点亮|熄灭|亮一点|暗一点|大声|小声|查.*(?:设备|灯板)|'
+        r'(?:灯光?|声音|音量|亮度).*(?:太|更|一点)|像.*(?:那样|一样)|那种', text))
+
+
 def exact_plan(text):
     """Fast path for an entire literal command; everything else uses semantic planning."""
     compact = re.sub(r'[，,。.!！\s]', '', text)
@@ -258,6 +272,8 @@ class SemanticControl:
         if direct:
             return direct
         if plain_knowledge_question(text):
+            return {'kind': 'chat', 'actions': []}
+        if not has_control_intent(text):
             return {'kind': 'chat', 'actions': []}
         parameters = explicit_parameters(text)
         catalog = '\n'.join(f'{mode}: {entry[0]} — {entry[2]}' for mode, entry in EFFECTS.items())

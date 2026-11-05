@@ -472,7 +472,7 @@ class VoiceEngine:
             raise ValueError('角色唤醒应答生成失败或超过2.5秒')
         return pcm
 
-    def _speak_chinese_first(self, text):
+    def _speak_chinese_first(self, text, cancelled=None):
         from light_controller import get_light_controller
         from bilingual_guard import validate_bilingual_alignment, chunk_sentences_safe
         self.last_tts_error = None
@@ -485,8 +485,11 @@ class VoiceEngine:
             self.last_tts_error = '中文基准为空，未播放'
             return
         ctrl = get_light_controller()
+        playback_options = {'cancelled': cancelled} if cancelled is not None else {}
         try:
             for lang in ('zh', 'ja'):
+                if cancelled is not None and cancelled.is_set():return
+                print(f'[语音状态] {lang}: ' + ('翻译与日语播报' if lang == 'ja' else '中文合成与播报'))
                 if lang == 'ja':
                     started = time.perf_counter()
                     if ja and not validate_bilingual_alignment(zh, ja)[0]:
@@ -498,6 +501,7 @@ class VoiceEngine:
                         # Keep the Chinese response and the visible translation
                         # error; never substitute an unrelated Japanese phrase.
                         return
+                    if cancelled is not None and cancelled.is_set():return
                 segments = chunk_sentences_safe(zh, max_chars=32) if lang == 'zh' else [ja]
                 if lang == 'zh' and hasattr(ctrl, 'play_audio_stream'):
                     from concurrent.futures import ThreadPoolExecutor
@@ -513,7 +517,9 @@ class VoiceEngine:
                         with ThreadPoolExecutor(max_workers=1, thread_name_prefix='kurisu_tts') as pool:
                             pending = pool.submit(synth_segment, segments[0])
                             for index in range(len(segments)):
+                                if cancelled is not None and cancelled.is_set():return
                                 pcm = pending.result()
+                                if cancelled is not None and cancelled.is_set():return
                                 if index+1 < len(segments):
                                     pending = pool.submit(synth_segment, segments[index+1])
                                 if 'first_pcm_ms' not in self.last_speech_timings:
@@ -523,7 +529,8 @@ class VoiceEngine:
                     started = time.perf_counter()
                     generator = audio_segments()
                     try:
-                        if not ctrl.play_audio_stream(generator):
+                        if not ctrl.play_audio_stream(generator, **playback_options):
+                            if cancelled is not None and cancelled.is_set():return
                             raise RuntimeError('中文连续播放未获确认')
                     finally:
                         generator.close()
@@ -534,6 +541,7 @@ class VoiceEngine:
                 for segment in segments:
                     started = time.perf_counter()
                     pcm, _ = self._single_language_bundle(segment, lang)
+                    if cancelled is not None and cancelled.is_set():return
                     key = f'{lang}_synthesis_ms'
                     self.last_speech_timings[key] = round(self.last_speech_timings.get(key,0)+(time.perf_counter()-started)*1000,1)
                     if not (ctrl.audio_connected or ctrl.connect_audio()):
@@ -542,7 +550,8 @@ class VoiceEngine:
                     started = time.perf_counter()
                     if lang == 'zh' and 'first_pcm_ms' not in self.last_speech_timings:
                         self.last_speech_timings['first_pcm_ms'] = round((started-speech_started)*1000,1)
-                    if not ctrl.play_audio_pcm(pcm):
+                    if not ctrl.play_audio_pcm(pcm, **playback_options):
+                        if cancelled is not None and cancelled.is_set():return
                         raise RuntimeError(f'{lang}板载播放未获确认')
                     key = f'{lang}_playback_ms'
                     self.last_speech_timings[key] = round(self.last_speech_timings.get(key,0)+(time.perf_counter()-started)*1000,1)
@@ -553,26 +562,27 @@ class VoiceEngine:
         except Exception as exc:
             self.last_tts_error = str(exc) + ('；中文已播放' if self.last_spoken_text else '')
 
-    def speak(self, text: str, block: bool = True, to_board: bool = True):
+    def speak(self, text: str, block: bool = True, to_board: bool = True, cancelled=None):
         """
         合成并播放对白:
         优先通过 ESP32-S3 板载 MAX98357A 扬声器物理发声；
         未使用板载输出时在 PC 扬声器播放。
         严守铁律: 要么听到红莉栖清晰人声，要么完全静音！
         """
-        if not text or not text.strip():
+        if not text or not text.strip() or (cancelled is not None and cancelled.is_set()):
             return
 
         if not block:
-            threading.Thread(target=self.speak, args=(text, True, to_board), daemon=True).start()
+            threading.Thread(target=self.speak, args=(text, True, to_board, cancelled), daemon=True).start()
             return
 
         if to_board and getattr(self, 'chinese_first', False):
-            return self._speak_chinese_first(text)
+            return self._speak_chinese_first(text, cancelled=cancelled)
 
         self.last_speech_timings = {}
         synth_started = time.perf_counter()
         bundle = self.synthesize_speech_bundle(text)
+        if cancelled is not None and cancelled.is_set():return
         self.last_speech_timings['synthesis_ms'] = round((time.perf_counter()-synth_started)*1000,1)
         if not bundle:
             return
@@ -588,7 +598,9 @@ class VoiceEngine:
         if to_board and board_ready:
             # One physical output avoids delayed PC/board copies sounding like echo.
             playback_started = time.perf_counter()
-            if not ctrl.play_audio_pcm(pcm_16k):
+            playback_options = {'cancelled': cancelled} if cancelled is not None else {}
+            if not ctrl.play_audio_pcm(pcm_16k, **playback_options):
+                if cancelled is not None and cancelled.is_set():return
                 self.last_tts_error = "板载语音流发送或播放失败"
                 print('[VoiceEngine] 板载语音播放失败')
             self.last_speech_timings['playback_ms'] = round((time.perf_counter()-playback_started)*1000,1)

@@ -30,6 +30,30 @@ def task_directory():
 
 
 class RuntimeContracts(unittest.TestCase):
+    def test_cancelled_turn_cannot_restart_network_pcm_after_new_wake(self):
+        import threading
+        import types
+        cancelled = threading.Event()
+        cancelled.set()
+        client = WiFiPcmClient(types.SimpleNamespace())
+        client.connect = lambda: self.fail('Cancelled PCM must not connect')
+        self.assertFalse(client.play(bytes(64), cancelled=cancelled))
+
+    def test_turn_cancellation_stops_next_pcm_segment(self):
+        import threading
+        import types
+        cancelled = threading.Event()
+        sent = []
+        client = WiFiPcmClient(types.SimpleNamespace(_mic_enabled=False,
+            enable_mic=lambda value: True, command_result=lambda payload: dict(status='ok')))
+        client.connect = lambda: True
+        def send(kind, data):
+            sent.append(data)
+            cancelled.set()
+        client._send = send
+        self.assertFalse(client.play(bytes(2048), chunk_samples=32, cancelled=cancelled))
+        self.assertEqual(len(sent), 1)
+
     def test_incremental_pcm_uses_one_counter_check_and_one_mic_pause(self):
         import types
         sent = []

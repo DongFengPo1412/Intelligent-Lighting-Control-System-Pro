@@ -620,6 +620,23 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
         eng.tts = types.SimpleNamespace(run=tts_fn) if tts_fn is not None else None
         return eng
 
+    def test_cancel_during_translation_never_plays_the_old_japanese(self):
+        import threading
+        with _temp_dir() as tmp:
+            eng = self._build_stub_voice_engine(Path(tmp), None)
+            eng.chinese_first = True
+            cancelled = threading.Event()
+            calls = []
+            eng._single_language_bundle = lambda text, lang: (calls.append('synth-'+lang) or b'zh', b'')
+            eng.fake_ctrl.play_audio_pcm = lambda pcm, **kwargs: calls.append('play') or True
+            def translate(text):
+                cancelled.set()
+                return 'こんにちは。'
+            eng._translate_zh_to_ja_kurisu = translate
+            with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
+                eng.speak('你好。', cancelled=cancelled)
+            self.assertEqual(calls, ['synth-zh', 'play'])
+
     def test_chinese_is_played_before_translation_and_survives_its_failure(self):
         with _temp_dir() as tmp:
             eng = self._build_stub_voice_engine(Path(tmp), None)

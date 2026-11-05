@@ -112,21 +112,23 @@ class WiFiPcmClient:
                 self.close(sock)
                 break
 
-    def play(self, pcm, chunk_samples=512):
+    def play(self, pcm, chunk_samples=512, cancelled=None):
         if not pcm or len(pcm) % 2 or not 1 <= chunk_samples <= 1024:
             raise ValueError("Invalid PCM input")
-        return self.play_stream(iter([pcm]), chunk_samples)
+        return self.play_stream(iter([pcm]), chunk_samples, cancelled=cancelled)
 
-    def play_stream(self, chunks, chunk_samples=512):
+    def play_stream(self, chunks, chunk_samples=512, cancelled=None):
         """One paced utterance and one final counter check across TTS chunks."""
         if not 1 <= chunk_samples <= 1024:
             raise ValueError("Invalid PCM chunk size")
         from itertools import chain
         chunks = iter(chunks)
+        if cancelled is not None and cancelled.is_set():return False
         first = next(chunks, None)
         if first is None:
             return False
         with self.play_lock:
+            if cancelled is not None and cancelled.is_set():return False
             if not self.connect():
                 return False
             self.cancelled.clear()
@@ -147,7 +149,7 @@ class WiFiPcmClient:
                     # rather than bursting stale scheduled data into the board.
                     start += max(0, time.monotonic() - (start + total/32000 + .12))
                     for offset in range(0, len(pcm), chunk_samples * 2):
-                        if self.cancelled.is_set():
+                        if self.cancelled.is_set() or (cancelled is not None and cancelled.is_set()):
                             return False
                         wait = start + (total+offset)/32000 - 0.12 - time.monotonic()
                         if wait > 0 and self.cancelled.wait(wait):

@@ -184,7 +184,12 @@ class KurisuAgent:
             if hasattr(self.voice, 'last_tts_error'):
                 self.voice.last_tts_error = None
             dispatch_started = time.perf_counter()
-            self.voice.speak(speech_text or reply, block=True)
+            if cancel is not None:
+                self.voice.speak(speech_text or reply, block=True, cancelled=cancel)
+            else:
+                self.voice.speak(speech_text or reply, block=True)
+            if cancel is not None and cancel.is_set():
+                return ''
             first_pcm = getattr(self.voice, 'last_speech_timings', {}).get('first_pcm_ms')
             if first_pcm is not None:
                 self.last_turn_timings['first_audio_dispatch_ms'] = round(

@@ -40,6 +40,72 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_cancelled_inference_never_executes_its_late_control_plan(self):
+        cancelled = threading.Event()
+        memory = MemoryStore(Path(self.tmp_dir) / 'cancelled.sqlite3')
+        voice = types.SimpleNamespace(speak=lambda *a, **k: self.fail('Stale reply must not speak'))
+        ctrl = types.SimpleNamespace(port='SIMULATION')
+        agent = KurisuAgent(controller=ctrl, voice=voice, memory=memory)
+        def late_plan(*args):
+            cancelled.set()
+            return {'kind':'control','actions':[{'tool':'set_light_mode','value':3}]}
+        agent.semantic = types.SimpleNamespace(plan=late_plan)
+        try:
+            with patch('kurisu_agent.execute_tool', side_effect=AssertionError('Stale command must not execute')):
+                self.assertEqual(agent.chat('切换成绿色', cancelled=cancelled), '')
+        finally:
+            memory.close()
+
+    def test_wake_interrupts_blocked_callback_and_preserves_fresh_question(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = listener.is_awake = listener.duplex = True
+        entered, finish = threading.Event(), threading.Event()
+        order = []
+        def callback(text):
+            entered.set()
+            self.assertTrue(finish.wait(2))
+        listener.callback = callback
+        listener.pause = lambda: setattr(listener, 'is_paused', True)
+        def acknowledge():
+            order.append('acknowledge')
+            listener.is_paused = False
+            listener._utterance_queue.put_nowait(b'new question')
+        listener._acknowledge_wake = acknowledge
+        texts = iter(['请讲一个故事。', '住手'])
+        listener.whisper_model.transcribe = lambda *a, **k: ([types.SimpleNamespace(text=next(texts))], object())
+        listener.wake_detector.detect = lambda pcm: '助手'
+        listener.controller.playback_cancel = threading.Event()
+        listener.controller.send_json = lambda payload: order.append(payload['cmd']) or True
+        worker = threading.Thread(target=listener._process_utterance, args=(bytes(3200),))
+        worker.start()
+        try:
+            self.assertTrue(entered.wait(1))
+            listener._check_barge(bytes(32000))
+            self.assertTrue(listener.turn_cancelled.is_set())
+            self.assertEqual(order, ['audio_abort', 'acknowledge'])
+            self.assertTrue(listener.is_awake)
+        finally:
+            finish.set()
+            worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(listener._utterance_queue.get_nowait(), b'new question')
+        self.assertFalse(listener.is_paused)
+
+    def test_text_only_wake_cannot_interrupt_without_acoustic_evidence(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = listener.is_paused = listener.duplex = True
+        listener.turn_cancelled = threading.Event()
+        listener._check_barge(bytes(32000))
+        self.assertFalse(listener.turn_cancelled.is_set())
+
+    def test_stopped_listener_rejects_stale_wake_worker(self):
+        listener = self._create_isolated_listener()
+        listener.is_paused = listener.duplex = True
+        listener.turn_cancelled = threading.Event()
+        listener.wake_detector.detect = lambda pcm: self.fail('Stopped detector must not run')
+        listener._check_barge(bytes(32000))
+        self.assertFalse(listener.turn_cancelled.is_set())
+
     def test_short_wake_reply_orders_chime_greeting_and_capture(self):
         listener = self._create_isolated_listener()
         order = []

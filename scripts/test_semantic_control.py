@@ -31,6 +31,13 @@ CASES = [
 
 
 class PlanningTests(unittest.TestCase):
+    def test_test_feedback_is_chat_even_after_prior_control_turns(self):
+        history = [{'role':'user','content':'切换成绿色'},
+                   {'role':'assistant','content':'已切换为绿灯。'}]
+        for text in ('然后有短的提示音。', '然后回答也很正常。', '中文后面有日语。',
+                     '音量目前正常，没有问题。'):
+            self.assertEqual(SemanticControl().plan(text, history), {'kind':'chat','actions':[]})
+
     def test_knowledge_questions_skip_planning_without_swallowing_controls(self):
         for query in ('给我介绍一下胆小鬼博弈。', '请解释幸存者偏差。'):
             self.assertEqual(SemanticControl().plan(query), {'kind':'chat','actions':[]})

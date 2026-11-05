@@ -79,6 +79,8 @@ class VoiceListener:
         self._barge_thread = None
         self._barge_pending = None
         self._barge_woke = False
+        self.turn_cancelled = None
+        self._wake_ack_active = False
         self._music_monitor = False
         self._music_suspended = False
         self.music_wake_ready = False
@@ -105,7 +107,7 @@ class VoiceListener:
         try:
             from wake_detector import WakeDetector
             self.wake_detector = WakeDetector(threshold=.50)
-            print('[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 牧濑红莉栖；阈值 0.50')
+            print('[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 克里斯蒂娜 / 牧濑红莉栖；阈值 0.50')
         except Exception as error:
             print(f'[VoiceListener] 声学唤醒未就绪，关闭自动唤醒，保留网页控制：{error}')
 
@@ -170,6 +172,7 @@ class VoiceListener:
 
     def _acknowledge_wake(self):
         """Short chime and a prepared character greeting, then resume capture."""
+        self._wake_ack_active = True
         self.pause()
         self.last_wake_error = None
         try:
@@ -189,8 +192,12 @@ class VoiceListener:
             print(f'[唤醒应答异常]: {exc}')
         finally:
             self.resume()
+            self._barge_audio.clear()
+            self._barge_last = time.monotonic()
+            self._wake_ack_active = False
             self.last_awake_time = time.time()
             self._update_board_led('active')
+            print('[语音状态] listening: 唤醒应答结束，等待下一句话')
 
     def _on_board_pcm(self, pcm_bytes: bytes):
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
@@ -199,7 +206,7 @@ class VoiceListener:
         if self.duplex or getattr(self, '_music_monitor', False):
             pcm_bytes=self.controller.echo_canceller.process(pcm_bytes)
         if self.is_paused:
-            if self.duplex or getattr(self, '_music_monitor', False):
+            if (self.duplex or getattr(self, '_music_monitor', False)) and not getattr(self, '_wake_ack_active', False):
                 self._barge_audio.extend(pcm_bytes)
                 self._barge_audio=self._barge_audio[-64000:]
                 if len(self._barge_audio)>=32000 and time.monotonic()-self._barge_last>.7 and not(self._barge_thread and self._barge_thread.is_alive()):
@@ -466,8 +473,7 @@ class VoiceListener:
                         self._update_board_led("thinking")
                         self.pause()
                         try:
-                            if self.callback:
-                                self.callback(stripped_cmd)
+                            self._dispatch_command(stripped_cmd)
                         finally:
                             self._finish_turn(stripped_cmd)
                         return
@@ -512,8 +518,7 @@ class VoiceListener:
                     self._update_board_led("thinking")
                     self.pause()
                     try:
-                        if self.callback:
-                            self.callback(cmd_to_exec)
+                        self._dispatch_command(cmd_to_exec)
                     finally:
                         self._finish_turn(cmd_to_exec)
 
@@ -521,9 +526,24 @@ class VoiceListener:
                 print(f"[VoiceListener 处理异常]: {e}")
                 self._update_board_led("listening")
 
+    def _dispatch_command(self, text):
+        # Recognition owns _work_lock, but inference/playback must not hold it:
+        # the independent wake worker needs the same recognizer to interrupt.
+        self.turn_cancelled = threading.Event()
+        print('[语音状态] thinking: 新一轮开始')
+        self._work_lock.release()
+        try:
+            if self.callback:
+                self.callback(text)
+        finally:
+            self._work_lock.acquire()
+
     def _check_barge(self, pcm):
         # The experimental duplex path keeps the same two-stage wake gate.
-        if not self.is_paused or not (self.duplex or getattr(self, '_music_monitor', False)) or self.wake_detector is None:return
+        if (not self.is_listening or self._stop_event.is_set() or not self.is_paused
+                or getattr(self, '_wake_ack_active', False)
+                or not (self.duplex or getattr(self, '_music_monitor', False))
+                or self.wake_detector is None):return
         if not self._work_lock.acquire(blocking=False):return
         try:
             self._check_barge_locked(pcm)
@@ -538,23 +558,42 @@ class VoiceListener:
                 segments,_=self.whisper_model.transcribe(audio_np,language='zh',beam_size=1,temperature=0.0,
                     initial_prompt=None,condition_on_previous_text=False,without_timestamps=True)
                 text=''.join(s.text for s in segments).strip()
-                if getattr(self, '_music_monitor', False) and keyword == '助手':
+                if keyword == '助手':
                     # Same acoustically gated homophone correction as standby.
                     text=re.sub(r'^(你好[，, ]*)?住手', lambda m:(m.group(1) or '')+'助手', text, count=1)
                 confirmed,command=self._check_wake_word(text)
             except Exception:return
-            if not confirmed or keyword not in text or not self.is_paused:return
+            if (not confirmed or keyword not in text or not self.is_paused
+                    or not self.is_listening or self._stop_event.is_set()):return
             self._barge_woke=True
+            # Retain an acoustically AND text-confirmed attached command, as in
+            # the existing music wake path. Standalone wake opens a new turn.
             self._barge_pending=pcm if len(command)>=2 else None
+            cancel = getattr(self, 'turn_cancelled', None)
+            if cancel is not None:cancel.set()
             audio=getattr(self.controller,'_network_audio',None)
             if audio:audio.cancelled.set()
             self.controller.playback_cancel.set()
             music = getattr(self.controller, '_music_player', None)
             if music and music.running:music.cancel.set()
             self.controller.send_json({'cmd':'audio_abort'})
-            self._barge_audio.clear()
+            if hasattr(self, '_barge_audio'):self._barge_audio.clear()
+            print(f'[语音状态] interrupted: 声学与识别均确认 {keyword}；取消旧轮次')
+            if self.duplex and not getattr(self, '_music_monitor', False):
+                self.is_awake = True
+                self._acknowledge_wake()
+                if self._barge_pending:
+                    try:self._utterance_queue.put_nowait(self._barge_pending)
+                    except queue.Full:pass
 
     def _finish_turn(self, text):
+        if getattr(self, '_barge_woke', False) and self.duplex:
+            # The wake worker already acknowledged and reopened capture. An old
+            # turn must not flush the newly captured question or close its session.
+            self._barge_woke = False
+            self._barge_pending = None
+            print('[语音状态] cancelled: 旧轮次收尾，保留新监听缓冲')
+            return
         self.is_awake = self.session.after_reply() and not self.session.should_end(text)
         if getattr(self,'_barge_woke',False):self.is_awake=True
         pending=getattr(self,'_barge_pending',None)
@@ -566,6 +605,7 @@ class VoiceListener:
             try:self._utterance_queue.put_nowait(pending)
             except queue.Full:pass
         self._update_board_led('active' if self.is_awake else 'listening')
+        print('[语音状态] ' + ('listening: 回答结束，继续收音' if self.is_awake else 'standby: 会话结束，等待唤醒'))
 
     def _watchdog_loop(self):
         """后台看门狗：空闲超时检测，以及核心工作线程存活监测与受控自愈"""
@@ -853,6 +893,7 @@ class VoiceListener:
             ('worker', self._worker_thread),
             ('watchdog', self._watchdog_thread),
             ('teardown', self._teardown_thread),
+            ('barge', getattr(self, '_barge_thread', None)),
         ]
         alive = [name for name, th in threads if th and th.is_alive()]
         if not alive:
@@ -902,7 +943,7 @@ class VoiceListener:
 
     def has_live_threads(self) -> bool:
         """判断是否有任一底层线程（含硬件收尾）仍在运行（供资源清理与回收等待使用）"""
-        return any(th and th.is_alive() for th in (self._process_thread, self._worker_thread, self._watchdog_thread, self._teardown_thread))
+        return any(th and th.is_alive() for th in (self._process_thread, self._worker_thread, self._watchdog_thread, self._teardown_thread, getattr(self, '_barge_thread', None)))
 
     def start(self) -> bool:
         with self._lifecycle_lock:
@@ -923,6 +964,10 @@ class VoiceListener:
             self.is_awake = False
             self._pending_prefix = ""
             self._is_processing = False
+            self.turn_cancelled = None
+            self._barge_woke = False
+            self._barge_pending = None
+            if hasattr(self, '_barge_audio'):self._barge_audio.clear()
 
             # 新会话代次递增
             self._session_generation += 1
@@ -1012,6 +1057,8 @@ class VoiceListener:
 
             self.is_listening = False
             self._stop_event.set()
+            cancel = getattr(self, 'turn_cancelled', None)
+            if cancel is not None:cancel.set()
             self._ready_event.set()
 
             # 2. 暂停与排空音频缓冲 (纯内存排空，杜绝阻塞主控线程)
@@ -1025,7 +1072,7 @@ class VoiceListener:
                     return
                 if getattr(self.controller, 'audio_connected', False):
                     try:
-                        if not self.duplex and hasattr(self.controller, 'enable_mic'):
+                        if hasattr(self.controller, 'enable_mic'):
                             self.controller.enable_mic(False)
                         if gen_to_teardown == self._session_generation:
                             self._update_board_led("green")
@@ -1045,6 +1092,7 @@ class VoiceListener:
                 ('worker', self._worker_thread),
                 ('watchdog', self._watchdog_thread),
                 ('teardown', self._teardown_thread),
+                ('barge', getattr(self, '_barge_thread', None)),
             ]
             pending = []
             for name, th in threads:

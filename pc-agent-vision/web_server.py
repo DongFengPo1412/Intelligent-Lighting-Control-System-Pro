@@ -175,7 +175,7 @@ def check_reinit_allowed():
         active_chat_tasks.clear()
 
 
-async def run_chat(message: str):
+async def run_chat(message: str, cancelled=None):
     if globals().get('shutting_down', False):
         raise RuntimeError("Server is shutting down: rejecting new chat requests")
 
@@ -277,6 +277,8 @@ async def run_chat(message: str):
                     job.state = "running"
 
                 try:
+                    if cancelled is not None:
+                        return agent.chat(message, cancelled=cancelled)
                     return agent.chat(message)
                 except Exception as ex:
                     if job:
@@ -648,6 +650,9 @@ async def handle_status(request: web.Request):
         "listener_threads": listener_threads,
         "listener_threads_alive": bool(listener and listener.has_live_threads()),
         "listener_paused": bool(listener and listener.is_paused),
+        "wake_interrupt_enabled": bool(listener and getattr(listener, 'duplex', False)),
+        "turn_cancelled": bool(listener and getattr(listener, 'turn_cancelled', None)
+                               and listener.turn_cancelled.is_set()),
         "listener_stop_pending": bool(listener and getattr(listener, 'stop_pending', False)),
         "wifi": wifi_info,
         "volume": wifi_info.get('last_command', {}).get('volume', 70),
@@ -749,7 +754,11 @@ async def process_voice_interaction(speech_text: str):
     if globals().get('shutting_down', False):
         return
     try:
-        result = await run_chat(speech_text)
+        cancel = getattr(listener, 'turn_cancelled', None) if listener else None
+        result = await run_chat(speech_text, cancelled=cancel)
+        if cancel is not None and cancel.is_set():
+            print('[语音状态] cancelled: 不广播已取消的旧回复')
+            return
         reply = result["reply"]
         print(f"[免触语音回复]: {reply}")
         print(f"[语音分段耗时]: {json.dumps(result.get('timings', {}), ensure_ascii=False)}")
