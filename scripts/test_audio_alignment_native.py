@@ -19,7 +19,7 @@ def main():
     if work == ROOT or ROOT in work.parents:
         raise ValueError('Build outputs must be outside the source repository')
     work.mkdir(parents=True, exist_ok=True)
-    includes = [ROOT/'tests/phase_a_stubs', ROOT/'firmware-s3/main/audio',
+    includes = [ROOT/'tests/phase_a_stubs', ROOT/'firmware-s3/main/audio', ROOT/'firmware-s3/main/protocol',
                 ROOT/'firmware-s3/main/display/arcade']
     source = ROOT/'tests/audio_alignment_native_test.cpp'
     env = dict(os.environ)

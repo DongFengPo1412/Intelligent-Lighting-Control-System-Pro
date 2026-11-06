@@ -40,6 +40,33 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_repeated_acoustically_confirmed_name_wakes_once_without_command(self):
+        for keyword in ('助手', '红莉栖', '克里斯', '克里斯蒂娜', '牧濑红莉栖'):
+            with self.subTest(keyword=keyword):
+                listener = self._create_isolated_listener()
+                listener.wake_detector.detect = lambda pcm: keyword
+                text = (keyword + '，') * 6 + '。'
+                listener.whisper_model.transcribe = lambda *a, **k: (
+                    [types.SimpleNamespace(text=text)], object())
+                acknowledged = []
+                listener._acknowledge_wake = acknowledged.append
+                listener.callback = lambda text: self.fail('A repeated name is not a command')
+                listener._process_utterance(bytes(3200))
+                self.assertTrue(listener.is_awake)
+                self.assertEqual(acknowledged, [keyword])
+
+    def test_repetition_filter_still_rejects_mismatched_names_and_commands(self):
+        for text in ('红莉栖' * 6, '助手' * 6 + '开灯', '哈哈哈哈哈哈'):
+            with self.subTest(text=text):
+                listener = self._create_isolated_listener()
+                listener.wake_detector.detect = lambda pcm: '助手'
+                listener.whisper_model.transcribe = lambda *a, **k: (
+                    [types.SimpleNamespace(text=text)], object())
+                listener._acknowledge_wake = lambda *a: self.fail('Noise must not wake')
+                listener.callback = lambda text: self.fail('Noise must not execute')
+                listener._process_utterance(bytes(3200))
+                self.assertFalse(listener.is_awake)
+
     def test_duplex_standby_pcm_bypasses_experimental_echo_filter(self):
         listener = self._create_isolated_listener()
         listener.is_listening = listener.duplex = True
@@ -246,6 +273,15 @@ class ListenerLifecycleTests(unittest.TestCase):
         listener.is_paused=False
         listener._stop_event.set()
         self.assertFalse(listener._recover_board_capture())
+
+    def test_disconnected_pcm_recovers_without_waiting_for_stale_audio_timeout(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener.controller.audio_connected = False
+        listener._last_board_frame_time = time.time()
+        with patch('voice_listener.time.monotonic', return_value=100):
+            self.assertTrue(listener._recover_board_capture())
+        self.assertEqual(listener.pcm_recoveries, 1)
 
     def test_pause_during_pcm_reconnect_does_not_reenable_microphone(self):
         listener = self._create_isolated_listener()

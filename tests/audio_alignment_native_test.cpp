@@ -1,11 +1,54 @@
 #include "audio_preferences.h"
 #include "audio_sample_format.h"
 #include "game_audio_stream.h"
+#include "pcm_frame_writer.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <optional>
 #include <vector>
+
+static void TestPcmFraming() {
+    std::vector<uint8_t> pcm(480);
+    for (size_t i=0;i<pcm.size();++i) pcm[i]=static_cast<uint8_t>(i);
+    std::vector<uint8_t> expected={'K','A','P','1',2,1,224};
+    expected.insert(expected.end(),pcm.begin(),pcm.end());
+    // Every possible header/payload failure position must invalidate the
+    // stream once; continuing at the next header would corrupt its boundary.
+    for (size_t stop=0;stop<expected.size();++stop) {
+        std::vector<uint8_t> wire;
+        unsigned disconnected=0;
+        const bool ok=pcm_transport::WriteFrame(2,pcm.data(),pcm.size(),
+            [&](const uint8_t* p,size_t n)->int {
+                const size_t accepted=std::min(std::min(n,size_t{3}),stop-wire.size());
+                wire.insert(wire.end(),p,p+accepted);
+                return accepted?static_cast<int>(accepted):-1;
+            },[&]{++disconnected;});
+        assert(!ok && disconnected==1 && wire.size()==stop);
+        assert(std::equal(wire.begin(),wire.end(),expected.begin()));
+    }
+    for (size_t chunk=1;chunk<=13;++chunk) {
+        std::vector<uint8_t> wire;
+        assert(pcm_transport::WriteFrame(2,pcm.data(),pcm.size(),
+            [&](const uint8_t* p,size_t n)->int {
+                const size_t accepted=std::min(n,chunk);
+                wire.insert(wire.end(),p,p+accepted);
+                return static_cast<int>(accepted);
+            },[]{assert(false && "Fragmented successful writes must not disconnect");}));
+        assert(wire==expected);
+    }
+    unsigned writes=0,disconnected=0;
+    auto writer=[&](const uint8_t*,size_t)->int {++writes;return 0;};
+    auto disconnect=[&]{++disconnected;};
+    assert(!pcm_transport::WriteFrame(2,pcm.data(),0,writer,disconnect));
+    assert(!pcm_transport::WriteFrame(2,pcm.data(),2049,writer,disconnect));
+    assert(!pcm_transport::WriteFrame(2,nullptr,480,writer,disconnect));
+    assert(writes==0 && disconnected==0);
+    assert(!pcm_transport::WriteFrame(2,pcm.data(),480,writer,disconnect));
+    assert(writes==1 && disconnected==1); // Busy/zero write cannot spin.
+    std::puts("PASS: TCP PCM fragmented writes and 487 injected failure positions (host; no hardware)");
+}
 
 namespace {
 std::optional<int32_t> stored, pending;
@@ -35,6 +78,7 @@ int nvs_commit(nvs_handle_t handle) {
 void nvs_close(nvs_handle_t handle) { assert(handle==1);++closes;pending.reset(); }
 
 int main() {
+    TestPcmFraming();
     using namespace audio_preferences;
     const auto empty=Load(); assert(empty.value==70 && !empty.saved);
     assert(Save(60)==ESP_OK); assert(Load().value==60 && Load().saved);

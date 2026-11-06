@@ -1,6 +1,7 @@
 #include "network_audio.h"
 #include "command_dispatcher.h"
 #include "network_auth.h"
+#include "pcm_frame_writer.h"
 #include <freertos/task.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -14,9 +15,6 @@ namespace {
 const char hello[]="pcm16le/16000/mono/v2";
 bool read_all(int fd,void* output,size_t length) {
     auto* p=(uint8_t*)output;while(length){int n=recv(fd,p,length,0);if(n<=0)return false;p+=n;length-=n;}return true;
-}
-bool write_all(int fd,const void* input,size_t length) {
-    auto* p=(const uint8_t*)input;while(length){int n=send(fd,p,length,0);if(n<=0)return false;p+=n;length-=n;}return true;
 }
 }
 NetworkAudio& NetworkAudio::GetInstance(){static NetworkAudio instance;return instance;}
@@ -34,10 +32,20 @@ void NetworkAudio::Task(void* arg){
     auto* audio=(NetworkAudio*)arg;audio->Run();audio->ready_=false;audio->running_=false;vTaskDelete(nullptr);
 }
 bool NetworkAudio::Send(uint8_t kind,const void* data,size_t bytes){
-    if(bytes>2048||!tx_)return false;
+    if(!data||!bytes||bytes>2048||!tx_)return false;
     if(xSemaphoreTake(tx_,pdMS_TO_TICKS(100))!=pdTRUE)return false;
-    uint8_t header[]={'K','A','P','1',kind,(uint8_t)(bytes>>8),(uint8_t)bytes};
-    bool ok=client_>=0&&write_all(client_,header,sizeof(header))&&write_all(client_,data,bytes);
+    // Handshake is allowed before ready_; queued microphone sends must not
+    // append another header after any writer has invalidated the connection.
+    const int fd=client_;
+    bool ok=fd>=0&&(kind==4||ready_.load())&&pcm_transport::WriteFrame(
+        kind,data,bytes,
+        [fd](const uint8_t* p,size_t length){return send(fd,p,length,0);},
+        [this,fd]{
+            const int send_error=errno;
+            ready_=false;
+            shutdown(fd,SHUT_RDWR); // Run() owns close(), under the same mutex.
+            ESP_LOGW("NetworkAudio","PCM write failed; connection closed (errno=%d)",send_error);
+        });
     xSemaphoreGive(tx_);return ok;
 }
 bool NetworkAudio::SendMic(const int16_t* data,size_t count){return ready_&&Send(2,data,count*2);}

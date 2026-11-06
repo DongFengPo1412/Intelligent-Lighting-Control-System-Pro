@@ -530,6 +530,15 @@ class VoiceListener:
                         text = ""
                         dt_asr = 0.0
 
+                # Repeated calls of the acoustically confirmed name are a
+                # single wake, not a repeated-character hallucination. Do not
+                # rescue arbitrary text or commands from the noise filter.
+                if not self.is_awake and acoustic_keyword:
+                    compact = re.sub(r'[，,。.!！?？、…~\s]', '', text)
+                    if re.fullmatch(r'(?:' + re.escape(acoustic_keyword) + r'){2,}', compact):
+                        text = acoustic_keyword
+                        print('[唤醒归一化]: 连续呼唤同一称呼，合并为一次唤醒')
+
                 # 过滤 ASR 常见重复字符幻觉
                 if re.search(r'(.)\1{4,}', text) or re.search(r'(.{2,4})\1{3,}', text):
                     print(f"[待命监听]: 过滤到 ASR 重复字符噪声: \"{text[:30]}...\"，静默丢弃。")
@@ -807,7 +816,7 @@ class VoiceListener:
     def _recover_board_capture(self):
         """Bounded reconnect in the existing capture worker; never fake freshness."""
         if not self.is_listening or self.is_paused or self._stop_event.is_set():return False
-        if time.time()-self._last_board_frame_time <= 6:return False
+        if self.controller.audio_connected and time.time()-self._last_board_frame_time <= 6:return False
         now=time.monotonic()
         if now-getattr(self, '_last_pcm_recovery', 0) < 5:return False
         audio=getattr(self.controller, '_network_audio', None)
@@ -870,7 +879,8 @@ class VoiceListener:
             except queue.Empty:
                 if self._stop_event.is_set():
                     break
-                if self.is_listening and not self.is_paused and (time.time() - self._last_board_frame_time > 6.0):
+                if self.is_listening and not self.is_paused and (
+                        not self.controller.audio_connected or time.time() - self._last_board_frame_time > 6.0):
                     self._speech_active = False
                     is_speaking = False
                     speech_frames.clear()
