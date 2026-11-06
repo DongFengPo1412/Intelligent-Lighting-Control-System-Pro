@@ -291,7 +291,7 @@ class VoiceListener:
 
     def _on_board_pcm(self, pcm_bytes: bytes):
         """来自 ESP32-S3 板载 INMP441 麦克风的原始 16kHz PCM 帧回调"""
-        if not self.is_listening:
+        if not self.is_listening or getattr(self, '_starting_capture', False):
             # Startup can confirm a real incoming PCM frame without exposing
             # ready-sound echo or pre-ready speech to wake/command processing.
             event = getattr(self, '_startup_pcm_event', None)
@@ -826,19 +826,45 @@ class VoiceListener:
         self.pcm_recoveries=getattr(self, 'pcm_recoveries', 0)+1
         self.last_capture_error='板载音频停流，正在重新连接PCM'
         print('[收音恢复] '+self.last_capture_error)
+        ready_callback = getattr(self, 'ready_callback', None)
         try:
+            if ready_callback is not None:
+                # Reboot/reconnect follows the same readiness ceremony as Mid's
+                # activation-complete path. Gate wake processing during its sound.
+                self._startup_pcm_event = threading.Event()
+                self._starting_capture = True
             if audio is not None:audio.close()
             if not self.controller.connect_audio():raise RuntimeError('PCM重连失败')
             if (not self.is_listening or self.is_paused or self._stop_event.is_set()
                     or generation!=self._session_generation):return False
             if self.controller.enable_mic(True) is False:raise RuntimeError('麦克风开启未获确认')
-            # Only _on_board_pcm can advance _last_board_frame_time or clear
-            # this error. A successful TCP/UDP handshake is not received audio.
+            if ready_callback is not None:
+                if not self._startup_pcm_event.wait(1.5):
+                    raise RuntimeError('重连后未收到真实板载PCM，不播放成功音')
+                if (not self.is_listening or self.is_paused or self._stop_event.is_set()
+                        or generation != self._session_generation):return False
+                self.is_awake = False
+                self._pending_prefix = ''
+                cancel = getattr(self, 'turn_cancelled', None)
+                if cancel is not None:cancel.set()
+                while not self._utterance_queue.empty():
+                    try:self._utterance_queue.get_nowait()
+                    except queue.Empty:break
+                if ready_callback() is False:
+                    raise RuntimeError('重连就绪提示未完整播放')
+                self._resume_warmup_frames = 10
+                self.last_capture_error = None  # Real PCM and confirmed sound above.
+                print('[语音状态] standby: 重新联网及就绪提示完成，等待唤醒词')
+            # Only real PCM advances freshness. Without a readiness ceremony,
+            # only the normal PCM callback clears this capture error.
             return True
         except Exception as exc:
             self.last_capture_error=str(exc)
+            if ready_callback is not None and audio is not None:audio.close()
             print('[收音恢复失败] '+self.last_capture_error)
             return False
+        finally:
+            if ready_callback is not None:self._starting_capture = False
 
     def _process_loop(self):
         """

@@ -274,6 +274,62 @@ class ListenerLifecycleTests(unittest.TestCase):
         listener._stop_event.set()
         self.assertFalse(listener._recover_board_capture())
 
+    def test_reconnect_announces_ready_only_after_real_pcm_and_gates_its_echo(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = listener.is_awake = True
+        listener._last_board_frame_time = 1
+        events = []
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False,
+            close=lambda:events.append('close'))
+        listener.controller.connect_audio = lambda:events.append('connect') or True
+        def mic(enabled):
+            events.append('mic')
+            listener._on_board_pcm(bytes(960))
+            self.assertTrue(listener._pcm_queue.empty())
+            return True
+        listener.controller.enable_mic = mic
+        def ready():
+            self.assertTrue(listener._startup_pcm_event.is_set())
+            self.assertFalse(listener.is_awake)
+            listener._on_board_pcm(bytes(960))
+            self.assertTrue(listener._pcm_queue.empty())
+            events.append('success_sound')
+            return True
+        listener.ready_callback = ready
+        self.assertTrue(listener._recover_board_capture())
+        self.assertEqual(events, ['close', 'connect', 'mic', 'success_sound'])
+        self.assertFalse(listener._starting_capture)
+        self.assertIsNone(listener.last_capture_error)
+        self.assertFalse(listener._recover_board_capture())
+
+    def test_reconnect_without_pcm_cannot_play_success_sound(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener._last_board_frame_time = 1
+        listener.ready_callback = lambda:self.fail('No ready sound without board PCM')
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False, close=lambda:None)
+        listener.controller.connect_audio = lambda:True
+        listener.controller.enable_mic = lambda enabled:True
+        event = threading.Event()
+        with patch('voice_listener.threading.Event', return_value=event), patch.object(event, 'wait', return_value=False):
+            self.assertFalse(listener._recover_board_capture())
+        self.assertIn('未收到真实板载PCM', listener.last_capture_error)
+        self.assertEqual(listener._last_board_frame_time, 1)
+        self.assertFalse(listener._starting_capture)
+
+    def test_reconnect_sound_failure_does_not_report_ready(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener._last_board_frame_time = 1
+        closed = []
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False, close=lambda:closed.append(True))
+        listener.controller.connect_audio = lambda:True
+        listener.controller.enable_mic = lambda enabled:listener._on_board_pcm(bytes(960)) or True
+        listener.ready_callback = lambda:False
+        self.assertFalse(listener._recover_board_capture())
+        self.assertIn('未完整播放', listener.last_capture_error)
+        self.assertEqual(len(closed), 2)
+
     def test_disconnected_pcm_recovers_without_waiting_for_stale_audio_timeout(self):
         listener = self._create_isolated_listener()
         listener.is_listening = True
