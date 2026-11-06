@@ -72,12 +72,14 @@ void WifiManager::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
             ESP_LOGI(TAG, ">>> [客户端已断开板端 AP]: MAC=%02x:%02x:%02x:%02x:%02x:%02x",
                      event->mac[0], event->mac[1], event->mac[2], event->mac[3], event->mac[4], event->mac[5]);
         } else if (event_id == WIFI_EVENT_STA_START) {
+            BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
             ESP_LOGI(TAG, ">>> [WiFi STA 启动]: 正在搜寻并连接热点 '%s'...", self->sta_ssid_);
             esp_wifi_connect();
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
             auto* disconnected = static_cast<wifi_event_sta_disconnected_t*>(event_data);
             self->is_sta_connected_ = false;
             strncpy(self->sta_ip_, "0.0.0.0", sizeof(self->sta_ip_) - 1);
+            BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
 
             static uint32_t retry_cnt = 0;
             if (++retry_cnt % 6 == 1) {
@@ -93,6 +95,10 @@ void WifiManager::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
         esp_ip4addr_ntoa(&event->ip_info.ip, self->sta_ip_, sizeof(self->sta_ip_));
         self->is_sta_connected_ = true;
         esp_timer_stop(self->reconnect_timer_);
+        // Network readiness must not depend on a PC voice process sending an LED
+        // command. Once DHCP succeeds, stop the misleading "still pairing" pulse.
+        // Voice/control commands can take over the indicator afterwards.
+        BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_BLUE);
         ESP_LOGI(TAG, "===============================================================");
         ESP_LOGI(TAG, "★★★ [热点局域网 STA 连接成功] ★★★");
         ESP_LOGI(TAG, ">>> 板端分配局域网 IP: %s", self->sta_ip_);
@@ -162,6 +168,12 @@ esp_err_t WifiManager::InitAndConnect(const char* sta_ssid, const char* sta_pass
     wifi_config_t sta_config = {};
     strncpy((char*)sta_config.sta.ssid, sta_ssid_, sizeof(sta_config.sta.ssid));
     strncpy((char*)sta_config.sta.password, sta_password_, sizeof(sta_config.sta.password));
+    // Search the configured network across all 2.4 GHz channels on every boot
+    // and reconnect; a phone hotspot can change its channel/BSSID when restarted.
+    sta_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+    sta_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    sta_config.sta.channel = 0;
+    sta_config.sta.bssid_set = false;
     sta_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
     sta_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
     sta_config.sta.pmf_cfg.capable = true;
