@@ -50,6 +50,7 @@ class WiFiPcmClient:
         self.cancelled = threading.Event()
         self.closed = threading.Event()
         self.last_error = None
+        self.boot_id = None
         self.state = threading.RLock()
         self._barrier_lock = threading.Lock()
         self._barriers = {}
@@ -79,6 +80,7 @@ class WiFiPcmClient:
             if receive(sock) != (4, HELLO):
                 raise ValueError("Unsupported PCM protocol")
             self.sock = sock
+            self.boot_id = gateway.boot_id
             self.connected = True
             self.last_error = None
             self.closed = threading.Event()

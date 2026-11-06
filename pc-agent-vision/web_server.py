@@ -660,6 +660,8 @@ async def handle_status(request: web.Request):
         "wifi": wifi_info,
         "volume": wifi_info.get('last_command', {}).get('volume', 70),
         "last_audio_error": getattr(controller, 'last_audio_error', None),
+        "ready_sound_status": getattr(controller, 'ready_sound_status', 'not_attempted'),
+        "ready_sound_error": getattr(controller, 'ready_sound_error', None),
         "pcm_connected": bool(getattr(controller, 'audio_connected', False)),
         "pcm_error": getattr(getattr(controller, '_network_audio', None), 'last_error', None),
         "capture_error": getattr(listener, 'last_capture_error', None),

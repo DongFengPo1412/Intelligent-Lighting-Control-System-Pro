@@ -197,6 +197,52 @@ class VoiceStartupTests(unittest.TestCase):
         self.assertTrue(LightController.run_boot_ceremony(ctrl))
         self.assertEqual(played, [success])
 
+    def test_ready_sound_once_per_board_boot_even_across_reconnect_calls(self):
+        from light_controller import LightController
+        played = []
+        ctrl = types.SimpleNamespace(wait_for_control=lambda timeout:True, connect_audio=lambda:True,
+            audio_transport='wifi', _network_audio=types.SimpleNamespace(boot_id='a'*32),
+            set_board_led=lambda mode:True, _ready_pcm=bytes(32),
+            play_audio_pcm=lambda pcm:played.append(pcm) or True)
+        self.assertTrue(LightController.run_boot_ceremony(ctrl))
+        self.assertTrue(LightController.run_boot_ceremony(ctrl))
+        self.assertEqual(len(played), 1)
+        ctrl._network_audio.boot_id='b'*32
+        self.assertTrue(LightController.run_boot_ceremony(ctrl))
+        self.assertEqual(len(played), 2)
+
+    def test_uncertain_ready_sound_is_not_automatically_replayed(self):
+        from light_controller import LightController
+        played = []
+        ctrl = types.SimpleNamespace(wait_for_control=lambda timeout:True, connect_audio=lambda:True,
+            audio_transport='wifi', _network_audio=types.SimpleNamespace(boot_id='a'*32),
+            set_board_led=lambda mode:True, _ready_pcm=bytes(32),
+            play_audio_pcm=lambda pcm:played.append(pcm) or False)
+        self.assertFalse(LightController.run_boot_ceremony(ctrl))
+        self.assertFalse(LightController.run_boot_ceremony(ctrl))
+        self.assertEqual(len(played), 1)
+        self.assertEqual(ctrl.ready_sound_status, 'unconfirmed')
+        self.assertTrue(ctrl.ready_sound_error)
+
+    def test_concurrent_ready_callers_share_one_announcement(self):
+        from light_controller import LightController
+        played = []
+        ctrl = types.SimpleNamespace(wait_for_control=lambda timeout:True, connect_audio=lambda:True,
+            audio_transport='wifi', _network_audio=types.SimpleNamespace(boot_id='a'*32),
+            _boot_ceremony_lock=threading.Lock(), set_board_led=lambda mode:True,
+            _ready_pcm=bytes(32), play_audio_pcm=lambda pcm:played.append(pcm) or True)
+        threads=[threading.Thread(target=LightController.run_boot_ceremony,args=(ctrl,)) for _ in range(4)]
+        for th in threads:th.start()
+        for th in threads:th.join(2)
+        self.assertEqual(len(played), 1)
+
+    def test_no_boot_identity_cannot_announce_wifi_readiness(self):
+        from light_controller import LightController
+        ctrl = types.SimpleNamespace(wait_for_control=lambda timeout:True, connect_audio=lambda:True,
+            audio_transport='wifi', _network_audio=types.SimpleNamespace(boot_id=None),
+            play_beep=lambda:self.fail('No sound without board boot identity'))
+        self.assertFalse(LightController.run_boot_ceremony(ctrl))
+
     def test_web_warmup_passes_ready_sound_to_listener_only_after_model_ready(self):
         import asyncio
         import web_server

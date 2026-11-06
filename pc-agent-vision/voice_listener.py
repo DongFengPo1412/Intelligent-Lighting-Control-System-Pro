@@ -101,6 +101,7 @@ class VoiceListener:
         self._last_board_frame_time = 0.0
         self._last_pcm_recovery = 0.0
         self.pcm_recoveries = 0
+        self._capture_boot_id = None
         self.last_capture_error = None
         self._resume_warmup_frames = 0
 
@@ -835,14 +836,18 @@ class VoiceListener:
                 self._starting_capture = True
             if audio is not None:audio.close()
             if not self.controller.connect_audio():raise RuntimeError('PCM重连失败')
+            boot_id = getattr(getattr(self.controller, '_network_audio', None), 'boot_id', None)
+            announce = ready_callback is not None and (not boot_id or boot_id != getattr(self, '_capture_boot_id', None))
+            if not announce:self._starting_capture = False
             if (not self.is_listening or self.is_paused or self._stop_event.is_set()
                     or generation!=self._session_generation):return False
             if self.controller.enable_mic(True) is False:raise RuntimeError('麦克风开启未获确认')
-            if ready_callback is not None:
+            if announce:
                 if not self._startup_pcm_event.wait(1.5):
                     raise RuntimeError('重连后未收到真实板载PCM，不播放成功音')
                 if (not self.is_listening or self.is_paused or self._stop_event.is_set()
                         or generation != self._session_generation):return False
+                self._capture_boot_id = boot_id
                 self.is_awake = False
                 self._pending_prefix = ''
                 cancel = getattr(self, 'turn_cancelled', None)
@@ -855,6 +860,8 @@ class VoiceListener:
                 self._resume_warmup_frames = 10
                 self.last_capture_error = None  # Real PCM and confirmed sound above.
                 print('[语音状态] standby: 重新联网及就绪提示完成，等待唤醒词')
+            elif ready_callback is not None:
+                print('[收音恢复] 同一次设备启动，只恢复收音，不重播成功提示音')
             # Only real PCM advances freshness. Without a readiness ceremony,
             # only the normal PCM callback clears this capture error.
             return True
@@ -1167,6 +1174,7 @@ class VoiceListener:
                 self.controller.on_mic_data = self._on_board_pcm
                 if not self.controller.connect_audio():
                     raise RuntimeError("Audio transport connection failed")
+                self._capture_boot_id = getattr(getattr(self.controller, '_network_audio', None), 'boot_id', None)
                 if self.controller.enable_mic(True) is False:
                     raise RuntimeError("Board did not acknowledge microphone enable")
                 self._update_board_led("listening")

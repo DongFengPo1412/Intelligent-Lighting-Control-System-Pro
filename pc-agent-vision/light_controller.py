@@ -35,6 +35,10 @@ class LightController(ProControlMixin):
         self._network_audio = None
         self.playback_cancel = threading.Event()
         self.playback_started_at = None
+        self._boot_ceremony_lock = threading.Lock()
+        self._ready_sound_boot_id = None
+        self.ready_sound_status = 'not_attempted'
+        self.ready_sound_error = None
 
         if self.audio_transport == 'wifi':
             self.is_connected = False
@@ -394,21 +398,48 @@ class LightController(ProControlMixin):
         The voice startup owner calls this only after models and capture workers
         are prepared. It does not configure Wi-Fi or change the matrix/volume.
         """
-        def _ceremony():
+        def _ceremony_locked():
             if not self.wait_for_control(3.0):
                 print("[配对失败] 未收到 Wi-Fi 回执")
                 return False
             if not self.connect_audio():
                 print('[语音启动失败] 板载音频未连接，不播放就绪提示音')
                 return False
+            boot_id = getattr(getattr(self, '_network_audio', None), 'boot_id', None)
+            if getattr(self, 'audio_transport', None) == 'wifi' and not boot_id:
+                self.ready_sound_error = '缺少设备开机标识，未播放就绪提示音'
+                return False
+            if boot_id and boot_id == getattr(self, '_ready_sound_boot_id', None):
+                print('[就绪提示] 本次开机已尝试播放，不因重连或重复调用再次播放')
+                return getattr(self, 'ready_sound_status', None) == 'confirmed'
             if not self.set_board_led("connected"):
                 return False
             ready_pcm = getattr(self, '_ready_pcm', b'')
-            if not (self.play_audio_pcm(ready_pcm) if ready_pcm else self.play_beep()):
+            # Claim BEFORE sending: an uncertain ACK must not replay an audible
+            # one-shot event. Only a new board boot can re-arm this announcement.
+            self._ready_sound_boot_id = boot_id
+            self.ready_sound_status = 'attempted'
+            self.ready_sound_error = None
+            try:
+                played = self.play_audio_pcm(ready_pcm) if ready_pcm else self.play_beep()
+            except Exception as exc:
+                played = False
+                self.ready_sound_error = str(exc)
+            if not played:
+                self.ready_sound_status = 'unconfirmed'
+                self.ready_sound_error = self.ready_sound_error or '就绪提示音播放未获确认；本次开机不自动重播'
                 print("[语音启动失败] 就绪提示音播放未获确认")
                 return False
+            self.ready_sound_status = 'confirmed'
             waiting_question = getattr(getattr(self, '_voice_listener', None), 'is_awake', False)
             return self.set_board_led('listening' if waiting_question else 'off')
+
+        lock = getattr(self, '_boot_ceremony_lock', None)
+        if lock is None:
+            lock = self._boot_ceremony_lock = threading.Lock()
+        def _ceremony():
+            with lock:
+                return _ceremony_locked()
 
         if async_mode:
             thread = threading.Thread(target=_ceremony, daemon=True)

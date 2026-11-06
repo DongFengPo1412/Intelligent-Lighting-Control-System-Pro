@@ -317,6 +317,36 @@ class ListenerLifecycleTests(unittest.TestCase):
         self.assertEqual(listener._last_board_frame_time, 1)
         self.assertFalse(listener._starting_capture)
 
+    def test_same_boot_pcm_reconnect_does_not_replay_success_sound(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = listener.is_awake = True
+        listener._last_board_frame_time = 1
+        listener._capture_boot_id = 'a'*32
+        listener.ready_callback = lambda:self.fail('A transport reconnect is not a new boot')
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False,
+            boot_id='a'*32, close=lambda:None)
+        listener.controller.connect_audio = lambda:True
+        listener.controller.enable_mic = lambda enabled:listener._on_board_pcm(bytes(960)) or True
+        self.assertTrue(listener._recover_board_capture())
+        self.assertTrue(listener.is_awake)
+
+    def test_new_boot_failed_prompt_does_not_announce_on_next_pcm_retry(self):
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener._last_board_frame_time = 1
+        listener._capture_boot_id = 'a'*32
+        calls = []
+        listener.ready_callback = lambda:calls.append('sound_attempt') or False
+        listener.controller._network_audio = types.SimpleNamespace(playback_active=False,
+            boot_id='b'*32, close=lambda:None)
+        listener.controller.connect_audio = lambda:True
+        listener.controller.enable_mic = lambda enabled:listener._on_board_pcm(bytes(960)) or True
+        self.assertFalse(listener._recover_board_capture())
+        listener._last_board_frame_time = 1
+        listener._last_pcm_recovery = 0
+        self.assertTrue(listener._recover_board_capture())
+        self.assertEqual(calls, ['sound_attempt'])
+
     def test_reconnect_sound_failure_does_not_report_ready(self):
         listener = self._create_isolated_listener()
         listener.is_listening = True
