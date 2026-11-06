@@ -167,6 +167,14 @@ class VoiceListener:
             raise ValueError('KURISU_VAD_MODE must be 0..3')
         self.vad = webrtcvad.Vad(self.vad_mode)
 
+    def _speech_energy_thresholds(self, ambient_energy):
+        # Slightly softer wake speech is allowed into KWS, while WebRTC VAD,
+        # acoustic keyword confirmation and ASR still guard actual activation.
+        # Keep the established in-conversation endpoint profile unchanged.
+        if self.is_awake:
+            return max(300.0, ambient_energy * 1.8), max(200.0, ambient_energy * 1.3)
+        return max(240.0, ambient_energy * 1.6), max(160.0, ambient_energy * 1.2)
+
     def _update_board_led(self, mode: str):
         """板载指示灯状态去重发送 (严格只在状态跳变时发送单条指令，杜绝频繁冲击)"""
         # In listener code, active means waiting for the user's next sentence.
@@ -965,11 +973,9 @@ class VoiceListener:
                 if not is_speaking:
                     ambient_energy = 0.98 * ambient_energy + 0.02 * ac_rms
 
-                # 双门限动态自适应计算:
-                # 起始门限: 至少 300 RMS (或底噪 1.8 倍)
-                # 持续门限: 至少 200 RMS (或底噪 1.3 倍)，确保轻声清辅音与过渡音素不被误当静音
-                start_threshold = max(300.0, ambient_energy * 1.8)
-                continue_threshold = max(200.0, ambient_energy * 1.3)
+                # Retain the adaptive noise floor; only standby wake capture
+                # uses the owner's slightly softer profile.
+                start_threshold, continue_threshold = self._speech_energy_thresholds(ambient_energy)
 
                 # 4. WebRTC VAD 模式 2 工业级判决
                 frame_vad_speech = False
@@ -995,7 +1001,7 @@ class VoiceListener:
                             # 对齐中阶 single_led.cc: 说话时点亮鲜红 hearing (HIGH_BRIGHTNESS)
                             self._update_board_led("hearing")
                             tag = "【等待指令中】" if self.is_awake else "【待命·等待唤醒词】"
-                            print(f"\n[ESP32 麦克风: {tag} 检测到语音输入 (VAD 触发, RMS: {ac_rms:.0f})...]", end="", flush=True)
+                            print(f"\n[ESP32 麦克风: {tag} 检测到语音输入 (VAD 触发, RMS: {ac_rms:.0f}, 门槛: {start_threshold:.0f}, 底噪: {ambient_energy:.0f})...]", end="", flush=True)
                     else:
                         speech_trigger_count = 0
                 else:

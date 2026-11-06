@@ -40,6 +40,31 @@ import web_server
 
 
 class ListenerLifecycleTests(unittest.TestCase):
+    def test_soft_wake_voice_can_cross_standby_energy_gate(self):
+        listener = self._create_isolated_listener()
+        start, continuing = listener._speech_energy_thresholds(100)
+        self.assertLessEqual(start, 260)  # Previously below the 300 RMS floor.
+        self.assertLessEqual(continuing, 170)  # Preserve quiet trailing syllables.
+
+    def test_soft_wake_gate_still_tracks_louder_background(self):
+        listener = self._create_isolated_listener()
+        start, continuing = listener._speech_energy_thresholds(500)
+        self.assertGreater(start, 500)
+        self.assertGreater(continuing, 500)
+        self.assertGreater(start, continuing)
+
+    def test_soft_wake_profile_keeps_normal_question_profile_unchanged(self):
+        listener = self._create_isolated_listener()
+        listener.is_awake = True
+        self.assertEqual(listener._speech_energy_thresholds(100), (300, 200))
+        self.assertEqual(listener._speech_energy_thresholds(500), (900, 650))
+
+    def test_soft_wake_profile_reduces_margin_without_accepting_noise_level(self):
+        listener = self._create_isolated_listener()
+        start, continuing = listener._speech_energy_thresholds(200)
+        self.assertLess(start, 340)  # Previously below 1.8 * noise = 360.
+        self.assertGreater(continuing, 200)
+
     def test_repeated_acoustically_confirmed_name_wakes_once_without_command(self):
         for keyword in ('助手', '红莉栖', '克里斯', '克里斯蒂娜', '牧濑红莉栖'):
             with self.subTest(keyword=keyword):
