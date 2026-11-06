@@ -3,12 +3,93 @@
 #include "game_audio_stream.h"
 #include "pcm_frame_writer.h"
 #include "wifi_audio_power.h"
+#include "pcm_tx_queue.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <optional>
 #include <vector>
+#include <memory>
+
+static std::vector<uint8_t> Wire(uint8_t kind,const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> result={'K','A','P','1',kind,
+        static_cast<uint8_t>(data.size()>>8),static_cast<uint8_t>(data.size())};
+    result.insert(result.end(),data.begin(),data.end());return result;
+}
+static void TestPcmTxQueue() {
+    using namespace pcm_transport;
+    auto storage=std::make_unique<PcmTxQueue>();auto& q=*storage;
+    std::vector<uint8_t> mic(480,17),marker={1,2,3,4},last={5,6};
+    auto expected=Wire(2,mic);
+    for(const auto& frame:{Wire(5,marker),Wire(2,last)})expected.insert(expected.end(),frame.begin(),frame.end());
+    for(size_t cut=0;cut<expected.size();++cut) {
+        assert(q.Enqueue(2,mic.data(),mic.size(),100));
+        assert(q.Enqueue(5,marker.data(),marker.size(),100));
+        assert(q.Enqueue(2,last.data(),last.size(),100));
+        std::vector<uint8_t> wire;
+        const auto first=q.Flush(101,[&](const uint8_t* p,size_t n){
+            const size_t accepted=std::min(n,cut-wire.size());
+            wire.insert(wire.end(),p,p+accepted);
+            return TxWrite{accepted,accepted?TxState::Progress:TxState::Blocked};
+        });
+        assert(first==FlushResult::Pending && wire.size()==cut);
+        assert(q.Flush(102,[&](const uint8_t* p,size_t n){
+            wire.insert(wire.end(),p,p+n);return TxWrite{n,TxState::Progress};
+        })==FlushResult::Idle);
+        assert(wire==expected && q.DroppedSamples()==0);
+    }
+    const uint32_t before=q.DroppedSamples();
+    for(size_t i=0;i<PcmTxQueue::kSlots-2;++i)assert(q.Enqueue(2,last.data(),2,200));
+    assert(!q.Enqueue(2,last.data(),2,200));
+    assert(q.DroppedSamples()==before+1);
+    assert(q.Enqueue(5,marker.data(),4,200) && q.Enqueue(5,last.data(),2,200));
+    assert(!q.Enqueue(5,last.data(),2,200));
+    unsigned calls=0;
+    while(q.Queued())q.Flush(201,[&](const uint8_t*,size_t n){++calls;return TxWrite{n,TxState::Progress};});
+    assert(calls==PcmTxQueue::kSlots);
+
+    auto blocked=[](const uint8_t*,size_t){return TxWrite{0,TxState::Blocked};};
+    assert(q.Enqueue(2,last.data(),2,300));
+    assert(q.Flush(300,blocked)==FlushResult::Pending);
+    assert(q.Flush(1799,blocked)==FlushResult::Pending);
+    assert(q.Flush(1801,[](const uint8_t*,size_t)->TxWrite{
+        assert(false && "Expired data must not reach socket");return {0,TxState::Fault};
+    })==FlushResult::Expired);
+    q.Clear();
+    assert(q.Enqueue(2,last.data(),2,UINT32_MAX-100));
+    assert(q.Flush(50,blocked)==FlushResult::Pending); // Wrapped monotonic clock.
+    assert(q.Flush(1501,blocked)==FlushResult::Expired);q.Clear();
+
+    assert(!q.Enqueue(2,nullptr,2,0) && !q.Enqueue(2,last.data(),1,0));
+    assert(!q.Enqueue(2,last.data(),2049,0) && !q.Enqueue(1,last.data(),2,0));
+    assert(!q.Enqueue(5,last.data(),0,0) && q.Queued()==0);
+    std::vector<uint8_t> maximum(2048,0xa7),wire;
+    assert(q.Enqueue(2,maximum.data(),maximum.size(),0));
+    calls=0;
+    assert(q.Flush(1,[&](const uint8_t* p,size_t){
+        wire.push_back(*p);++calls;return TxWrite{1,TxState::Progress};
+    })==FlushResult::Pending && calls==8); // Bounded work per poll.
+    q.Clear(); // Disconnected peer must not leak its partial frame to the next.
+    wire.clear();assert(q.Enqueue(5,marker.data(),marker.size(),10));
+    assert(q.Flush(11,[&](const uint8_t* p,size_t n){
+        wire.insert(wire.end(),p,p+n);return TxWrite{n,TxState::Progress};
+    })==FlushResult::Idle && wire==Wire(5,marker));
+
+    assert(q.Enqueue(2,maximum.data(),maximum.size(),20));wire.clear();
+    assert(q.Flush(21,[&](const uint8_t* p,size_t n){
+        wire.insert(wire.end(),p,p+n);return TxWrite{n,TxState::Progress};
+    })==FlushResult::Idle && wire==Wire(2,maximum));
+    assert(q.Enqueue(5,marker.data(),4,30));
+    assert(q.Flush(31,[](const uint8_t*,size_t){return TxWrite{0,TxState::Fault};})==FlushResult::Fault);
+    q.Clear();assert(q.Enqueue(5,marker.data(),4,40));
+    assert(q.Flush(41,[](const uint8_t*,size_t n){return TxWrite{n+1,TxState::Progress};})==FlushResult::Fault);
+    q.Clear();assert(q.Enqueue(5,marker.data(),4,50));
+    assert(q.Flush(51,[](const uint8_t*,size_t){return TxWrite{1,TxState::Blocked};})==FlushResult::Fault);
+    q.Clear();
+    std::printf("PASS: PCM queue %u partial/backpressure positions, control reserve, expiry, reset and bounded work; storage=%u bytes (host)\n",
+        static_cast<unsigned>(expected.size()),static_cast<unsigned>(sizeof(PcmTxQueue)));
+}
 
 namespace {
 wifi_ps_type_t wifi_policy=WIFI_PS_MIN_MODEM;
@@ -132,6 +213,7 @@ int nvs_commit(nvs_handle_t handle) {
 void nvs_close(nvs_handle_t handle) { assert(handle==1);++closes;pending.reset(); }
 
 int main() {
+    TestPcmTxQueue();
     TestWifiAudioPower();
     TestPcmFraming();
     using namespace audio_preferences;

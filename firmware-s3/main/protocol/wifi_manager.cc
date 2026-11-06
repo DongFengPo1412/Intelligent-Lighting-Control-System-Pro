@@ -19,6 +19,7 @@
 #include <math.h>
 #include "board_led.h"
 #include "audio_hal.h"
+#include "network_audio.h"
 
 static const char* TAG = "WifiMgr";
 
@@ -377,15 +378,20 @@ void WifiManager::UdpServerTaskLoop()
             bool arcade_cmd = (strcasecmp(cmd_name, "arcade") == 0);
 
             char ack[512];
-            snprintf(ack, sizeof(ack),
-                     "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"brightness\":%u,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u}\n",
+            const int ack_length=snprintf(ack, sizeof(ack),
+                     "{\"request_id\":\"%s\",\"status\":\"%s\",\"error\":\"%s\",\"mode\":%d,\"countdown_active\":%s,\"countdown_remaining\":%u,\"mic_streaming\":%s,\"volume\":%d,\"brightness\":%u,\"audio_rx\":%u,\"audio_played\":%u,\"audio_dropped\":%u,\"audio_errors\":%u,\"audio_stack_free\":%u,\"pcm_tx_q\":%u,\"pcm_tx_busy\":%u,\"mic_tx_drop\":%u,\"pcm_tx_err\":%u,\"pcm_tx_stack\":%u}\n",
                      id, ok ? "ok" : "error", ok ? "" : "invalid_command",
                      (int)dm.GetMode(), dm.IsCountdownActive() ? "true" : "false",
                      (unsigned)dm.GetCountdownRemainingSeconds(),
                      dispatcher.IsMicStreaming() ? "true" : "false", AudioHAL::GetInstance().GetVolume(), unsigned(dm.GetBrightness()),
                      (unsigned)dispatcher.AudioReceived(), (unsigned)dispatcher.AudioPlayed(),
                      (unsigned)dispatcher.AudioDropped(), (unsigned)dispatcher.AudioErrors(),
-                     (unsigned)dispatcher.AudioStackFree());
+                     (unsigned)dispatcher.AudioStackFree(),
+                     (unsigned)NetworkAudio::GetInstance().TxQueued(),(unsigned)NetworkAudio::GetInstance().TxBusy(),
+                     (unsigned)NetworkAudio::GetInstance().MicDropped(),(unsigned)NetworkAudio::GetInstance().TxErrors(),
+                     (unsigned)NetworkAudio::GetInstance().TxStackFree());
+            if(ack_length<0 || size_t(ack_length)>=sizeof(ack))
+                snprintf(ack,sizeof(ack),"{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"response_too_large\"}",id);
 
             const char* send_buf = ack;
             static char frame_ack[2304];
