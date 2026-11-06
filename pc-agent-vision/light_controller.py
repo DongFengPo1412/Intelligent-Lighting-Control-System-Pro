@@ -374,14 +374,14 @@ class LightController(ProControlMixin):
     def set_board_led(self, mode: str = "green") -> bool:
         """
         控制 ESP32-S3 核心板载独立 RGB 指示灯 (GPIO 48):
-        - "pairing" / "breathe": 幽蓝呼吸灯 (模式 1: 等待配对)
+        - "pairing" / "breathe": 中阶蓝灯500ms明灭 (模式 1，兼容旧名称)
         - "speaking": 翠绿色常亮 (模式 2: 正在播报语音)
         - "thinking" / "active": 青蓝微呼吸律动 (模式 3: 思考中/大模型运算)
-        - "listening": 微光暗红待命 (模式 4: 静默监听唤醒词)
+        - "listening": 微光暗红 (模式 4: 唤醒后等待问题)
         - "hearing": 鲜亮红光 (模式 5: 检测到用户说话 VAD 激活)
         - "connected" / "blue": 中阶蓝色常亮 (模式 6: 连接语音通道)
         - "initializing": 中阶绿色500ms明灭 (本地语音初始化)
-        - "off": 熄灭
+        - "off": 熄灭 (联网待机、等待唤醒词)
         """
         print(f"[LightController] 设置板载指示灯 (GPIO 48): {mode}")
         ok = self.send_json({"cmd": "board_led", "mode": mode})
