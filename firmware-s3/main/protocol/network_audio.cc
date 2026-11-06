@@ -2,6 +2,7 @@
 #include "command_dispatcher.h"
 #include "network_auth.h"
 #include "pcm_frame_writer.h"
+#include "wifi_audio_power.h"
 #include <freertos/task.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -77,6 +78,13 @@ void NetworkAudio::Run(){
         }
         payload[first_size]=0;
         if (!NetworkAuth::GetInstance().Check((const char*)payload+prefix+1)) { close(fd); continue; }
+        pcm_transport::WifiAudioPowerSession power;
+        const esp_err_t power_result=power.Activate();
+        if(power_result!=ESP_OK){
+            ESP_LOGW("NetworkAudio","PCM performance policy failed (%d)",power_result);
+            close(fd);continue;
+        }
+        ESP_LOGI("NetworkAudio","Authenticated PCM active: Wi-Fi power save NONE");
         xSemaphoreTake(tx_,portMAX_DELAY);client_=fd;xSemaphoreGive(tx_);
         if (!Send(4,hello,prefix)) {
             xSemaphoreTake(tx_,portMAX_DELAY);client_=-1;close(fd);xSemaphoreGive(tx_);continue;

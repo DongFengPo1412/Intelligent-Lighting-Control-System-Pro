@@ -2,12 +2,66 @@
 #include "audio_sample_format.h"
 #include "game_audio_stream.h"
 #include "pcm_frame_writer.h"
+#include "wifi_audio_power.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <optional>
 #include <vector>
+
+namespace {
+wifi_ps_type_t wifi_policy=WIFI_PS_MIN_MODEM;
+int wifi_get_error=ESP_OK,wifi_set_error=ESP_OK;
+unsigned wifi_gets=0;
+std::vector<wifi_ps_type_t> wifi_sets;
+}
+esp_err_t esp_wifi_get_ps(wifi_ps_type_t* policy) {
+    ++wifi_gets;
+    if(wifi_get_error!=ESP_OK)return wifi_get_error;
+    *policy=wifi_policy;return ESP_OK;
+}
+esp_err_t esp_wifi_set_ps(wifi_ps_type_t policy) {
+    wifi_sets.push_back(policy);
+    if(wifi_set_error!=ESP_OK)return wifi_set_error;
+    wifi_policy=policy;return ESP_OK;
+}
+static void TestWifiAudioPower() {
+    for(auto initial:{WIFI_PS_MIN_MODEM,WIFI_PS_MAX_MODEM,WIFI_PS_NONE}) {
+        wifi_policy=initial;wifi_sets.clear();wifi_gets=0;
+        {
+            pcm_transport::WifiAudioPowerSession session;
+            assert(session.Activate()==ESP_OK && wifi_policy==WIFI_PS_NONE);
+            assert(session.Activate()==ESP_OK && wifi_gets==1);
+        }
+        assert(wifi_policy==initial);
+        if(initial==WIFI_PS_NONE)assert(wifi_sets.empty());
+        else assert((wifi_sets==std::vector<wifi_ps_type_t>{WIFI_PS_NONE,initial}));
+    }
+    // A failed get/set must not pretend activation or restore an unknown mode.
+    wifi_policy=WIFI_PS_MIN_MODEM;wifi_sets.clear();wifi_get_error=ESP_FAIL;
+    {pcm_transport::WifiAudioPowerSession session;assert(session.Activate()==ESP_FAIL);}
+    assert(wifi_sets.empty() && wifi_policy==WIFI_PS_MIN_MODEM);
+    wifi_get_error=ESP_OK;wifi_set_error=ESP_FAIL;
+    {pcm_transport::WifiAudioPowerSession session;assert(session.Activate()==ESP_FAIL);}
+    assert(wifi_sets.size()==1 && wifi_policy==WIFI_PS_MIN_MODEM);
+    wifi_set_error=ESP_OK;wifi_sets.clear();
+    // Early return, e.g. failed authenticated hello, still restores policy.
+    auto failed_hello=[] {
+        pcm_transport::WifiAudioPowerSession session;
+        assert(session.Activate()==ESP_OK);return false;
+    };
+    assert(!failed_hello() && wifi_policy==WIFI_PS_MIN_MODEM && wifi_sets.size()==2);
+    wifi_sets.clear();
+    {
+        pcm_transport::WifiAudioPowerSession session;
+        assert(session.Activate()==ESP_OK);
+        wifi_set_error=ESP_FAIL;
+    }
+    assert(wifi_policy==WIFI_PS_NONE && wifi_sets.size()==2); // No retry/panic on restore failure.
+    wifi_set_error=ESP_OK;wifi_policy=WIFI_PS_MIN_MODEM;
+    std::puts("PASS: production audio Wi-Fi policy activation, failure and scope-exit restore (host stubs)");
+}
 
 static void TestPcmFraming() {
     std::vector<uint8_t> pcm(480);
@@ -78,6 +132,7 @@ int nvs_commit(nvs_handle_t handle) {
 void nvs_close(nvs_handle_t handle) { assert(handle==1);++closes;pending.reset(); }
 
 int main() {
+    TestWifiAudioPower();
     TestPcmFraming();
     using namespace audio_preferences;
     const auto empty=Load(); assert(empty.value==70 && !empty.saved);
