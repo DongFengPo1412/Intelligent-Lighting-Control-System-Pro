@@ -72,14 +72,16 @@ void WifiManager::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
             ESP_LOGI(TAG, ">>> [客户端已断开板端 AP]: MAC=%02x:%02x:%02x:%02x:%02x:%02x",
                      event->mac[0], event->mac[1], event->mac[2], event->mac[3], event->mac[4], event->mac[5]);
         } else if (event_id == WIFI_EVENT_STA_START) {
-            BoardLed::GetInstance().SetMode(BoardLedMode::STARTING);
+            // Brief hardware startup uses Mid's 100ms pattern; waiting for
+            // Wi-Fi uses its 500ms configuring pattern, per owner feedback.
+            BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
             ESP_LOGI(TAG, ">>> [WiFi STA 启动]: 正在搜寻并连接热点 '%s'...", self->sta_ssid_);
             esp_wifi_connect();
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
             auto* disconnected = static_cast<wifi_event_sta_disconnected_t*>(event_data);
             self->is_sta_connected_ = false;
             strncpy(self->sta_ip_, "0.0.0.0", sizeof(self->sta_ip_) - 1);
-            BoardLed::GetInstance().SetMode(BoardLedMode::STARTING);
+            BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
 
             static uint32_t retry_cnt = 0;
             if (++retry_cnt % 6 == 1) {
