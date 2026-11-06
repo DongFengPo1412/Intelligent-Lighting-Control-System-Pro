@@ -4,6 +4,7 @@
 #include "pcm_frame_writer.h"
 #include "wifi_audio_power.h"
 #include "pcm_tx_queue.h"
+#include "../firmware-s3/main/display/board_led_profile.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -12,6 +13,15 @@
 #include <vector>
 #include <memory>
 
+static void TestMidLedProfile() {
+    static_assert(mid_led::kDefault == 4 && mid_led::kLow == 2 && mid_led::kHigh == 16,
+                  "Keep Mid raw RGB levels");
+    assert(mid_led::BlinkOn(99999,100) && !mid_led::BlinkOn(100000,100));
+    assert(!mid_led::BlinkOn(199999,100) && mid_led::BlinkOn(200000,100));
+    assert(mid_led::BlinkOn(499999,500) && !mid_led::BlinkOn(500000,500));
+    assert(!mid_led::BlinkOn(999999,500) && mid_led::BlinkOn(1000000,500));
+    std::puts("PASS: Mid LED RGB levels and 100/500ms monotonic blink boundaries (host; no hardware)");
+}
 static std::vector<uint8_t> Wire(uint8_t kind,const std::vector<uint8_t>& data) {
     std::vector<uint8_t> result={'K','A','P','1',kind,
         static_cast<uint8_t>(data.size()>>8),static_cast<uint8_t>(data.size())};
@@ -213,6 +223,7 @@ int nvs_commit(nvs_handle_t handle) {
 void nvs_close(nvs_handle_t handle) { assert(handle==1);++closes;pending.reset(); }
 
 int main() {
+    TestMidLedProfile();
     TestPcmTxQueue();
     TestWifiAudioPower();
     TestPcmFraming();

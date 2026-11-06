@@ -845,6 +845,7 @@ async def on_startup(app: web.Application):
 
     if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
         app['voice_startup_state'] = 'preparing_voice'
+        await loop.run_in_executor(None, controller.set_board_led, 'initializing')
         try:
             t_synth0 = time.perf_counter()
             if hasattr(voice, 'warmup'):

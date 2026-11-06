@@ -571,6 +571,8 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
             const char* m = mode_item->valuestring;
             if (strcasecmp(m, "pairing") == 0 || strcasecmp(m, "breathe") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::BREATHE_PAIRING);
+            } else if (strcasecmp(m, "initializing") == 0) {
+                BoardLed::GetInstance().SetMode(BoardLedMode::INITIALIZING);
             } else if (strcasecmp(m, "green") == 0 || strcasecmp(m, "speaking") == 0) {
                 BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
             } else if (strcasecmp(m, "blue") == 0 || strcasecmp(m, "connected") == 0) {

@@ -1,6 +1,8 @@
 #include "board_led.h"
 #include <esp_log.h>
 #include <math.h>
+#include <esp_timer.h>
+#include "board_led_profile.h"
 
 static const char* TAG = "BoardLed";
 
@@ -12,8 +14,10 @@ BoardLed& BoardLed::GetInstance()
 
 BoardLed::BoardLed()
     : led_strip_(nullptr),
-      current_mode_(BoardLedMode::BREATHE_PAIRING),
+      current_mode_(BoardLedMode::OFF),
       step_count_(0),
+      state_started_us_(0),
+      blink_on_(false),
       is_initialized_(false),
       mutex_(nullptr)
 {
@@ -65,7 +69,7 @@ esp_err_t BoardLed::Init(gpio_num_t gpio_pin)
 
     led_strip_clear(led_strip_);
     is_initialized_ = true;
-    SetMode(BoardLedMode::BREATHE_PAIRING); // 上电默认进入配对呼吸灯模式
+    SetMode(BoardLedMode::STARTING);
     return ESP_OK;
 }
 
@@ -73,36 +77,41 @@ void BoardLed::SetMode(BoardLedMode mode)
 {
     if (!led_strip_ || !is_initialized_) return;
 
-    // 状态去重：静态模式未改变时，严禁重复触发 RMT 硬件刷新，杜绝通道冲突
-    if (current_mode_ == mode && mode != BoardLedMode::BREATHE_PAIRING && mode != BoardLedMode::ACTIVE_INTERACT) {
+    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) != pdTRUE) {
         return;
     }
-
-    if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(50)) != pdTRUE) {
+    if (current_mode_ == mode) {
+        if (mutex_) xSemaphoreGive(mutex_);
         return;
     }
 
     current_mode_ = mode;
     step_count_ = 0;
+    state_started_us_ = esp_timer_get_time();
+    blink_on_ = true;
 
     if (current_mode_ == BoardLedMode::SOLID_GREEN) {
         // 语音播发中: 翠绿色常亮 (中阶 kDeviceStateSpeaking)
-        led_strip_set_pixel(led_strip_, 0, 0, 28, 0);
+        led_strip_set_pixel(led_strip_, 0, 0, mid_led::kDefault, 0);
         led_strip_refresh(led_strip_);
     } else if (current_mode_ == BoardLedMode::SOLID_BLUE) {
         // 配对确立: 幽蓝常亮 (中阶 kDeviceStateConnecting)
-        led_strip_set_pixel(led_strip_, 0, 0, 4, 30);
+        led_strip_set_pixel(led_strip_, 0, 0, 0, mid_led::kDefault);
         led_strip_refresh(led_strip_);
     } else if (current_mode_ == BoardLedMode::LISTENING_LOW) {
         // 待命监听中: 微光暗红 (中阶 kDeviceStateListening, Low Brightness)
-        led_strip_set_pixel(led_strip_, 0, 4, 0, 0);
+        led_strip_set_pixel(led_strip_, 0, mid_led::kLow, 0, 0);
         led_strip_refresh(led_strip_);
     } else if (current_mode_ == BoardLedMode::LISTENING_HIGH) {
         // 人声捕获中: 鲜艳鲜红 (中阶 kDeviceStateListening, High Brightness - VAD Active)
-        led_strip_set_pixel(led_strip_, 0, 42, 0, 0);
+        led_strip_set_pixel(led_strip_, 0, mid_led::kHigh, 0, 0);
         led_strip_refresh(led_strip_);
     } else if (current_mode_ == BoardLedMode::OFF) {
         led_strip_clear(led_strip_);
+    } else if (mode == BoardLedMode::STARTING || mode == BoardLedMode::BREATHE_PAIRING || mode == BoardLedMode::INITIALIZING) {
+        const bool green = mode == BoardLedMode::INITIALIZING;
+        led_strip_set_pixel(led_strip_, 0, 0, green ? mid_led::kDefault : 0, green ? 0 : mid_led::kDefault);
+        led_strip_refresh(led_strip_);
     }
 
     if (mutex_) {
@@ -113,25 +122,20 @@ void BoardLed::SetMode(BoardLedMode mode)
 void BoardLed::UpdateAnimation()
 {
     if (!led_strip_ || !is_initialized_) return;
-    if (current_mode_ != BoardLedMode::BREATHE_PAIRING && current_mode_ != BoardLedMode::ACTIVE_INTERACT) {
-        return;
-    }
-
     if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(10)) != pdTRUE) {
         return;
     }
 
-    if (current_mode_ == BoardLedMode::BREATHE_PAIRING) {
-        // 配对等待模式：深邃幽蓝呼吸律动 (中阶 kDeviceStateWifiConfiguring 500ms律动)
-        step_count_++;
-        float rad = (float)(step_count_ % 45) * (2.0f * M_PI / 45.0f);
-        float norm = (sinf(rad) + 1.0f) * 0.5f; // 0.0 ~ 1.0
-        float curved = norm * norm;
-        uint32_t b = (uint32_t)(curved * 40.0f + 2.0f);
-        uint32_t g = (uint32_t)(curved * 8.0f);
-        uint32_t r = 0;
-        led_strip_set_pixel(led_strip_, 0, r, g, b);
-        led_strip_refresh(led_strip_);
+    if (current_mode_ == BoardLedMode::BREATHE_PAIRING || current_mode_ == BoardLedMode::STARTING || current_mode_ == BoardLedMode::INITIALIZING) {
+        const unsigned interval = current_mode_ == BoardLedMode::STARTING ? 100 : 500;
+        const bool on = mid_led::BlinkOn(uint64_t(esp_timer_get_time() - state_started_us_), interval);
+        if (on != blink_on_) {
+            blink_on_ = on;
+            const bool green = current_mode_ == BoardLedMode::INITIALIZING;
+            const uint8_t level = on ? mid_led::kDefault : 0;
+            led_strip_set_pixel(led_strip_, 0, 0, green ? level : 0, green ? 0 : level);
+            led_strip_refresh(led_strip_);
+        }
     }
     else if (current_mode_ == BoardLedMode::ACTIVE_INTERACT) {
         // 思考运算中：青白灵动微呼吸 (周期约 1.2s = 40 steps)

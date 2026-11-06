@@ -379,7 +379,8 @@ class LightController(ProControlMixin):
         - "thinking" / "active": 青蓝微呼吸律动 (模式 3: 思考中/大模型运算)
         - "listening": 微光暗红待命 (模式 4: 静默监听唤醒词)
         - "hearing": 鲜亮红光 (模式 5: 检测到用户说话 VAD 激活)
-        - "connected" / "blue": 幽蓝常亮 (模式 6: 握手连接确立)
+        - "connected" / "blue": 中阶蓝色常亮 (模式 6: 连接语音通道)
+        - "initializing": 中阶绿色500ms明灭 (本地语音初始化)
         - "off": 熄灭
         """
         print(f"[LightController] 设置板载指示灯 (GPIO 48): {mode}")
