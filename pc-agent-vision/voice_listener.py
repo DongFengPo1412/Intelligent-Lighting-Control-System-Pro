@@ -191,19 +191,66 @@ class VoiceListener:
             except Exception:
                 pass
 
-    @staticmethod
-    def _normalize_acoustic_name(text, keyword):
+    _HONG_LI_QI_PAT = (
+        r'(?:[红洪宏鸿虹孔空哄][莉利丽立力历厉礼里理栗粒][栖期漆七7柒欺妻戚凄溪希西昔惜夕析悉基机鸡姬击激迹奇骑旗棋企起气器区曲屈趋躯驱崎琪琦祺麒祈齐喜洗系细戏席袭]?'
+        r'|[莉利丽立力][栖期漆七7柒欺妻戚凄溪希西基机鸡区曲崎琪])'
+    )
+    _MU_LAI_PAT = r'(?:[牧木目沐慕暮穆莫默母姆没未][濑赖籁来莱兰揽懒奈耐代带塞瑟拉辣]|牧濑)'
+    _KE_LI_SI_PAT = r'[克科可喀刻客][里莉丽立力理礼栗][斯丝思司撕私师诗施狮]'
+    _DI_NA_PAT = r'[蒂缔第帝地弟递缇提题啼体替踢汀听厅亭停挺丁盯钉顶定][娜那呐拿哪呢呐拉啦男南难楠]'
+    _ZHU_SHOU_PAT = r'(?:住手|筑手|祝手|著手|驻守|助守)'
+
+    @classmethod
+    def _has_wake_homophone_prefix(cls, text):
+        pattern = (
+            r'^(?:你好[，, ]*)?(?:'
+            + cls._MU_LAI_PAT + cls._HONG_LI_QI_PAT + r'|'
+            + cls._HONG_LI_QI_PAT + r'|'
+            + r'[红洪宏鸿虹孔空哄][莉利丽立力历厉礼里理栗粒][^，,。.!！?？\s]{0,2}(?=[，,。.!！?？\s]*$)|'
+            + cls._KE_LI_SI_PAT + cls._DI_NA_PAT + r'|'
+            + cls._KE_LI_SI_PAT + r'[蒂缔第帝地弟递缇提题啼体替踢汀听厅亭停挺丁盯钉顶定][^，,。.!！?？\s]{0,2}(?=[，,。.!！?？\s]*$)|'
+            + cls._KE_LI_SI_PAT + r'|'
+            + cls._ZHU_SHOU_PAT + r')'
+        )
+        return bool(re.match(pattern, text or ''))
+
+    @classmethod
+    def _normalize_acoustic_name(cls, text, keyword):
         text = text.translate(str.maketrans({'紅':'红', '瀨':'濑', '棲':'栖'}))
-        spellings = {
-            '助手': ('住手', '筑手', '祝手'),
-            '红莉栖': ('红丽栖', '红利栖', '红利西', '红丽西', '红莉西', '洪莉栖', '洪利栖', '洪丽栖', '洪利西', '孔利西', '孔丽西', '孔莉栖'),
-            '牧濑红莉栖': ('牧濑红丽栖', '牧濑红利栖', '牧濑红利西', '牧濑孔利西', '木赖红莉栖', '木赖红利栖', '木赖红丽栖', '木赖红利西', '牧赖红莉栖', '牧赖红利栖', '牧赖红丽栖', '慕赖红莉栖', '暮赖红莉栖'),
-            '克里斯': ('克莉丝', '克里丝', '科里斯', '科里丝'),
-            '克里斯蒂娜': ('克莉丝蒂娜', '克里丝蒂娜', '克里斯蒂那', '克莉丝蒂那', '科里斯蒂娜'),
+        if not keyword:
+            return text
+        rules = {
+            '助手': [(cls._ZHU_SHOU_PAT, '助手')],
+            '红莉栖': [
+                (cls._MU_LAI_PAT + cls._HONG_LI_QI_PAT, '牧濑红莉栖'),
+                (cls._HONG_LI_QI_PAT, '红莉栖'),
+                (r'[红洪宏鸿虹孔空哄][莉利丽立力历厉礼里理栗粒][^，,。.!！?？\s]{0,2}(?=[，,。.!！?？\s]*$)', '红莉栖'),
+            ],
+            '牧濑红莉栖': [
+                (r'(?:' + cls._MU_LAI_PAT + r'|[^，,。.!！?？\s]{1,2})' + cls._HONG_LI_QI_PAT, '牧濑红莉栖'),
+                (r'[^，,。.!！?？\s]{1,2}[红洪宏鸿虹孔空哄][莉利丽立力历厉礼里理栗粒][^，,。.!！?？\s]{0,2}(?=[，,。.!！?？\s]*$)', '牧濑红莉栖'),
+                (cls._HONG_LI_QI_PAT, '牧濑红莉栖'),
+            ],
+            '克里斯': [
+                (cls._KE_LI_SI_PAT + cls._DI_NA_PAT, '克里斯蒂娜'),
+                (cls._KE_LI_SI_PAT + r'[蒂缔第帝地弟递缇提题啼体替踢汀听厅亭停挺丁盯钉顶定][^，,。.!！?？\s]{0,2}(?=[，,。.!！?？\s]*$)', '克里斯蒂娜'),
+                (cls._KE_LI_SI_PAT, '克里斯'),
+            ],
+            '克里斯蒂娜': [
+                (cls._KE_LI_SI_PAT + cls._DI_NA_PAT, '克里斯蒂娜'),
+                (cls._KE_LI_SI_PAT + r'[蒂缔第帝地弟递缇提题啼体替踢汀听厅亭停挺丁盯钉顶定][^，,。.!！?？\s]{0,2}(?=[，,。.!！?？\s]*$)', '克里斯蒂娜'),
+                (cls._KE_LI_SI_PAT, '克里斯蒂娜'),
+            ],
         }
-        for spelling in spellings.get(keyword, ()):
-            text = re.sub(r'^(你好[，, ]*)?(?:' + re.escape(spelling) + r'(?:[，, ]*' + re.escape(spelling) + r')*)',
-                          lambda m:(m.group(1) or '')+keyword, text, count=1)
+        for pat, target in rules.get(keyword, ()):
+            new_text, count = re.subn(
+                r'^(你好[，, ]*)?(?:' + pat + r'(?:[，, ]*' + pat + r')*)',
+                lambda m: (m.group(1) or '') + target,
+                text,
+                count=1,
+            )
+            if count:
+                return new_text
         return text
 
     def _probe_wake(self, pcm, phase='standby'):
@@ -581,7 +628,8 @@ class VoiceListener:
                     self._pending_prefix = ""
                     self.is_awake = True
                     self.last_awake_time = time.time()
-                    self._acknowledge_wake(acoustic_keyword)
+                    match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
+                    self._acknowledge_wake(match.group() if match else acoustic_keyword)
 
                     # 情况 1: 一句话指令 (例如: "克里斯，把灯调成烈焰模式" / "克里斯蒂娜，开灯")
                     if len(stripped_cmd) >= 2:
@@ -610,7 +658,7 @@ class VoiceListener:
                     self.last_awake_time = time.time()
                     # A name can be misspelled during continuous listening too.
                     # Correct only with fresh acoustic evidence, never from text alone.
-                    if re.match(r'^(?:你好[，, ]*)?(?:住手|筑手|祝手|红丽栖|红利栖|红利西|红丽西|红莉西|洪莉栖|洪利栖|洪丽栖|洪利西|孔利西|孔丽西|孔莉栖|牧濑|木赖|牧赖|慕赖|暮赖|克莉丝|克里丝|科里斯|科里丝)', text):
+                    if self._has_wake_homophone_prefix(text):
                         detector = getattr(self, 'wake_detector', None)
                         acoustic_keyword = detector.detect(pcm_bytes) if detector else ''
                         text = self._normalize_acoustic_name(text, acoustic_keyword)
@@ -682,6 +730,9 @@ class VoiceListener:
         keyword = self._probe_wake(pcm, phase='interrupt')
         if keyword and self.whisper_model is not None:
             audio_np=np.frombuffer(pcm,dtype=np.int16).astype(np.float32)/32768
+            peak = float(np.max(np.abs(audio_np))) if len(audio_np) else 0
+            if peak > 1e-5:
+                audio_np *= min(8.0, .75 / peak)
             try:
                 segments,_=self.whisper_model.transcribe(audio_np,language='zh',beam_size=1,temperature=0.0,
                     initial_prompt=None,condition_on_previous_text=False,without_timestamps=True)
@@ -712,11 +763,13 @@ class VoiceListener:
             else:
                 self.controller.send_json({'cmd':'audio_abort'})
             if hasattr(self, '_barge_audio'):self._barge_audio.clear()
-            print(f'[语音状态] interrupted: 声学与识别均确认 {keyword}；取消旧轮次')
+            match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
+            matched_keyword = match.group() if match else keyword
+            print(f'[语音状态] interrupted: 声学与识别均确认 {matched_keyword}；取消旧轮次')
             if not self.is_listening or self._stop_event.is_set():return
             if self.duplex and not getattr(self, '_music_monitor', False):
                 self.is_awake = True
-                self._acknowledge_wake(keyword)
+                self._acknowledge_wake(matched_keyword)
                 if self._barge_pending:
                     try:self._utterance_queue.put_nowait(self._barge_pending)
                     except queue.Full:pass

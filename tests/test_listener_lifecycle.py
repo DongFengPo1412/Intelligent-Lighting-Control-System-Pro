@@ -2821,9 +2821,17 @@ class ListenerLifecycleTests(unittest.TestCase):
     def test_8e_acoustic_homophone_and_punctuation_idle_guard(self):
         listener = self._create_isolated_listener()
         self.assertEqual(listener._normalize_acoustic_name('孔利西。', '红莉栖'), '红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('红利期。', '红莉栖'), '红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('红利漆。', '红莉栖'), '红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('红利基。', '红莉栖'), '红莉栖。')
         self.assertEqual(listener._normalize_acoustic_name('孔利西。', ''), '孔利西。')
         self.assertEqual(listener._normalize_acoustic_name('木赖红利栖。', '牧濑红莉栖'), '牧濑红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('木赖红利漆。', '牧濑红莉栖'), '牧濑红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('木赖红利漆。', '红莉栖'), '牧濑红莉栖。')
         self.assertEqual(listener._normalize_acoustic_name('克莉丝蒂娜。', '克里斯蒂娜'), '克里斯蒂娜。')
+        self.assertEqual(listener._normalize_acoustic_name('克里斯缇娜。', '克里斯蒂娜'), '克里斯蒂娜。')
+        self.assertEqual(listener._normalize_acoustic_name('克里斯缇娜。', '克里斯'), '克里斯蒂娜。')
+        self.assertEqual(listener._normalize_acoustic_name('克里斯汀呢。', '克里斯'), '克里斯蒂娜。')
         self.assertEqual(listener._check_wake_word('助手助手。'), (True, ''))
         self.assertEqual(listener._check_wake_word('红莉栖，红莉栖！'), (True, ''))
 

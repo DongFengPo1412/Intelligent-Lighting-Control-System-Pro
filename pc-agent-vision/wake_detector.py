@@ -17,10 +17,32 @@ class WakeDetector:
         keywords = keyword_dir / 'kurisu_keywords.txt'
         keywords.write_text(
             'zh ù sh ǒu @助手\n'
+            'zh ù sh òu @助手\n'
             'h óng l ì q ī @红莉栖\n'
+            'h óng l ì x ī @红莉栖\n'
+            'h óng l ì j ī @红莉栖\n'
+            'h óng l í q ī @红莉栖\n'
+            'h óng l í x ī @红莉栖\n'
             'k è l ǐ s ī @克里斯\n'
+            'k è l ì s ī @克里斯\n'
+            'k è l í s ī @克里斯\n'
             'k è l ǐ s ī d ì n à @克里斯蒂娜\n'
-            'm ù l ài h óng l ì q ī @牧濑红莉栖\n', encoding='utf-8')
+            'k è l ǐ s ī d ì n ā @克里斯蒂娜\n'
+            'k è l ǐ s ī t í n à @克里斯蒂娜\n'
+            'k è l ǐ s ī t í n ā @克里斯蒂娜\n'
+            'k è l ǐ s ī t ī n à @克里斯蒂娜\n'
+            'k è l ǐ s ī t ī n ā @克里斯蒂娜\n'
+            'k è l ǐ s ī t ì n à @克里斯蒂娜\n'
+            'k è l ǐ s ī t īng n à @克里斯蒂娜\n'
+            'm ù l ài h óng l ì q ī @牧濑红莉栖\n'
+            'm ù l ài h óng l ì x ī @牧濑红莉栖\n'
+            'm ù l ài h óng l ì j ī @牧濑红莉栖\n'
+            'm ù l ái h óng l ì q ī @牧濑红莉栖\n'
+            'm ù l ái h óng l ì x ī @牧濑红莉栖\n'
+            'm ù n ài h óng l ì q ī @牧濑红莉栖\n'
+            'm ù n ài h óng l ì x ī @牧濑红莉栖\n'
+            'm ù s è h óng l ì q ī @牧濑红莉栖\n'
+            'm ù s è h óng l ì x ī @牧濑红莉栖\n', encoding='utf-8')
         suffix = '-epoch-12-avg-2-chunk-16-left-64.int8.onnx'
         self.spotter = sherpa_onnx.KeywordSpotter(
             tokens=str(model / 'tokens.txt'), encoder=str(model / ('encoder' + suffix)),
@@ -35,6 +57,7 @@ class WakeDetector:
         peak = float(np.max(np.abs(samples))) if len(samples) else 0
         if peak > 1e-5:
             samples *= min(8.0, .75 / peak)
+        hits = []
         with self._lock:
             stream = self.spotter.create_stream()
             stream.accept_waveform(16000, np.concatenate([samples, np.zeros(8000, np.float32)]))
@@ -43,5 +66,5 @@ class WakeDetector:
                 self.spotter.decode_stream(stream)
                 keyword = self.spotter.get_result(stream)
                 if keyword:
-                    return keyword
-        return ''
+                    hits.append(keyword)
+        return max(hits, key=len) if hits else ''
