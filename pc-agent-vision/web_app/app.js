@@ -1981,6 +1981,18 @@
     $("visionBadge").textContent = "未启用";
     $("visionSummary").textContent = "摄像头未启用";
   });
+  let currentPhoneRotation = 90;
+  if ($("rotatePhoneCameraBtn")) {
+    $("rotatePhoneCameraBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      currentPhoneRotation = (currentPhoneRotation + 90) % 360;
+      if (window.AmadeusNative && window.AmadeusNative.setCameraRotation) {
+        window.AmadeusNative.setCameraRotation(currentPhoneRotation);
+      }
+      notice(`已顺时针旋转至: ${currentPhoneRotation}°`);
+    });
+  }
   bind("enroll", async () => {
     const name = $("identity").value.trim();
     if (!name) throw Error("请填写登记名称");

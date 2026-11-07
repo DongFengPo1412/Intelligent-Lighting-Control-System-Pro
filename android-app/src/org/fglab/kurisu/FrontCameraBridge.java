@@ -28,12 +28,21 @@ public class FrontCameraBridge {
     private SurfaceTexture mSurface;
     private volatile boolean mRunning = false;
     private volatile boolean mUploading = false;
+    private volatile int mRotation = 90; // Default: 90 degrees clockwise as requested
     private long lastFrameTime = 0;
     private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
 
     public FrontCameraBridge(Activity activity, WebView webView) {
         this.activity = activity;
         this.webView = webView;
+    }
+
+    public void setRotation(int deg) {
+        this.mRotation = (deg % 360 + 360) % 360;
+    }
+
+    public int getRotation() {
+        return mRotation;
     }
 
     public synchronized boolean start(final String uploadUrl, final String mode) {
@@ -104,8 +113,26 @@ public class FrontCameraBridge {
                     YuvImage yuv = new YuvImage(data, ImageFormat.NV21, sz.width, sz.height, null);
                     ByteArrayOutputStream out = new ByteArrayOutputStream();
                     yuv.compressToJpeg(new Rect(0, 0, sz.width, sz.height), 60, out);
-                    final byte[] jpeg = out.toByteArray();
-                    final String b64 = Base64.encodeToString(jpeg, Base64.NO_WRAP);
+                    byte[] jpeg = out.toByteArray();
+
+                    final int rot = mRotation;
+                    if (rot != 0) {
+                        try {
+                            android.graphics.Bitmap src = android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
+                            if (src != null) {
+                                android.graphics.Matrix matrix = new android.graphics.Matrix();
+                                matrix.postRotate(rot);
+                                android.graphics.Bitmap rotated = android.graphics.Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), matrix, true);
+                                ByteArrayOutputStream rotOut = new ByteArrayOutputStream();
+                                rotated.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, rotOut);
+                                jpeg = rotOut.toByteArray();
+                                src.recycle();
+                                if (rotated != src) rotated.recycle();
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    final byte[] finalJpeg = jpeg;
+                    final String b64 = Base64.encodeToString(finalJpeg, Base64.NO_WRAP);
 
                     // Post frame to WebView for local live preview window
                     activity.runOnUiThread(() -> {
@@ -131,7 +158,7 @@ public class FrontCameraBridge {
                                 conn.setConnectTimeout(1500);
                                 conn.setReadTimeout(1500);
                                 OutputStream os = conn.getOutputStream();
-                                os.write(jpeg);
+                                os.write(finalJpeg);
                                 os.flush();
                                 os.close();
                                 if (conn.getResponseCode() == 200) {

@@ -473,6 +473,13 @@ public class MainActivity extends Activity {
         }
 
         @android.webkit.JavascriptInterface
+        public void setCameraRotation(final int rotation) {
+            if (frontCameraBridge != null) {
+                frontCameraBridge.setRotation(rotation);
+            }
+        }
+
+        @android.webkit.JavascriptInterface
         public void sendUdpAsync(final String message,final int timeoutMs,final int retries,final String callbackId) {
             if(!BridgePolicy.requestId(callbackId))return;
             final int epoch=bridgeEpoch.get();
