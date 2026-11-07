@@ -177,7 +177,10 @@ class KurisuAgent:
 
     def _finish_reply(self, reply, speak=True, speech_text=None):
         cancel=getattr(self,'_cancel_turn',None)
-        if cancel and cancel.is_set():return ''
+        if cancel and cancel.is_set():
+            if self.history and self.history[-1].get('role') == 'user':
+                self.history.pop()
+            return ''
         self.history.append({'role': 'assistant', 'content': reply})
         self.memory.append_turn('assistant', reply)
         if speak and getattr(self,'_speak_turn',True):
@@ -400,6 +403,10 @@ class KurisuAgent:
 
             if getattr(self.voice, 'chinese_first', False) and getattr(self, '_speak_turn', True):
                 return self._finish_reply(zh)
+
+            cancel = getattr(self, '_cancel_turn', None)
+            if cancel is not None and cancel.is_set():
+                return self._finish_reply('')
 
             ja = ''
             if ja_cand:
