@@ -214,6 +214,34 @@ class VoiceRegressionTests(unittest.TestCase):
         self.assertTrue(music.cancel.is_set())
         self.assertTrue(listener._barge_woke)
 
+    def test_music_standalone_wake_under_duplex_acknowledges_exactly_once(self):
+        listener=self.listener(iter(['助手。']))
+        del listener.__dict__['_check_wake_word']
+        listener.duplex=True;listener.is_paused=True;listener._music_monitor=True
+        listener._music_suspended=True;listener._barge_audio=bytearray()
+        listener._utterance_queue=queue.Queue()
+        ack_calls=[]
+        listener._acknowledge_wake=lambda kw=None:ack_calls.append(kw)
+        music=types.SimpleNamespace(running=True,cancel=threading.Event())
+        def fake_abort():
+            # Simulate music thread exiting during audio.abort() and calling finish_music()
+            t=threading.Thread(target=listener.finish_music,daemon=True)
+            t.start()
+            time.sleep(0.05)
+            return True, t
+        holder={}
+        def abort_wrapper():
+            ok, t = fake_abort()
+            holder['t'] = t
+            return ok
+        audio=types.SimpleNamespace(cancelled=threading.Event(),abort=abort_wrapper,last_error=None)
+        listener.controller=types.SimpleNamespace(_music_player=music,_network_audio=audio,
+            playback_cancel=threading.Event(),send_json=listener.commands.append)
+        listener._check_barge(bytes(960))
+        if 't' in holder:
+            holder['t'].join(timeout=1.0)
+        self.assertEqual(ack_calls,['助手'])
+
 
 class FakeSocket:
     def __init__(self, gateway, ack_on=1, status='ok'):

@@ -458,6 +458,13 @@ class VoiceListener:
                 delay_samples=int(os.environ.get('KURISU_ECHO_DELAY_MS', '120')) * 16)
 
     def finish_music(self):
+        lock = getattr(self, '_work_lock', None)
+        if lock is not None:
+            with lock:
+                return self._finish_music_locked()
+        return self._finish_music_locked()
+
+    def _finish_music_locked(self):
         self._music_monitor = self._music_suspended = False
         woke, pending = self._barge_woke, self._barge_pending
         keyword = getattr(self, '_barge_keyword', None)
@@ -748,6 +755,13 @@ class VoiceListener:
             except Exception:return
             if (not confirmed or keyword not in text or not self.is_paused
                     or not self.is_listening or self._stop_event.is_set()):return
+            music = getattr(self.controller, '_music_player', None)
+            was_music = bool(getattr(self, '_music_monitor', False)
+                             or getattr(self, '_music_suspended', False)
+                             or (music and getattr(music, 'running', False)))
+            match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
+            matched_keyword = match.group() if match else keyword
+            self._barge_keyword = matched_keyword
             self._barge_woke=True
             # Retain an acoustically AND text-confirmed attached command, as in
             # the existing music wake path. Standalone wake opens a new turn.
@@ -757,23 +771,20 @@ class VoiceListener:
             audio=getattr(self.controller,'_network_audio',None)
             if audio:audio.cancelled.set()
             self.controller.playback_cancel.set()
-            music = getattr(self.controller, '_music_player', None)
             if music and music.running:music.cancel.set()
             if audio and hasattr(audio, 'abort'):
                 if not audio.abort():
                     self.last_wake_error = f'旧播放停止未确认: {audio.last_error}'
                     print(f'[打断失败] {self.last_wake_error}')
                     self._barge_woke = False
+                    self._barge_keyword = None
                     return
             else:
                 self.controller.send_json({'cmd':'audio_abort'})
             if hasattr(self, '_barge_audio'):self._barge_audio.clear()
-            match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
-            matched_keyword = match.group() if match else keyword
-            self._barge_keyword = matched_keyword
             print(f'[语音状态] interrupted: 声学与识别均确认 {matched_keyword}；取消旧轮次')
             if not self.is_listening or self._stop_event.is_set():return
-            if self.duplex and not getattr(self, '_music_monitor', False):
+            if self.duplex and not was_music:
                 self.is_awake = True
                 self._acknowledge_wake(matched_keyword)
                 if self._barge_pending:

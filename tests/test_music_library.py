@@ -265,7 +265,10 @@ class LibraryContracts(unittest.TestCase):
         self.assertGreaterEqual(self.player.position, paused_pos)
         self.queue.seek(0.5)
         self.assertGreaterEqual(self.player.position, 0.45)
-        self.queue.stop()
+        stop_res = self.commands.handle("音乐停止。")
+        self.assertTrue(stop_res["speak"])
+        self.assertIn("音乐已停止", stop_res["reply"])
+        self.assertFalse(self.player.running)
         self.assertFalse(self.player.paused)
 
 
