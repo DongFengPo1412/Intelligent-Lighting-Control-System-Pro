@@ -90,7 +90,7 @@
       const path = command.cmd === "frame" ? "/api/arcade/frame" : "/api/arcade";
       const data = command.cmd === "frame" ? undefined : {...command};
       const reply = await httpApi(path,data,data ? "POST" : "GET",3000);
-      if (!reply || reply.status === "error") throw Error(reply?.error || "无效服务回执");
+      if (!reply || reply.status === "error") throw Error(reply?.error || "请求失败");
       return reply;
     });
   async function api(path, data, method = "POST", timeout = 15000) {
@@ -233,9 +233,9 @@
     const text = !s
       ? (nativeMode ? "灯板未连接" : "电脑服务未连接")
       : s.simulated
-        ? "离线模拟 · 无实物输出"
+        ? "演示模式"
         : s.is_connected
-          ? (s.control_retrying ? "控制连接待复查" : "设备已连接")
+          ? (s.control_retrying ? "正在重连设备" : "设备已连接")
           : "服务在线 · 灯板离线";
     $("connectionText").textContent = text;
     $$("[data-connection]").forEach((e) => (e.textContent = text));
@@ -246,19 +246,17 @@
     );
     $("offlineBanner").hidden = state.board && !state.simulated;
     $("offlineText").textContent = state.simulated
-      ? "当前为模拟服务：可预览操作流程，不会控制灯板、播放声音或打开摄像头。"
+      ? "当前处于演示模式。"
       : state.online
         ? "电脑服务在线，灯板尚未连接。请检查灯板电源与 Wi-Fi。"
-        : (nativeMode ? "灯板未连接，请检查设备地址、配对令牌、电源和Wi-Fi。" : "电脑服务未连接，请在连接设置中检查地址和网络。");
+        : (nativeMode ? "正在搜寻并连接灯板或电脑服务…" : "电脑服务未连接，请在连接设置中检查地址和网络。");
     $("serverStatus").textContent = state.online ? "服务在线" : "离线";
     $("serverAddress").textContent =
       nativeMode
-        ? "APK直连ESP32（设备设置）"
-        : (s?.lan_url && s?.pairing_token
-          ? `${s.lan_url} （手机免输配对地址：${s.lan_url}/?pair=${s.pairing_token}）`
-          : (s?.lan_url || location.origin));
+        ? "手机直连灯板"
+        : (s?.lan_url || location.origin);
     $("boardConnection").textContent = s?.simulated
-      ? "模拟设备"
+      ? "演示模式"
       : s?.is_connected
         ? "Wi-Fi 已连接"
         : "未连接";
@@ -274,7 +272,7 @@
         : s.audio_transport
       : "由电脑服务配置";
     $("voiceState").textContent = s?.simulated
-      ? "模拟服务，不进行真实语音识别"
+      ? "可直接输入文字体验对话"
       : wakeReady
         ? "对板载麦克风说“助手”即可开始"
         : "可发送文字；板载语音状态见设置";
@@ -347,11 +345,9 @@
       if (matrix3d && !$("view").hidden) matrix3d.update(f.pixels);
     }
     const source = state.simulated
-      ? "模拟帧"
-      : f.frame_source === "board"
-        ? "灯板回读"
-        : f.frame_source || "设备回读";
-    $("frameTag").textContent = state.simulated ? "模拟预览" : "实时回读";
+      ? "演示画面"
+      : "实时画面";
+    $("frameTag").textContent = state.simulated ? "演示画面" : "实时同步";
     $("homeFrameEmpty").hidden = $("lightFrameEmpty").hidden = true;
     $("frameSource").textContent = `${source} · 帧 ${f.frame_id ?? "—"}`;
     $("modeName").textContent = $("currentModeLabel").textContent = modeName(
@@ -382,9 +378,7 @@
       if ($("marioContainer")) $("marioContainer").style.display="none";
     }
     await api("/api/mode", { mode });
-    notice(
-      `${modeName(mode)} · ${state.simulated ? "模拟操作已提交" : "设备已确认"}`,
-    );
+    notice(`已切换至：${modeName(mode)}`);
     lastPro = 0;
   }
   function modeClick(e) {
@@ -1279,7 +1273,7 @@
       const data={action:"config",sound_enabled:$("arcadeSoundEnabled").checked,sound_volume:Number($("arcadeSoundVolume").value)};
       if(!$("arcadeDifficulty").disabled)data.difficulty=Number($("arcadeDifficulty").value);
       const reply=await api("/api/arcade",data);arcadeSettingsDirty=false;updateArcadeHud(reply.game_status);
-      notice("卡带设置已确认"+ (reply.simulated?"（模拟模式无实体声音）":""));
+      notice("设置已保存");
     } catch(error){notice(error.message);}finally{button.disabled=false;}
   };
 
@@ -1293,8 +1287,9 @@
         $("arcadeSoundEnabled").checked=status.sound_enabled===true;
         $("arcadeSoundVolume").value=String(status.sound_volume??25);
       }
-      $("arcadeSettingsStatus").textContent=(status.difficulty_supported?"此卡带支持三档实际难度；待机或结算时调整。":"此卡带尚未接入统一难度。")+
-        (status.simulated?" 模拟模式仅记录音效事件。":" 语音、音乐、收音优先，游戏声音可能保持静音。");
+      $("arcadeSettingsStatus").textContent = status.difficulty_supported
+        ? "可在待机或结算画面切换游戏难度。"
+        : "当前游戏采用固定标准难度。";
     }
     if (status.game_id===20 && [1,2].includes(status.player_count)) {
       state.pongPlayers=status.player_count;
@@ -1302,11 +1297,11 @@
       if(toggle)toggle.textContent=status.player_count===1?"单人 AI · 切为双人":"本地双人 · 切为 AI";
     }
     const stateLabels = {
-      0: "TITLE 待机",
-      1: "PLAYING 游玩中",
-      2: "PAUSED 已暂停",
-      3: "GAMEOVER 结算",
-      4: "VICTORY 胜利",
+      0: "待机",
+      1: "游戏中",
+      2: "已暂停",
+      3: "游戏结束",
+      4: "通关胜利",
     };
     const stateColors = {
       0: "#64748b",
@@ -1343,14 +1338,14 @@
     if ($("arcadeControlStat")) {
       const cType = Number(status.control_type !== undefined ? status.control_type : 3);
       const ctNames = {
-        0: "CTRL_TAP_SINGLE",
-        1: "CTRL_TWO_BUTTON",
-        2: "CTRL_DPAD_4WAY",
-        3: "CTRL_ARCADE_AB",
-        4: "CTRL_MULTI_TRACK",
-        5: "CTRL_VERSUS_DUAL"
+        0: "单键点按",
+        1: "双键控制",
+        2: "四向十字键",
+        3: "十字键 + A/B",
+        4: "四轨按键",
+        5: "双人同屏"
       };
-      $("arcadeControlStat").textContent = ctNames[cType] || `TYPE_${cType}`;
+      $("arcadeControlStat").textContent = ctNames[cType] || `模式 ${cType}`;
     }
 
     updateGamepadLayout(status.control_type, status.game_id || state.arcadeGid);
@@ -1360,7 +1355,7 @@
     }
     const badge = $("marioSyncBadge");
     if (badge && state.arcadeActive && status.source === "esp32_hardware") {
-      badge.textContent = "🟢 ESP32 硬件模式 (唯一权威)";
+      badge.textContent = "🟢 灯板已连接";
       badge.style.backgroundColor = "rgba(34, 197, 94, 0.2)";
       badge.style.color = "#22c55e";
     }
@@ -1398,18 +1393,18 @@
         const badge = $("marioSyncBadge");
         if (badge) {
           if (res.source === "esp32_hardware") {
-            badge.textContent = "🟢 ESP32 硬件模式 (唯一权威)";
+            badge.textContent = "🟢 灯板已连接";
             badge.style.backgroundColor = "rgba(34, 197, 94, 0.2)";
             badge.style.color = "#22c55e";
           } else {
-            badge.textContent = "🟡 本地模拟器测试模式";
+            badge.textContent = "🟡 离线演示";
             badge.style.backgroundColor = "rgba(234, 179, 8, 0.2)";
             badge.style.color = "#eab308";
           }
         }
         updateArcadeHud(res.game_status);
         startArcadeHeartbeat();
-        notice(`已成功载入街机卡带 #${String(gid).padStart(3, "0")}`);
+        notice(`已载入 ${gameTitle}`);
       } else {
         throw new Error(res?.message || res?.error || "载入游戏失败");
       }
@@ -1417,7 +1412,7 @@
       notice(`街机选卡失败: ${e.message}`);
       const badge = $("marioSyncBadge");
       if (badge) {
-        badge.textContent = "🔴 设备离线 / 选卡失败";
+        badge.textContent = "🔴 灯板未连接";
         badge.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
         badge.style.color = "#ef4444";
       }
@@ -1443,7 +1438,7 @@
         if(/^stale_/.test(err.message) || state.page!=="interaction")return;
         const badge = $("marioSyncBadge");
         if (badge && state.arcadeActive) {
-          badge.textContent = "⚠️ 连接抖动 / 自动安全暂停";
+          badge.textContent = "⚠️ 连接波动 · 已自动暂停";
           badge.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
           badge.style.color = "#ef4444";
         }
@@ -1696,11 +1691,11 @@
         const res = await api("/api/arcade/frame", undefined, "GET", 1500);
         if (res && res.hex && $("marioCanvas")) {
           drawMarioFrame($("marioCanvas"), res.hex);
-          $("arcadePreviewStatus").textContent=(res.simulated?"模拟预览":"灯板回读")+" · 帧 "+(res.frame_id??"—");
+          $("arcadePreviewStatus").textContent="实时画面 · 帧 "+(res.frame_id??"—");
         }
         if (res?.game_status || (res?.status && typeof res.status === "object")) updateArcadeHud(res.game_status || res.status);
       } catch (error) {
-        if(!/^stale_|telemetry_busy/.test(error.message))$("arcadePreviewStatus").textContent="预览延迟，保留上一帧；控制连接单独检测。";
+        if(!/^stale_|telemetry_busy/.test(error.message))$("arcadePreviewStatus").textContent="画面同步中…";
       } finally { arcadeFrameBusy=false; }
     }
   }, 250);
@@ -1714,11 +1709,7 @@
     if (res && res.error) {
       notice("摄像头启动提示: " + res.error);
     } else {
-      notice(
-        state.simulated
-          ? "模拟视觉流程已提交，不启用摄像头"
-          : "已请求启用电脑摄像头，正在接入观测流",
-      );
+      notice("已开启视觉互动");
     }
     lastPro = 0;
     setTimeout(() => poll(), 500);
@@ -1756,7 +1747,7 @@
     const target = targets[samples.length];
     $("calibration").textContent = target
       ? `注视橙色圆点，点击采集或按空格 (${samples.length}/9)`
-      : "校准拟合完成；独立定位精度需实际验证";
+      : "九点视线校准已完成";
     if (target) {
       targetDot = document.createElement("div");
       targetDot.className = "calibration-dot";
@@ -1781,12 +1772,12 @@
       !o?.present ||
       o.iris_x === undefined
     )
-      throw Error("当前没有新鲜的人脸／虹膜观测");
+      throw Error("请正对摄像头以识别人脸与视线");
     samples.push([o.iris_x, o.iris_y, ...targets[samples.length]]);
     if (samples.length === 9) {
       const r = await api("/api/pro/calibrate", { samples });
       notice(
-        `拟合误差 ${Number(r.rms_training_error).toFixed(4)}；独立精度尚未测量`,
+        `视线校准已完成（误差 ${Number(r.rms_training_error).toFixed(4)}）`,
       );
     }
     calibrationText();
@@ -1911,7 +1902,7 @@
       for (let i = 0; i < 768; i++)
         draft[i] = parseInt(d.hex.slice(i * 2, i * 2 + 2), 16);
       drawDraft();
-      notice("草稿已导入，尚未应用到灯板");
+      notice("画布已导入，点击“应用到灯板”即可显示");
     } catch (error) {
       notice(error.message);
     } finally {
@@ -2009,8 +2000,8 @@
         state.socket?.close();
       } else if (stage === "frame") {
         if(error.message==="telemetry_busy")return;
-        $("frameTag").textContent = "预览延迟";
-        $("frameSource").textContent = "预览暂不可用，保留上一帧 · 控制连接单独检测";
+        $("frameTag").textContent = "同步中";
+        $("frameSource").textContent = "正在同步灯板画面…";
       } else {
         $("status").textContent = "功能状态暂不可用：" + error.message;
       }

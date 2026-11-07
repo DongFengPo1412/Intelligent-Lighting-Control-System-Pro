@@ -727,6 +727,18 @@ async def handle_index(request: web.Request):
     index_path = os.path.join(STATIC_DIR, "index.html")
     return web.FileResponse(index_path)
 
+async def handle_apk_download(request: web.Request):
+    apk_path = os.environ.get("KURISU_APK_PATH") or os.path.join(STATIC_DIR, "Kurisu_Amadeus.apk")
+    if not os.path.isfile(apk_path):
+        return web.json_response({"status": "error", "error": "apk_not_found"}, status=404)
+    return web.FileResponse(
+        apk_path,
+        headers={
+            "Content-Type": "application/vnd.android.package-archive",
+            "Content-Disposition": 'attachment; filename="Kurisu_Amadeus_Pro.apk"',
+        },
+    )
+
 async def handle_ceremony(request: web.Request):
     """手动触发上电自检与配对握手正向反馈仪式"""
     loop = asyncio.get_running_loop()
@@ -1288,6 +1300,8 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     app.on_cleanup.append(on_cleanup)
     app.on_shutdown.append(on_shutdown)
     app.router.add_get("/", handle_index)
+    app.router.add_get("/apk", handle_apk_download)
+    app.router.add_get("/download/Kurisu_Amadeus.apk", handle_apk_download)
     app.router.add_post("/api/chat", handle_chat)
     app.router.add_post("/api/retry_warmup", handle_retry_warmup)
     app.router.add_post("/api/ceremony", handle_ceremony)

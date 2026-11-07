@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
         DeviceTarget(String host,String token) {this.host=host;this.token=token;}
     }
     private volatile DeviceTarget deviceTarget=new DeviceTarget("","");
+    private volatile boolean discovering=false;
     private String clientId="";
     private String pendingExport;
     private static final int PICK_FILE = 10, SAVE_CANVAS = 11;
@@ -69,9 +70,8 @@ public class MainActivity extends Activity {
         clientId=getSharedPreferences("config",MODE_PRIVATE).getString("device_client",java.util.UUID.randomUUID().toString().replace("-",""));
         getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_client",clientId).apply();
         initWebSettings();
-        String saved = getSharedPreferences("config", MODE_PRIVATE).getString("server_url", "");
-        if (saved.isEmpty()) { webView.loadUrl(OFFLINE); if(deviceTarget.host.isEmpty())configureConnection(); }
-        else connectServer(saved);
+        webView.loadUrl(OFFLINE);
+        autoDiscoverAndConnect(false);
     }
 
     private void connectServer(String value) {
@@ -81,14 +81,28 @@ public class MainActivity extends Activity {
             if (serverOrigin.isEmpty()) webView.loadUrl(OFFLINE);
             return;
         }
+        String pairParam = uri.getQueryParameter("pair");
+        if (pairParam != null && !pairParam.trim().isEmpty()) {
+            getSharedPreferences("config", MODE_PRIVATE).edit().putString("access_token", pairParam.trim()).apply();
+        } else {
+            pairParam = getSharedPreferences("config", MODE_PRIVATE).getString("access_token", "");
+        }
         serverOrigin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         getSharedPreferences("config", MODE_PRIVATE).edit().putString("server_url", serverOrigin + "/").apply();
-        webView.loadUrl(serverOrigin + "/");
+        String targetUrl = serverOrigin + "/" + (pairParam != null && !pairParam.isEmpty() ? "?pair=" + Uri.encode(pairParam) : "");
+        webView.loadUrl(targetUrl);
     }
 
     private void configureConnection() {
-        new AlertDialog.Builder(this).setTitle("连接方式").setItems(new String[]{"ESP32 街机直连（无需电脑）","电脑服务（语音／音乐／视觉）"},
-            (dialog,which)->{if(which==0)configureDevice();else configureServer();}).show();
+        new AlertDialog.Builder(this).setTitle("连接方式").setItems(new String[]{
+            "⚡ 自动搜索并配对连接（推荐）",
+            "🎮 灯板街机直连（无需电脑）",
+            "💻 电脑服务（语音／音乐／视觉）"
+        }, (dialog,which)->{
+            if(which==0)autoDiscoverAndConnect(true);
+            else if(which==1)configureDevice();
+            else configureServer();
+        }).show();
     }
     private void configureDevice() {
         android.widget.LinearLayout layout=new android.widget.LinearLayout(this);layout.setOrientation(1);
@@ -194,8 +208,9 @@ public class MainActivity extends Activity {
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame() && !request.getUrl().toString().startsWith("file:")) {
-                    Toast.makeText(MainActivity.this, "电脑服务暂不可达，请检查连接设置", Toast.LENGTH_LONG).show();
+                    serverOrigin = "";
                     view.loadUrl(OFFLINE);
+                    Toast.makeText(MainActivity.this, "已切换至手机直连模式", Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -240,7 +255,131 @@ public class MainActivity extends Activity {
         }
     }
 
+    private static void addSubnetPrefix(java.util.Set<String> prefixes, String ip) {
+        if (!BridgePolicy.privateIpv4(ip)) return;
+        int dot = ip.lastIndexOf('.');
+        if (dot > 0) prefixes.add(ip.substring(0, dot + 1));
+    }
+
+    private void autoDiscoverAndConnect(final boolean manual) {
+        if (discovering) return;
+        discovering = true;
+        if (manual) Toast.makeText(this, "正在自动搜索局域网内的电脑服务与灯板…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            String foundServerUrl = null, foundAccessToken = null, foundBoardIp = null, foundControlToken = null;
+            try (java.net.DatagramSocket sock = new java.net.DatagramSocket()) {
+                sock.setBroadcast(true);
+                sock.setSoTimeout(45);
+                java.util.Set<String> prefixes = new java.util.LinkedHashSet<>();
+                try {
+                    java.util.Enumeration<java.net.NetworkInterface> ifs = java.net.NetworkInterface.getNetworkInterfaces();
+                    while (ifs != null && ifs.hasMoreElements()) {
+                        java.net.NetworkInterface nif = ifs.nextElement();
+                        if (!nif.isUp() || nif.isLoopback()) continue;
+                        java.util.Enumeration<java.net.InetAddress> addrs = nif.getInetAddresses();
+                        while (addrs.hasMoreElements()) {
+                            String ip = addrs.nextElement().getHostAddress();
+                            addSubnetPrefix(prefixes, ip);
+                        }
+                    }
+                } catch (Exception ignored) {}
+                addSubnetPrefix(prefixes, deviceTarget.host);
+                String savedUrl = getSharedPreferences("config", MODE_PRIVATE).getString("server_url", "");
+                if (!savedUrl.isEmpty()) {
+                    try { addSubnetPrefix(prefixes, Uri.parse(savedUrl).getHost()); } catch (Exception ignored) {}
+                }
+                prefixes.add("192.168.186.");
+                prefixes.add("192.168.4.");
+
+                byte[] pcProbe = "{\"cmd\":\"kurisu_discover\"}".getBytes(StandardCharsets.UTF_8);
+                byte[] boardProbe = "{\"request_id\":\"probe_discover\"}".getBytes(StandardCharsets.UTF_8);
+                try {
+                    sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName("255.255.255.255"), 8890));
+                    sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName("255.255.255.255"), 8888));
+                    sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName("192.168.4.1"), 8888));
+                } catch (Exception ignored) {}
+
+                for (String prefix : prefixes) {
+                    try {
+                        sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName(prefix + "255"), 8890));
+                        sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName(prefix + "255"), 8888));
+                    } catch (Exception ignored) {}
+                    for (int host = 1; host <= 254; host++) {
+                        try {
+                            java.net.InetAddress target = java.net.InetAddress.getByName(prefix + host);
+                            sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, target, 8890));
+                            sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, target, 8888));
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                long deadline = System.nanoTime() + 850_000_000L;
+                byte[] buf = new byte[2048];
+                while (System.nanoTime() < deadline) {
+                    java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
+                    try {
+                        sock.receive(pkt);
+                    } catch (java.net.SocketTimeoutException timeout) {
+                        if (foundServerUrl != null) break;
+                        continue;
+                    }
+                    String senderIp = pkt.getAddress().getHostAddress();
+                    if (!BridgePolicy.privateIpv4(senderIp)) continue;
+                    String text = new String(pkt.getData(), 0, pkt.getLength(), StandardCharsets.UTF_8).trim();
+                    try {
+                        org.json.JSONObject json = new org.json.JSONObject(text);
+                        if ("KurisuPro".equals(json.optString("service"))) {
+                            foundServerUrl = "http://" + senderIp + ":8080";
+                            foundAccessToken = json.optString("access_token", "");
+                            String bIp = json.optString("board_ip", "");
+                            String cTok = json.optString("control_token", "");
+                            if (BridgePolicy.privateIpv4(bIp)) foundBoardIp = bIp;
+                            if (BridgePolicy.token(cTok)) foundControlToken = cTok;
+                            break;
+                        }
+                        if (json.has("boot_id") || "Kurisu-Matrix".equals(json.optString("device"))) {
+                            String staIp = json.optString("sta_ip", "");
+                            foundBoardIp = BridgePolicy.privateIpv4(staIp) ? staIp : senderIp;
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+
+            final String sUrl = foundServerUrl, sTok = foundAccessToken, bIp = foundBoardIp, cTok = foundControlToken;
+            runOnUiThread(() -> {
+                discovering = false;
+                if (isFinishing() || destroyed) return;
+                android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
+                android.content.SharedPreferences.Editor ed = prefs.edit();
+                String finalBoardIp = bIp != null ? bIp : deviceTarget.host;
+                String finalBoardTok = cTok != null ? cTok : deviceTarget.token;
+                if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(finalBoardTok)) {
+                    deviceTarget = new DeviceTarget(finalBoardIp, finalBoardTok);
+                    ed.putString("device_host", finalBoardIp).putString("device_token", finalBoardTok);
+                }
+                if (sUrl != null) {
+                    if (sTok != null && !sTok.isEmpty()) ed.putString("access_token", sTok);
+                    ed.apply();
+                    Toast.makeText(MainActivity.this, "已自动配对并连接服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
+                    connectServer(sUrl + (sTok != null && !sTok.isEmpty() ? "/?pair=" + Uri.encode(sTok) : "/"));
+                } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(finalBoardTok)) {
+                    serverOrigin = "";
+                    ed.remove("server_url").apply();
+                    Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
+                    if (!isOfflinePage(webView.getUrl())) webView.loadUrl(OFFLINE);
+                } else {
+                    ed.apply();
+                    if (manual) {
+                        Toast.makeText(MainActivity.this, "未发现同一局域网下的服务，请确认手机与设备在同一热点/Wi-Fi", Toast.LENGTH_LONG).show();
+                        discoverServer();
+                    }
+                }
+            });
+        }).start();
+    }
+
     private void discoverServer() {
+        autoDiscoverAndConnect(true);
         if (discovery != null) return;
         nsd = (NsdManager) getSystemService(NSD_SERVICE);
         discovery = new NsdManager.DiscoveryListener() {

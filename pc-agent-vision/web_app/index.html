@@ -163,14 +163,14 @@
                 <p class="eyebrow">LIVE MATRIX</p>
                 <h2>此刻的光</h2>
               </div>
-              <span class="live-tag" id="frameTag">等待回读</span>
+              <span class="live-tag" id="frameTag">等待画面</span>
             </div>
             <div class="home-matrix-wrap">
-              <canvas id="homeMatrix" width="320" height="320" aria-label="灯板实际帧预览"></canvas><span
+              <canvas id="homeMatrix" width="320" height="320" aria-label="灯板画面预览"></canvas><span
                 id="homeFrameEmpty">等待灯板连接</span>
             </div>
             <div class="preview-footer">
-              <span><i class="mode-dot"></i><b id="currentModeLabel">尚未读取</b></span><button class="text-button"
+              <span><i class="mode-dot"></i><b id="currentModeLabel">待机中</b></span><button class="text-button"
                 data-go="lights">
                 调整灯光 ↗
               </button>
@@ -279,18 +279,18 @@
               </div>
             </div>
             <div class="matrix-stage">
-              <canvas id="matrixCanvas" width="512" height="512" aria-label="16×16 实际像素帧"></canvas><canvas id="view"
-                width="768" height="600" aria-label="基于实际帧的三维预览" hidden></canvas><span id="lightFrameEmpty">等待设备帧</span>
+              <canvas id="matrixCanvas" width="512" height="512" aria-label="16×16 像素画面"></canvas><canvas id="view"
+                width="768" height="600" aria-label="三维灯效预览" hidden></canvas><span id="lightFrameEmpty">等待灯板画面</span>
             </div>
             <div class="frame-caption">
-              <span id="frameSource">尚无设备帧</span><span id="modeName">—</span>
+              <span id="frameSource">等待连接</span><span id="modeName">—</span>
             </div>
             <div class="exposure-control" id="exposureControl" hidden>
               <label for="previewExposure">预览曝光</label><input id="previewExposure" type="range" min="1" max="6"
                 step=".25" value="3" />
             </div>
             <p class="field-help">
-              预览来自实际回读；屏幕光晕与曝光仅用于展示。
+              实时同步显示灯板画面。
             </p>
           </article>
           <div class="light-presets">
@@ -525,7 +525,7 @@
               <input id="arcadeSearchInput" type="search" aria-label="搜索游戏编号或名称" placeholder="搜索 #001~#100 或名称…" maxlength="60" autocomplete="off" />
               <span class="subtle-badge" id="arcadeVisibleCount">100 / 100</span>
             </div>
-            <p class="arcade-catalog-note">先看玩法，再选卡带。网页与 APK 使用同一套手柄；实体灯板运行游戏，预览显示回读画面。</p>
+            <p class="arcade-catalog-note">选择下方的游戏卡带即可在灯板上开始游玩，手机触屏与电脑键盘均可操控。</p>
             <div class="game-selection" id="arcadeGameGrid" role="group" aria-label="100款点阵街机游戏选择">
               <button class="secondary" data-arcade-id="001" data-arcade-cat="A" data-game="mario" id="btnArcade001">#001 超级马里奥</button>
               <button class="secondary" data-arcade-id="002" data-arcade-cat="A" id="btnArcade002">#002 涂鸦跳跃</button>
@@ -632,18 +632,18 @@
             <div class="mario-container" id="marioContainer" style="display:none;">
               <div class="mario-header">
                 <span id="arcadeGameTitle">🎮 街机游戏 · 16×16 点阵屏</span>
-                <span id="marioSyncBadge" class="mario-sync-pill">🟢 ESP32 硬件模式</span>
+                <span id="marioSyncBadge" class="mario-sync-pill">🟢 灯板已连接</span>
               </div>
               <div class="mario-screen-housing">
-                <canvas id="marioCanvas" width="320" height="320" aria-label="当前街机卡带的16×16灯板回读"></canvas>
+                <canvas id="marioCanvas" width="320" height="320" aria-label="16×16 街机画面预览"></canvas>
               </div>
-              <p id="arcadePreviewStatus" class="field-help" aria-live="polite">等待读取当前卡带画面</p>
+              <p id="arcadePreviewStatus" class="field-help" aria-live="polite">准备就绪</p>
               <div class="mario-progress-track">
                 <div id="marioProgFill" class="mario-progress-bar"></div>
               </div>
               <div class="mario-hud-panel">
                 <div class="mario-hud-row">
-                  <span id="marioStateTag" class="mario-state-badge">TITLE 待机</span>
+                  <span id="marioStateTag" class="mario-state-badge">待机</span>
                   <span id="marioScoreStat" style="color:#ffd23f;font-weight:bold;">得分: 00000</span>
                   <span id="arcadeHighScoreStat" style="color:#f59e0b;font-weight:bold;">最高: 00000</span>
                 </div>
@@ -651,7 +651,7 @@
                   <span id="marioLivesStat">❤️ ×3</span>
                   <span id="marioCoinsStat">🪙/⚡ ×00</span>
                   <span id="marioProgressStat">🏁 0%</span>
-                  <span id="arcadeControlStat" class="subtle-badge">CTRL_ARCADE_AB</span>
+                  <span id="arcadeControlStat" class="subtle-badge">十字键 + A/B</span>
                 </div>
               </div>
 
@@ -729,14 +729,14 @@
                   <label><input id="arcadeSoundEnabled" type="checkbox" checked />游戏音效</label>
                   <label>音效音量<input id="arcadeSoundVolume" type="range" min="0" max="100" value="25" /></label>
                   <button type="button" id="arcadeApplySettings" class="secondary">应用卡带设置</button>
-                  <p id="arcadeSettingsStatus" class="field-help">以设备回执为准；语音、音乐或收音占用时游戏音效让路。</p>
+                  <p id="arcadeSettingsStatus" class="field-help">支持调节游戏难度与音效音量。</p>
                 </fieldset>
                 <p class="field-help mario-help">
                   选择卡带后，这里会显示该游戏的操作与目标。手机支持多点触控，电脑可使用键盘。
                 </p>
               </div>
             </div>
-            <p class="field-help">所有游戏都在上方同一套卡带系统中运行。选择卡带后查看操作简介，再点击开始；离开页面会释放按键并安全暂停。</p>
+            <p class="field-help">选择游戏后可查看操作说明，离开页面时会自动暂停。</p>
           </article>
           <article class="card vision-card">
             <div class="card-heading">
@@ -763,7 +763,7 @@
             <details class="nested-details">
               <summary>视线校准与人脸问候</summary>
               <p class="field-help">
-                视线游戏需先启用摄像头并完成校准。登记人脸会保存本地样本，仅在你点击登记时执行。
+                开启摄像头后可进行视线校准或录入人脸。
               </p>
               <div class="button-row">
                 <button id="calibrate" class="secondary">开始九点校准</button><button id="sampleGaze"
@@ -815,9 +815,14 @@
                 <dd id="audioTransport">—</dd>
               </div>
             </dl>
-            <button class="secondary" id="connectionSettings">
-              连接设置
-            </button>
+            <div class="button-row">
+              <button class="secondary" id="connectionSettings">
+                连接设置
+              </button>
+              <a href="/apk" download="Kurisu_Amadeus_Pro.apk" class="button secondary" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-size:0.9rem;padding:0.6rem 1rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);color:inherit;background:rgba(255,255,255,0.06);">
+                📥 下载手机客户端 (APK)
+              </a>
+            </div>
             <p class="field-help">
               手机和灯板需能访问同一电脑服务。模型、曲库和视觉处理仍在电脑上运行。
             </p>
@@ -862,17 +867,17 @@
         <details class="card">
           <summary>设备详情与诊断</summary>
           <p class="field-help">
-            这里显示真实服务状态，便于排查连接；不是实时性能保证。
+            查看系统连接状态与运行详情。
           </p>
           <div class="button-row">
             <button id="runCeremony" class="secondary" data-hardware>
               播放连接自检提示</button><button id="refreshStatus" class="quiet">刷新状态</button>
           </div>
-          <pre id="status">尚未读取</pre>
+          <pre id="status">读取中…</pre>
           <pre id="visionStatus"></pre>
         </details>
         <footer class="app-footer">
-          <span>AMADEUS · 未来道具研究所</span><span>世界线彩蛋 1.048596% · 非测量值</span>
+          <span>AMADEUS · 未来道具研究所</span><span>世界线变动率 1.048596%</span>
         </footer>
       </section>
     </main>
