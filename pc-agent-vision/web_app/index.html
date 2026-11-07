@@ -753,13 +753,20 @@
                 <option value="gesture_game">手势游戏</option>
                 <option value="gaze_game">视线游戏</option>
                 <option value="identity">人脸问候</option>
-              </select></label><label class="stack-label">电脑摄像头编号<input id="camera" type="number" min="0" max="9"
-                value="0" /></label>
+              </select></label><label class="stack-label">电脑摄像头编号<div style="display:flex;gap:8px;"><input id="camera" type="number" min="0" max="9"
+                value="0" style="flex:1;" /><button id="cameraDetectBtn" type="button" class="quiet" style="white-space:nowrap;">检测设备</button></div></label>
             <div class="button-row">
               <button id="visionStart" class="primary" data-hardware>
                 启用视觉</button><button id="visionStop" class="quiet">停止视觉</button>
             </div>
             <p id="visionSummary" class="field-help">摄像头未启用</p>
+            <div class="camera-stream-wrapper" id="cameraStreamWrapper" style="display:none; margin: 12px 0; border-radius: 8px; overflow: hidden; background: #000; text-align: center; position: relative; border: 1px solid rgba(255,255,255,0.15);">
+              <img id="cameraStreamImg" src="" alt="实时摄像头画面" style="max-width: 100%; max-height: 280px; display: block; margin: 0 auto; object-fit: contain;" />
+              <div id="cameraStreamOverlay" style="position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; font-size: 11px; color: #fff; background: rgba(0,0,0,0.65); padding: 4px 8px; border-radius: 4px; pointer-events: none;">
+                <span id="cameraStreamStatus">🟢 实时画面</span>
+                <span id="cameraDetectionInfo">正在检测手势/人脸</span>
+              </div>
+            </div>
             <details class="nested-details">
               <summary>视线校准与人脸问候</summary>
               <p class="field-help">

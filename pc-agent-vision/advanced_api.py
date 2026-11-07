@@ -430,6 +430,76 @@ def register(app, api_getter):
     async def upload(request):
         return await api_getter().upload_music(request)
 
+    async def camera_feed(request):
+        api = api_getter()
+        if not api or not hasattr(api, "vision"):
+            return web.Response(status=503, text="Vision not ready")
+        response = web.StreamResponse(
+            status=200,
+            reason="OK",
+            headers={
+                "Content-Type": "multipart/x-mixed-replace; boundary=frame",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+        await response.prepare(request)
+        try:
+            while True:
+                jpeg = api.vision.get_latest_jpeg()
+                if jpeg:
+                    chunk = (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
+                    )
+                    await response.write(chunk)
+                await asyncio.sleep(0.05)
+        except (asyncio.CancelledError, ConnectionResetError):
+            pass
+        return response
+
+    async def camera_frame(request):
+        api = api_getter()
+        if not api or not hasattr(api, "vision"):
+            return web.Response(status=503, text="Vision not ready")
+        jpeg = api.vision.get_latest_jpeg()
+        if not jpeg:
+            return web.Response(status=404, text="No camera frame available")
+        return web.Response(
+            body=jpeg,
+            content_type="image/jpeg",
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+    async def camera_devices(request):
+        def detect():
+            devices = []
+            try:
+                import cv2
+                import sys
+
+                backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+                for idx in range(3):
+                    cap = cv2.VideoCapture(idx, backend)
+                    if cap.isOpened():
+                        ret, _ = cap.read()
+                        if ret:
+                            devices.append({"id": idx, "name": f"电脑摄像头 {idx}"})
+                        cap.release()
+            except Exception:
+                pass
+            if not devices:
+                devices.append({"id": 0, "name": "默认摄像头 0"})
+            return devices
+
+        devices = await asyncio.to_thread(detect)
+        return web.json_response({"devices": devices})
+
+    app.router.add_get("/api/pro/camera/feed", camera_feed)
+    app.router.add_get("/api/pro/camera/frame", camera_frame)
+    app.router.add_get("/api/pro/camera/devices", camera_devices)
     app.router.add_post("/api/pro/music-upload", upload)
     app.router.add_route("*", "/api/pro/{action}", handle)
     app.router.add_post("/mcp", mcp)

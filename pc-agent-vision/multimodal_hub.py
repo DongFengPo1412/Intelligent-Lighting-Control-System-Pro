@@ -54,6 +54,14 @@ class MultimodalHub:
         self.strain_since = None
         self.last_celebration = 0
         self.observed_at = 0
+        self.latest_jpeg = None
+        self.frame_lock = threading.RLock()
+
+    def get_latest_jpeg(self):
+        if hasattr(self, "frame_lock"):
+            with self.frame_lock:
+                return self.latest_jpeg
+        return None
 
     def start(self, mode="pet", camera=0):
         if mode not in self.MODES or type(camera) is not int or not 0 <= camera <= 9:
@@ -97,6 +105,9 @@ class MultimodalHub:
             raise RuntimeError("Camera has not released yet")
         self.started = False
         self._record_face(None)
+        if hasattr(self, "frame_lock"):
+            with self.frame_lock:
+                self.latest_jpeg = None
 
     def _record_face(self, image):
         """Publish a detached sample; a missing/invalid crop invalidates enrollment."""
@@ -109,7 +120,16 @@ class MultimodalHub:
         try:
             import cv2
             import mediapipe as mp
-            cap = cv2.VideoCapture(self.camera)
+            import sys
+
+            # Use DirectShow on Windows to avoid MSMF capture failures
+            if sys.platform == "win32":
+                cap = cv2.VideoCapture(self.camera, cv2.CAP_DSHOW)
+                if not cap.isOpened():
+                    cap = cv2.VideoCapture(self.camera)
+            else:
+                cap = cv2.VideoCapture(self.camera)
+
             if not cap.isOpened():
                 raise RuntimeError("Cannot open selected camera")
             with mp.solutions.hands.Hands(
@@ -128,26 +148,39 @@ class MultimodalHub:
                     image = image[
                         (h - side) // 2 : (h + side) // 2, (w - side) // 2 : (w + side) // 2
                     ]
+                    preview = image.copy()
                     rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                     hand = hands.process(rgb)
                     faces = face.process(rgb)
                     observation = {"present": bool(faces.multi_face_landmarks)}
                     if hand.multi_hand_landmarks:
+                        hl = hand.multi_hand_landmarks[0]
                         observation["hand"] = self.features.hand(
-                            [[v.x, v.y, v.z] for v in hand.multi_hand_landmarks[0].landmark]
+                            [[v.x, v.y, v.z] for v in hl.landmark]
                         )
+                        mp.solutions.drawing_utils.draw_landmarks(
+                            preview, hl, mp.solutions.hands.HAND_CONNECTIONS
+                        )
+                        pt8 = hl.landmark[8]
+                        cx, cy = int(pt8.x * side), int(pt8.y * side)
+                        cv2.circle(preview, (cx, cy), 8, (0, 255, 0), -1)
+                        cv2.circle(preview, (cx, cy), 12, (255, 255, 255), 2)
+                        if observation.get("hand", {}).get("pinch"):
+                            cv2.putText(preview, "PINCH", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
                     if faces.multi_face_landmarks:
-                        points = [[v.x, v.y, v.z] for v in faces.multi_face_landmarks[0].landmark]
+                        fl = faces.multi_face_landmarks[0]
+                        points = [[v.x, v.y, v.z] for v in fl.landmark]
                         observation.update(self.features.face(points, time.monotonic(), side, side))
                         import numpy as np
 
                         pts = np.array(points)
                         lo = np.clip(pts[:, :2].min(axis=0), 0, 1)
                         hi = np.clip(pts[:, :2].max(axis=0), 0, 1)
-                        crop = image[
-                            int(lo[1] * side) : int(hi[1] * side),
-                            int(lo[0] * side) : int(hi[0] * side),
-                        ]
+                        x1, y1 = int(lo[0] * side), int(lo[1] * side)
+                        x2, y2 = int(hi[0] * side), int(hi[1] * side)
+                        cv2.rectangle(preview, (x1, y1), (x2, y2), (255, 120, 0), 2)
+
+                        crop = image[y1:y2, x1:x2]
                         image_sample = (
                             cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (100, 100))
                             if crop.size else None
@@ -161,8 +194,15 @@ class MultimodalHub:
                             label, confidence = self.identity.predict(self.last_face)
                             observation["identity"] = label
                             observation["identity_distance"] = confidence
+                            cv2.putText(preview, f"{label}", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                     else:
                         self._record_face(None)
+
+                    enc_ok, enc_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    if enc_ok and hasattr(self, "frame_lock"):
+                        with self.frame_lock:
+                            self.latest_jpeg = enc_buf.tobytes()
+
                     self.process(observation)
                     self.stop_event.wait(0.04)
         except Exception as exc:
@@ -172,6 +212,9 @@ class MultimodalHub:
                 cap.release()
             self.started = False
             self._record_face(None)
+            if hasattr(self, "frame_lock"):
+                with self.frame_lock:
+                    self.latest_jpeg = None
 
     def process(self, observation, now=None):
         self.observed_at = time.time()

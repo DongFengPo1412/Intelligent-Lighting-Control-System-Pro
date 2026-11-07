@@ -3,6 +3,7 @@ package org.fglab.kurisu;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
@@ -69,6 +70,9 @@ public class MainActivity extends Activity {
             getSharedPreferences("config",MODE_PRIVATE).getString("device_token",""));
         clientId=getSharedPreferences("config",MODE_PRIVATE).getString("device_client",java.util.UUID.randomUUID().toString().replace("-",""));
         getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_client",clientId).apply();
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 102);
+        }
         initWebSettings();
         webView.loadUrl(OFFLINE);
         autoDiscoverAndConnect(false);
@@ -215,7 +219,16 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
-            @Override public void onPermissionRequest(PermissionRequest request) { runOnUiThread(request::deny); }
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> {
+                    try {
+                        request.grant(request.getResources());
+                    } catch (Exception e) {
+                        request.deny();
+                    }
+                });
+            }
             @Override public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, final android.webkit.JsPromptResult result) {
                 if (isFinishing() || !trustedPage(view)) { result.cancel(); return true; }
                 final EditText input = new EditText(MainActivity.this);

@@ -1700,6 +1700,20 @@
     }
   }, 250);
 
+  bind("cameraDetectBtn", async () => {
+    try {
+      const r = await api("/api/pro/camera/devices", undefined, "GET");
+      if (r && r.devices && r.devices.length) {
+        notice(`已检测到 ${r.devices.length} 个可用摄像头: ` + r.devices.map(d => `${d.name}`).join(", "));
+        $("camera").value = r.devices[0].id;
+      } else {
+        notice("未探测到额外摄像头，保持默认 0");
+      }
+    } catch (e) {
+      notice("摄像头探测: " + e.message);
+    }
+  });
+
   bind("visionStart", async () => {
     const res = await api("/api/pro/vision", {
       enabled: true,
@@ -1710,12 +1724,21 @@
       notice("摄像头启动提示: " + res.error);
     } else {
       notice("已开启视觉互动");
+      if ($("cameraStreamWrapper")) {
+        $("cameraStreamWrapper").style.display = "block";
+        const tok = state.token || "";
+        $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+      }
     }
     lastPro = 0;
     setTimeout(() => poll(), 500);
   });
   bind("visionStop", async () => {
     await api("/api/pro/vision", { enabled: false });
+    if ($("cameraStreamWrapper")) {
+      $("cameraStreamWrapper").style.display = "none";
+      $("cameraStreamImg").src = "";
+    }
     cancelCalibration();
     lastPro = 0;
   });
@@ -1980,6 +2003,29 @@
           (p.vision?.running
             ? `互动方式：${p.vision.mode}${p.vision.fresh === false ? " · 暂无新鲜观测" : ""}`
             : "摄像头未启用");
+        if ($("cameraStreamWrapper")) {
+          if (p.vision?.running) {
+            $("cameraStreamWrapper").style.display = "block";
+            const img = $("cameraStreamImg");
+            if (!img.src || img.src.indexOf("/api/pro/camera/feed") === -1) {
+              const tok = state.token || "";
+              img.src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+            }
+            if ($("cameraDetectionInfo")) {
+              const obs = p.vision?.observation || {};
+              if (obs.hand) {
+                $("cameraDetectionInfo").textContent = obs.hand.pinch ? "✋ 捏合抓取" : "👆 食指追踪";
+              } else if (obs.present) {
+                $("cameraDetectionInfo").textContent = obs.identity ? `👤 识别: ${obs.identity}` : "👤 人脸就绪";
+              } else {
+                $("cameraDetectionInfo").textContent = "正在捕捉手势/人脸...";
+              }
+            }
+          } else {
+            $("cameraStreamWrapper").style.display = "none";
+            $("cameraStreamImg").src = "";
+          }
+        }
         updateMusic(p.music);
         lastPro = now;
         if (state.page === "music" && libraryDirty) await loadLibrary();
