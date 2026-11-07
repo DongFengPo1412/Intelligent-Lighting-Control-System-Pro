@@ -358,6 +358,15 @@ def _ja_has_integer(ja_text: str, n: int, zh_text: str) -> bool:
         return True
     if n in _KANJI_NUM_MAP and any(rep in ja_text for rep in _KANJI_NUM_MAP[n]):
         return True
+    # 24-hour <-> 12-hour clock hour equivalence and 30分 <-> 半 equivalence
+    if 13 <= n <= 23 and ("点" in zh_text or ":" in zh_text or "时" in zh_text):
+        if _ja_has_integer(ja_text, n - 12, zh_text):
+            return True
+    if 1 <= n <= 11 and any(w in zh_text for w in ("下午", "晚上", "傍晚", "午后")):
+        if _ja_has_integer(ja_text, n + 12, zh_text):
+            return True
+    if n == 30 and ("分" in zh_text or ":" in zh_text) and "半" in ja_text:
+        return True
     # Unit equivalence: e.g. 2分钟 <-> 120秒, 60秒 <-> 1分
     if n == 2 and ("分钟" in zh_text or "分" in zh_text) and ("120" in ja_text or "二" in ja_text):
         return True
@@ -532,7 +541,7 @@ def validate_bilingual_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Opti
 
     # 1. Reject untranslated Simplified/Traditional Chinese grammar or non-JIS Simplified hanzi
     m_zh_leak = re.search(
-        r"[吗嗎呢吧哦呀啦咱么这那让给帮欢们]|我的|你的|我是|你是|他是|她是|的就是|的是|现在我们|不再喜欢|明天|早上好|下午好|晚上好|为什么|怎么样|这个|那个|还是|当然可以|好的|再見|再见|也许|哪里哪里",
+        r"[吗嗎呢吧哦呀啦咱么这那让给帮欢们]|我的|你的|我是|你是|他是|她是|的就是|的是|现在我们|不再喜欢|今天|明天|毛毛雨|之間|之间|早上好|下午好|晚上好|为什么|怎么样|这个|那个|还是|当然可以|好的|再見|再见|也许|哪里哪里",
         ja_text,
     )
     if m_zh_leak:
@@ -588,6 +597,11 @@ def validate_bilingual_alignment(zh_text: str, ja_text: str) -> Tuple[bool, Opti
 
     ja_ints = {int(tok) for tok in re.findall(r"(?<![.\d])\d+(?![.\d])", ja_text)}
     allowed_ja_ints = set(exp_ints)
+    for n in list(exp_ints):
+        if 13 <= n <= 23 and ("点" in zh_text or ":" in zh_text or "时" in zh_text):
+            allowed_ja_ints.add(n - 12)
+        if 1 <= n <= 11 and any(w in zh_text for w in ("下午", "晚上", "傍晚", "午后")):
+            allowed_ja_ints.add(n + 12)
     if 2 in exp_ints and ("分钟" in zh_text or "分" in zh_text):
         allowed_ja_ints.add(120)
     if 60 in exp_ints and "秒" in zh_text:

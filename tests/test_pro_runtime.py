@@ -587,5 +587,62 @@ class WebContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.status, 400)
 
 
+class RealtimeClockAndWeatherTests(unittest.TestCase):
+    def test_system_clock_snapshot_includes_today_and_tomorrow(self):
+        from datetime import datetime, timezone, timedelta
+        from realtime_context import format_clock_prompt_section, system_clock_snapshot
+
+        tz = timezone(timedelta(hours=8))
+        snap = system_clock_snapshot(datetime(2026, 11, 7, 15, 38, 5, tzinfo=tz))
+        self.assertEqual(snap["date"], "2026-11-07")
+        self.assertEqual(snap["date_cn"], "2026年11月7日")
+        self.assertEqual(snap["weekday_cn"], "星期六")
+        self.assertEqual(snap["time_cn"], "15点38分")
+        self.assertEqual(snap["tomorrow_date"], "2026-11-08")
+        self.assertEqual(snap["tomorrow_date_cn"], "2026年11月8日")
+        self.assertEqual(snap["tomorrow_weekday_cn"], "星期日")
+        prompt = format_clock_prompt_section(snap)
+        self.assertIn("2026年11月7日（星期六）15点38分", prompt)
+        self.assertIn("2026年11月8日（星期日", prompt)
+
+    def test_weather_city_extraction_and_error_formatting(self):
+        from realtime_context import (
+            extract_weather_city,
+            format_weather_prompt_section,
+            is_time_or_date_query,
+            is_weather_query,
+        )
+
+        self.assertTrue(is_time_or_date_query("现在是几点？"))
+        self.assertTrue(is_time_or_date_query("明天是几月几号星期几？"))
+        self.assertTrue(is_weather_query("北京今天天气怎么样？"))
+        self.assertEqual(extract_weather_city("北京今天天气怎么样？"), "北京")
+        self.assertEqual(extract_weather_city("帮我查一下上海明天的气温"), "上海")
+        self.assertIsNone(extract_weather_city("助手，今天外面天气怎么样？"))
+
+        ok_prompt = format_weather_prompt_section({
+            "status": "ok",
+            "city": "北京",
+            "observed_at": "2026-11-07T15:30",
+            "weather_desc": "晴朗",
+            "temperature_c": 5,
+            "today_max_c": 6,
+            "today_min_c": 1,
+            "humidity_pct": 70,
+            "tomorrow_date": "2026-11-08",
+            "tomorrow_desc": "多云",
+            "tomorrow_max_c": 7,
+            "tomorrow_min_c": 0,
+        })
+        self.assertIn("北京", ok_prompt)
+        self.assertIn("5度", ok_prompt)
+        err_prompt = format_weather_prompt_section({
+            "status": "error",
+            "city": "北京",
+            "error": "TimeoutError: timed out",
+        })
+        self.assertIn("实时联网天气查询失败", err_prompt)
+
+
 if __name__ == "__main__":
     unittest.main()

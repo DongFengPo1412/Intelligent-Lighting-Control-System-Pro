@@ -56,8 +56,11 @@ class ProApi:
                 self.vision.error = str(exc)
 
     def sensor_context(self):
+        from realtime_context import system_clock_snapshot
+
         return dict(
             simulated=self.controller.port == "SIMULATION",
+            clock=system_clock_snapshot(),
             vision=self.vision.status(),
             music=dict(
                 running=self.music.running,
