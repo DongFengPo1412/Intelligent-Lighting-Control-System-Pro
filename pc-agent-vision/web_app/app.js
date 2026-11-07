@@ -1277,6 +1277,65 @@
 
   }
 
+  function updateFsGamepadLayout(controlType, gid) {
+    const gNum = Number(gid || state.arcadeGid || 1);
+    const ct = Number(controlType !== undefined ? controlType : 3);
+    const dpad = $("fsDpad");
+    const lrStage = $("fsLrStage");
+    const tapLeft = $("fsTapLeft");
+    const tapRight = $("fsTapRight");
+    const actions = $("fsActions");
+    const tracks = $("fsTracks");
+    const pongP1 = $("fsPongP1");
+    const pongP2 = $("fsPongP2");
+    const guide = window.ARCADE_GAME_GUIDES?.[gNum];
+    const tip = $("fsGuideText");
+    if (tip) tip.textContent = guide?.help || "按键操控灯板";
+
+    const keyASub = $("fsKeyASub");
+    const keyBSub = $("fsKeyBSub");
+    const btnB = $("fsKeyB");
+
+    if (dpad) dpad.style.display = "none";
+    if (lrStage) lrStage.style.display = "none";
+    if (tapLeft) tapLeft.style.display = "none";
+    if (tapRight) tapRight.style.display = "none";
+    if (actions) actions.style.display = "none";
+    if (tracks) tracks.style.display = "none";
+    if (pongP1) pongP1.style.display = "none";
+    if (pongP2) pongP2.style.display = "none";
+
+    if (ct === 0) {
+      if (tapLeft) tapLeft.style.display = "flex";
+      if (tapRight) tapRight.style.display = "flex";
+      const tapBigL = $("fsTapBigLeft");
+      const tapBigR = $("fsTapBigRight");
+      const label = guide?.a || "👆 点击控制";
+      if (tapBigL) tapBigL.textContent = label;
+      if (tapBigR) tapBigR.textContent = label;
+    } else if (ct === 1) {
+      if (lrStage) lrStage.style.display = "flex";
+      if (guide?.a) {
+        if (actions) actions.style.display = "flex";
+        if (btnB) btnB.style.display = "none";
+        if (keyASub) keyASub.textContent = guide.a;
+      }
+    } else if (ct === 2) {
+      if (dpad) dpad.style.display = "grid";
+    } else if (ct === 4) {
+      if (tracks) tracks.style.display = "flex";
+    } else if (ct === 5) {
+      if (pongP1) pongP1.style.display = "flex";
+      if (pongP2) pongP2.style.display = "flex";
+    } else {
+      if (dpad) dpad.style.display = "grid";
+      if (actions) actions.style.display = "flex";
+      if (btnB) btnB.style.display = "flex";
+      if (keyASub) keyASub.textContent = guide?.a || "跳跃";
+      if (keyBSub) keyBSub.textContent = guide?.b || "加速";
+    }
+  }
+
   let arcadeSettingsDirty=false;
   for(const id of ["arcadeDifficulty","arcadeSoundEnabled","arcadeSoundVolume"])
     $(id)?.addEventListener("input",()=>{arcadeSettingsDirty=true;});
@@ -1372,6 +1431,41 @@
       badge.style.backgroundColor = "rgba(34, 197, 94, 0.2)";
       badge.style.color = "#22c55e";
     }
+
+    // 全屏横屏手柄 HUD 同步
+    if ($("fsGameTitle")) {
+      $("fsGameTitle").textContent = ARCADE_TITLE_MAP[status.game_id || state.arcadeGid] || `街机 #${status.game_id || state.arcadeGid || 1}`;
+    }
+    if ($("fsStateStat")) {
+      $("fsStateStat").textContent = stCode === 2 ? "⏸ 暂停" : (stCode === 1 ? "🟢 游玩中" : "待机");
+    }
+    if ($("fsScoreStat")) {
+      $("fsScoreStat").textContent = `得分: ${String(status.score || 0).padStart(5, "0")}`;
+    }
+    if ($("fsHighScoreStat")) {
+      $("fsHighScoreStat").textContent = `最高: ${String(status.high_score || 0).padStart(5, "0")}`;
+    }
+    if ($("fsLivesStat")) {
+      $("fsLivesStat").textContent = `❤️ ×${status.lives !== undefined ? status.lives : 3}`;
+    }
+    if ($("fsProgressStat")) {
+      $("fsProgressStat").textContent = `🏁 ${status.progress || 0}%`;
+    }
+    if ($("fsPauseBtn")) {
+      $("fsPauseBtn").textContent = stCode === 2 ? "▶ 继续" : "⏸ 暂停";
+    }
+    if ($("fsSyncBadge")) {
+      if (status.source === "esp32_hardware") {
+        $("fsSyncBadge").textContent = "🟢 灯板同步";
+        $("fsSyncBadge").style.backgroundColor = "rgba(34, 197, 94, 0.18)";
+        $("fsSyncBadge").style.color = "#22c55e";
+      } else {
+        $("fsSyncBadge").textContent = "🟡 离线模式";
+        $("fsSyncBadge").style.backgroundColor = "rgba(234, 179, 8, 0.18)";
+        $("fsSyncBadge").style.color = "#eab308";
+      }
+    }
+    updateFsGamepadLayout(status.control_type, status.game_id || state.arcadeGid);
   }
 
   async function launchArcadeGame(gameId) {
@@ -1638,10 +1732,110 @@
       state.game = null;
       if ($("gameState")) $("gameState").textContent = "选择游戏开始";
       if ($("marioContainer")) $("marioContainer").style.display = "none";
+      exitFullscreenGamepad();
 
       $$("[data-arcade-id]").forEach((btn) => btn.classList.remove("active"));
       $$("[data-game]").forEach((btn) => btn.classList.remove("active"));
       notice("已安全退出街机系统");
+    };
+  }
+
+  function enterFullscreenGamepad() {
+    const overlay = $("fullscreenGamepadOverlay");
+    if (!overlay) return;
+    overlay.style.display = "flex";
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("fs-gamepad-active");
+    if (navigator.vibrate) try { navigator.vibrate(20); } catch (_) {}
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } catch (_) {}
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("landscape").catch(() => {});
+      }
+    } catch (_) {}
+    updateFsGamepadLayout(activeControlType, state.arcadeGid);
+  }
+
+  function exitFullscreenGamepad() {
+    const overlay = $("fullscreenGamepadOverlay");
+    if (!overlay) return;
+    overlay.style.display = "none";
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("fs-gamepad-active");
+    if (navigator.vibrate) try { navigator.vibrate(10); } catch (_) {}
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch (_) {}
+    try {
+      if (screen.orientation && screen.orientation.unlock) {
+        screen.orientation.unlock();
+      }
+    } catch (_) {}
+  }
+
+  if ($("enterFullscreenPadBtn")) {
+    $("enterFullscreenPadBtn").onclick = (e) => {
+      e.preventDefault();
+      enterFullscreenGamepad();
+    };
+  }
+  if ($("fsExitPadBtn")) {
+    $("fsExitPadBtn").onclick = (e) => {
+      e.preventDefault();
+      exitFullscreenGamepad();
+    };
+  }
+  if ($("fsStartBtn")) {
+    $("fsStartBtn").onclick = async (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      try {
+        const res = await api("/api/arcade", { action: "start" });
+        if (res && res.game_status) updateArcadeHud(res.game_status);
+        notice("街机已开始游玩");
+        startArcadeHeartbeat();
+      } catch (err) {
+        notice(`启动失败: ${err.message}`);
+      }
+    };
+  }
+  if ($("fsPauseBtn")) {
+    $("fsPauseBtn").onclick = async (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      try {
+        const curTag = $("marioStateTag")?.textContent || $("fsStateStat")?.textContent || "";
+        const isPaused = curTag.includes("PAUSED") || curTag.includes("暂停");
+        const act = isPaused ? "resume" : "pause";
+        const res = await api("/api/arcade", { action: act });
+        if (res && res.game_status) updateArcadeHud(res.game_status);
+        notice(isPaused ? "游戏已恢复继续" : "游戏已暂停");
+        startArcadeHeartbeat();
+      } catch (err) {
+        notice(`操作失败: ${err.message}`);
+      }
+    };
+  }
+  if ($("fsResetBtn")) {
+    $("fsResetBtn").onclick = async (e) => {
+      e.preventDefault();
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      try {
+        const res = await api("/api/arcade", { action: "reset" });
+        if (res && res.game_status) updateArcadeHud(res.game_status);
+        notice("街机已重新开局");
+      } catch (err) {
+        notice(`重开失败: ${err.message}`);
+      }
     };
   }
 
@@ -1702,9 +1896,14 @@
       try {
         arcadeFrameBusy=true;
         const res = await api("/api/arcade/frame", undefined, "GET", 1500);
-        if (res && res.hex && $("marioCanvas")) {
-          drawMarioFrame($("marioCanvas"), res.hex);
-          $("arcadePreviewStatus").textContent="实时画面 · 帧 "+(res.frame_id??"—");
+        if (res && res.hex) {
+          if ($("marioCanvas")) {
+            drawMarioFrame($("marioCanvas"), res.hex);
+            $("arcadePreviewStatus").textContent="实时画面 · 帧 "+(res.frame_id??"—");
+          }
+          if ($("fsMiniCanvas") && $("fullscreenGamepadOverlay")?.style.display !== "none") {
+            drawMarioFrame($("fsMiniCanvas"), res.hex);
+          }
         }
         if (res?.game_status || (res?.status && typeof res.status === "object")) updateArcadeHud(res.game_status || res.status);
       } catch (error) {

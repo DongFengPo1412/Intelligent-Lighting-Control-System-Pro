@@ -2652,3 +2652,451 @@ dialog p {
   .mario-screen-housing { max-width: 210px; }
   .mario-touch-stage { min-height: 165px; }
 }
+
+/* ==========================================================================
+   全屏横屏大手柄模式 (Horizontal Big Gamepad Mode)
+   专为手机横置、双拇指握持打造的超大触控街机手柄
+   ========================================================================== */
+.fs-pad-trigger {
+  background: linear-gradient(135deg, #0284c7, #2563eb) !important;
+  color: #fff !important;
+  border: 1px solid rgba(56, 189, 248, 0.6) !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+}
+.fs-pad-trigger:hover, .fs-pad-trigger:active {
+  background: linear-gradient(135deg, #0369a1, #1d4ed8) !important;
+  transform: translateY(1px);
+}
+
+body.fs-gamepad-active {
+  overflow: hidden !important;
+  touch-action: none !important;
+}
+
+.fs-gamepad-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999999;
+  background: #080c14;
+  background-image: radial-gradient(circle at 50% 50%, #111a2e 0%, #080c14 100%);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+/* 顶栏信息与状态 */
+.fs-top-bar {
+  height: 44px;
+  min-height: 44px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  box-sizing: border-box;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.fs-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.fs-game-title {
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
+}
+
+.fs-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.18);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  font-weight: 600;
+}
+
+.fs-bar-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.fs-stat-item {
+  font-weight: 700;
+}
+.fs-stat-item.score { color: #facc15; }
+.fs-stat-item.hi { color: #fb923c; }
+
+.fs-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-bar-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.1s, transform 0.05s;
+}
+.fs-bar-btn:active {
+  background: #334155;
+  transform: scale(0.96);
+}
+.fs-bar-btn.fs-bar-close {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+.fs-bar-btn.fs-bar-close:active {
+  background: rgba(239, 68, 68, 0.4);
+}
+
+/* 驾驶舱主体 */
+.fs-cockpit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px 16px 24px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* 左右两翼 */
+.fs-wing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.fs-wing-left { justify-content: center; }
+.fs-wing-right { justify-content: center; }
+
+/* 十字方向键 (D-Pad) - 巨大触控感 */
+.fs-dpad {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  grid-template-columns: repeat(3, 72px);
+  grid-template-rows: repeat(3, 72px);
+  gap: 2px;
+  touch-action: none;
+  background: #111827;
+  border-radius: 24px;
+  padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.06);
+}
+
+.fs-dbtn {
+  background: linear-gradient(180deg, #2a3442, #1b232e);
+  border: 1px solid #3b4859;
+  color: #f8fafc;
+  font-size: 26px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.04s, background 0.04s, box-shadow 0.04s;
+}
+.fs-dbtn-up { grid-area: 1 / 2; border-radius: 14px 14px 4px 4px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.15); }
+.fs-dbtn-left { grid-area: 2 / 1; border-radius: 14px 4px 4px 14px; box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.15); }
+.fs-dbtn-right { grid-area: 2 / 3; border-radius: 4px 14px 14px 4px; box-shadow: inset -2px 0 0 rgba(255, 255, 255, 0.15); }
+.fs-dbtn-down { grid-area: 3 / 2; border-radius: 4px 4px 14px 14px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3); }
+
+.fs-dpad-center {
+  grid-area: 2 / 2;
+  background: #151d27;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fs-dpad-center::after {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #0b0f16;
+  border: 2px solid #232d3a;
+}
+
+.fs-dbtn:active, .fs-dbtn.pressed, .fs-dbtn.active {
+  background: linear-gradient(180deg, #38bdf8, #0284c7) !important;
+  color: #fff !important;
+  border-color: #7dd3fc !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.6) !important;
+  transform: scale(0.96);
+}
+
+/* 左右双向键模式 */
+.fs-lr-stage {
+  display: flex;
+  gap: 20px;
+}
+.fs-lr-btn {
+  width: 110px;
+  height: 120px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #2a3442, #1b232e);
+  border: 2px solid #3b4859;
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+}
+.fs-lr-btn:active, .fs-lr-btn.pressed {
+  background: linear-gradient(180deg, #38bdf8, #0284c7) !important;
+  border-color: #7dd3fc !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.7);
+  transform: scale(0.96);
+}
+
+/* 单键模式大触控键 */
+.fs-tap-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fs-big-tap-btn {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fde047, #eab308 65%, #ca8a04);
+  border: 3px solid #fef08a;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 0 #854d0e, 0 12px 28px rgba(234, 179, 8, 0.4);
+  touch-action: none;
+  cursor: pointer;
+}
+.fs-big-tap-btn:active, .fs-big-tap-btn.pressed {
+  transform: translateY(6px);
+  box-shadow: 0 4px 0 #854d0e, 0 4px 12px rgba(234, 179, 8, 0.4);
+  filter: brightness(1.15);
+}
+
+/* 中央显屏与提示 */
+.fs-center-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.fs-screen-bezel {
+  position: relative;
+  background: #020617;
+  border: 4px solid #1e293b;
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.2), inset 0 2px 8px rgba(0,0,0,0.8);
+}
+.fs-screen-bezel canvas {
+  display: block;
+  background: #0c1017;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+.fs-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px);
+  border-radius: 8px;
+}
+
+.fs-screen-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+
+.fs-guide-text {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+  text-align: center;
+  max-width: 220px;
+  line-height: 1.3;
+}
+
+/* 右侧动作按键 (A / B) - 巨大街机球形按键 */
+.fs-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  transform: rotate(-10deg);
+  touch-action: none;
+}
+
+.fs-abtn {
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  transition: transform 0.04s, box-shadow 0.04s, filter 0.04s;
+}
+
+.fs-btn-b {
+  width: 90px;
+  height: 90px;
+  margin-top: 36px;
+  background: radial-gradient(circle at 35% 30%, #f87171, #dc2626 65%, #991b1b);
+  box-shadow: 0 8px 0 #7f1d1d, 0 12px 24px rgba(220, 38, 38, 0.45);
+}
+
+.fs-btn-a {
+  width: 104px;
+  height: 104px;
+  background: radial-gradient(circle at 35% 30%, #4ade80, #16a34a 65%, #14532d);
+  box-shadow: 0 10px 0 #0f4022, 0 14px 28px rgba(22, 163, 74, 0.5);
+}
+
+.fs-btn-letter {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.fs-btn-sub {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.5px;
+}
+
+.fs-abtn:active, .fs-abtn.pressed {
+  transform: translateY(6px);
+  filter: brightness(1.2);
+}
+.fs-btn-a:active, .fs-btn-a.pressed {
+  box-shadow: 0 3px 0 #0f4022, 0 4px 10px rgba(22, 163, 74, 0.4);
+}
+.fs-btn-b:active, .fs-btn-b.pressed {
+  box-shadow: 0 3px 0 #7f1d1d, 0 4px 10px rgba(220, 38, 38, 0.4);
+}
+
+/* 四色四轨按键 */
+.fs-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fs-track-row {
+  display: flex;
+  gap: 12px;
+}
+.fs-track-btn {
+  width: 100px;
+  height: 70px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  touch-action: none;
+}
+.fs-track-btn.track-red { background: linear-gradient(135deg, #ef4444, #991b1b); }
+.fs-track-btn.track-green { background: linear-gradient(135deg, #22c55e, #14532d); }
+.fs-track-btn.track-blue { background: linear-gradient(135deg, #3b82f6, #1e3a8a); }
+.fs-track-btn.track-yellow { background: linear-gradient(135deg, #eab308, #854d0e); }
+.fs-track-btn:active, .fs-track-btn.pressed { transform: scale(0.95); filter: brightness(1.2); }
+
+/* 双人 Pong 玩家列 */
+.fs-pong-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+.fs-player-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #38bdf8;
+}
+.fs-pong-btn {
+  width: 100px;
+  height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #334155, #1e293b);
+  border: 2px solid #475569;
+  color: #f1f5f9;
+  font-size: 18px;
+  font-weight: 800;
+  touch-action: none;
+}
+.fs-pong-btn:active, .fs-pong-btn.pressed {
+  background: #0284c7;
+  border-color: #38bdf8;
+  transform: scale(0.96);
+}
+
+/* 屏幕高度极矮时微调适配 */
+@media (max-height: 480px) {
+  .fs-dpad {
+    width: 180px;
+    height: 180px;
+    grid-template-columns: repeat(3, 58px);
+    grid-template-rows: repeat(3, 58px);
+  }
+  .fs-dbtn { font-size: 20px; }
+  .fs-screen-bezel canvas { width: 128px; height: 128px; }
+  .fs-btn-a { width: 84px; height: 84px; }
+  .fs-btn-b { width: 74px; height: 74px; margin-top: 24px; }
+  .fs-btn-letter { font-size: 26px; }
+}

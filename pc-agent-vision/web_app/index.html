@@ -658,6 +658,9 @@
               <!-- 手机触控虚拟手柄控制区 (无需外接手柄，直接触屏或点击) -->
               <div class="mario-gamepad-controls" id="marioGamepadControls">
                 <div class="mario-mid-btns">
+                  <button type="button" class="mario-ctrl-btn fs-pad-trigger" id="enterFullscreenPadBtn">
+                    📱 进入全屏横屏大手柄
+                  </button>
                   <button type="button" class="mario-ctrl-btn primary" id="marioStartBtn" data-mario-key="start">
                     ▶ 开始游戏
                   </button>
@@ -962,6 +965,113 @@
       </div>
     </form>
   </dialog>
+
+  <!-- 全屏横屏大手柄模式 (手机横置沉浸式双拇指操控) -->
+  <div id="fullscreenGamepadOverlay" class="fs-gamepad-overlay" style="display:none;" aria-hidden="true">
+    <!-- 顶栏状态与快捷菜单 -->
+    <header class="fs-top-bar">
+      <div class="fs-bar-left">
+        <span class="fs-game-title" id="fsGameTitle">🎮 超级马里奥</span>
+        <span class="fs-badge" id="fsSyncBadge">🟢 灯板同步</span>
+      </div>
+      <div class="fs-bar-stats">
+        <span class="fs-stat-item" id="fsStateStat">待机</span>
+        <span class="fs-stat-item score" id="fsScoreStat">得分: 00000</span>
+        <span class="fs-stat-item hi" id="fsHighScoreStat">最高: 01500</span>
+        <span class="fs-stat-item" id="fsLivesStat">❤️ ×3</span>
+        <span class="fs-stat-item" id="fsProgressStat">🏁 0%</span>
+      </div>
+      <div class="fs-bar-right">
+        <button type="button" class="fs-bar-btn" id="fsStartBtn" data-mario-key="start">▶ 开始</button>
+        <button type="button" class="fs-bar-btn" id="fsPauseBtn" data-arcade-action="pause">⏸ 暂停</button>
+        <button type="button" class="fs-bar-btn" id="fsResetBtn" data-mario-action="reset">↺ 重开</button>
+        <button type="button" class="fs-bar-btn fs-bar-close" id="fsExitPadBtn">✕ 退出全屏</button>
+      </div>
+    </header>
+
+    <!-- 手柄主驾驶舱：左手控制区 + 中央实机迷你显屏 + 右手动作区 -->
+    <main class="fs-cockpit">
+      <!-- 左侧控制区 -->
+      <section class="fs-wing fs-wing-left">
+        <!-- 十字方向键 (D-Pad) -->
+        <div class="fs-dpad" id="fsDpad" role="group" aria-label="全屏方向十字键">
+          <button type="button" class="fs-dbtn fs-dbtn-up" id="fsKeyUp" data-mario-key="up" aria-label="向上">▲</button>
+          <button type="button" class="fs-dbtn fs-dbtn-left" id="fsKeyLeft" data-mario-key="left" aria-label="向左">◀</button>
+          <div class="fs-dpad-center"></div>
+          <button type="button" class="fs-dbtn fs-dbtn-right" id="fsKeyRight" data-mario-key="right" aria-label="向右">▶</button>
+          <button type="button" class="fs-dbtn fs-dbtn-down" id="fsKeyDown" data-mario-key="down" aria-label="向下">▼</button>
+        </div>
+
+        <!-- 左右双向键 (Two-Button LR) -->
+        <div class="fs-lr-stage" id="fsLrStage" style="display:none;" role="group" aria-label="左右双向键">
+          <button type="button" class="fs-lr-btn fs-lr-left" id="fsKeyLeftOnly" data-mario-key="left">◀ 往左</button>
+          <button type="button" class="fs-lr-btn fs-lr-right" id="fsKeyRightOnly" data-mario-key="right">往右 ▶</button>
+        </div>
+
+        <!-- 单键模式左手触控区 -->
+        <div class="fs-tap-stage" id="fsTapLeft" style="display:none;">
+          <button type="button" class="fs-big-tap-btn" id="fsTapBigLeft" data-mario-key="a">👆 点击控制</button>
+        </div>
+
+        <!-- 双人对战 P1 控制 (Pong) -->
+        <div class="fs-pong-col" id="fsPongP1" style="display:none;">
+          <span class="fs-player-badge">P1 玩家</span>
+          <button type="button" class="fs-pong-btn" data-mario-key="up">▲ 上移</button>
+          <button type="button" class="fs-pong-btn" data-mario-key="down">▼ 下移</button>
+        </div>
+      </section>
+
+      <!-- 中央实机画面同显与操作提示 -->
+      <section class="fs-center-display">
+        <div class="fs-screen-bezel">
+          <canvas id="fsMiniCanvas" width="160" height="160" aria-label="16×16 点阵屏实时同显"></canvas>
+          <div class="fs-scanlines"></div>
+        </div>
+        <div class="fs-screen-label" id="fsScreenStatus">16×16 WS2812B 硬件实时同步</div>
+        <p class="fs-guide-text" id="fsGuideText">按住 ▶ 向右探索 · 按 A 跳跃</p>
+      </section>
+
+      <!-- 右侧动作控制区 -->
+      <section class="fs-wing fs-wing-right">
+        <!-- A / B 大动作键 -->
+        <div class="fs-actions" id="fsActions" role="group" aria-label="全屏动作按键">
+          <button type="button" class="fs-abtn fs-btn-b" id="fsKeyB" data-mario-key="b" aria-label="动作/加速">
+            <span class="fs-btn-letter">B</span>
+            <small class="fs-btn-sub" id="fsKeyBSub">加速</small>
+          </button>
+          <button type="button" class="fs-abtn fs-btn-a" id="fsKeyA" data-mario-key="a" aria-label="跳跃/确认">
+            <span class="fs-btn-letter">A</span>
+            <small class="fs-btn-sub" id="fsKeyASub">跳跃</small>
+          </button>
+        </div>
+
+        <!-- 单键模式右手触控区 -->
+        <div class="fs-tap-stage" id="fsTapRight" style="display:none;">
+          <button type="button" class="fs-big-tap-btn" id="fsTapBigRight" data-mario-key="a">👆 轻触按键</button>
+        </div>
+
+        <!-- 四轨 / 四色触控区 -->
+        <div class="fs-tracks" id="fsTracks" style="display:none;" role="group" aria-label="四色四轨按键">
+          <div class="fs-track-row">
+            <button type="button" class="fs-track-btn track-red" data-mario-key="left">1 · 红</button>
+            <button type="button" class="fs-track-btn track-green" data-mario-key="down">2 · 绿</button>
+          </div>
+          <div class="fs-track-row">
+            <button type="button" class="fs-track-btn track-blue" data-mario-key="up">3 · 蓝</button>
+            <button type="button" class="fs-track-btn track-yellow" data-mario-key="right">4 · 黄</button>
+          </div>
+        </div>
+
+        <!-- 双人对战 P2 控制 (Pong) -->
+        <div class="fs-pong-col" id="fsPongP2" style="display:none;">
+          <span class="fs-player-badge">P2 玩家</span>
+          <button type="button" class="fs-pong-btn" data-mario-key="a">▲ 上移</button>
+          <button type="button" class="fs-pong-btn" data-mario-key="b">▼ 下移</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
   <script src="matrix3d.js?v=20261025u"></script>
   <script src="paired_http.js?v=20261104"></script>
   <script src="arcade_transport.js?v=20261105_closure"></script>
