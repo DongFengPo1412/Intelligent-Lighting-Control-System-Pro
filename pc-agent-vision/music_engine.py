@@ -181,6 +181,10 @@ class MusicPlayer:
             raise ValueError("KURISU_MUSIC_GAIN must be in (0, 5.0]")
         self.duration = 0.0
         self._position = 0.0
+        self._start_offset = 0.0
+        self._full_pcm = b""
+        self.paused = False
+        self._explicit_stop = False
         self.operations = threading.RLock()
         self.controller._music_player = self
 
@@ -195,20 +199,27 @@ class MusicPlayer:
     def position(self):
         clock = getattr(self.controller, "playback_started_at", None)
         return (
-            min(self.duration, max(0.0, time.monotonic() - clock))
+            min(self.duration, max(0.0, self._start_offset + (time.monotonic() - clock)))
             if self.running and clock
             else self._position
         )
 
-    def _play(self, raw, fluid=True):
+    def _play(self, raw, fluid=True, start_offset=0.0, _decoded_pcm=None):
         if type(fluid) is not bool:
             raise ValueError("Music visual must be fluid or spectrum")
-        self.stop()
-        pcm = decode_audio(raw)
+        self._stop(keep_paused=True)
+        pcm = _decoded_pcm if _decoded_pcm is not None else decode_audio(raw)
+        self._full_pcm = pcm
         self.cancel.clear()
+        self._explicit_stop = False
+        self.paused = False
         self.error = None
         self.features = {}
-        self.duration, self._position = len(pcm) / 32000, 0.0
+        self.duration = len(pcm) / 32000
+        start_offset = min(self.duration, max(0.0, float(start_offset)))
+        self._start_offset = start_offset
+        self._position = start_offset
+        start_sample = min(len(pcm) // 2, max(0, int(round(start_offset * 16000))))
         if hasattr(self.controller, "playback_started_at"):
             self.controller.playback_started_at = None
         self.analysis_stats = dict(frames=0, skipped_frames=0, max_dispatch_lag_ms=0)
@@ -224,7 +235,7 @@ class MusicPlayer:
             listener.pause()
             resume_listener = listener
         self.thread = threading.Thread(
-            target=self._run, args=(pcm, resume_listener), daemon=True
+            target=self._run, args=(pcm, resume_listener, start_sample), daemon=True
         )
         try:
             self.thread.start()
@@ -235,6 +246,57 @@ class MusicPlayer:
             if resume_listener and resume_listener.is_listening:
                 resume_listener.resume()
             raise
+
+    def pause(self):
+        with self.operations:
+            if not self.running:
+                if self.paused and self._full_pcm:
+                    return self._position
+                raise ValueError("当前没有正在播放的音乐。")
+            pos = self.position
+            self._stop(keep_paused=True)
+            self._position = pos
+            self.paused = True
+            return self._position
+
+    def resume(self):
+        with self.operations:
+            if self.running:
+                return self.position
+            if not self._full_pcm:
+                raise ValueError("当前没有可恢复播放的音乐。")
+            offset = (
+                self._position
+                if (self.paused and 0.0 <= self._position < max(0.0, self.duration - 0.05))
+                else 0.0
+            )
+            self._play(
+                None,
+                fluid=self.visual_fluid,
+                start_offset=offset,
+                _decoded_pcm=self._full_pcm,
+            )
+            return self._position
+
+    def seek(self, position_seconds):
+        with self.operations:
+            pos = float(position_seconds)
+            if not math.isfinite(pos) or pos < 0:
+                raise ValueError("拖动进度无效。")
+            if not self._full_pcm or self.duration <= 0:
+                raise ValueError("当前没有可定位进度的音乐。")
+            target = min(max(0.0, self.duration - 0.05), max(0.0, pos))
+            if self.running or not self.paused:
+                self._play(
+                    None,
+                    fluid=self.visual_fluid,
+                    start_offset=target,
+                    _decoded_pcm=self._full_pcm,
+                )
+            else:
+                self._position = target
+                self._start_offset = target
+            return self._position
 
     def play_url(self, url, fluid=True):
         if not isinstance(url, str):
@@ -253,7 +315,7 @@ class MusicPlayer:
             raise ValueError("Music file exceeds 20 MiB")
         self.play(raw, fluid)
 
-    def _run(self, pcm, resume_listener):
+    def _run(self, pcm, resume_listener, start_sample=0):
         self.running = True
         analysis_stop = threading.Event()
         has_clock = hasattr(self.controller, "playback_started_at")
@@ -284,16 +346,17 @@ class MusicPlayer:
                         if self.cancel.wait(0.005) or analysis_stop.is_set():
                             return
                     start = self.controller.playback_started_at
-                next_offset = 0
+                base_offset = (start_sample // 512) * 512
+                next_offset = base_offset
                 while not (self.cancel.is_set() or analysis_stop.is_set()):
-                    wait = start + next_offset / 16000 - time.monotonic()
+                    wait = start + (next_offset - base_offset) / 16000 - time.monotonic()
                     if wait > 0 and self.cancel.wait(wait):
                         break
                     # Use the current audio window instead of replaying stale
                     # FFT frames when ACKs or the UI temporarily take longer.
                     offset = max(
                         next_offset,
-                        int(max(0, time.monotonic() - start) * 16000) // 512 * 512,
+                        base_offset + int(max(0, time.monotonic() - start) * 16000) // 512 * 512,
                     )
                     if offset + engine.size > len(samples):
                         break
@@ -307,7 +370,7 @@ class MusicPlayer:
                     if not transmit(f):
                         self.error = "Music visual command not acknowledged"
                         break
-                    lag = max(0, (time.monotonic() - start - offset / 16000) * 1000)
+                    lag = max(0, (time.monotonic() - start - (offset - base_offset) / 16000) * 1000)
                     self.analysis_stats["frames"] += 1
                     self.analysis_stats["max_dispatch_lag_ms"] = max(
                         self.analysis_stats["max_dispatch_lag_ms"], lag
@@ -322,14 +385,16 @@ class MusicPlayer:
         try:
             # Music masters are much louder than the accepted speech/chime
             # baseline. Keep speaker headroom without weakening MIR features.
-            speaker_pcm = process_speaker_audio(pcm, gain=self.gain)
+            rem_pcm = pcm[start_sample * 2 :] if start_sample > 0 else pcm
+            speaker_pcm = process_speaker_audio(rem_pcm, gain=self.gain) if rem_pcm else b""
             if (
-                not self.controller.play_audio_pcm(speaker_pcm)
+                speaker_pcm
+                and not self.controller.play_audio_pcm(speaker_pcm)
                 and not self.cancel.is_set()
             ):
                 self.error = "PCM playback not confirmed or cancelled"
             if getattr(self.controller, "port", None) == "SIMULATION":
-                self.cancel.wait(len(pcm) / 32000)
+                self.cancel.wait(len(rem_pcm) / 32000)
         except Exception as exc:
             self.error = str(exc)
         finally:
@@ -351,6 +416,8 @@ class MusicPlayer:
                 if not self.cancel.is_set():
                     self.error = str(exc)
             self._position = self.position if self.cancel.is_set() else self.duration
+            if self.cancel.is_set() and not self._explicit_stop and 0.0 < self._position < self.duration:
+                self.paused = True
             self.features = quiet
             self.running = False
             self.controller._music_wake_active = False
@@ -362,10 +429,13 @@ class MusicPlayer:
 
     def stop(self):
         with self.operations:
-            self._stop()
+            self._stop(keep_paused=False)
 
-    def _stop(self):
+    def _stop(self, keep_paused=False):
         active = self.running
+        self._explicit_stop = not keep_paused
+        if not keep_paused:
+            self.paused = False
         self.cancel.set()
         client = getattr(self.controller, "_network_audio", None)
         if active and client:

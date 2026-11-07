@@ -43,6 +43,9 @@
       <symbol id="i-play" viewBox="0 0 24 24">
         <path d="m8 5 11 7-11 7Z" />
       </symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24">
+        <path d="M7 5h3v14H7zm7 0h3v14h-3z" />
+      </symbol>
       <symbol id="i-stop" viewBox="0 0 24 24">
         <rect x="6" y="6" width="12" height="12" rx="2" />
       </symbol>
@@ -385,7 +388,7 @@
               由板载扬声器播放，灯光随音乐律动
             </p>
             <div class="progress-row">
-              <progress id="musicProgress" value="0" max="1" aria-label="歌曲播放进度"></progress><span id="musicTime">00:00 /
+              <progress id="musicProgress" value="0" max="1" aria-label="歌曲播放进度（点击或拖动可跳转）" title="点击或拖动跳转进度" style="cursor:pointer;"></progress><span id="musicTime">00:00 /
                 00:00</span>
             </div>
             <div class="player-controls">
@@ -393,7 +396,10 @@
                 <button id="previousMusic" class="icon-button" aria-label="上一首">
                   <svg>
                     <use href="#i-prev" />
-                  </svg></button><button id="stopMusic" class="round-control" aria-label="停止音乐">
+                  </svg></button><button id="pauseResumeMusic" class="round-control" aria-label="暂停或继续音乐">
+                  <svg>
+                    <use id="pauseResumeIcon" href="#i-pause" />
+                  </svg></button><button id="stopMusic" class="icon-button" aria-label="停止音乐">
                   <svg>
                     <use href="#i-stop" />
                   </svg></button><button id="nextMusic" class="icon-button" aria-label="下一首">

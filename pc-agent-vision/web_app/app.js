@@ -232,8 +232,8 @@
     $("sendChat").disabled = nativeMode || !state.online || !!state.ownChat;
     markHardware();
     if (!state.board) {
-      for (const id of ["previousMusic", "nextMusic", "stopMusic"])
-        $(id).disabled = true;
+      for (const id of ["previousMusic", "pauseResumeMusic", "nextMusic", "stopMusic"])
+        if ($(id)) $(id).disabled = true;
       $$(".play-track").forEach((b) => (b.disabled = true));
     }
     if (!state.board) {
@@ -646,15 +646,19 @@
       ? state.simulated
         ? "SIMULATED PLAYBACK"
         : "NOW PLAYING"
-      : current
-        ? "PLAYBACK STOPPED"
-        : "READY WHEN YOU ARE";
+      : m.paused
+        ? "PAUSED"
+        : current
+          ? "PLAYBACK STOPPED"
+          : "READY WHEN YOU ARE";
     document
       .querySelector(".music-player")
       .classList.toggle("playing", !!m.running);
     $("musicProgress").max = Math.max(1, m.duration || 0);
-    $("musicProgress").value = m.position || 0;
-    $("musicTime").textContent = time(m.position) + " / " + time(m.duration);
+    if (!state.seekingMusic) {
+      $("musicProgress").value = m.position || 0;
+      $("musicTime").textContent = time(m.position) + " / " + time(m.duration);
+    }
     for (const [id, value] of [
       ["musicOrder", m.order],
       ["musicRepeat", m.repeat],
@@ -666,7 +670,13 @@
     }
     $("previousMusic").disabled = $("nextMusic").disabled =
       !state.board || !m.queue_count;
-    $("stopMusic").disabled = !state.board || !m.running;
+    if ($("pauseResumeMusic")) {
+      $("pauseResumeMusic").disabled = !state.board || (!m.running && !m.paused && !m.current);
+      const icon = $("pauseResumeIcon");
+      if (icon) icon.setAttribute("href", m.running ? "#i-pause" : "#i-play");
+      $("pauseResumeMusic").setAttribute("aria-label", m.running ? "暂停音乐" : "继续播放");
+    }
+    $("stopMusic").disabled = !state.board || (!m.running && !m.paused);
     $("musicVoiceHint").textContent = m.running
       ? m.voice_wake
         ? "播放中先说“助手”，音乐停止后可说“下一首”或继续点歌。"
@@ -814,6 +824,59 @@
       await api("/api/pro/music", { action });
       lastPro = 0;
     });
+  if ($("pauseResumeMusic")) {
+    bind("pauseResumeMusic", async () => {
+      const action = state.music.running ? "pause" : "resume";
+      await api("/api/pro/music", { action });
+      notice(action === "pause" ? "音乐已暂停" : "已恢复播放");
+      lastPro = 0;
+    });
+  }
+  const progEl = $("musicProgress");
+  if (progEl) {
+    const calcSeekSeconds = (e) => {
+      const dur = Number(state.music?.duration || 0);
+      if (!dur || dur <= 0) return null;
+      const rect = progEl.getBoundingClientRect();
+      if (!rect.width) return null;
+      const clientX = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      return Math.round(ratio * dur * 10) / 10;
+    };
+    progEl.addEventListener("pointerdown", (e) => {
+      if (!state.board || !(state.music?.duration > 0)) return;
+      state.seekingMusic = true;
+      try { progEl.setPointerCapture(e.pointerId); } catch (_) {}
+      const sec = calcSeekSeconds(e);
+      if (sec !== null) {
+        progEl.value = sec;
+        $("musicTime").textContent = time(sec) + " / " + time(state.music.duration);
+      }
+    });
+    progEl.addEventListener("pointermove", (e) => {
+      if (!state.seekingMusic) return;
+      const sec = calcSeekSeconds(e);
+      if (sec !== null) {
+        progEl.value = sec;
+        $("musicTime").textContent = time(sec) + " / " + time(state.music.duration);
+      }
+    });
+    const finishSeek = async (e) => {
+      if (!state.seekingMusic) return;
+      state.seekingMusic = false;
+      const sec = calcSeekSeconds(e);
+      if (sec === null) return;
+      try {
+        await api("/api/pro/music", { action: "seek", position: sec });
+        notice("已跳转至 " + time(sec));
+        lastPro = 0;
+      } catch (err) {
+        notice(err.message);
+      }
+    };
+    progEl.addEventListener("pointerup", finishSeek);
+    progEl.addEventListener("pointercancel", () => { state.seekingMusic = false; });
+  }
   for (const id of ["musicOrder", "musicRepeat"])
     $(id).onchange = () =>
       api("/api/pro/music", {

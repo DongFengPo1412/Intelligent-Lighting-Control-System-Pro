@@ -242,6 +242,32 @@ class LibraryContracts(unittest.TestCase):
             out.truncate(21 * 1024 * 1024)
         self.assertEqual(len(decode_audio(path)), 4800)
 
+    def test_voice_pause_resume_seek_and_quality_tag_exact_match(self):
+        sf.write(self.music / "周杰伦 - 夜曲(标清).wav", np.sin(np.arange(16000) * 0.2) * 0.1, 16000)
+        sf.write(self.music / "米津玄師 - 夜曲大迷惑.wav", np.sin(np.arange(16000) * 0.2) * 0.1, 16000)
+        self.library.scan()
+        result = self.commands.handle("播放夜曲")
+        self.assertFalse(result["speak"])
+        self.assertIn("夜曲(标清)", result["reply"])
+        self.assertTrue(self.player.running)
+        time.sleep(0.15)
+        pause_res = self.commands.handle("暂停音乐")
+        self.assertTrue(pause_res["speak"])
+        self.assertIn("已暂停", pause_res["reply"])
+        self.assertFalse(self.player.running)
+        self.assertTrue(self.player.paused)
+        paused_pos = self.player.position
+        self.assertGreater(paused_pos, 0.05)
+        resume_res = self.commands.handle("继续播放")
+        self.assertFalse(resume_res["speak"])
+        self.assertTrue(self.player.running)
+        self.assertFalse(self.player.paused)
+        self.assertGreaterEqual(self.player.position, paused_pos)
+        self.queue.seek(0.5)
+        self.assertGreaterEqual(self.player.position, 0.45)
+        self.queue.stop()
+        self.assertFalse(self.player.paused)
+
 
 class MusicLibraryApi(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

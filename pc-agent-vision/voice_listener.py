@@ -460,11 +460,16 @@ class VoiceListener:
     def finish_music(self):
         self._music_monitor = self._music_suspended = False
         woke, pending = self._barge_woke, self._barge_pending
+        keyword = getattr(self, '_barge_keyword', None)
         self._barge_woke = False
         self._barge_pending = None
+        self._barge_keyword = None
         self._barge_audio.clear()
         self.is_awake = woke
         self.last_awake_time = time.time()
+        if woke and not pending:
+            self._acknowledge_wake(keyword)
+            return
         self.resume()
         if pending:
             try:self._utterance_queue.put_nowait(pending)
@@ -765,6 +770,7 @@ class VoiceListener:
             if hasattr(self, '_barge_audio'):self._barge_audio.clear()
             match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
             matched_keyword = match.group() if match else keyword
+            self._barge_keyword = matched_keyword
             print(f'[语音状态] interrupted: 声学与识别均确认 {matched_keyword}；取消旧轮次')
             if not self.is_listening or self._stop_event.is_set():return
             if self.duplex and not getattr(self, '_music_monitor', False):

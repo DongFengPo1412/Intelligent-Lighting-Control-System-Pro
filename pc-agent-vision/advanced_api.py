@@ -267,6 +267,13 @@ class ProApi:
                 operation = data.get("action")
                 if data.get("stop") or operation == "stop":
                     await asyncio.to_thread(self.playback.stop)
+                elif operation == "pause":
+                    await asyncio.to_thread(self.playback.pause)
+                elif operation == "resume":
+                    await asyncio.to_thread(self.playback.resume)
+                elif operation == "seek" or "seek" in data:
+                    target_pos = data["seek"] if "seek" in data else data.get("position")
+                    await asyncio.to_thread(self.playback.seek, target_pos)
                 elif operation in ("next", "previous"):
                     await asyncio.to_thread(
                         self.playback.step, 1 if operation == "next" else -1

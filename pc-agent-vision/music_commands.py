@@ -22,8 +22,19 @@ def parse_music_request(text):
         "停止播放": "stop",
         "关掉音乐": "stop",
         "关闭音乐": "stop",
-        "暂停音乐": "stop",
-        "暂停播放": "stop",
+        "暂停音乐": "pause",
+        "暂停播放": "pause",
+        "音乐暂停": "pause",
+        "暂停": "pause",
+        "继续播放": "resume",
+        "恢复播放": "resume",
+        "继续音乐": "resume",
+        "恢复音乐": "resume",
+        "继续放歌": "resume",
+        "接着放": "resume",
+        "接着播放": "resume",
+        "继续唱": "resume",
+        "继续": "resume",
         "别唱了": "stop",
         "停掉音乐": "stop",
         "音乐停一下": "stop",
@@ -100,6 +111,14 @@ class MusicCommands:
                 return self.reply(
                     "音乐已停止。", spoken_reply="音乐已停止。\n音楽を停止したわ。"
                 )
+            if action == "pause":
+                self.playback.pause()
+                return self.reply(
+                    "音乐已暂停。", spoken_reply="音乐已暂停。\n音楽を一時停止したわ。"
+                )
+            if action == "resume":
+                result = self.playback.resume()
+                return self.resumed(result)
             if action in ("next", "previous"):
                 result = self.playback.step(1 if action == "next" else -1)
                 return self.started(result)
@@ -174,11 +193,15 @@ class MusicCommands:
             )
             return self.started(self.playback.play(selected["id"], scope=query))
         words = "".join(search_words(query))
+        def _clean_title(title):
+            return re.sub(r"[（(](?:标清|高清|超清|原版|伴奏|Live|live|MV|mv)[）)]", "", str(title)).strip()
         exact = [
             t
             for t in matches
             if normalized(t["title"]) == words
             or normalized(t["artist"] + t["title"]) == words
+            or normalized(_clean_title(t["title"])) == words
+            or normalized(t["artist"] + _clean_title(t["title"])) == words
         ]
         if len(exact) == 1:
             matches = exact
@@ -206,5 +229,12 @@ class MusicCommands:
         # Playback itself is the audible confirmation; TTS must not interrupt it.
         return self.reply(
             "开始播放：" + self.label(result["current"]) + "，音乐灯光随动已启用。",
+            speak=False,
+        )
+
+    def resumed(self, result):
+        current = result.get("current") or self.playback.current or {"title": "当前歌曲", "artist": ""}
+        return self.reply(
+            "继续播放：" + self.label(current) + "，音乐灯光随动已恢复。",
             speak=False,
         )

@@ -357,6 +357,7 @@ class LibraryPlayback:
                 error=self.error,
                 position=round(self.player.position, 2),
                 duration=round(self.player.duration, 2),
+                paused=bool(getattr(self.player, "paused", False)),
                 candidates=self.candidates,
             )
 
@@ -453,6 +454,53 @@ class LibraryPlayback:
                 index,
                 "fluid" if self.player.visual_fluid else "spectrum",
             )
+        return self.status()
+
+    def pause(self):
+        with self.operations:
+            self.generation += 1
+            self.player.pause()
+        return self.status()
+
+    def resume(self):
+        with self.operations:
+            if self.player.running:
+                return self.status()
+            if not getattr(self.player, "_full_pcm", b"") and self.current:
+                return self.play(
+                    self.current["id"],
+                    visual="fluid" if self.player.visual_fluid else "spectrum",
+                )
+            self.player.resume()
+            with self.state:
+                self.generation += 1
+                generation = self.generation
+                self.error = None
+            worker = self.player.thread
+            if worker:
+                visual = "fluid" if self.player.visual_fluid else "spectrum"
+                threading.Thread(
+                    target=self._after_song, args=(worker, generation, visual), daemon=True
+                ).start()
+        return self.status()
+
+    def seek(self, position_seconds):
+        with self.operations:
+            if not self.current and not getattr(self.player, "_full_pcm", b""):
+                raise ValueError("当前没有正在播放的歌曲。")
+            was_running = self.player.running or not getattr(self.player, "paused", False)
+            self.generation += 1
+            self.player.seek(position_seconds)
+            with self.state:
+                self.generation += 1
+                generation = self.generation
+                self.error = None
+            worker = self.player.thread
+            if was_running and worker:
+                visual = "fluid" if self.player.visual_fluid else "spectrum"
+                threading.Thread(
+                    target=self._after_song, args=(worker, generation, visual), daemon=True
+                ).start()
         return self.status()
 
     def stop(self, restore=True):
