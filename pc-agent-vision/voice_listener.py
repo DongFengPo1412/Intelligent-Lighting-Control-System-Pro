@@ -194,10 +194,15 @@ class VoiceListener:
     @staticmethod
     def _normalize_acoustic_name(text, keyword):
         text = text.translate(str.maketrans({'紅':'红', '瀨':'濑', '棲':'栖'}))
-        spellings = {'助手': ('住手',), '红莉栖': ('红丽栖', '红利栖'),
-                     '克里斯': ('克莉丝', '克里丝')}
+        spellings = {
+            '助手': ('住手', '筑手', '祝手'),
+            '红莉栖': ('红丽栖', '红利栖', '红利西', '红丽西', '红莉西', '洪莉栖', '洪利栖', '洪丽栖', '洪利西', '孔利西', '孔丽西', '孔莉栖'),
+            '牧濑红莉栖': ('牧濑红丽栖', '牧濑红利栖', '牧濑红利西', '牧濑孔利西', '木赖红莉栖', '木赖红利栖', '木赖红丽栖', '木赖红利西', '牧赖红莉栖', '牧赖红利栖', '牧赖红丽栖', '慕赖红莉栖', '暮赖红莉栖'),
+            '克里斯': ('克莉丝', '克里丝', '科里斯', '科里丝'),
+            '克里斯蒂娜': ('克莉丝蒂娜', '克里丝蒂娜', '克里斯蒂那', '克莉丝蒂那', '科里斯蒂娜'),
+        }
         for spelling in spellings.get(keyword, ()):
-            text = re.sub(r'^(你好[，, ]*)?' + re.escape(spelling),
+            text = re.sub(r'^(你好[，, ]*)?(?:' + re.escape(spelling) + r'(?:[，, ]*' + re.escape(spelling) + r')*)',
                           lambda m:(m.group(1) or '')+keyword, text, count=1)
         return text
 
@@ -250,7 +255,7 @@ class VoiceListener:
 
     def _check_wake_word(self, text: str) -> Tuple[bool, str]:
         # Exact configured names at the beginning; never substrings or homophones.
-        match = re.match(r'^(?:你好[，, ]*)?(牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手)(?:[，,。！!？?\s]*)', text.strip())
+        match = re.match(r'^(?:你好[，, ]*)?(牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手)(?:[，,。！!？?\s]*\1)*(?:[，,。！!？?\s]*)', text.strip())
         if not match:
             return False, ''
         remaining = text.strip()[match.end():].strip('，,。！!？? ')
@@ -553,9 +558,8 @@ class VoiceListener:
                     print(f"[待命监听]: 过滤到 ASR 重复字符噪声: \"{text[:30]}...\"，静默丢弃。")
                     text = ""
 
-                if not text or not text.strip():
-                    if not self.is_awake:
-                        self._update_board_led("listening")
+                if not text or not re.sub(r'[，,。.!！?？、…~\s]', '', text):
+                    self._update_board_led("active" if self.is_awake else "listening")
                     return
 
                 print(f"\n[ESP32 麦克风识别文本]: \"{text}\" (ASR 耗时: {dt_asr:.1f}ms)")
@@ -606,7 +610,7 @@ class VoiceListener:
                     self.last_awake_time = time.time()
                     # A name can be misspelled during continuous listening too.
                     # Correct only with fresh acoustic evidence, never from text alone.
-                    if re.match(r'^(?:你好[，, ]*)?(?:住手|红丽栖|红利栖|克莉丝|克里丝)', text):
+                    if re.match(r'^(?:你好[，, ]*)?(?:住手|筑手|祝手|红丽栖|红利栖|红利西|红丽西|红莉西|洪莉栖|洪利栖|洪丽栖|洪利西|孔利西|孔丽西|孔莉栖|牧濑|木赖|牧赖|慕赖|暮赖|克莉丝|克里丝|科里斯|科里丝)', text):
                         detector = getattr(self, 'wake_detector', None)
                         acoustic_keyword = detector.detect(pcm_bytes) if detector else ''
                         text = self._normalize_acoustic_name(text, acoustic_keyword)

@@ -2818,6 +2818,23 @@ class ListenerLifecycleTests(unittest.TestCase):
         run_th.clear()
         listener.stop(timeout=1.0)
 
+    def test_8e_acoustic_homophone_and_punctuation_idle_guard(self):
+        listener = self._create_isolated_listener()
+        self.assertEqual(listener._normalize_acoustic_name('孔利西。', '红莉栖'), '红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('孔利西。', ''), '孔利西。')
+        self.assertEqual(listener._normalize_acoustic_name('木赖红利栖。', '牧濑红莉栖'), '牧濑红莉栖。')
+        self.assertEqual(listener._normalize_acoustic_name('克莉丝蒂娜。', '克里斯蒂娜'), '克里斯蒂娜。')
+        self.assertEqual(listener._check_wake_word('助手助手。'), (True, ''))
+        self.assertEqual(listener._check_wake_word('红莉栖，红莉栖！'), (True, ''))
+
+        listener.is_awake = True
+        listener.last_awake_time = 100.0
+        listener.whisper_model = types.SimpleNamespace(
+            transcribe=lambda *a, **k: ([types.SimpleNamespace(text='。', no_speech_prob=0.0)], types.SimpleNamespace(no_speech_prob=0.0))
+        )
+        listener._process_utterance(bytes(3200))
+        self.assertEqual(listener.last_awake_time, 100.0)
+
 
 if __name__ == "__main__":
     unittest.main()

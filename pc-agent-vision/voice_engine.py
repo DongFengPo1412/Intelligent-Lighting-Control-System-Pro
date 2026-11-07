@@ -464,9 +464,12 @@ class VoiceEngine:
                     w.writeframes(audio.astype('<i2').tobytes())
                 wav = stream.getvalue()
                 folder.mkdir(parents=True, exist_ok=True)
-                if len(list(folder.glob('*.wav'))) < 128:
-                    temporary = path.with_suffix(f'.{os.getpid()}.tmp')
-                    temporary.write_bytes(wav); temporary.replace(path)
+                existing = list(folder.glob('*.wav'))
+                if len(existing) >= 128:
+                    for old in sorted(existing, key=lambda p: p.stat().st_mtime)[:len(existing) - 127]:
+                        old.unlink(missing_ok=True)
+                temporary = path.with_suffix(f'.{os.getpid()}.tmp')
+                temporary.write_bytes(wav); temporary.replace(path)
             pcm = scipy.signal.resample_poly(audio.astype(np.float32), 1, 2)
             return np.clip(pcm, -32768, 32767).astype('<i2').tobytes(), wav
 
@@ -493,7 +496,7 @@ class VoiceEngine:
             '红莉栖':'うん、何か用かしら？',
             '牧濑红莉栖':'うん、何か用かしら？',
             '克里斯':'ちゃんと名前で呼んで。',
-            '克里斯蒂娜':'ティーナって付けないで。何の用？',
+            '克里斯蒂娜':'ティーナって付けないで、何？',
         }
         replies = {}
         self.wake_reply_errors = {}
