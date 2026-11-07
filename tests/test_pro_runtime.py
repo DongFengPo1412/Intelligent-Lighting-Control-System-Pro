@@ -643,6 +643,35 @@ class RealtimeClockAndWeatherTests(unittest.TestCase):
         })
         self.assertIn("实时联网天气查询失败", err_prompt)
 
+    def test_clear_memory_accepts_sensevoice_trailing_punctuation(self):
+        import tempfile
+        from kurisu_agent import KurisuAgent
+        from memory_store import MemoryStore
+
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = MemoryStore(path=os.path.join(tmp, "mem.sqlite3"))
+            try:
+                mem.remember_preference("请记住我最喜欢的颜色是墨绿色。")
+                self.assertEqual(len(mem.list()), 1)
+
+                class SilentStub:
+                    chinese_first = False
+                    last_tts_error = None
+                    def speak(self, *args, **kwargs):
+                        pass
+
+                agent = KurisuAgent(
+                    api_base="http://127.0.0.1:11434/v1",
+                    model="kurisu",
+                    voice=SilentStub(),
+                    memory=mem,
+                )
+                reply = agent.chat("清空记忆。", speak=False)
+                self.assertIn("已清空保存的记忆", reply)
+                self.assertEqual(len(mem.list()), 0)
+            finally:
+                mem.close()
+
 
 if __name__ == "__main__":
     unittest.main()

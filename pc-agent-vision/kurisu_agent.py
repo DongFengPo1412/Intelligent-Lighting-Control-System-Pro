@@ -116,7 +116,7 @@ class KurisuAgent:
             else:
                 self.memory.remember(remember.group(1))
             return self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。')
-        if user_message.strip() == '清空记忆':
+        if re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
             self.history = self.history[:1]
             self.memory.clear()
             reply = '已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。'
