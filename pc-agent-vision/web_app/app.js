@@ -1700,6 +1700,138 @@
     }
   }, 250);
 
+  let phoneStream = null;
+  let phoneUploadTimer = null;
+  let phoneUploading = false;
+
+  function stopPhoneCamera() {
+    if (phoneUploadTimer) {
+      clearInterval(phoneUploadTimer);
+      phoneUploadTimer = null;
+    }
+    phoneUploading = false;
+    if (phoneStream) {
+      try {
+        phoneStream.getTracks().forEach((t) => t.stop());
+      } catch (e) {}
+      phoneStream = null;
+    }
+    const video = $("phoneCameraVideo");
+    if (video) video.srcObject = null;
+    const wrapper = $("phoneCameraWrapper");
+    if (wrapper) wrapper.style.display = "none";
+    const overlay = $("phoneCameraOverlay");
+    if (overlay) {
+      const ctx = overlay.getContext("2d");
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+  }
+
+  async function startPhoneCamera() {
+    stopPhoneCamera();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw Error("当前运行环境未开放前置摄像头访问权限");
+    }
+    const video = $("phoneCameraVideo");
+    const wrapper = $("phoneCameraWrapper");
+    const canvas = $("phoneCameraHidden") || document.createElement("canvas");
+    const overlay = $("phoneCameraOverlay");
+    const info = $("phoneDetectionInfo");
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "user",
+        width: { ideal: 480 },
+        height: { ideal: 480 },
+      },
+      audio: false,
+    });
+    phoneStream = stream;
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    if (wrapper) wrapper.style.display = "block";
+
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+
+    phoneUploadTimer = setInterval(async () => {
+      if (phoneUploading || !phoneStream || video.readyState < 2) return;
+      phoneUploading = true;
+      try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise((res) =>
+          canvas.toBlob(res, "image/jpeg", 0.65)
+        );
+        if (!blob) return;
+
+        const mode = $("visionMode") ? $("visionMode").value : "fingertip";
+        const tok = state.token || "";
+        const url = `/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(mode)}`;
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "image/jpeg",
+            "X-Vision-Mode": mode,
+          },
+          body: blob,
+        });
+
+        if (response.ok) {
+          const res = await response.json();
+          const obs = res.observation || {};
+
+          if (overlay) {
+            overlay.width = video.videoWidth || 320;
+            overlay.height = video.videoHeight || 240;
+            const octx = overlay.getContext("2d");
+            octx.clearRect(0, 0, overlay.width, overlay.height);
+
+            if (obs.hand) {
+              const h = obs.hand;
+              const hx = (1 - h.x) * overlay.width;
+              const hy = h.y * overlay.height;
+              octx.beginPath();
+              octx.arc(hx, hy, 14, 0, Math.PI * 2);
+              octx.fillStyle = h.pinch
+                ? "rgba(255, 235, 59, 0.85)"
+                : "rgba(76, 175, 80, 0.85)";
+              octx.fill();
+              octx.lineWidth = 3;
+              octx.strokeStyle = "#fff";
+              octx.stroke();
+
+              if (info) {
+                info.textContent = h.pinch ? "✋ 捏合抓取" : "👆 食指追踪中";
+              }
+            } else if (obs.present) {
+              if (info) {
+                info.textContent = obs.identity
+                  ? `👤 识别: ${obs.identity}`
+                  : "👤 人脸就绪";
+              }
+            } else {
+              if (info) info.textContent = "正在捕捉手势/人脸...";
+            }
+          }
+        }
+      } catch (err) {
+      } finally {
+        phoneUploading = false;
+      }
+    }, 65);
+  }
+
+  if ($("cameraSource")) {
+    $("cameraSource").addEventListener("change", () => {
+      const src = $("cameraSource").value;
+      if ($("pcCameraConfig")) {
+        $("pcCameraConfig").style.display = src === "pc" ? "block" : "none";
+      }
+    });
+  }
+
   bind("cameraDetectBtn", async () => {
     try {
       const r = await api("/api/pro/camera/devices", undefined, "GET");
@@ -1715,25 +1847,40 @@
   });
 
   bind("visionStart", async () => {
-    const res = await api("/api/pro/vision", {
-      enabled: true,
-      mode: $("visionMode").value,
-      camera: Number($("camera").value),
-    });
-    if (res && res.error) {
-      notice("摄像头启动提示: " + res.error);
+    const src = $("cameraSource") ? $("cameraSource").value : "phone";
+    if (src === "phone") {
+      try {
+        if ($("cameraStreamWrapper")) $("cameraStreamWrapper").style.display = "none";
+        await startPhoneCamera();
+        notice("手机前置摄像头已开启，正在向灯板同步");
+        $("visionBadge").textContent = "运行中";
+        $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
+      } catch (err) {
+        notice("前置摄像头启动提示: " + err.message);
+      }
     } else {
-      notice("已开启视觉互动");
-      if ($("cameraStreamWrapper")) {
-        $("cameraStreamWrapper").style.display = "block";
-        const tok = state.token || "";
-        $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+      stopPhoneCamera();
+      const res = await api("/api/pro/vision", {
+        enabled: true,
+        mode: $("visionMode").value,
+        camera: Number($("camera").value),
+      });
+      if (res && res.error) {
+        notice("摄像头启动提示: " + res.error);
+      } else {
+        notice("已开启电脑摄像头互动");
+        if ($("cameraStreamWrapper")) {
+          $("cameraStreamWrapper").style.display = "block";
+          const tok = state.token || "";
+          $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+        }
       }
     }
     lastPro = 0;
     setTimeout(() => poll(), 500);
   });
   bind("visionStop", async () => {
+    stopPhoneCamera();
     await api("/api/pro/vision", { enabled: false });
     if ($("cameraStreamWrapper")) {
       $("cameraStreamWrapper").style.display = "none";
@@ -1741,6 +1888,8 @@
     }
     cancelCalibration();
     lastPro = 0;
+    $("visionBadge").textContent = "未启用";
+    $("visionSummary").textContent = "摄像头未启用";
   });
   bind("enroll", async () => {
     const name = $("identity").value.trim();
@@ -1997,13 +2146,18 @@
         state.vision = p.vision;
         $("status").textContent = JSON.stringify(p, null, 2);
         $("visionStatus").textContent = JSON.stringify(p.vision, null, 2);
-        $("visionBadge").textContent = p.vision?.running ? "运行中" : "未启用";
-        $("visionSummary").textContent =
-          p.vision?.error ||
-          (p.vision?.running
-            ? `互动方式：${p.vision.mode}${p.vision.fresh === false ? " · 暂无新鲜观测" : ""}`
-            : "摄像头未启用");
-        if ($("cameraStreamWrapper")) {
+        const running = p.vision?.running || phoneStream !== null;
+        $("visionBadge").textContent = running ? "运行中" : "未启用";
+        if (phoneStream) {
+          $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
+        } else {
+          $("visionSummary").textContent =
+            p.vision?.error ||
+            (p.vision?.running
+              ? `互动方式：${p.vision.mode}${p.vision.fresh === false ? " · 暂无新鲜观测" : ""}`
+              : "摄像头未启用");
+        }
+        if (!phoneStream && $("cameraStreamWrapper")) {
           if (p.vision?.running) {
             $("cameraStreamWrapper").style.display = "block";
             const img = $("cameraStreamImg");

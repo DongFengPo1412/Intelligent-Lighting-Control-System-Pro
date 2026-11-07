@@ -183,7 +183,7 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         s.setAllowFileAccessFromFileURLs(false);
         s.setAllowUniversalAccessFromFileURLs(false);
-        s.setMediaPlaybackRequiresUserGesture(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);

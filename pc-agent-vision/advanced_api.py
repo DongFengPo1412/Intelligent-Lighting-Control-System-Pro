@@ -497,8 +497,30 @@ def register(app, api_getter):
         devices = await asyncio.to_thread(detect)
         return web.json_response({"devices": devices})
 
+    async def upload_frame(request):
+        api = api_getter()
+        if not api or not hasattr(api, "vision"):
+            return web.Response(status=503, text="Vision not ready")
+        raw = await request.read()
+        if not raw:
+            return web.Response(status=400, text="Empty frame")
+        mode = request.headers.get("X-Vision-Mode") or request.query.get("mode")
+        try:
+            obs = await asyncio.to_thread(api.vision.process_remote_frame, raw, mode)
+            return web.json_response(
+                {
+                    "status": "ok",
+                    "observation": obs,
+                    "vision": api.vision.status(),
+                }
+            )
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+
     app.router.add_get("/api/pro/camera/feed", camera_feed)
     app.router.add_get("/api/pro/camera/frame", camera_frame)
+    app.router.add_post("/api/pro/camera/frame", upload_frame)
+    app.router.add_post("/api/pro/vision/frame", upload_frame)
     app.router.add_get("/api/pro/camera/devices", camera_devices)
     app.router.add_post("/api/pro/music-upload", upload)
     app.router.add_route("*", "/api/pro/{action}", handle)

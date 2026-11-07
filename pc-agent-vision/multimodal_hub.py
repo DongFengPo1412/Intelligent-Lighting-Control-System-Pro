@@ -108,12 +108,115 @@ class MultimodalHub:
         if hasattr(self, "frame_lock"):
             with self.frame_lock:
                 self.latest_jpeg = None
+        if hasattr(self, "_remote_hands") and self._remote_hands:
+            try:
+                self._remote_hands.close()
+                self._remote_face.close()
+            except Exception:
+                pass
+            self._remote_hands = None
+            self._remote_face = None
 
     def _record_face(self, image):
         """Publish a detached sample; a missing/invalid crop invalidates enrollment."""
         with self.face_lock:
             self.last_face = image.copy() if image is not None else None
             self.face_sample_at = time.monotonic() if image is not None else None
+
+    def _process_cv_frame(self, image, hands, face, is_flipped=False):
+        import cv2
+        import numpy as np
+        import mediapipe as mp
+
+        if not is_flipped:
+            image = cv2.flip(image, 1)
+        h, w = image.shape[:2]
+        side = min(h, w)
+        image = image[
+            (h - side) // 2 : (h + side) // 2, (w - side) // 2 : (w + side) // 2
+        ]
+        preview = image.copy()
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        hand = hands.process(rgb)
+        faces = face.process(rgb)
+        observation = {"present": bool(faces.multi_face_landmarks)}
+        if hand.multi_hand_landmarks:
+            hl = hand.multi_hand_landmarks[0]
+            observation["hand"] = self.features.hand(
+                [[v.x, v.y, v.z] for v in hl.landmark]
+            )
+            mp.solutions.drawing_utils.draw_landmarks(
+                preview, hl, mp.solutions.hands.HAND_CONNECTIONS
+            )
+            pt8 = hl.landmark[8]
+            cx, cy = int(pt8.x * side), int(pt8.y * side)
+            cv2.circle(preview, (cx, cy), 8, (0, 255, 0), -1)
+            cv2.circle(preview, (cx, cy), 12, (255, 255, 255), 2)
+            if observation.get("hand", {}).get("pinch"):
+                cv2.putText(preview, "PINCH", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        if faces.multi_face_landmarks:
+            fl = faces.multi_face_landmarks[0]
+            points = [[v.x, v.y, v.z] for v in fl.landmark]
+            observation.update(self.features.face(points, time.monotonic(), side, side))
+
+            pts = np.array(points)
+            lo = np.clip(pts[:, :2].min(axis=0), 0, 1)
+            hi = np.clip(pts[:, :2].max(axis=0), 0, 1)
+            x1, y1 = int(lo[0] * side), int(lo[1] * side)
+            x2, y2 = int(hi[0] * side), int(hi[1] * side)
+            cv2.rectangle(preview, (x1, y1), (x2, y2), (255, 120, 0), 2)
+
+            crop = image[y1:y2, x1:x2]
+            image_sample = (
+                cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (100, 100))
+                if crop.size else None
+            )
+            self._record_face(image_sample)
+            if self.mode == "identity" and self.identity is None:
+                from identity_store import IdentityStore
+
+                self.identity = IdentityStore()
+            if self.mode == "identity" and self.identity:
+                label, confidence = self.identity.predict(self.last_face)
+                observation["identity"] = label
+                observation["identity_distance"] = confidence
+                cv2.putText(preview, f"{label}", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        else:
+            self._record_face(None)
+
+        enc_ok, enc_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if enc_ok and hasattr(self, "frame_lock"):
+            with self.frame_lock:
+                self.latest_jpeg = enc_buf.tobytes()
+
+        self.process(observation)
+        return observation
+
+    def process_remote_frame(self, raw_bytes, mode=None):
+        import cv2
+        import numpy as np
+        import mediapipe as mp
+
+        if mode and mode in self.MODES:
+            if self.mode != mode:
+                desired = {"pet": 17, "identity": 17, "fingertip": 26, "sandbox": 27}.get(mode)
+                if desired is not None:
+                    self.controller.send_json({"cmd": "mode", "val": desired})
+            self.mode = mode
+            self.automatic_enabled = True
+            self.arbiter.until = 0
+
+        if not hasattr(self, "_remote_hands") or self._remote_hands is None:
+            self._remote_hands = mp.solutions.hands.Hands(max_num_hands=1, model_complexity=0)
+            self._remote_face = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
+
+        nparr = np.frombuffer(raw_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError("Failed to decode image")
+
+        self.started = True
+        return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True)
 
     def _capture(self):
         cap = None
@@ -142,68 +245,7 @@ class MultimodalHub:
                     ok, image = cap.read()
                     if not ok:
                         raise RuntimeError("Camera stream ended")
-                    image = cv2.flip(image, 1)
-                    h, w = image.shape[:2]
-                    side = min(h, w)
-                    image = image[
-                        (h - side) // 2 : (h + side) // 2, (w - side) // 2 : (w + side) // 2
-                    ]
-                    preview = image.copy()
-                    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                    hand = hands.process(rgb)
-                    faces = face.process(rgb)
-                    observation = {"present": bool(faces.multi_face_landmarks)}
-                    if hand.multi_hand_landmarks:
-                        hl = hand.multi_hand_landmarks[0]
-                        observation["hand"] = self.features.hand(
-                            [[v.x, v.y, v.z] for v in hl.landmark]
-                        )
-                        mp.solutions.drawing_utils.draw_landmarks(
-                            preview, hl, mp.solutions.hands.HAND_CONNECTIONS
-                        )
-                        pt8 = hl.landmark[8]
-                        cx, cy = int(pt8.x * side), int(pt8.y * side)
-                        cv2.circle(preview, (cx, cy), 8, (0, 255, 0), -1)
-                        cv2.circle(preview, (cx, cy), 12, (255, 255, 255), 2)
-                        if observation.get("hand", {}).get("pinch"):
-                            cv2.putText(preview, "PINCH", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                    if faces.multi_face_landmarks:
-                        fl = faces.multi_face_landmarks[0]
-                        points = [[v.x, v.y, v.z] for v in fl.landmark]
-                        observation.update(self.features.face(points, time.monotonic(), side, side))
-                        import numpy as np
-
-                        pts = np.array(points)
-                        lo = np.clip(pts[:, :2].min(axis=0), 0, 1)
-                        hi = np.clip(pts[:, :2].max(axis=0), 0, 1)
-                        x1, y1 = int(lo[0] * side), int(lo[1] * side)
-                        x2, y2 = int(hi[0] * side), int(hi[1] * side)
-                        cv2.rectangle(preview, (x1, y1), (x2, y2), (255, 120, 0), 2)
-
-                        crop = image[y1:y2, x1:x2]
-                        image_sample = (
-                            cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (100, 100))
-                            if crop.size else None
-                        )
-                        self._record_face(image_sample)
-                        if self.mode == "identity" and self.identity is None:
-                            from identity_store import IdentityStore
-
-                            self.identity = IdentityStore()
-                        if self.mode == "identity" and self.identity:
-                            label, confidence = self.identity.predict(self.last_face)
-                            observation["identity"] = label
-                            observation["identity_distance"] = confidence
-                            cv2.putText(preview, f"{label}", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                    else:
-                        self._record_face(None)
-
-                    enc_ok, enc_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 70])
-                    if enc_ok and hasattr(self, "frame_lock"):
-                        with self.frame_lock:
-                            self.latest_jpeg = enc_buf.tobytes()
-
-                    self.process(observation)
+                    self._process_cv_frame(image, hands, face, is_flipped=False)
                     self.stop_event.wait(0.04)
         except Exception as exc:
             self.error = str(exc)
