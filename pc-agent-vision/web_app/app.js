@@ -123,6 +123,19 @@
       try { localStorage.setItem(k, v); } catch (_) {}
     }
   };
+  function getAccessToken() {
+    try {
+      return (
+        (typeof pairStorage !== "undefined" && pairStorage.getItem("kurisu_access_token")) ||
+        localStorage.getItem("kurisu_access_token") ||
+        sessionStorage.getItem("kurisu_access_token") ||
+        state.token ||
+        ""
+      );
+    } catch (_) {
+      return state.token || "";
+    }
+  }
   function promptPairingToken() {
     const dialog = $("pairDialog"), form = $("pairForm"), input = $("pairTokenInput");
     if (!dialog || typeof dialog.showModal !== "function" || !form || !input) {
@@ -1740,7 +1753,8 @@
     const overlay = $("phoneCameraOverlay");
     const info = $("phoneDetectionInfo");
     const mode = $("visionMode") ? $("visionMode").value : "fingertip";
-    const tok = state.token || "";
+    const tok = getAccessToken();
+    state.token = tok;
 
     // 1. Android APK native hardware camera bridge
     if (window.AmadeusNative && window.AmadeusNative.hasNativeCamera && window.AmadeusNative.hasNativeCamera()) {
@@ -1848,6 +1862,7 @@
           headers: {
             "Content-Type": "image/jpeg",
             "X-Vision-Mode": currentMode,
+            ...(tok ? { "Authorization": "Bearer " + tok, "X-Access-Token": tok } : {}),
           },
           body: blob,
         });
@@ -1945,7 +1960,8 @@
         notice("已开启电脑摄像头互动");
         if ($("cameraStreamWrapper")) {
           $("cameraStreamWrapper").style.display = "block";
-          const tok = state.token || "";
+          const tok = getAccessToken();
+          state.token = tok;
           $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
         }
       }
@@ -2236,7 +2252,8 @@
             $("cameraStreamWrapper").style.display = "block";
             const img = $("cameraStreamImg");
             if (!img.src || img.src.indexOf("/api/pro/camera/feed") === -1) {
-              const tok = state.token || "";
+              const tok = getAccessToken();
+          state.token = tok;
               img.src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
             }
             if ($("cameraDetectionInfo")) {

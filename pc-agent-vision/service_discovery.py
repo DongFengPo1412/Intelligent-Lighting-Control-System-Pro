@@ -75,6 +75,13 @@ class ServiceAdvertisement:
             pass
         board_ip = os.environ.get("KURISU_BOARD_IP", "")
         control_token = os.environ.get("KURISU_CONTROL_TOKEN", "")
+        access_token = os.environ.get("KURISU_ACCESS_TOKEN", "").strip()
+        if not access_token:
+            try:
+                from access_control import load_access_token
+                access_token = load_access_token()
+            except Exception:
+                access_token = ""
         try:
             from wifi_gateway import get_wifi_gateway
             gw = get_wifi_gateway()
@@ -87,7 +94,7 @@ class ServiceAdvertisement:
         return json.dumps({
             "service": "KurisuPro",
             "server_url": f"http://{host_ip}:{port}",
-            "access_token": os.environ.get("KURISU_ACCESS_TOKEN", ""),
+            "access_token": access_token,
             "board_ip": board_ip,
             "control_token": control_token,
         }, separators=(",", ":")).encode("utf-8")

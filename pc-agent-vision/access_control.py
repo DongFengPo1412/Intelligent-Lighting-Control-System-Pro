@@ -59,11 +59,14 @@ class AccessPolicy:
     def authorized(self, request):
         supplied = request.headers.get("Authorization", "")
         bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
+        query_token = request.query.get("token", "")
+        header_token = request.headers.get("X-Access-Token", "")
+        token_candidate = bearer or query_token or header_token
         cookie = request.cookies.get("kurisu_session", "")
         if request.path == '/xiaozhi/v1/' and len(self.xiaozhi_token) >= 32 and hmac.compare_digest(
                 bearer.encode('utf-8'),self.xiaozhi_token.encode('utf-8')):
             return True # Scoped compatibility with the existing optional native adapter.
-        return (hmac.compare_digest(bearer.encode('utf-8'), self.token.encode('utf-8')) or
+        return (hmac.compare_digest(token_candidate.encode('utf-8'), self.token.encode('utf-8')) or
                 hmac.compare_digest(cookie.encode('utf-8'), self.token.encode('utf-8')) or self.local(request))
 
     def allow_rate(self, peer):
@@ -98,7 +101,7 @@ async def access_middleware(request, handler):
             return response
         if not policy.authorized(request):
             return web.json_response({"status":"error", "error":"pairing_required"}, status=401)
-        limit = (20*1024*1024 if request.path == "/api/pro/music-upload" else
+        limit = (20*1024*1024 if request.path in ("/api/pro/music-upload", "/api/pro/camera/frame", "/api/pro/vision/frame") else
                  1024*1024 if request.path == "/api/pro/documents" else 64*1024)
         if request.content_length and request.content_length > limit:
             raise web.HTTPRequestEntityTooLarge(max_size=limit, actual_size=request.content_length)

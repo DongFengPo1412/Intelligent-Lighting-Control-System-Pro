@@ -60,10 +60,37 @@ public class FrontCameraBridge {
                     }
                 }
             }
+            if (best == null) {
+                for (Camera.Size s : params.getSupportedPreviewSizes()) {
+                    if (best == null || (s.width * s.height < best.width * best.height)) {
+                        best = s;
+                    }
+                }
+            }
             if (best != null) {
                 params.setPreviewSize(best.width, best.height);
             }
             mCamera.setParameters(params);
+
+            // Resolve access token from URL or SharedPreferences
+            String tok = null;
+            try {
+                android.net.Uri uri = android.net.Uri.parse(uploadUrl);
+                tok = uri.getQueryParameter("token");
+            } catch (Exception ignored) {}
+            if (tok == null || tok.trim().isEmpty()) {
+                tok = activity.getSharedPreferences("config", Activity.MODE_PRIVATE).getString("access_token", "");
+            }
+            final String authToken = tok != null ? tok.trim() : "";
+            String resolvedUrl = uploadUrl;
+            if (!authToken.isEmpty() && uploadUrl != null && !uploadUrl.isEmpty()) {
+                try {
+                    String clean = uploadUrl.replaceAll("([?&])token=[^&]*", "$1").replaceAll("[?&]$", "");
+                    resolvedUrl = clean + (clean.contains("?") ? "&" : "?") + "token=" + java.net.URLEncoder.encode(authToken, "UTF-8");
+                } catch (Exception ignored) {}
+            }
+            final String finalUploadUrl = resolvedUrl;
+
             mSurface = new SurfaceTexture(10);
             mCamera.setPreviewTexture(mSurface);
             mRunning = true;
@@ -87,16 +114,20 @@ public class FrontCameraBridge {
                     });
 
                     // Upload frame to PC server in background thread
-                    if (!mUploading && uploadUrl != null && !uploadUrl.isEmpty()) {
+                    if (!mUploading && finalUploadUrl != null && !finalUploadUrl.isEmpty()) {
                         mUploading = true;
                         uploadExecutor.execute(() -> {
                             try {
-                                URL u = new URL(uploadUrl);
+                                URL u = new URL(finalUploadUrl);
                                 HttpURLConnection conn = (HttpURLConnection) u.openConnection();
                                 conn.setRequestMethod("POST");
                                 conn.setDoOutput(true);
                                 conn.setRequestProperty("Content-Type", "image/jpeg");
                                 conn.setRequestProperty("X-Vision-Mode", mode != null ? mode : "fingertip");
+                                if (!authToken.isEmpty()) {
+                                    conn.setRequestProperty("Authorization", "Bearer " + authToken);
+                                    conn.setRequestProperty("X-Access-Token", authToken);
+                                }
                                 conn.setConnectTimeout(1500);
                                 conn.setReadTimeout(1500);
                                 OutputStream os = conn.getOutputStream();
