@@ -100,9 +100,55 @@
     }
     return httpApi(path,data,method,timeout);
   }
+  try {
+    const params = new URLSearchParams(location.search);
+    const pairFromQuery = (params.get("pair") || "").trim();
+    if (pairFromQuery) {
+      sessionStorage.setItem("kurisu_access_token", pairFromQuery);
+      try { localStorage.setItem("kurisu_access_token", pairFromQuery); } catch (_) {}
+      params.delete("pair");
+      const cleanQuery = params.toString();
+      history.replaceState(null, "", location.pathname + (cleanQuery ? "?" + cleanQuery : "") + location.hash);
+    } else if (!sessionStorage.getItem("kurisu_access_token")) {
+      const savedToken = localStorage.getItem("kurisu_access_token");
+      if (savedToken) sessionStorage.setItem("kurisu_access_token", savedToken);
+    }
+  } catch (_) {}
+  const pairStorage = {
+    getItem: (k) => {
+      try { return sessionStorage.getItem(k) || localStorage.getItem(k); } catch (_) { return sessionStorage.getItem(k); }
+    },
+    setItem: (k, v) => {
+      sessionStorage.setItem(k, v);
+      try { localStorage.setItem(k, v); } catch (_) {}
+    }
+  };
+  function promptPairingToken() {
+    const dialog = $("pairDialog"), form = $("pairForm"), input = $("pairTokenInput");
+    if (!dialog || typeof dialog.showModal !== "function" || !form || !input) {
+      return window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）");
+    }
+    return new Promise((resolve) => {
+      const finish = (val) => {
+        form.onsubmit = null;
+        if ($("closePairDialog")) $("closePairDialog").onclick = null;
+        if ($("cancelPairBtn")) $("cancelPairBtn").onclick = null;
+        dialog.oncancel = null;
+        if (dialog.open) dialog.close();
+        resolve(val);
+      };
+      input.value = pairStorage.getItem("kurisu_access_token") || "";
+      form.onsubmit = (e) => { e.preventDefault(); finish(input.value.trim()); };
+      if ($("closePairDialog")) $("closePairDialog").onclick = () => finish("");
+      if ($("cancelPairBtn")) $("cancelPairBtn").onclick = () => finish("");
+      dialog.oncancel = () => finish("");
+      dialog.showModal();
+      setTimeout(() => input.focus(), 30);
+    });
+  }
   const pairedHttp = window.createPairedHttp({
-    fetch: (...args) => fetch(...args), storage: sessionStorage,
-    prompt: () => window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）")
+    fetch: (...args) => fetch(...args), storage: pairStorage,
+    prompt: promptPairingToken
   });
   const httpApi = (path,data,method="POST",timeout=15000) =>
     pairedHttp(path,{method,body:data===undefined?undefined:JSON.stringify(data),
@@ -206,7 +252,11 @@
         : (nativeMode ? "灯板未连接，请检查设备地址、配对令牌、电源和Wi-Fi。" : "电脑服务未连接，请在连接设置中检查地址和网络。");
     $("serverStatus").textContent = state.online ? "服务在线" : "离线";
     $("serverAddress").textContent =
-      nativeMode ? "APK直连ESP32（设备设置）" : location.origin;
+      nativeMode
+        ? "APK直连ESP32（设备设置）"
+        : (s?.lan_url && s?.pairing_token
+          ? `${s.lan_url} （手机免输配对地址：${s.lan_url}/?pair=${s.pairing_token}）`
+          : (s?.lan_url || location.origin));
     $("boardConnection").textContent = s?.simulated
       ? "模拟设备"
       : s?.is_connected
@@ -1308,6 +1358,12 @@
     if ($("arcadePauseBtn")) {
       $("arcadePauseBtn").textContent = stCode === 2 ? "▶ 继续游戏" : "⏸ 暂停游戏";
     }
+    const badge = $("marioSyncBadge");
+    if (badge && state.arcadeActive && status.source === "esp32_hardware") {
+      badge.textContent = "🟢 ESP32 硬件模式 (唯一权威)";
+      badge.style.backgroundColor = "rgba(34, 197, 94, 0.2)";
+      badge.style.color = "#22c55e";
+    }
   }
 
   async function launchArcadeGame(gameId) {
@@ -1600,6 +1656,7 @@
     const k = keyMap[e.key];
     if (k) {
       e.preventDefault();
+      if (e.repeat) return;
       if (k === "reset") {
         api("/api/arcade", { action: "reset" }).catch(() => {});
       } else if (k === "pause") {

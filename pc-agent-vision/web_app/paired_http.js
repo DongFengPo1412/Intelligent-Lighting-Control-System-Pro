@@ -14,7 +14,7 @@
       if(prompted)throw Error("配对尚未成功，请在连接设置中重试");
       prompted=true;
       pairing=Promise.resolve().then(async()=>{
-        const value=(prompt()||"").trim();
+        const value=((await prompt())||"").trim();
         if(!value)throw Error("配对已取消");
         const reply=await exchange("/api/pair",{method:"POST",headers:{Authorization:"Bearer "+value}},5000);
         if(!reply.ok)throw Error("配对令牌无效或配对失败");

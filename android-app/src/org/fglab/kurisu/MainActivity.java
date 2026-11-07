@@ -129,6 +129,15 @@ public class MainActivity extends Activity {
         if ("amadeus".equals(uri.getScheme())) {
             if (!trustedPage(view)) return true;
             if ("settings".equals(uri.getHost())) configureConnection();
+            if ("pair".equals(uri.getHost())) {
+                String ip = uri.getQueryParameter("host"), key = uri.getQueryParameter("token");
+                if (BridgePolicy.privateIpv4(ip) && BridgePolicy.token(key)) {
+                    releaseDeviceInput();
+                    deviceTarget = new DeviceTarget(ip, key);
+                    getSharedPreferences("config", MODE_PRIVATE).edit().putString("device_host", ip).putString("device_token", key).apply();
+                    Toast.makeText(this, "已同步灯板直连配对参数 (" + ip + ")", Toast.LENGTH_LONG).show();
+                }
+            }
             if ("export".equals(uri.getHost())) {
                 String hex = uri.getQueryParameter("hex");
                 if (hex != null && hex.matches("[0-9a-fA-F]{1536}")) {
@@ -192,6 +201,17 @@ public class MainActivity extends Activity {
         });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public void onPermissionRequest(PermissionRequest request) { runOnUiThread(request::deny); }
+            @Override public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, final android.webkit.JsPromptResult result) {
+                if (isFinishing() || !trustedPage(view)) { result.cancel(); return true; }
+                final EditText input = new EditText(MainActivity.this);
+                input.setSingleLine(true);
+                if (defaultValue != null) input.setText(defaultValue);
+                new AlertDialog.Builder(MainActivity.this).setTitle("配对验证").setMessage(message).setView(input)
+                    .setPositiveButton("确定", (d, w) -> result.confirm(input.getText().toString()))
+                    .setNegativeButton("取消", (d, w) -> result.cancel())
+                    .setOnCancelListener(d -> result.cancel()).show();
+                return true;
+            }
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (!trustedPage(view)) return false;
                 if (fileCallback != null) fileCallback.onReceiveValue(null);

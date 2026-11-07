@@ -916,6 +916,23 @@
       <button type="submit" class="primary">连接服务</button>
     </form>
   </dialog>
+  <dialog id="pairDialog">
+    <form id="pairForm">
+      <div class="card-heading">
+        <h2>配对电脑服务</h2>
+        <button type="button" class="icon-button" id="closePairDialog" aria-label="取消配对">
+          ×
+        </button>
+      </div>
+      <p class="muted">
+        首次从局域网手机／APK连接电脑服务时，请输入电脑端的配对令牌（见电脑页面“设置 → 连接与设备”或 web-access-token 文件）。
+      </p>
+      <label class="stack-label">配对令牌<input id="pairTokenInput" type="text" placeholder="粘贴或输入配对令牌" autocomplete="off" required /></label>
+      <div class="button-row">
+        <button type="submit" class="primary">确认配对</button><button type="button" class="quiet" id="cancelPairBtn">取消</button>
+      </div>
+    </form>
+  </dialog>
   <script src="matrix3d.js?v=20261025u"></script>
   <script src="paired_http.js?v=20261104"></script>
   <script src="arcade_transport.js?v=20261105_closure"></script>

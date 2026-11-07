@@ -622,10 +622,14 @@ async def handle_status(request: web.Request):
     gw = get_wifi_gateway()
     probe=await asyncio.to_thread(gw.request,'{"cmd":"status"}')
     wifi_info = gw.get_status()
+    local_ip = get_local_ip(wifi_info.get("board_sta_ip"))
+    is_local_req = bool(request.app.get('access_policy') and request.app['access_policy'].local(request))
 
     return web.json_response({
         "status": "online",
-        "host_ip": get_local_ip(wifi_info.get("board_sta_ip")),
+        "host_ip": local_ip,
+        "lan_url": f"http://{local_ip}:{WEB_PORT}",
+        "pairing_token": request.app['access_policy'].token if is_local_req else None,
         "port": controller.port,
         "is_connected": probe.get('status')=='ok' or (probe.get('error')=='telemetry_busy' and wifi_info['wifi_online']),
         "control_probe": probe.get('error') or probe.get('status'),

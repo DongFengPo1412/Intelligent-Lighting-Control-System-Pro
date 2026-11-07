@@ -281,7 +281,7 @@ class WiFiGateway:
                 lane.release()
         with self._send_lock:
             if isinstance(query,dict) and query.get('cmd')=='arcade' and query.get('action') in ('input','heartbeat'):
-                self.send_command(command,timeout=0.2,retries=1)
+                self.send_command(command,timeout=0.35,retries=1)
             else:
                 self.send_command(command)
             return dict(self.last_result)
