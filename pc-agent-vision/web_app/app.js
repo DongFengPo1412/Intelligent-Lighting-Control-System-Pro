@@ -1705,19 +1705,24 @@
   let phoneUploading = false;
 
   function stopPhoneCamera() {
+    if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
+      try { window.AmadeusNative.stopFrontCamera(); } catch(e) {}
+    }
     if (phoneUploadTimer) {
       clearInterval(phoneUploadTimer);
       phoneUploadTimer = null;
     }
     phoneUploading = false;
-    if (phoneStream) {
+    if (phoneStream && phoneStream.getTracks) {
       try {
         phoneStream.getTracks().forEach((t) => t.stop());
       } catch (e) {}
-      phoneStream = null;
     }
+    phoneStream = null;
     const video = $("phoneCameraVideo");
-    if (video) video.srcObject = null;
+    if (video) { video.srcObject = null; video.style.display = "none"; }
+    const img = $("phoneCameraImg");
+    if (img) { img.src = ""; img.style.display = "none"; }
     const wrapper = $("phoneCameraWrapper");
     if (wrapper) wrapper.style.display = "none";
     const overlay = $("phoneCameraOverlay");
@@ -1729,15 +1734,85 @@
 
   async function startPhoneCamera() {
     stopPhoneCamera();
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw Error("当前运行环境未开放前置摄像头访问权限");
-    }
-    const video = $("phoneCameraVideo");
     const wrapper = $("phoneCameraWrapper");
-    const canvas = $("phoneCameraHidden") || document.createElement("canvas");
+    const video = $("phoneCameraVideo");
+    const img = $("phoneCameraImg");
     const overlay = $("phoneCameraOverlay");
     const info = $("phoneDetectionInfo");
+    const mode = $("visionMode") ? $("visionMode").value : "fingertip";
+    const tok = state.token || "";
 
+    // 1. Android APK native hardware camera bridge
+    if (window.AmadeusNative && window.AmadeusNative.hasNativeCamera && window.AmadeusNative.hasNativeCamera()) {
+      if (video) video.style.display = "none";
+      if (img) img.style.display = "block";
+      if (wrapper) wrapper.style.display = "block";
+
+      window.onNativeCameraFrame = function(b64) {
+        if (img) img.src = "data:image/jpeg;base64," + b64;
+      };
+
+      window.onNativeCameraObservation = function(res) {
+        const obs = res.observation || {};
+        if (overlay && img) {
+          overlay.width = img.clientWidth || 320;
+          overlay.height = img.clientHeight || 240;
+          const octx = overlay.getContext("2d");
+          octx.clearRect(0, 0, overlay.width, overlay.height);
+
+          if (obs.hand) {
+            const h = obs.hand;
+            const hx = (1 - h.x) * overlay.width;
+            const hy = h.y * overlay.height;
+            octx.beginPath();
+            octx.arc(hx, hy, 16, 0, Math.PI * 2);
+            octx.fillStyle = h.pinch
+              ? "rgba(255, 235, 59, 0.9)"
+              : "rgba(76, 175, 80, 0.9)";
+            octx.fill();
+            octx.lineWidth = 3;
+            octx.strokeStyle = "#fff";
+            octx.stroke();
+
+            if (info) {
+              info.textContent = h.pinch ? "✋ 捏合抓取" : "👆 食指追踪中";
+            }
+          } else if (obs.present) {
+            if (info) {
+              info.textContent = obs.identity
+                ? `👤 识别: ${obs.identity}`
+                : "👤 人脸就绪";
+            }
+          } else {
+            if (info) info.textContent = "正在捕捉手势/人脸...";
+          }
+        }
+      };
+
+      let serverBase = state.serverOrigin || window.location.origin;
+      if (!serverBase || serverBase.startsWith("file:")) {
+        const savedUrl = localStorage.getItem("server_url") || "";
+        serverBase = savedUrl || "http://192.168.186.90:8080";
+      }
+      serverBase = serverBase.replace(/\/+$/, "");
+      const uploadUrl = `${serverBase}/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(mode)}`;
+
+      const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
+      if (!started) {
+        throw Error("硬件前置摄像头无法打开，请确认已授予相机权限");
+      }
+      phoneStream = { isNative: true };
+      return;
+    }
+
+    // 2. WebRTC getUserMedia for secure browser contexts
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw Error("当前浏览器运行环境未开放 WebRTC 权限，请使用最新版 APK 或选择【电脑摄像头】");
+    }
+    if (img) img.style.display = "none";
+    if (video) video.style.display = "block";
+
+    const canvas = $("phoneCameraHidden") || document.createElement("canvas");
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
@@ -1765,15 +1840,14 @@
         );
         if (!blob) return;
 
-        const mode = $("visionMode") ? $("visionMode").value : "fingertip";
-        const tok = state.token || "";
-        const url = `/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(mode)}`;
+        const currentMode = $("visionMode") ? $("visionMode").value : "fingertip";
+        const url = `/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(currentMode)}`;
 
         const response = await fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "image/jpeg",
-            "X-Vision-Mode": mode,
+            "X-Vision-Mode": currentMode,
           },
           body: blob,
         });
@@ -1793,10 +1867,10 @@
               const hx = (1 - h.x) * overlay.width;
               const hy = h.y * overlay.height;
               octx.beginPath();
-              octx.arc(hx, hy, 14, 0, Math.PI * 2);
+              octx.arc(hx, hy, 16, 0, Math.PI * 2);
               octx.fillStyle = h.pinch
-                ? "rgba(255, 235, 59, 0.85)"
-                : "rgba(76, 175, 80, 0.85)";
+                ? "rgba(255, 235, 59, 0.9)"
+                : "rgba(76, 175, 80, 0.9)";
               octx.fill();
               octx.lineWidth = 3;
               octx.strokeStyle = "#fff";

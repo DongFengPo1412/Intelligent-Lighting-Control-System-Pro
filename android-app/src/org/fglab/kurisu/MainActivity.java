@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private volatile boolean bridgeTrusted=false, backgrounded=false, destroyed=false;
     private final java.util.concurrent.atomic.AtomicInteger bridgeEpoch=new java.util.concurrent.atomic.AtomicInteger();
     private final DeviceUdpClient udpClient=new DeviceUdpClient();
+    private FrontCameraBridge frontCameraBridge;
     private final DeviceUdpClient readClient=new DeviceUdpClient();
     private final java.util.concurrent.ThreadPoolExecutor readExecutor=new java.util.concurrent.ThreadPoolExecutor(
         1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1));
@@ -73,6 +74,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 102);
         }
+        frontCameraBridge = new FrontCameraBridge(this, webView);
         initWebSettings();
         webView.loadUrl(OFFLINE);
         autoDiscoverAndConnect(false);
@@ -420,12 +422,13 @@ public class MainActivity extends Activity {
     }
     private void stopDiscovery() { NsdManager.DiscoveryListener current=discovery;discovery=null;if(nsd!=null&&current!=null)try{nsd.stopServiceDiscovery(current);}catch(IllegalArgumentException ignored){} }
     @Override protected void onPause() {
+        if (frontCameraBridge != null) frontCameraBridge.stop();
         backgrounded=true;releaseDeviceInput();
         webView.evaluateJavascript("window.dispatchEvent(new Event('blur'))",null);
         webView.onPause();super.onPause();
     }
     @Override protected void onResume() { super.onResume();backgrounded=false;if(webView!=null)webView.onResume(); }
-    @Override protected void onDestroy() { releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();readExecutor.shutdownNow();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
+    @Override protected void onDestroy() { if (frontCameraBridge != null) frontCameraBridge.stop(); releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();readExecutor.shutdownNow();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
 
     private static boolean isOfflinePage(String url) {
@@ -449,6 +452,26 @@ public class MainActivity extends Activity {
         }); } catch(java.util.concurrent.RejectedExecutionException ignored) { /* Board watchdog releases/pause in 500/1000ms. */ }
     }
     public class NativeUdpBridge {
+        @android.webkit.JavascriptInterface
+        public boolean hasNativeCamera() {
+            return true;
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean startFrontCamera(final String uploadUrl, final String mode) {
+            if (frontCameraBridge != null) {
+                return frontCameraBridge.start(uploadUrl, mode);
+            }
+            return false;
+        }
+
+        @android.webkit.JavascriptInterface
+        public void stopFrontCamera() {
+            if (frontCameraBridge != null) {
+                frontCameraBridge.stop();
+            }
+        }
+
         @android.webkit.JavascriptInterface
         public void sendUdpAsync(final String message,final int timeoutMs,final int retries,final String callbackId) {
             if(!BridgePolicy.requestId(callbackId))return;
