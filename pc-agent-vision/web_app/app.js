@@ -1915,6 +1915,7 @@
   let phoneStream = null;
   let phoneUploadTimer = null;
   let phoneUploading = false;
+  let currentVisionSessionId = null;
 
   function stopPhoneCamera() {
     if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
@@ -1925,6 +1926,7 @@
       phoneUploadTimer = null;
     }
     phoneUploading = false;
+    currentVisionSessionId = null;
     if (phoneStream && phoneStream.getTracks) {
       try {
         phoneStream.getTracks().forEach((t) => t.stop());
@@ -1954,6 +1956,17 @@
     const mode = $("visionMode") ? $("visionMode").value : "fingertip";
     const tok = getAccessToken();
     state.token = tok;
+
+    // Start remote vision session on backend first!
+    const vRes = await api("/api/pro/vision", {
+      enabled: true,
+      source: "remote",
+      mode: mode,
+    });
+    if (!vRes || vRes.error || !vRes.session_id) {
+      throw Error(vRes && vRes.error ? vRes.error : "无法在服务端创建手机视觉会话");
+    }
+    currentVisionSessionId = vRes.session_id;
 
     // 1. Android APK native hardware camera bridge
     if (window.AmadeusNative && window.AmadeusNative.hasNativeCamera && window.AmadeusNative.hasNativeCamera()) {
@@ -2008,10 +2021,11 @@
         serverBase = savedUrl || "http://192.168.186.90:8080";
       }
       serverBase = serverBase.replace(/\/+$/, "");
-      const uploadUrl = `${serverBase}/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(mode)}`;
+      const uploadUrl = `${serverBase}/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(mode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
 
       const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
       if (!started) {
+        stopPhoneCamera();
         throw Error("硬件前置摄像头无法打开，请确认已授予相机权限");
       }
       phoneStream = { isNative: true };
@@ -2054,17 +2068,29 @@
         if (!blob) return;
 
         const currentMode = $("visionMode") ? $("visionMode").value : "fingertip";
-        const url = `/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(currentMode)}`;
+        const url = `/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(currentMode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
 
         const response = await fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "image/jpeg",
             "X-Vision-Mode": currentMode,
+            "X-Vision-Session": currentVisionSessionId,
             ...(tok ? { "Authorization": "Bearer " + tok, "X-Access-Token": tok } : {}),
           },
           body: blob,
         });
+
+        if (response.ok) {
+          const res = await response.json();
+          window.onNativeCameraObservation && window.onNativeCameraObservation(res);
+        }
+      } catch (e) {
+      } finally {
+        phoneUploading = false;
+      }
+    }, 150);
+  }
 
         if (response.ok) {
           const res = await response.json();
@@ -2148,8 +2174,10 @@
       }
     } else {
       stopPhoneCamera();
+      await api("/api/pro/vision", { enabled: false });
       const res = await api("/api/pro/vision", {
         enabled: true,
+        source: "camera",
         mode: $("visionMode").value,
         camera: Number($("camera").value),
       });

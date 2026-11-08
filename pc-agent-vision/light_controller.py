@@ -499,19 +499,77 @@ class LightController(ProControlMixin):
             start_res = session.start()
             if start_res.get("status") != "ok":
                 return start_res
-            confirmed_gid = getattr(session, 'status', {}).get("game_id", 0)
-            if confirmed_gid != 0 and confirmed_gid != gid and not getattr(session, 'simulated_mode', False):
+
+            is_sim = getattr(session, 'simulated_mode', False) or start_res.get("simulated", False)
+            if is_sim:
+                sim_status = getattr(session, 'status', {}) or start_res.get("game_status", {})
+                confirmed_gid = sim_status.get("game_id", 0)
+                confirmed_state = sim_status.get("state", -1)
+                if not confirmed_gid:
+                    return {
+                        "status": "error",
+                        "error": "missing_game_id",
+                        "message": "模拟会话缺少游戏 ID 确认",
+                    }
+                if confirmed_gid != gid:
+                    return {
+                        "status": "error",
+                        "error": "cartridge_mismatch",
+                        "message": f"卡带 ID ({confirmed_gid}) 与目标 ({gid}) 不一致",
+                    }
+                if confirmed_state != 1:
+                    return {
+                        "status": "error",
+                        "error": "not_running",
+                        "message": f"游戏状态未处于运行中 (state: {confirmed_state})",
+                    }
+                return {
+                    "status": "ok",
+                    "game_id": gid,
+                    "game_name": name,
+                    "source": "simulator",
+                    "simulated": True,
+                    "message": f"已成功启动 #{gid:03d} {name}",
+                }
+
+            # Hardware mode: verify fresh start ACK from board; reject cached selection
+            hw_reply = start_res.get("hardware_reply") or {}
+            arc_data = hw_reply.get("arcade") or {}
+            if not arc_data or "game_id" not in arc_data or "state" not in arc_data:
+                if hasattr(session, "read_status"):
+                    st_res = session.read_status()
+                    if st_res.get("status") == "ok":
+                        hw_st = st_res.get("hardware_reply") or {}
+                        arc_data = hw_st.get("arcade") or {}
+
+            confirmed_gid = arc_data.get("game_id", 0) if isinstance(arc_data, dict) else 0
+            confirmed_state = arc_data.get("state") if isinstance(arc_data, dict) else None
+
+            if not confirmed_gid:
+                return {
+                    "status": "error",
+                    "error": "missing_game_id",
+                    "message": "板端启动回执缺少游戏 ID 确认",
+                }
+            if confirmed_gid != gid:
                 return {
                     "status": "error",
                     "error": "cartridge_mismatch",
                     "message": f"板端确认卡带 ID ({confirmed_gid}) 与目标 ({gid}) 不一致",
                 }
+            if confirmed_state != 1:  # 1 is STATE_PLAYING
+                return {
+                    "status": "error",
+                    "error": "not_running",
+                    "message": f"板端游戏状态未处于运行中 (state: {confirmed_state})",
+                }
+
             return {
                 "status": "ok",
                 "game_id": gid,
                 "game_name": name,
                 "source": start_res.get("source", "esp32_hardware"),
-                "simulated": start_res.get("simulated", False),
+                "simulated": False,
                 "message": f"已成功启动 #{gid:03d} {name}",
             }
         elif hasattr(session, 'legacy_control'):

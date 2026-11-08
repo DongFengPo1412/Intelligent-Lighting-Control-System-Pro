@@ -26,7 +26,7 @@ class TestVisionSessionAndArbiter(unittest.TestCase):
         hub = MultimodalHub(controller)
 
         # Establish remote session
-        hub.start_remote(mode="fingertip")
+        sid = hub.start_remote(mode="fingertip")
 
         # User claims manual priority for 15 seconds
         fake_time = 1000.0
@@ -46,7 +46,7 @@ class TestVisionSessionAndArbiter(unittest.TestCase):
         sent_commands = []
         controller.send_json.side_effect = lambda payload: sent_commands.append(payload) or True
 
-        hub.process_remote_frame(raw_jpeg, mode="fingertip")
+        hub.process_remote_frame(raw_jpeg, mode="fingertip", session_id=sid)
 
         # Mode tracking attribute is updated
         self.assertEqual(hub.mode, "fingertip")
@@ -133,6 +133,29 @@ class TestVisionSessionAndArbiter(unittest.TestCase):
             hub.process_remote_frame(raw_jpeg, mode="fingertip")
         self.assertIn("local camera", str(ctx.exception).lower())
 
+    def test_missing_session_id_rejected(self):
+        """Frames without session_id must be rejected when remote session is active."""
+        controller = MagicMock()
+        controller.send_json.return_value = True
+        hub = MultimodalHub(controller)
+        sid = hub.start_remote(mode="fingertip")
+
+        import cv2
+        import numpy as np
+        img = np.zeros((40, 40, 3), dtype=np.uint8)
+        _, enc = cv2.imencode(".jpg", img)
+        raw_jpeg = enc.tobytes()
+
+        # None session_id -> rejected
+        with self.assertRaises(RuntimeError) as ctx:
+            hub.process_remote_frame(raw_jpeg, mode="fingertip", session_id=None)
+        self.assertIn("missing", str(ctx.exception).lower())
+
+        # Empty session_id -> rejected
+        with self.assertRaises(RuntimeError) as ctx:
+            hub.process_remote_frame(raw_jpeg, mode="fingertip", session_id="")
+        self.assertIn("missing", str(ctx.exception).lower())
+
 
 class TestArcadeVoiceResolution(unittest.TestCase):
     """Issue 4: Voice resolution covering canonical 100 cartridges and aliases."""
@@ -191,6 +214,18 @@ class TestSemanticGamePlan(unittest.TestCase):
         # 4. "马里奥还是贪吃蛇" mentions multiple games, must ask for clarification
         p4 = exact_plan("马里奥还是贪吃蛇")
         self.assertEqual(p4, {"kind": "clarify", "actions": []})
+
+    def test_codex_latest_regressions(self):
+        """The 3 new regressions identified by Codex: questions, exclusions, and conditional hesitations."""
+        # 1. "打开打砖块吗" -> question/chat, NOT game 21
+        self.assertEqual(exact_plan("打开打砖块吗"), {"kind": "chat", "actions": []})
+        self.assertEqual(exact_plan("启动打砖块吗？"), {"kind": "chat", "actions": []})
+
+        # 2. "启动不是马里奥的游戏" -> exclusion/negation/chat, NOT game 1
+        self.assertEqual(exact_plan("启动不是马里奥的游戏"), {"kind": "chat", "actions": []})
+
+        # 3. "开启贪吃蛇但先不要启动" -> conditional negation/chat, NOT game 33
+        self.assertEqual(exact_plan("开启贪吃蛇但先不要启动"), {"kind": "chat", "actions": []})
 
     def test_positive_game_launches(self):
         p1 = exact_plan("启动马里奥")
@@ -305,6 +340,71 @@ class TestLightControllerArcadeExecution(unittest.TestCase):
         res = controller.start_arcade("unknown_xyz")
         self.assertEqual(res["status"], "error")
         self.assertEqual(res["error"], "unknown_game")
+
+    def test_actual_arcade_session_hardware_start_ack_validation(self):
+        """Use actual ArcadeSession to test startup ACK validation:
+        1. Missing game_id -> error 'missing_game_id'
+        2. Mismatched game_id -> error 'cartridge_mismatch'
+        3. State not running -> error 'not_running'
+        4. Valid ACK -> status 'ok'
+        """
+        from light_controller import LightController
+        import arcade_runner
+
+        ctrl = LightController()
+        session = arcade_runner.get_arcade_session(ctrl)
+        orig_hw = session.is_hardware_available
+        orig_send = session._send_esp32_command
+        orig_sim = session.simulated_mode
+
+        try:
+            session.is_hardware_available = lambda: True
+            session.simulated_mode = False
+
+            # Case 1: Start ACK lacks game_id (only status: ok)
+            session._send_esp32_command = lambda cmd: (
+                {"status": "ok", "arcade": {"game_id": 1, "state": 0}} if cmd.get("action") == "select"
+                else ({"status": "ok"} if cmd.get("action") == "start"
+                else {"status": "ok"})
+            )
+            res1 = ctrl.start_arcade(1)
+            self.assertEqual(res1.get("status"), "error")
+            self.assertEqual(res1.get("error"), "missing_game_id")
+
+            # Case 2: Start ACK confirms mismatched game_id (target 1, confirmed 2)
+            session._send_esp32_command = lambda cmd: (
+                {"status": "ok", "arcade": {"game_id": 1, "state": 0}} if cmd.get("action") == "select"
+                else ({"status": "ok", "arcade": {"game_id": 2, "state": 1}} if cmd.get("action") == "start"
+                else {"status": "ok"})
+            )
+            res2 = ctrl.start_arcade(1)
+            self.assertEqual(res2.get("status"), "error")
+            self.assertEqual(res2.get("error"), "cartridge_mismatch")
+
+            # Case 3: Start ACK state not running (state 0 != 1)
+            session._send_esp32_command = lambda cmd: (
+                {"status": "ok", "arcade": {"game_id": 1, "state": 0}} if cmd.get("action") == "select"
+                else ({"status": "ok", "arcade": {"game_id": 1, "state": 0}} if cmd.get("action") == "start"
+                else {"status": "ok"})
+            )
+            res3 = ctrl.start_arcade(1)
+            self.assertEqual(res3.get("status"), "error")
+            self.assertEqual(res3.get("error"), "not_running")
+
+            # Case 4: Start ACK confirms matching game_id 1 and state 1
+            session._send_esp32_command = lambda cmd: (
+                {"status": "ok", "arcade": {"game_id": 1, "state": 0}} if cmd.get("action") == "select"
+                else ({"status": "ok", "arcade": {"game_id": 1, "state": 1}} if cmd.get("action") == "start"
+                else {"status": "ok"})
+            )
+            res4 = ctrl.start_arcade(1)
+            self.assertEqual(res4.get("status"), "ok")
+            self.assertEqual(res4.get("game_id"), 1)
+            self.assertEqual(res4.get("game_name"), "超级马里奥")
+        finally:
+            session.is_hardware_available = orig_hw
+            session._send_esp32_command = orig_send
+            session.simulated_mode = orig_sim
 
 
 if __name__ == "__main__":

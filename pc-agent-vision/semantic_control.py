@@ -186,12 +186,12 @@ def exact_plan(text):
                 return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': 41}]}
             return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': mode}]}
 
-    # 2. Negations for games and control (e.g. "我不想玩马里奥了", "不要玩游戏", "别打开马里奥")
-    if re.search(r'(?:我(?:们)?|你|请)?(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束).*(?:游戏|街机|卡带|马里奥|贪吃蛇|方块|乒乓|赛车|打砖块|切水果|小鸟|恐龙)', compact):
+    # 2. Negations, conditions, and disclaimers (e.g. "我不想玩马里奥了", "不要玩游戏", "别打开马里奥", "启动不是马里奥的游戏", "开启贪吃蛇但先不要启动")
+    if re.search(r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|不要启动|别启动)', compact):
         return {'kind': 'chat', 'actions': []}
 
-    # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩")
-    if re.search(r'(?:是什么|是什么意思|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则是什么|有什么|多少关|哪个好玩|\?|？)', compact):
+    # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩", "打开打砖块吗")
+    if re.search(r'(?:吗|呢|好吗|行吗|可以吗|是什么|是什么意思|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则是什么|有什么|多少关|哪个好玩|\?|？)', compact):
         return {'kind': 'chat', 'actions': []}
 
     # 4. Multiple games / comparison (e.g. "马里奥还是贪吃蛇", "玩马里奥还是贪吃蛇") -> clarify
@@ -204,13 +204,14 @@ def exact_plan(text):
     if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:玩|启动|打开|开启|进入|运行|来[个局把]|玩一[局把下])?(?:街机|游戏)(?:吧|一下)?', compact):
         return {'kind': 'clarify', 'actions': []}
 
-    # 6. Specific arcade game launch with explicit intent (e.g. "启动马里奥", "玩超级马里奥", "启动第1款游戏")
+    # 6. Specific arcade game launch with explicit intent (e.g. "启动马里奥", "玩超级马里奥", "启动第1款游戏", "打开#041")
     game_m = re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:启动|打开|开启|玩|运行|切换到|进入|来[个局把]|玩一[局把下])\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:吧|一下)?', compact)
     if game_m:
-        candidate = game_m.group(1)
-        res = resolve_arcade_game(candidate)
-        if res:
-            return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
+        candidate = game_m.group(1).strip()
+        if not re.search(r'(?:不是|不要|别|但|不过|先不|暂不|吗|呢|\?|？)', candidate):
+            res = resolve_arcade_game(candidate)
+            if res:
+                return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
 
     # 7. Direct exact standalone game alias fallback
     if compact not in RESERVED_LIGHTING_WORDS and compact in _NAME_TO_ID:

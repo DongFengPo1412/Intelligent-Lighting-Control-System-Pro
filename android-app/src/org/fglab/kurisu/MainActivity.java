@@ -31,6 +31,8 @@ public class MainActivity extends Activity {
     private NsdManager.DiscoveryListener discovery;
     private ValueCallback<Uri[]> fileCallback;
     private volatile String serverOrigin = "";
+    private volatile String authenticatedOrigin = "";
+    private volatile String candidateOrigin = "";
     private volatile boolean bridgeTrusted=false, backgrounded=false, destroyed=false;
     private final java.util.concurrent.atomic.AtomicInteger bridgeEpoch=new java.util.concurrent.atomic.AtomicInteger();
     private final DeviceUdpClient udpClient=new DeviceUdpClient();
@@ -81,6 +83,10 @@ public class MainActivity extends Activity {
     }
 
     private void connectServer(String value) {
+        connectServer(value, false);
+    }
+
+    private void connectServer(String value, boolean preVerified) {
         Uri uri = Uri.parse(value.trim());
         if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null) {
             Toast.makeText(this, "请输入完整的 HTTP(S) 服务地址", Toast.LENGTH_LONG).show();
@@ -91,13 +97,43 @@ public class MainActivity extends Activity {
         serverOrigin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
         if (pairParam != null && !pairParam.trim().isEmpty()) {
-            prefs.edit().putString("access_token", pairParam.trim()).putString("server_url", serverOrigin + "/").apply();
-        } else {
+            String newTok = pairParam.trim();
+            prefs.edit().putString("access_token", newTok).putString("server_url", serverOrigin + "/").apply();
+            authenticatedOrigin = serverOrigin;
+            android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + newTok + "; path=/; SameSite=Strict");
+        } else if (preVerified) {
+            authenticatedOrigin = serverOrigin;
             prefs.edit().putString("server_url", serverOrigin + "/").apply();
-        }
-        String savedToken = prefs.getString("access_token", "");
-        if (savedToken != null && !savedToken.isEmpty()) {
-            android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + savedToken + "; path=/; SameSite=Strict");
+            String savedToken = prefs.getString("access_token", "");
+            if (savedToken != null && !savedToken.isEmpty()) {
+                android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + savedToken + "; path=/; SameSite=Strict");
+            }
+        } else {
+            final String targetOrigin = serverOrigin;
+            final String savedToken = prefs.getString("access_token", "");
+            if (savedToken != null && !savedToken.isEmpty()) {
+                new Thread(() -> {
+                    boolean ok = verifyServerIdentity(targetOrigin, savedToken);
+                    runOnUiThread(() -> {
+                        if (destroyed || !targetOrigin.equals(serverOrigin)) return;
+                        if (ok) {
+                            authenticatedOrigin = targetOrigin;
+                            prefs.edit().putString("server_url", targetOrigin + "/").apply();
+                            android.webkit.CookieManager.getInstance().setCookie(targetOrigin, "kurisu_session=" + savedToken + "; path=/; SameSite=Strict");
+                            Toast.makeText(MainActivity.this, "服务身份验证成功", Toast.LENGTH_SHORT).show();
+                            if (isPageAuthenticated(webView)) {
+                                String js = "try { sessionStorage.setItem('kurisu_access_token', '" + savedToken + "'); localStorage.setItem('kurisu_access_token', '" + savedToken + "'); } catch(e){}";
+                                webView.evaluateJavascript(js, null);
+                            }
+                        } else {
+                            authenticatedOrigin = "";
+                            Toast.makeText(MainActivity.this, "新服务未通过配对身份验证，请重新配对", Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }).start();
+            } else {
+                authenticatedOrigin = "";
+            }
         }
         // Security: Never append ?pair= into candidate or loaded server URLs!
         String targetUrl = serverOrigin + "/";
@@ -141,13 +177,20 @@ public class MainActivity extends Activity {
             .setNeutralButton("发现服务", (d,w) -> discoverServer()).setNegativeButton("取消", null).show();
     }
 
+    public boolean isPageAuthenticated(WebView view) {
+        if (view == null) return false;
+        String current = view.getUrl();
+        if (current == null || isOfflinePage(current)) return false;
+        Uri uri = Uri.parse(current);
+        String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
+        return !authenticatedOrigin.isEmpty() && authenticatedOrigin.equalsIgnoreCase(origin);
+    }
+
     private boolean trustedPage(WebView view) {
         String current = view.getUrl();
         if (current == null) return false;
         if (isOfflinePage(current)) return true;
-        Uri uri = Uri.parse(current);
-        String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
-        return !serverOrigin.isEmpty() && serverOrigin.equals(origin);
+        return isPageAuthenticated(view);
     }
 
     public static boolean verifyServerIdentity(String candidateOrigin, String savedToken) {
@@ -265,7 +308,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view,String url) {
                 bridgeTrusted=isOfflinePage(url);super.onPageFinished(view,url);
-                if (trustedPage(view)) {
+                if (isPageAuthenticated(view)) {
                     android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
                     String tok = prefs.getString("access_token", "");
                     if (tok != null && !tok.isEmpty() && !isOfflinePage(url)) {
@@ -289,6 +332,7 @@ public class MainActivity extends Activity {
                 if (frontCameraBridge != null) frontCameraBridge.stop();
                 if (request.isForMainFrame() && !request.getUrl().toString().startsWith("file:")) {
                     serverOrigin = "";
+                    authenticatedOrigin = "";
                     view.loadUrl(OFFLINE);
                     Toast.makeText(MainActivity.this, "已切换至手机直连模式", Toast.LENGTH_SHORT).show();
                 }
@@ -455,15 +499,29 @@ public class MainActivity extends Activity {
                     ed.apply();
                     if (isVerifiedPaired) {
                         Toast.makeText(MainActivity.this, "已验证服务身份并安全重连 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
-                        connectServer(sUrl);
+                        connectServer(sUrl, true);
                     } else {
-                        // Candidate service is unverified or new: DO NOT provide saved credentials!
-                        Toast.makeText(MainActivity.this, "已发现候选服务 (" + sUrl + ")，未验证身份需手动配对", Toast.LENGTH_SHORT).show();
-                        serverOrigin = sUrl;
-                        webView.loadUrl(sUrl + "/");
+                        // Candidate service is unverified or rogue: NEVER provide saved credentials!
+                        authenticatedOrigin = "";
+                        if (manual) {
+                            new AlertDialog.Builder(MainActivity.this)
+                                .setTitle("发现未认证服务")
+                                .setMessage("在局域网发现服务 (" + sUrl + ")，但未通过身份凭据验证。\n\n是否以未配对访客身份连接？（旧凭据绝不会泄露给该服务）")
+                                .setPositiveButton("前往配对", (d, w) -> {
+                                    serverOrigin = sUrl;
+                                    authenticatedOrigin = "";
+                                    webView.loadUrl(sUrl + "/");
+                                })
+                                .setNegativeButton("取消", null)
+                                .show();
+                        } else {
+                            // Silent auto-discovery in background: remain on OFFLINE page!
+                            Toast.makeText(MainActivity.this, "发现候选服务 (" + sUrl + ")，未验证身份，保持离线", Toast.LENGTH_SHORT).show();
+                        }
                     }
                 } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(deviceTarget.token)) {
                     serverOrigin = "";
+                    authenticatedOrigin = "";
                     ed.remove("server_url").apply();
                     Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
                     if (!isOfflinePage(webView.getUrl())) webView.loadUrl(OFFLINE);
@@ -545,7 +603,8 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public boolean startFrontCamera(final String uploadUrl, final String mode) {
             if (backgrounded || destroyed) return false;
-            if (serverOrigin == null || serverOrigin.isEmpty() || !trustedPage(webView)) {
+            if (authenticatedOrigin == null || authenticatedOrigin.isEmpty() || !isPageAuthenticated(webView)) {
+                android.util.Log.w("MainActivity", "Camera upload rejected: page is not authenticated");
                 return false;
             }
             if (uploadUrl == null || uploadUrl.trim().isEmpty()) return false;
@@ -556,11 +615,11 @@ public class MainActivity extends Activity {
                 }
                 String host = parsed.getHost();
                 int port = parsed.getPort() != -1 ? parsed.getPort() : ("https".equalsIgnoreCase(parsed.getScheme()) ? 443 : 80);
-                Uri serverUri = Uri.parse(serverOrigin);
-                String serverHost = serverUri.getHost();
-                int serverPort = serverUri.getPort() != -1 ? serverUri.getPort() : ("https".equalsIgnoreCase(serverUri.getScheme()) ? 443 : 80);
-                if (host == null || !host.equalsIgnoreCase(serverHost) || port != serverPort) {
-                    android.util.Log.w("MainActivity", "Camera upload rejected: target origin does not match paired server");
+                Uri authUri = Uri.parse(authenticatedOrigin);
+                String authHost = authUri.getHost();
+                int authPort = authUri.getPort() != -1 ? authUri.getPort() : ("https".equalsIgnoreCase(authUri.getScheme()) ? 443 : 80);
+                if (host == null || !host.equalsIgnoreCase(authHost) || port != authPort) {
+                    android.util.Log.w("MainActivity", "Camera upload rejected: target origin does not match authenticated server");
                     return false;
                 }
                 String path = parsed.getPath();
@@ -572,7 +631,7 @@ public class MainActivity extends Activity {
                 return false;
             }
             if (frontCameraBridge != null) {
-                return frontCameraBridge.start(uploadUrl, mode, serverOrigin);
+                return frontCameraBridge.start(uploadUrl, mode, authenticatedOrigin);
             }
             return false;
         }

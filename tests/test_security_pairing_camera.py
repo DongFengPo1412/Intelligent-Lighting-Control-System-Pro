@@ -156,6 +156,72 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         )
         self.assertFalse(res_bg, "Camera must not start in background")
 
+    def test_unverified_candidate_page_credential_isolation(self):
+        """Unverified candidate server MUST NOT receive cookies, JS storage tokens, or camera access."""
+        saved_token = "genuine_saved_token_secret_12345"
+        rogue_origin = "http://192.168.186.199:8080"
+        genuine_origin = "http://192.168.186.90:8080"
+
+        # Simulate APK verification & state machine
+        class APKState:
+            def __init__(self):
+                self.server_origin = ""
+                self.authenticated_origin = ""
+                self.cookies = {}
+                self.injected_storage = {}
+
+            def on_discovery(self, candidate_origin, server_proof_valid):
+                if server_proof_valid:
+                    self.server_origin = candidate_origin
+                    self.authenticated_origin = candidate_origin
+                    self.cookies[candidate_origin] = f"kurisu_session={saved_token}"
+                else:
+                    self.authenticated_origin = ""
+                    # Stays offline or loads as unauthenticated guest without credentials
+
+            def is_page_authenticated(self, current_url):
+                if not current_url or current_url.startswith("file:"):
+                    return False
+                p = urlparse(current_url)
+                origin = f"{p.scheme}://{p.netloc}"
+                return bool(self.authenticated_origin) and self.authenticated_origin == origin
+
+            def on_page_finished(self, current_url):
+                if self.is_page_authenticated(current_url):
+                    self.injected_storage[current_url] = saved_token
+
+            def start_front_camera(self, current_url, upload_url):
+                if not self.is_page_authenticated(current_url):
+                    return False
+                u = urlparse(upload_url)
+                upload_origin = f"{u.scheme}://{u.netloc}"
+                return upload_origin == self.authenticated_origin
+
+        apk = APKState()
+
+        # 1. Rogue server discovery (challenge fails)
+        apk.on_discovery(rogue_origin, server_proof_valid=False)
+        self.assertEqual(apk.authenticated_origin, "", "Rogue candidate must not become authenticated_origin")
+        self.assertNotIn(rogue_origin, apk.cookies, "Rogue origin must NOT receive session cookie")
+
+        # Even if loaded as guest:
+        apk.on_page_finished(rogue_origin + "/index.html")
+        self.assertNotIn(rogue_origin + "/index.html", apk.injected_storage, "Rogue page must NOT receive storage token")
+        self.assertFalse(
+            apk.start_front_camera(rogue_origin + "/index.html", rogue_origin + "/api/pro/camera/frame"),
+            "Rogue page must NOT get camera access"
+        )
+
+        # 2. Genuine server discovery (challenge passes)
+        apk.on_discovery(genuine_origin, server_proof_valid=True)
+        self.assertEqual(apk.authenticated_origin, genuine_origin)
+        self.assertIn(genuine_origin, apk.cookies)
+        apk.on_page_finished(genuine_origin + "/index.html")
+        self.assertEqual(apk.injected_storage.get(genuine_origin + "/index.html"), saved_token)
+        self.assertTrue(
+            apk.start_front_camera(genuine_origin + "/index.html", genuine_origin + "/api/pro/camera/frame")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -233,14 +233,23 @@ class ProApi:
                         "Simulation does not open a camera; use observations"
                     )
                 if data.get("enabled"):
-                    await asyncio.to_thread(
-                        self.vision.start,
-                        data.get("mode", "pet"),
-                        data.get("camera", 0),
-                    )
+                    source = data.get("source", "camera")
+                    if source in ("remote", "phone"):
+                        session_id = await asyncio.to_thread(
+                            self.vision.start_remote,
+                            data.get("mode", "pet"),
+                        )
+                        result = dict(**self.vision.status(), session_id=session_id)
+                    else:
+                        await asyncio.to_thread(
+                            self.vision.start,
+                            data.get("mode", "pet"),
+                            data.get("camera", 0),
+                        )
+                        result = self.vision.status()
                 else:
                     await asyncio.to_thread(self.vision.stop)
-                result = self.vision.status()
+                    result = self.vision.status()
             elif action == "observations":
                 if data.get("mode", "pet") not in self.vision.MODES or not isinstance(
                     data.get("observation"), dict
@@ -516,7 +525,7 @@ def register(app, api_getter):
                 }
             )
         except Exception as exc:
-            status_code = 409 if "stopped" in str(exc).lower() else 400
+            status_code = 409 if any(k in str(exc).lower() for k in ("stopped", "stale", "missing", "rejected", "no remote")) else 400
             return web.json_response({"error": str(exc)}, status=status_code)
 
     app.router.add_get("/api/pro/camera/feed", camera_feed)

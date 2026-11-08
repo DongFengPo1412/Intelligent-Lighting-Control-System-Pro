@@ -134,6 +134,7 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         return None
 
     norm_clean = re.sub(r'^[#＃第]+', '', norm)
+    norm_clean = re.sub(r'(?:小?游戏|卡带|街机)$', '', norm_clean).strip()
     norm_clean = re.sub(r'[号款关个]+$', '', norm_clean)
     if norm_clean.isdigit():
         val = int(norm_clean)
@@ -145,11 +146,11 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         gid = _NAME_TO_ID[norm]
         return gid, _CATALOG_CACHE.get(gid, {}).get("name", norm)
 
-    # Substring match: only if a specific game alias (>=2 chars) is contained in norm
-    # NEVER match norm in name (which erroneously matched "红灯" to "红绿灯")
-    for name, gid in _NAME_TO_ID.items():
-        if len(name) >= 2 and name not in RESERVED_LIGHTING_WORDS and name in norm:
-            return gid, _CATALOG_CACHE.get(gid, {}).get("name", name)
+    # Clean stripped alias match (e.g., "超级马里奥游戏", "贪吃蛇卡带", "经典打砖块小游戏")
+    stripped = re.sub(r'(?:小?游戏|卡带|街机)$', '', norm).strip()
+    if stripped and stripped in _NAME_TO_ID:
+        gid = _NAME_TO_ID[stripped]
+        return gid, _CATALOG_CACHE.get(gid, {}).get("name", stripped)
 
     return None
 

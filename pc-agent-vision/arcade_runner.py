@@ -423,9 +423,11 @@ class ArcadeSession:
                 return {"status": "error", "error": "device_offline", "message": "ESP32 硬件灯板未连接或网络离线", "simulated": False}
             res = self._send_esp32_command({"cmd": "arcade", "action": "start"})
             if res.get("status") == "ok":
-                self._update_status_from_hardware(res.get("arcade", {}))
-                return {"status": "ok", "source": "esp32_hardware", "simulated": False, "game_status": self.status}
-            return {"status": "error", "error": res.get("error", "send_failed"), "simulated": False}
+                arc_data = res.get("arcade", {})
+                if arc_data:
+                    self._update_status_from_hardware(arc_data)
+                return {"status": "ok", "source": "esp32_hardware", "simulated": False, "game_status": self.status, "hardware_reply": res}
+            return {"status": "error", "error": res.get("error", "send_failed"), "simulated": False, "hardware_reply": res}
 
         if self.current_cartridge:
             self.current_cartridge.start()
@@ -582,8 +584,9 @@ class ArcadeSession:
                 return {"status":"error","error":"stale_reply","simulated":False}
             if reply.get("status") != "ok":
                 return {"status":"error","error":reply.get("error","device_offline"),"simulated":False}
-            self._update_status_from_hardware(reply['arcade'])
-            return {"status":"ok","game_status":dict(self.status),"source":"esp32_hardware","simulated":False}
+            if reply.get("arcade"):
+                self._update_status_from_hardware(reply['arcade'])
+            return {"status":"ok","game_status":dict(self.status),"source":"esp32_hardware","simulated":False, "hardware_reply": reply}
 
     @synchronized
     def configure(self,enabled,volume,difficulty=None):

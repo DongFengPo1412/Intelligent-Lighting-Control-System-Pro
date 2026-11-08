@@ -222,9 +222,12 @@ class MultimodalHub:
             raise RuntimeError("Vision session is stopped")
         if self.source == "camera":
             raise RuntimeError("Local camera is active; remote frame rejected")
-        if session_id is not None and self.active_session_id is not None:
-            if session_id != self.active_session_id:
-                raise RuntimeError("Stale or invalid session ID")
+        if self.source != "remote":
+            raise RuntimeError("No remote vision session active")
+        if not session_id:
+            raise RuntimeError("Missing vision session ID")
+        if session_id != self.active_session_id:
+            raise RuntimeError("Stale or invalid session ID")
 
         import cv2
         import numpy as np
