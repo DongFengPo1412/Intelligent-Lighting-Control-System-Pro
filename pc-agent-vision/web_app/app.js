@@ -1918,6 +1918,7 @@
   let phoneUploadTimer = null;
   let phoneUploading = false;
   let currentVisionSessionId = null;
+  let activeVisionSource = null;
 
   async function stopPhoneCamera() {
     const sidToStop = currentVisionSessionId;
@@ -1930,6 +1931,7 @@
     }
     phoneUploading = false;
     currentVisionSessionId = null;
+    activeVisionSource = null;
     if (phoneStream && phoneStream.getTracks) {
       try {
         phoneStream.getTracks().forEach((t) => t.stop());
@@ -1973,6 +1975,7 @@
       throw Error(vRes && vRes.error ? vRes.error : "无法在服务端创建手机视觉会话");
     }
     currentVisionSessionId = vRes.session_id;
+    activeVisionSource = "remote";
 
     // 1. Android APK native hardware camera bridge
     if (window.AmadeusNative && window.AmadeusNative.hasNativeCamera && window.AmadeusNative.hasNativeCamera()) {
@@ -2138,6 +2141,7 @@ bind("visionStart", async () => {
       $("visionBadge").textContent = "运行中";
       $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
     } catch (err) {
+      activeVisionSource = null;
       notice("前置摄像头启动提示: " + err.message);
     }
   } else {
@@ -2149,9 +2153,13 @@ bind("visionStart", async () => {
       camera: Number($("camera").value),
     });
     if (res && res.error) {
+      activeVisionSource = null;
       notice("摄像头启动提示: " + res.error);
     } else {
+      activeVisionSource = "camera";
       notice("已开启电脑摄像头互动");
+      $("visionBadge").textContent = "运行中";
+      $("visionSummary").textContent = `电脑摄像头互动：${$("visionMode").value} · 运行中`;
       if ($("cameraStreamWrapper")) {
         $("cameraStreamWrapper").style.display = "block";
         const tok = getAccessToken();
@@ -2164,11 +2172,12 @@ bind("visionStart", async () => {
   setTimeout(() => poll(), 500);
 });
 bind("visionStop", async () => {
-  const isPhone = Boolean(currentVisionSessionId || (phoneStream && phoneStream.isNative) || ($("cameraSource") && $("cameraSource").value === "phone"));
-  if (currentVisionSessionId || isPhone) {
-    await stopPhoneCamera();
+  const isPhone = Boolean(currentVisionSessionId || (phoneStream && phoneStream.isNative) || activeVisionSource === "remote");
+  let res;
+  if (isPhone) {
+    res = await stopPhoneCamera();
   } else {
-    await api("/api/pro/vision", { enabled: false, source: "camera" });
+    res = await api("/api/pro/vision", { enabled: false, source: "camera" });
   }
   if ($("cameraStreamWrapper")) {
     $("cameraStreamWrapper").style.display = "none";
@@ -2176,8 +2185,13 @@ bind("visionStop", async () => {
   }
   cancelCalibration();
   lastPro = 0;
-  $("visionBadge").textContent = "未启用";
-  $("visionSummary").textContent = "摄像头未启用";
+  if (!res || !res.error) {
+    activeVisionSource = null;
+    $("visionBadge").textContent = "未启用";
+    $("visionSummary").textContent = "摄像头未启用";
+  } else {
+    notice("停止摄像头提示: " + (res.error || "服务端停止失败"));
+  }
 });
 let currentPhoneRotation = 90;
 if ($("rotatePhoneCameraBtn")) {
@@ -2446,8 +2460,15 @@ async function poll() {
       state.vision = p.vision;
       $("status").textContent = JSON.stringify(p, null, 2);
       $("visionStatus").textContent = JSON.stringify(p.vision, null, 2);
-      const running = p.vision?.running || phoneStream !== null;
+      const running = p.vision?.running || phoneStream !== null || currentVisionSessionId !== null;
       $("visionBadge").textContent = running ? "运行中" : "未启用";
+      if (p.vision?.running) {
+        if (!phoneStream && !currentVisionSessionId) {
+          activeVisionSource = p.vision.source || "camera";
+        }
+      } else if (!phoneStream && !currentVisionSessionId) {
+        activeVisionSource = null;
+      }
       if (phoneStream) {
         $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
       } else {

@@ -252,7 +252,45 @@ async function runTests() {
     console.log("  -> PASS: Session safely revoked when WebRTC is missing without global stop.");
   }
 
-  console.log("ALL 4 JS PHONE CAMERA LIFECYCLE TESTS PASSED!");
+  // 5. PC Camera Started -> Dropdown changed to phone -> Stop Button Click
+  {
+    console.log("Test 5: PC Camera Started -> cameraSource changed to phone -> Stop Button Click...");
+    const env = createEnvironment({
+      cameraSource: 'pc',
+    });
+
+    const visionStartBtn = env.eventListeners['visionStart:click'];
+    const visionStopBtn = env.eventListeners['visionStop:click'];
+    assert(visionStartBtn, "visionStart:click listener must exist");
+    assert(visionStopBtn, "visionStop:click listener must exist");
+
+    // 1) Start PC Camera
+    await visionStartBtn({ preventDefault: () => {} });
+    const startReqs = env.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(startReqs.length, 1, "Must send 1 start request for PC camera");
+    assert.strictEqual(startReqs[0].body.enabled, true);
+    assert.strictEqual(startReqs[0].body.source, 'camera');
+    assert.strictEqual(env.elements['visionBadge'].textContent, '运行中', "Badge must show '运行中'");
+
+    // 2) Change dropdown selection to phone
+    env.elements['cameraSource'].value = 'phone';
+
+    // 3) Click stop button
+    env.capturedRequests.length = 0; // reset capture
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // 4) Assert PC stop request is sent and UI updated to '未启用'
+    const stopReqs = env.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(stopReqs.length, 1, "Must send exactly 1 stop request for PC camera");
+    assert.strictEqual(stopReqs[0].body.enabled, false);
+    assert.strictEqual(stopReqs[0].body.source, 'camera', "Must send source: camera");
+    assert.strictEqual(stopReqs[0].body.session_id, undefined, "PC stop must not send remote session_id");
+
+    assert.strictEqual(env.elements['visionBadge'].textContent, '未启用', "Badge must be updated to '未启用' after backend confirmation");
+    console.log("  -> PASS: Changing dropdown to phone did not misroute stop request; PC camera stopped cleanly and badge shows '未启用'.");
+  }
+
+  console.log("ALL 5 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
 }
 
 runTests().catch(err => {
