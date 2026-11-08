@@ -1948,7 +1948,7 @@
     }
   }
 
-  async function stopPhoneCamera(force = false) {
+  async function stopPhoneCamera() {
     releaseLocalPhoneCapture();
     const sidToStop = currentVisionSessionId;
     if (!sidToStop) {
@@ -1963,36 +1963,22 @@
         session_id: sidToStop,
       });
 
-      if (res && res.error) {
-        if (force) {
-          currentVisionSessionId = null;
-          activeVisionSource = null;
-        }
-        return res;
-      }
-
-      if (res && res.running === true) {
-        if (force) {
-          currentVisionSessionId = null;
-          activeVisionSource = null;
-        }
-        return res;
-      }
-
-      currentVisionSessionId = null;
-      activeVisionSource = null;
-      return res || { running: false };
-    } catch (err) {
-      if (force) {
+      if (res && res.running === false && !res.error) {
         currentVisionSessionId = null;
         activeVisionSource = null;
+        return res;
       }
-      return { error: err.message || "网络请求失败", networkError: true };
+
+      return res || { unconfirmed: true };
+    } catch (err) {
+      return { error: err.message || "网络请求失败", networkError: true, unconfirmed: true };
     }
   }
 
   async function startPhoneCamera() {
-    await stopPhoneCamera(true);
+    if (currentVisionSessionId) {
+      await stopPhoneCamera();
+    }
     const wrapper = $("phoneCameraWrapper");
     const video = $("phoneCameraVideo");
     const img = $("phoneCameraImg");
@@ -2178,11 +2164,16 @@ bind("visionStart", async () => {
       $("visionBadge").textContent = "运行中";
       $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
     } catch (err) {
-      activeVisionSource = null;
+      if (currentVisionSessionId) {
+        $("visionBadge").textContent = "停止未确认";
+        $("visionSummary").textContent = "会话开启受阻且停止未确认，点击可重试";
+      } else {
+        activeVisionSource = null;
+      }
       notice("前置摄像头启动提示: " + err.message);
     }
   } else {
-    await stopPhoneCamera(true);
+    await stopPhoneCamera();
     const res = await api("/api/pro/vision", {
       enabled: true,
       source: "camera",
@@ -2190,10 +2181,11 @@ bind("visionStart", async () => {
       camera: Number($("camera").value),
     });
     if (res && res.error) {
-      activeVisionSource = null;
+      if (!currentVisionSessionId) activeVisionSource = null;
       notice("摄像头启动提示: " + res.error);
     } else {
       activeVisionSource = "camera";
+      currentVisionSessionId = null;
       notice("已开启电脑摄像头互动");
       $("visionBadge").textContent = "运行中";
       $("visionSummary").textContent = `电脑摄像头互动：${$("visionMode").value} · 运行中`;
@@ -2212,7 +2204,7 @@ bind("visionStop", async () => {
   const isPhone = Boolean(currentVisionSessionId || (phoneStream && phoneStream.isNative) || activeVisionSource === "remote");
   let res;
   if (isPhone) {
-    res = await stopPhoneCamera(false);
+    res = await stopPhoneCamera();
   } else {
     try {
       res = await api("/api/pro/vision", { enabled: false, source: "camera" });
@@ -2239,11 +2231,15 @@ bind("visionStop", async () => {
     notice("停止未确认: 服务端仍在运行");
     $("visionBadge").textContent = "运行中";
     $("visionSummary").textContent = res.error || (res.mode ? `互动方式：${res.mode}` : "运行中");
-  } else {
+  } else if (res && res.running === false) {
     currentVisionSessionId = null;
     activeVisionSource = null;
     $("visionBadge").textContent = "未启用";
     $("visionSummary").textContent = "摄像头未启用";
+  } else {
+    notice("停止未确认");
+    $("visionBadge").textContent = "停止未确认";
+    $("visionSummary").textContent = "停止未确认，点击可重试";
   }
 });
 let currentPhoneRotation = 90;

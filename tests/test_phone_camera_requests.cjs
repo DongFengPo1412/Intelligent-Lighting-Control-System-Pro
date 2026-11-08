@@ -402,7 +402,100 @@ async function runTests() {
     console.log("  -> PASS: Backend still running properly handled: actual state displayed, session_id preserved, retry remained remote stop.");
   }
 
-  console.log("ALL 7 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
+  // 8. Permission Denied and Rollback Network Outage -> Retry
+  {
+    console.log("Test 8: Permission denied and rollback stop network outage -> retry retains session_id without falling back to PC...");
+    const env = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_rollback_net_fail',
+      userMediaThrows: 'NotAllowedError: Permission denied',
+    });
+
+    // Simulate network error during rollback stop
+    env.fetchHook = async (url, opts, body) => {
+      if (url.includes('/api/pro/vision') && body.enabled === false) {
+        throw new TypeError('Failed to fetch (rollback network down)');
+      }
+    };
+
+    const visionStartBtn = env.eventListeners['visionStart:click'];
+    const visionStopBtn = env.eventListeners['visionStop:click'];
+
+    // Start fails with permission denied and rollback fails with network outage
+    await visionStartBtn({ preventDefault: () => {} });
+
+    // Assert: Badge indicates "停止未确认" because rollback stop could not be confirmed
+    assert.strictEqual(env.elements['visionBadge'].textContent, '停止未确认');
+
+    // Network recovers
+    env.fetchHook = null;
+    env.capturedRequests.length = 0;
+
+    // User clicks stop to retry stopping the session
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Retry request MUST be targeted remote stop with original session_id!
+    const retryReqs = env.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(retryReqs.length, 1, "Must send exactly 1 stop request on retry");
+    assert.strictEqual(retryReqs[0].body.enabled, false);
+    assert.strictEqual(retryReqs[0].body.source, 'remote', "Retry MUST NOT fall back to source: camera");
+    assert.strictEqual(retryReqs[0].body.session_id, 'sess_rollback_net_fail', "Retry MUST use preserved session_id");
+    assert.strictEqual(env.elements['visionBadge'].textContent, '未启用', "Badge must update to '未启用' upon backend confirmation");
+    console.log("  -> PASS: Permission denied with rollback network outage properly handled: session_id preserved, retry remained remote stop.");
+  }
+
+  // 9. HTTP 200 but missing 'running' field -> Retry
+  {
+    console.log("Test 9: Phone stop returns HTTP 200 without 'running' field -> notice '停止未确认' -> retry retains session_id without falling back to PC...");
+    const env = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_phone_missing_running_field',
+    });
+
+    const visionStartBtn = env.eventListeners['visionStart:click'];
+    const visionStopBtn = env.eventListeners['visionStop:click'];
+
+    // Start phone camera
+    await visionStartBtn({ preventDefault: () => {} });
+    assert.strictEqual(env.elements['visionBadge'].textContent, '运行中');
+
+    // Backend returns HTTP 200 with {} (missing running)
+    env.capturedRequests.length = 0;
+    env.fetchHook = async (url, opts, body) => {
+      if (url.includes('/api/pro/vision') && body.enabled === false) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({})
+        };
+      }
+    };
+
+    // Click stop button
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Badge shows "停止未确认", notice indicates "停止未确认"
+    assert.strictEqual(env.elements['visionBadge'].textContent, '停止未确认', "Badge must show '停止未确认' when running field is missing");
+    assert(env.elements['toast'].textContent.includes('停止未确认'), "Toast must indicate '停止未确认'");
+
+    // Backend stop now returns explicit running: false
+    env.fetchHook = null;
+    env.capturedRequests.length = 0;
+
+    // Click stop button again (Retry)
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Retry request MUST be targeted remote stop with original session_id!
+    const retryReqs = env.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(retryReqs.length, 1, "Must send exactly 1 stop request on retry");
+    assert.strictEqual(retryReqs[0].body.enabled, false);
+    assert.strictEqual(retryReqs[0].body.source, 'remote', "Retry MUST NOT fall back to source: camera");
+    assert.strictEqual(retryReqs[0].body.session_id, 'sess_phone_missing_running_field', "Retry MUST use preserved session_id");
+    assert.strictEqual(env.elements['visionBadge'].textContent, '未启用', "Badge must update to '未启用' upon backend confirmation");
+    console.log("  -> PASS: Missing running field properly handled: unconfirmed state displayed, session_id preserved, retry remained remote stop.");
+  }
+
+  console.log("ALL 9 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
 }
 
 runTests().catch(err => {
