@@ -74,29 +74,23 @@ class ServiceAdvertisement:
         except Exception:
             pass
         board_ip = os.environ.get("KURISU_BOARD_IP", "")
-        control_token = os.environ.get("KURISU_CONTROL_TOKEN", "")
-        access_token = os.environ.get("KURISU_ACCESS_TOKEN", "").strip()
-        if not access_token:
-            try:
-                from access_control import load_access_token
-                access_token = load_access_token()
-            except Exception:
-                access_token = ""
         try:
             from wifi_gateway import get_wifi_gateway
             gw = get_wifi_gateway()
             if getattr(gw, "board_sta_ip", "") and gw.board_sta_ip != "0.0.0.0":
                 board_ip = gw.board_sta_ip
-            if getattr(gw, "control_token", ""):
-                control_token = gw.control_token
         except Exception:
             pass
+        # Security: Never transmit access_token or control_token over unauthenticated discovery broadcast.
+        # Clients must authenticate/pair independently via explicit user authorization.
         return json.dumps({
             "service": "KurisuPro",
             "server_url": f"http://{host_ip}:{port}",
-            "access_token": access_token,
+            "host": host_ip,
+            "port": port,
+            "version": "2.1.2",
             "board_ip": board_ip,
-            "control_token": control_token,
+            "pairing_required": True,
         }, separators=(",", ":")).encode("utf-8")
 
     def _udp_loop(self, default_host, port):

@@ -194,6 +194,7 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new NativeUdpBridge(), "AmadeusNative");
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
+                if (frontCameraBridge != null) frontCameraBridge.stop();
                 if(bridgeTrusted)releaseDeviceInput();
                 bridgeTrusted=false;bridgeEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
                 super.onPageStarted(view,url,favicon);
@@ -213,6 +214,7 @@ public class MainActivity extends Activity {
                 return request.isForMainFrame() && navigate(view, request.getUrl());
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (frontCameraBridge != null) frontCameraBridge.stop();
                 if (request.isForMainFrame() && !request.getUrl().toString().startsWith("file:")) {
                     serverOrigin = "";
                     view.loadUrl(OFFLINE);
@@ -345,11 +347,8 @@ public class MainActivity extends Activity {
                         org.json.JSONObject json = new org.json.JSONObject(text);
                         if ("KurisuPro".equals(json.optString("service"))) {
                             foundServerUrl = "http://" + senderIp + ":8080";
-                            foundAccessToken = json.optString("access_token", "");
                             String bIp = json.optString("board_ip", "");
-                            String cTok = json.optString("control_token", "");
                             if (BridgePolicy.privateIpv4(bIp)) foundBoardIp = bIp;
-                            if (BridgePolicy.token(cTok)) foundControlToken = cTok;
                             break;
                         }
                         if (json.has("boot_id") || "Kurisu-Matrix".equals(json.optString("device"))) {
@@ -360,24 +359,28 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception ignored) {}
 
-            final String sUrl = foundServerUrl, sTok = foundAccessToken, bIp = foundBoardIp, cTok = foundControlToken;
+            final String sUrl = foundServerUrl, bIp = foundBoardIp;
             runOnUiThread(() -> {
                 discovering = false;
                 if (isFinishing() || destroyed) return;
                 android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
                 android.content.SharedPreferences.Editor ed = prefs.edit();
                 String finalBoardIp = bIp != null ? bIp : deviceTarget.host;
-                String finalBoardTok = cTok != null ? cTok : deviceTarget.token;
-                if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(finalBoardTok)) {
-                    deviceTarget = new DeviceTarget(finalBoardIp, finalBoardTok);
-                    ed.putString("device_host", finalBoardIp).putString("device_token", finalBoardTok);
+                if (BridgePolicy.privateIpv4(finalBoardIp)) {
+                    deviceTarget = new DeviceTarget(finalBoardIp, deviceTarget.token);
+                    ed.putString("device_host", finalBoardIp);
                 }
                 if (sUrl != null) {
-                    if (sTok != null && !sTok.isEmpty()) ed.putString("access_token", sTok);
                     ed.apply();
-                    Toast.makeText(MainActivity.this, "已自动配对并连接服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
-                    connectServer(sUrl + (sTok != null && !sTok.isEmpty() ? "/?pair=" + Uri.encode(sTok) : "/"));
-                } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(finalBoardTok)) {
+                    String savedToken = prefs.getString("access_token", "");
+                    if (savedToken != null && !savedToken.isEmpty()) {
+                        Toast.makeText(MainActivity.this, "已发现并重连服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
+                        connectServer(sUrl + "/?pair=" + Uri.encode(savedToken));
+                    } else {
+                        Toast.makeText(MainActivity.this, "已发现服务 (" + sUrl + ")，首次使用请进行配对验证", Toast.LENGTH_SHORT).show();
+                        connectServer(sUrl + "/");
+                    }
+                } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(deviceTarget.token)) {
                     serverOrigin = "";
                     ed.remove("server_url").apply();
                     Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
@@ -459,8 +462,35 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public boolean startFrontCamera(final String uploadUrl, final String mode) {
+            if (!bridgeTrusted || backgrounded || destroyed) return false;
+            if (serverOrigin == null || serverOrigin.isEmpty() || !trustedPage(webView)) {
+                return false;
+            }
+            if (uploadUrl == null || uploadUrl.trim().isEmpty()) return false;
+            try {
+                Uri parsed = Uri.parse(uploadUrl.trim());
+                if (!("http".equalsIgnoreCase(parsed.getScheme()) || "https".equalsIgnoreCase(parsed.getScheme()))) {
+                    return false;
+                }
+                String host = parsed.getHost();
+                int port = parsed.getPort() != -1 ? parsed.getPort() : ("https".equalsIgnoreCase(parsed.getScheme()) ? 443 : 80);
+                Uri serverUri = Uri.parse(serverOrigin);
+                String serverHost = serverUri.getHost();
+                int serverPort = serverUri.getPort() != -1 ? serverUri.getPort() : ("https".equalsIgnoreCase(serverUri.getScheme()) ? 443 : 80);
+                if (host == null || !host.equalsIgnoreCase(serverHost) || port != serverPort) {
+                    android.util.Log.w("MainActivity", "Camera upload rejected: target origin does not match paired server");
+                    return false;
+                }
+                String path = parsed.getPath();
+                if (path == null || !(path.equals("/api/vision/phone_frame") || path.equals("/api/pro/vision/frame") || path.equals("/api/pro/camera/frame"))) {
+                    android.util.Log.w("MainActivity", "Camera upload rejected: endpoint not whitelisted");
+                    return false;
+                }
+            } catch (Exception e) {
+                return false;
+            }
             if (frontCameraBridge != null) {
-                return frontCameraBridge.start(uploadUrl, mode);
+                return frontCameraBridge.start(uploadUrl, mode, serverOrigin);
             }
             return false;
         }

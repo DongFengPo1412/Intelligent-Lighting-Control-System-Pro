@@ -29,6 +29,7 @@ public class FrontCameraBridge {
     private volatile boolean mRunning = false;
     private volatile boolean mUploading = false;
     private volatile int mRotation = 90; // Default: 90 degrees clockwise as requested
+    private volatile String mAuthorizedOrigin = null;
     private long lastFrameTime = 0;
     private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
 
@@ -46,7 +47,26 @@ public class FrontCameraBridge {
     }
 
     public synchronized boolean start(final String uploadUrl, final String mode) {
+        return start(uploadUrl, mode, null);
+    }
+
+    public synchronized boolean start(final String uploadUrl, final String mode, final String authorizedOrigin) {
         stop();
+        if (authorizedOrigin == null || authorizedOrigin.trim().isEmpty() || uploadUrl == null || uploadUrl.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            android.net.Uri targetUri = android.net.Uri.parse(uploadUrl.trim());
+            String targetOrigin = new android.net.Uri.Builder().scheme(targetUri.getScheme()).encodedAuthority(targetUri.getEncodedAuthority()).build().toString();
+            android.net.Uri authUri = android.net.Uri.parse(authorizedOrigin.trim());
+            String expectedOrigin = new android.net.Uri.Builder().scheme(authUri.getScheme()).encodedAuthority(authUri.getEncodedAuthority()).build().toString();
+            if (!expectedOrigin.equalsIgnoreCase(targetOrigin)) {
+                return false;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        this.mAuthorizedOrigin = authorizedOrigin.trim();
         try {
             int camId = -1;
             int count = Camera.getNumberOfCameras();
@@ -81,24 +101,11 @@ public class FrontCameraBridge {
             }
             mCamera.setParameters(params);
 
-            // Resolve access token from URL or SharedPreferences
-            String tok = null;
-            try {
-                android.net.Uri uri = android.net.Uri.parse(uploadUrl);
-                tok = uri.getQueryParameter("token");
-            } catch (Exception ignored) {}
-            if (tok == null || tok.trim().isEmpty()) {
-                tok = activity.getSharedPreferences("config", Activity.MODE_PRIVATE).getString("access_token", "");
-            }
+            // Resolve access token securely from SharedPreferences
+            String tok = activity.getSharedPreferences("config", Activity.MODE_PRIVATE).getString("access_token", "");
             final String authToken = tok != null ? tok.trim() : "";
-            String resolvedUrl = uploadUrl;
-            if (!authToken.isEmpty() && uploadUrl != null && !uploadUrl.isEmpty()) {
-                try {
-                    String clean = uploadUrl.replaceAll("([?&])token=[^&]*", "$1").replaceAll("[?&]$", "");
-                    resolvedUrl = clean + (clean.contains("?") ? "&" : "?") + "token=" + java.net.URLEncoder.encode(authToken, "UTF-8");
-                } catch (Exception ignored) {}
-            }
-            final String finalUploadUrl = resolvedUrl;
+            // Strip any sensitive token parameter from URL to prevent query parameter exposure
+            final String finalUploadUrl = uploadUrl.replaceAll("([?&])token=[^&]*", "$1").replaceAll("[?&]$", "");
 
             mSurface = new SurfaceTexture(10);
             mCamera.setPreviewTexture(mSurface);
@@ -147,6 +154,7 @@ public class FrontCameraBridge {
                             try {
                                 URL u = new URL(finalUploadUrl);
                                 HttpURLConnection conn = (HttpURLConnection) u.openConnection();
+                                conn.setInstanceFollowRedirects(false); // Security: prohibit following cross-origin redirects
                                 conn.setRequestMethod("POST");
                                 conn.setDoOutput(true);
                                 conn.setRequestProperty("Content-Type", "image/jpeg");
@@ -161,7 +169,13 @@ public class FrontCameraBridge {
                                 os.write(finalJpeg);
                                 os.flush();
                                 os.close();
-                                if (conn.getResponseCode() == 200) {
+                                int responseCode = conn.getResponseCode();
+                                if (responseCode >= 300 && responseCode < 400) {
+                                    // Security: reject redirects, do not leak frames or credentials
+                                    conn.disconnect();
+                                    return;
+                                }
+                                if (responseCode == 200) {
                                     InputStream is = conn.getInputStream();
                                     ByteArrayOutputStream resp = new ByteArrayOutputStream();
                                     byte[] buf = new byte[1024];
