@@ -44,6 +44,9 @@ class MultimodalHub:
         self.last_greet = 0
         self.previous_auto_mode = None
         self.started = False
+        self.source = "none"
+        self.active_session_id = None
+        self.session_epoch = 0
         self.pending_direction = None
         self.direction_since = 0
         self.last_face = None
@@ -64,6 +67,8 @@ class MultimodalHub:
         return None
 
     def start(self, mode="pet", camera=0):
+        if camera in ("remote", -1, "phone"):
+            return self.start_remote(mode=mode)
         if mode not in self.MODES or type(camera) is not int or not 0 <= camera <= 9:
             raise ValueError("Invalid vision mode/camera")
         if self.thread and self.thread.is_alive() and camera != self.camera:
@@ -73,6 +78,9 @@ class MultimodalHub:
             raise ConnectionError("Vision display mode was not acknowledged")
         self.automatic_enabled = True
         self.arbiter.until = 0
+        self.session_epoch += 1
+        self.active_session_id = f"cam_{self.session_epoch}_{int(time.time())}"
+        self.source = "camera"
         if self.thread and self.thread.is_alive():
             if camera != self.camera:
                 raise ValueError("Stop the camera before changing its index")
@@ -85,6 +93,20 @@ class MultimodalHub:
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._capture, daemon=True)
         self.thread.start()
+
+    def start_remote(self, mode="pet"):
+        if mode not in self.MODES:
+            raise ValueError("Invalid vision mode")
+        if self.thread and self.thread.is_alive():
+            raise RuntimeError("Stop the local camera before starting remote session")
+        self.stop_event.clear()
+        self.session_epoch += 1
+        self.active_session_id = f"remote_{self.session_epoch}_{int(time.time())}"
+        self.source = "remote"
+        self.mode = mode
+        self.started = True
+        self.error = None
+        return self.active_session_id
 
     def manual_mode(self, mode):
         compatible = {
@@ -104,6 +126,9 @@ class MultimodalHub:
         if self.thread and self.thread.is_alive():
             raise RuntimeError("Camera has not released yet")
         self.started = False
+        self.source = "none"
+        self.active_session_id = None
+        self.session_epoch += 1
         self._record_face(None)
         if hasattr(self, "frame_lock"):
             with self.frame_lock:
@@ -192,7 +217,15 @@ class MultimodalHub:
         self.process(observation)
         return observation
 
-    def process_remote_frame(self, raw_bytes, mode=None):
+    def process_remote_frame(self, raw_bytes, mode=None, session_id=None):
+        if not self.started or self.stop_event.is_set():
+            raise RuntimeError("Vision session is stopped")
+        if self.source == "camera":
+            raise RuntimeError("Local camera is active; remote frame rejected")
+        if session_id is not None and self.active_session_id is not None:
+            if session_id != self.active_session_id:
+                raise RuntimeError("Stale or invalid session ID")
+
         import cv2
         import numpy as np
         import mediapipe as mp
@@ -213,7 +246,6 @@ class MultimodalHub:
         if img is None:
             raise ValueError("Failed to decode image")
 
-        self.started = True
         if self._remote_hands and self._remote_face:
             return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True)
         return {"present": False}
@@ -407,6 +439,8 @@ class MultimodalHub:
         age = time.time() - self.observed_at if self.observed_at else None
         return dict(
             running=self.started,
+            source=self.source,
+            session_id=self.active_session_id,
             mode=self.mode,
             automatic_enabled=self.automatic_enabled,
             error=self.error,

@@ -492,20 +492,39 @@ class LightController(ProControlMixin):
             self._vision_hub.manual_mode(32)
         from arcade_runner import get_arcade_session
         session = get_arcade_session(self)
-        sel_res = session.select_game(gid)
-        if sel_res.get("status") != "ok":
-            return sel_res
-        start_res = session.start()
-        if start_res.get("status") != "ok":
-            return start_res
-        return {
-            "status": "ok",
-            "game_id": gid,
-            "game_name": name,
-            "source": start_res.get("source", "esp32_hardware"),
-            "simulated": start_res.get("simulated", False),
-            "message": f"已成功启动 #{gid:03d} {name}",
-        }
+        if hasattr(session, 'select_game') and hasattr(session, 'start'):
+            sel_res = session.select_game(gid)
+            if sel_res.get("status") != "ok":
+                return sel_res
+            start_res = session.start()
+            if start_res.get("status") != "ok":
+                return start_res
+            confirmed_gid = getattr(session, 'status', {}).get("game_id", 0)
+            if confirmed_gid != 0 and confirmed_gid != gid and not getattr(session, 'simulated_mode', False):
+                return {
+                    "status": "error",
+                    "error": "cartridge_mismatch",
+                    "message": f"板端确认卡带 ID ({confirmed_gid}) 与目标 ({gid}) 不一致",
+                }
+            return {
+                "status": "ok",
+                "game_id": gid,
+                "game_name": name,
+                "source": start_res.get("source", "esp32_hardware"),
+                "simulated": start_res.get("simulated", False),
+                "message": f"已成功启动 #{gid:03d} {name}",
+            }
+        elif hasattr(session, 'legacy_control'):
+            res = session.legacy_control(gid, 'start')
+            if res.get('status') == 'ok':
+                return {
+                    "status": "ok",
+                    "game_id": gid,
+                    "game_name": name,
+                    "message": f"已成功启动 #{gid:03d} {name}",
+                }
+            return res
+        return {"status": "error", "error": "unsupported_session"}
 
     def set_mode(self, mode_num: int) -> bool:
         """Select a direct mode (0..31 except 18/25); countdown requires seconds."""

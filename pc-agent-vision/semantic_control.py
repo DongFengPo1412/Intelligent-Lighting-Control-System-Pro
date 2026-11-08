@@ -172,29 +172,7 @@ def exact_plan(text):
     compact = re.sub(r'[，,。.!！\s]', '', text)
     compact = compact.replace('音乐流体','音乐光环')
 
-    # 1. Negation for games and general control
-    if re.search(r'(?:不要|别|不想|不用)(?:再)?(?:去)?(?:玩|启动|打开|进入|运行)?(?:街机|游戏)', compact):
-        return {'kind': 'chat', 'actions': []}
-    neg_m = re.fullmatch(r'(?:请)?(?:不要|别|不想|不用)(?:再)?(?:去)?(?:玩|启动|打开|进入|运行)?\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:了)?(?:吧|一下)?', compact)
-    if neg_m:
-        from arcade_catalog import resolve_arcade_game
-        cand = re.sub(r'[了吧一下]+$', '', neg_m.group(1))
-        if not cand or cand in ('游戏', '街机', '卡带') or resolve_arcade_game(cand):
-            return {'kind': 'chat', 'actions': []}
-
-    # 2. Ambiguous game request without specific title -> clarify
-    if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:玩|启动|打开|开启|进入|运行|来[个局把]|玩一[局把下])?(?:街机|游戏)(?:吧|一下)?', compact):
-        return {'kind': 'clarify', 'actions': []}
-
-    # 3. Specific arcade game launch
-    from arcade_catalog import resolve_arcade_game
-    game_m = re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:启动|打开|开启|玩|运行|切换到|进入|来[个局把]|玩一[局把下])\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:吧|一下)?', compact)
-    if game_m:
-        candidate = game_m.group(1)
-        res = resolve_arcade_game(candidate)
-        if res:
-            return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
-
+    # 1. Explicit color & lighting modes first (prevents lighting commands like "切换到红灯" from hitting arcade)
     color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)
     if color:
         return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}
@@ -208,10 +186,37 @@ def exact_plan(text):
                 return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': 41}]}
             return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': mode}]}
 
-    # 4. Direct game name mention fallback
-    res = resolve_arcade_game(compact)
-    if res:
-        return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
+    # 2. Negations for games and control (e.g. "我不想玩马里奥了", "不要玩游戏", "别打开马里奥")
+    if re.search(r'(?:我(?:们)?|你|请)?(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束).*(?:游戏|街机|卡带|马里奥|贪吃蛇|方块|乒乓|赛车|打砖块|切水果|小鸟|恐龙)', compact):
+        return {'kind': 'chat', 'actions': []}
+
+    # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩")
+    if re.search(r'(?:是什么|是什么意思|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则是什么|有什么|多少关|哪个好玩|\?|？)', compact):
+        return {'kind': 'chat', 'actions': []}
+
+    # 4. Multiple games / comparison (e.g. "马里奥还是贪吃蛇", "玩马里奥还是贪吃蛇") -> clarify
+    from arcade_catalog import find_arcade_games, resolve_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
+    games = find_arcade_games(compact)
+    if len(games) > 1 or (len(games) >= 1 and ('还是' in compact or '或者' in compact)):
+        return {'kind': 'clarify', 'actions': []}
+
+    # 5. Ambiguous game request without specific title (e.g. "玩游戏", "我想玩游戏", "启动街机") -> clarify
+    if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:玩|启动|打开|开启|进入|运行|来[个局把]|玩一[局把下])?(?:街机|游戏)(?:吧|一下)?', compact):
+        return {'kind': 'clarify', 'actions': []}
+
+    # 6. Specific arcade game launch with explicit intent (e.g. "启动马里奥", "玩超级马里奥", "启动第1款游戏")
+    game_m = re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:启动|打开|开启|玩|运行|切换到|进入|来[个局把]|玩一[局把下])\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:吧|一下)?', compact)
+    if game_m:
+        candidate = game_m.group(1)
+        res = resolve_arcade_game(candidate)
+        if res:
+            return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
+
+    # 7. Direct exact standalone game alias fallback
+    if compact not in RESERVED_LIGHTING_WORDS and compact in _NAME_TO_ID:
+        res = resolve_arcade_game(compact)
+        if res:
+            return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
 
     return None
 

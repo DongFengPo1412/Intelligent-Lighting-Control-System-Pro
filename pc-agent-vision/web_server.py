@@ -1267,11 +1267,12 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     check_reinit_allowed()
     global shutting_down
     shutting_down = False
-    from access_control import AccessPolicy, access_middleware, pair
+    from access_control import AccessPolicy, access_middleware, pair, auth_challenge
     app = web.Application(client_max_size=21*1024*1024, middlewares=[access_middleware, no_cache_cors_middleware])
     app['access_policy'] = AccessPolicy(token=os.environ.get('KURISU_ACCESS_TOKEN'),
         origins=filter(None, os.environ.get('KURISU_ALLOWED_ORIGINS','').split(',')))
     app.router.add_post('/api/pair', pair)
+    app.router.add_post('/api/auth/challenge', auth_challenge)
     app['simulate']=simulate;app['no_audio']=no_audio
     warmup_abort_ev = threading.Event()
     app['warmup_state'] = {

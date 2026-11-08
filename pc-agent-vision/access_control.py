@@ -99,7 +99,7 @@ async def access_middleware(request, handler):
                 response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id"
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
             return response
-        if not policy.authorized(request):
+        if not policy.authorized(request) and request.path not in ("/api/auth/challenge",):
             return web.json_response({"status":"error", "error":"pairing_required"}, status=401)
         limit = (20*1024*1024 if request.path in ("/api/pro/music-upload", "/api/pro/camera/frame", "/api/pro/vision/frame") else
                  1024*1024 if request.path == "/api/pro/documents" else 64*1024)
@@ -139,3 +139,24 @@ async def pair(request):
     response = web.json_response({"status":"ok"})
     response.set_cookie("kurisu_session", policy.token, httponly=True, samesite="Strict", secure=request.secure)
     return response
+
+
+async def auth_challenge(request):
+    """Zero-knowledge server identity verification: proves this server holds the shared token."""
+    try:
+        data = await request.json() if request.can_read_body else {}
+    except Exception:
+        data = {}
+    client_nonce = str(data.get("nonce", "")).strip()
+    if not client_nonce or len(client_nonce) < 8 or len(client_nonce) > 128:
+        return web.json_response({"status": "error", "error": "invalid_nonce"}, status=400)
+    policy = request.app["access_policy"]
+    server_nonce = secrets.token_hex(16)
+    message = f"{client_nonce}:{server_nonce}".encode("utf-8")
+    server_proof = hmac.new(policy.token.encode("utf-8"), message, "sha256").hexdigest()
+    return web.json_response({
+        "status": "ok",
+        "service": "KurisuPro",
+        "server_nonce": server_nonce,
+        "server_proof": server_proof,
+    })

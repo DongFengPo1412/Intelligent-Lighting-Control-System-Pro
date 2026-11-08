@@ -86,6 +86,27 @@ def _init_catalog():
         _NAME_TO_ID[k.lower()] = v
 
 
+# Common lighting, persona and utility words that must NEVER be matched as game aliases
+RESERVED_LIGHTING_WORDS = {
+    "红灯", "绿灯", "蓝灯", "纯红", "纯蓝", "纯绿", "红色", "绿色", "蓝色",
+    "极光", "呼吸极光", "霓虹", "幻彩霓虹", "流星", "流星划过", "星空", "繁星点点",
+    "雨滴", "乱序雨滴", "波纹", "中心波纹", "笑脸", "哭脸", "垂头丧气", "表情",
+    "桌宠", "红莉栖", "立绘", "倒计时", "沙漏", "世界线", "仪表", "画布", "微光",
+    "音乐", "随动", "光环", "流体", "关灯", "开灯"
+}
+
+
+def find_arcade_games(text: str) -> set:
+    """Find all unique cartridge IDs mentioned in text."""
+    _init_catalog()
+    norm = text.lower().strip()
+    found = set()
+    for name, gid in _NAME_TO_ID.items():
+        if len(name) >= 2 and name not in RESERVED_LIGHTING_WORDS and name in norm:
+            found.add(gid)
+    return found
+
+
 def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
     """Resolve an arcade game name, alias or ID to (target_id, clean_name)."""
     _init_catalog()
@@ -98,7 +119,7 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         return None
 
     raw = str(query).strip()
-    if not raw:
+    if not raw or raw in RESERVED_LIGHTING_WORDS:
         return None
 
     # Digits direct lookup
@@ -109,10 +130,13 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         return None
 
     norm = raw.lower().strip()
-    norm = re.sub(r'^[#＃第]+', '', norm)
-    norm = re.sub(r'[号款关个]+$', '', norm)
-    if norm.isdigit():
-        val = int(norm)
+    if norm in RESERVED_LIGHTING_WORDS:
+        return None
+
+    norm_clean = re.sub(r'^[#＃第]+', '', norm)
+    norm_clean = re.sub(r'[号款关个]+$', '', norm_clean)
+    if norm_clean.isdigit():
+        val = int(norm_clean)
         if 1 <= val <= 100 and val in _CATALOG_CACHE:
             return val, _CATALOG_CACHE[val]["name"]
 
@@ -121,9 +145,11 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         gid = _NAME_TO_ID[norm]
         return gid, _CATALOG_CACHE.get(gid, {}).get("name", norm)
 
-    # Substring / fuzzy match
+    # Substring match: only if a specific game alias (>=2 chars) is contained in norm
+    # NEVER match norm in name (which erroneously matched "红灯" to "红绿灯")
     for name, gid in _NAME_TO_ID.items():
-        if name in norm or norm in name:
+        if len(name) >= 2 and name not in RESERVED_LIGHTING_WORDS and name in norm:
             return gid, _CATALOG_CACHE.get(gid, {}).get("name", name)
 
     return None
+

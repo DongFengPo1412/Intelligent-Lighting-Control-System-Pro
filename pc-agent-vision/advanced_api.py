@@ -505,8 +505,9 @@ def register(app, api_getter):
         if not raw:
             return web.Response(status=400, text="Empty frame")
         mode = request.headers.get("X-Vision-Mode") or request.query.get("mode")
+        session_id = request.headers.get("X-Vision-Session") or request.query.get("session_id")
         try:
-            obs = await asyncio.to_thread(api.vision.process_remote_frame, raw, mode)
+            obs = await asyncio.to_thread(api.vision.process_remote_frame, raw, mode, session_id)
             return web.json_response(
                 {
                     "status": "ok",
@@ -515,7 +516,8 @@ def register(app, api_getter):
                 }
             )
         except Exception as exc:
-            return web.json_response({"error": str(exc)}, status=400)
+            status_code = 409 if "stopped" in str(exc).lower() else 400
+            return web.json_response({"error": str(exc)}, status=status_code)
 
     app.router.add_get("/api/pro/camera/feed", camera_feed)
     app.router.add_get("/api/pro/camera/frame", camera_frame)

@@ -88,14 +88,19 @@ public class MainActivity extends Activity {
             return;
         }
         String pairParam = uri.getQueryParameter("pair");
-        if (pairParam != null && !pairParam.trim().isEmpty()) {
-            getSharedPreferences("config", MODE_PRIVATE).edit().putString("access_token", pairParam.trim()).apply();
-        } else {
-            pairParam = getSharedPreferences("config", MODE_PRIVATE).getString("access_token", "");
-        }
         serverOrigin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
-        getSharedPreferences("config", MODE_PRIVATE).edit().putString("server_url", serverOrigin + "/").apply();
-        String targetUrl = serverOrigin + "/" + (pairParam != null && !pairParam.isEmpty() ? "?pair=" + Uri.encode(pairParam) : "");
+        android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
+        if (pairParam != null && !pairParam.trim().isEmpty()) {
+            prefs.edit().putString("access_token", pairParam.trim()).putString("server_url", serverOrigin + "/").apply();
+        } else {
+            prefs.edit().putString("server_url", serverOrigin + "/").apply();
+        }
+        String savedToken = prefs.getString("access_token", "");
+        if (savedToken != null && !savedToken.isEmpty()) {
+            android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + savedToken + "; path=/; SameSite=Strict");
+        }
+        // Security: Never append ?pair= into candidate or loaded server URLs!
+        String targetUrl = serverOrigin + "/";
         webView.loadUrl(targetUrl);
     }
 
@@ -143,6 +148,65 @@ public class MainActivity extends Activity {
         Uri uri = Uri.parse(current);
         String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         return !serverOrigin.isEmpty() && serverOrigin.equals(origin);
+    }
+
+    public static boolean verifyServerIdentity(String candidateOrigin, String savedToken) {
+        if (candidateOrigin == null || candidateOrigin.trim().isEmpty() || savedToken == null || savedToken.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            byte[] nonceBytes = new byte[16];
+            new java.security.SecureRandom().nextBytes(nonceBytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : nonceBytes) sb.append(String.format("%02x", b));
+            String clientNonce = sb.toString();
+
+            java.net.URL url = new java.net.URL(candidateOrigin.replaceAll("/+$", "") + "/api/auth/challenge");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setConnectTimeout(1500);
+            conn.setReadTimeout(1500);
+            conn.setDoOutput(true);
+            conn.setInstanceFollowRedirects(false);
+
+            org.json.JSONObject req = new org.json.JSONObject();
+            req.put("nonce", clientNonce);
+            byte[] body = req.toString().getBytes(StandardCharsets.UTF_8);
+            try (java.io.OutputStream os = conn.getOutputStream()) {
+                os.write(body);
+            }
+
+            if (conn.getResponseCode() != 200) {
+                return false;
+            }
+
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            try (java.io.InputStream is = conn.getInputStream()) {
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+            }
+            String respText = baos.toString("UTF-8");
+            org.json.JSONObject resp = new org.json.JSONObject(respText);
+            if (!"ok".equals(resp.optString("status"))) return false;
+            String serverNonce = resp.optString("server_nonce", "");
+            String serverProof = resp.optString("server_proof", "");
+            if (serverNonce.isEmpty() || serverProof.isEmpty()) return false;
+
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            javax.crypto.spec.SecretKeySpec keySpec = new javax.crypto.spec.SecretKeySpec(
+                savedToken.trim().getBytes(StandardCharsets.UTF_8), "HmacSHA256"
+            );
+            mac.init(keySpec);
+            byte[] rawHmac = mac.doFinal((clientNonce + ":" + serverNonce).getBytes(StandardCharsets.UTF_8));
+            StringBuilder expectedProof = new StringBuilder();
+            for (byte b : rawHmac) expectedProof.append(String.format("%02x", b));
+
+            return expectedProof.toString().equalsIgnoreCase(serverProof);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private boolean navigate(WebView view, Uri uri) {
@@ -201,6 +265,14 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view,String url) {
                 bridgeTrusted=isOfflinePage(url);super.onPageFinished(view,url);
+                if (trustedPage(view)) {
+                    android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
+                    String tok = prefs.getString("access_token", "");
+                    if (tok != null && !tok.isEmpty() && !isOfflinePage(url)) {
+                        String js = "try { sessionStorage.setItem('kurisu_access_token', '" + tok + "'); localStorage.setItem('kurisu_access_token', '" + tok + "'); } catch(e){}";
+                        view.evaluateJavascript(js, null);
+                    }
+                }
             }
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request) {
                 String url=request.getUrl().toString();
@@ -360,6 +432,15 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
 
             final String sUrl = foundServerUrl, bIp = foundBoardIp;
+            boolean verifiedPaired = false;
+            if (sUrl != null) {
+                android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
+                String savedToken = prefs.getString("access_token", "");
+                if (savedToken != null && !savedToken.isEmpty()) {
+                    verifiedPaired = verifyServerIdentity(sUrl, savedToken);
+                }
+            }
+            final boolean isVerifiedPaired = verifiedPaired;
             runOnUiThread(() -> {
                 discovering = false;
                 if (isFinishing() || destroyed) return;
@@ -372,13 +453,14 @@ public class MainActivity extends Activity {
                 }
                 if (sUrl != null) {
                     ed.apply();
-                    String savedToken = prefs.getString("access_token", "");
-                    if (savedToken != null && !savedToken.isEmpty()) {
-                        Toast.makeText(MainActivity.this, "已发现并重连服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
-                        connectServer(sUrl + "/?pair=" + Uri.encode(savedToken));
+                    if (isVerifiedPaired) {
+                        Toast.makeText(MainActivity.this, "已验证服务身份并安全重连 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
+                        connectServer(sUrl);
                     } else {
-                        Toast.makeText(MainActivity.this, "已发现服务 (" + sUrl + ")，首次使用请进行配对验证", Toast.LENGTH_SHORT).show();
-                        connectServer(sUrl + "/");
+                        // Candidate service is unverified or new: DO NOT provide saved credentials!
+                        Toast.makeText(MainActivity.this, "已发现候选服务 (" + sUrl + ")，未验证身份需手动配对", Toast.LENGTH_SHORT).show();
+                        serverOrigin = sUrl;
+                        webView.loadUrl(sUrl + "/");
                     }
                 } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(deviceTarget.token)) {
                     serverOrigin = "";
@@ -462,7 +544,7 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public boolean startFrontCamera(final String uploadUrl, final String mode) {
-            if (!bridgeTrusted || backgrounded || destroyed) return false;
+            if (backgrounded || destroyed) return false;
             if (serverOrigin == null || serverOrigin.isEmpty() || !trustedPage(webView)) {
                 return false;
             }
