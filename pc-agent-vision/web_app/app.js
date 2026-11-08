@@ -88,24 +88,24 @@
   const arcadeTransport = new window.ArcadeTransport(nativeMode ? window.arcadeNativeExchange(window.AmadeusNative) :
     async (command, id, policy) => {
       const path = command.cmd === "frame" ? "/api/arcade/frame" : "/api/arcade";
-      const data = command.cmd === "frame" ? undefined : {...command};
-      const reply = await httpApi(path,data,data ? "POST" : "GET",3000);
+      const data = command.cmd === "frame" ? undefined : { ...command };
+      const reply = await httpApi(path, data, data ? "POST" : "GET", 3000);
       if (!reply || reply.status === "error") throw Error(reply?.error || "请求失败");
       return reply;
     });
   async function api(path, data, method = "POST", timeout = 15000) {
-    if (path === "/api/arcade" || path.startsWith("/api/arcade/")) return arcadeTransport.call(path,data);
+    if (path === "/api/arcade" || path.startsWith("/api/arcade/")) return arcadeTransport.call(path, data);
     if (nativeMode) {
-      return nativeDevice(path,data,method);
+      return nativeDevice(path, data, method);
     }
-    return httpApi(path,data,method,timeout);
+    return httpApi(path, data, method, timeout);
   }
   try {
     const params = new URLSearchParams(location.search);
     const pairFromQuery = (params.get("pair") || "").trim();
     if (pairFromQuery) {
       sessionStorage.setItem("kurisu_access_token", pairFromQuery);
-      try { localStorage.setItem("kurisu_access_token", pairFromQuery); } catch (_) {}
+      try { localStorage.setItem("kurisu_access_token", pairFromQuery); } catch (_) { }
       params.delete("pair");
       const cleanQuery = params.toString();
       history.replaceState(null, "", location.pathname + (cleanQuery ? "?" + cleanQuery : "") + location.hash);
@@ -113,14 +113,14 @@
       const savedToken = localStorage.getItem("kurisu_access_token");
       if (savedToken) sessionStorage.setItem("kurisu_access_token", savedToken);
     }
-  } catch (_) {}
+  } catch (_) { }
   const pairStorage = {
     getItem: (k) => {
       try { return sessionStorage.getItem(k) || localStorage.getItem(k); } catch (_) { return sessionStorage.getItem(k); }
     },
     setItem: (k, v) => {
       sessionStorage.setItem(k, v);
-      try { localStorage.setItem(k, v); } catch (_) {}
+      try { localStorage.setItem(k, v); } catch (_) { }
     }
   };
   function getAccessToken() {
@@ -163,9 +163,11 @@
     fetch: (...args) => fetch(...args), storage: pairStorage,
     prompt: promptPairingToken
   });
-  const httpApi = (path,data,method="POST",timeout=15000) =>
-    pairedHttp(path,{method,body:data===undefined?undefined:JSON.stringify(data),
-      headers:data===undefined?{}:{"Content-Type":"application/json"}},timeout);
+  const httpApi = (path, data, method = "POST", timeout = 15000) =>
+    pairedHttp(path, {
+      method, body: data === undefined ? undefined : JSON.stringify(data),
+      headers: data === undefined ? {} : { "Content-Type": "application/json" }
+    }, timeout);
   function bind(id, fn) {
     $(id).addEventListener("click", async (e) => {
       const b = e.currentTarget;
@@ -239,7 +241,7 @@
     weekday: "long",
   }).format(new Date());
   function connection(s) {
-    s=deviceHealth.observe(s);
+    s = deviceHealth.observe(s);
     state.online = !!s;
     state.simulated = !!s?.simulated;
     state.board = !!s?.is_connected;
@@ -289,7 +291,7 @@
       : wakeReady
         ? "对板载麦克风说“助手”即可开始"
         : "可发送文字；板载语音状态见设置";
-    if(nativeMode)$("voiceState").textContent="灯光和街机可直连；AI对话需连接电脑服务";
+    if (nativeMode) $("voiceState").textContent = "灯光和街机可直连；AI对话需连接电脑服务";
     $("sendChat").disabled = nativeMode || !state.online || !!state.ownChat;
     markHardware();
     if (!state.board) {
@@ -370,10 +372,10 @@
       b.classList.toggle("active", Number(b.dataset.mode) === f.mode);
       b.setAttribute("aria-pressed", String(Number(b.dataset.mode) === f.mode));
     });
-    state.game=state.arcadeActive ? "arcade" : null;
-    $("gameState").textContent=state.arcadeActive ? ARCADE_TITLE_MAP[state.arcadeGid] || "街机" : "选择游戏开始";
+    state.game = state.arcadeActive ? "arcade" : null;
+    $("gameState").textContent = state.arcadeActive ? ARCADE_TITLE_MAP[state.arcadeGid] || "街机" : "选择游戏开始";
     $$("[data-game]").forEach((b) =>
-      b.classList.toggle("active", state.arcadeActive ? Number(b.dataset.arcadeId)===state.arcadeGid : b.dataset.game === state.game),
+      b.classList.toggle("active", state.arcadeActive ? Number(b.dataset.arcadeId) === state.arcadeGid : b.dataset.game === state.game),
     );
     if ($("marioContainer")) {
       $("marioContainer").style.display = state.arcadeActive ? "flex" : "none";
@@ -383,12 +385,12 @@
       f.mode === 25 ? "计时画面显示中" : "尚未开始 / 已结束";
   }
   async function setMode(mode) {
-    if([19,20,21,22].includes(mode))return launchArcadeGame(mode<21?33:41);
+    if ([19, 20, 21, 22].includes(mode)) return launchArcadeGame(mode < 21 ? 33 : 41);
     if (state.arcadeActive) {
-      await api("/api/arcade", {action:"exit"});
-      state.arcadeActive=false;state.game=null;
+      await api("/api/arcade", { action: "exit" });
+      state.arcadeActive = false; state.game = null;
       clearInterval(arcadeHeartbeatTimer);
-      if ($("marioContainer")) $("marioContainer").style.display="none";
+      if ($("marioContainer")) $("marioContainer").style.display = "none";
     }
     await api("/api/mode", { mode });
     notice(`已切换至：${modeName(mode)}`);
@@ -477,7 +479,7 @@
     volumeDebounce = setTimeout(async () => {
       try {
         await api("/api/volume", { volume: num });
-      } catch (_) {}
+      } catch (_) { }
     }, 70);
   }
 
@@ -526,8 +528,8 @@
   }
   $$("[data-timer]").forEach(
     (b) =>
-      (b.onclick = () =>
-        timer(Number(b.dataset.timer)).catch((e) => notice(e.message))),
+    (b.onclick = () =>
+      timer(Number(b.dataset.timer)).catch((e) => notice(e.message))),
   );
   $("timerForm").onsubmit = (e) => {
     e.preventDefault();
@@ -540,22 +542,22 @@
   });
   $$("[data-preview]").forEach(
     (b) =>
-      (b.onclick = () => {
-        try {
-          const three = b.dataset.preview === "3d";
-          if (three && !matrix3d) matrix3d = new Matrix3D($("view"));
-          $("view").hidden = !three;
-          $("matrixCanvas").hidden = three;
-          $("exposureControl").hidden = !three;
-          $$("[data-preview]").forEach((x) => {
-            x.classList.toggle("active", x === b);
-            x.setAttribute("aria-pressed", String(x === b));
-          });
-          if (state.frame) renderFrame(state.frame);
-        } catch (e) {
-          notice(e.message);
-        }
-      }),
+    (b.onclick = () => {
+      try {
+        const three = b.dataset.preview === "3d";
+        if (three && !matrix3d) matrix3d = new Matrix3D($("view"));
+        $("view").hidden = !three;
+        $("matrixCanvas").hidden = three;
+        $("exposureControl").hidden = !three;
+        $$("[data-preview]").forEach((x) => {
+          x.classList.toggle("active", x === b);
+          x.setAttribute("aria-pressed", String(x === b));
+        });
+        if (state.frame) renderFrame(state.frame);
+      } catch (e) {
+        notice(e.message);
+      }
+    }),
   );
   $("previewExposure").oninput = () => {
     if (matrix3d) {
@@ -585,10 +587,10 @@
   };
   $$("[data-prompt]").forEach(
     (b) =>
-      (b.onclick = () => {
-        $("chatInput").value = b.dataset.prompt;
-        $("chatInput").focus();
-      }),
+    (b.onclick = () => {
+      $("chatInput").value = b.dataset.prompt;
+      $("chatInput").focus();
+    }),
   );
   $("chatForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -663,9 +665,9 @@
     if (location.protocol === "file:" || state.socket) return;
     const ws = new WebSocket(
       (location.protocol === "https:" ? "wss:" : "ws:") +
-        "//" +
-        location.host +
-        "/ws",
+      "//" +
+      location.host +
+      "/ws",
     );
     state.socket = ws;
     ws.onmessage = (e) => {
@@ -765,7 +767,7 @@
     $("libraryPageState").textContent = "正在读取…";
     const r = await api(
       "/api/pro/library?" +
-        new URLSearchParams({ q: query, offset: String(offset), limit: "30" }),
+      new URLSearchParams({ q: query, offset: String(offset), limit: "30" }),
       undefined,
       "GET",
     );
@@ -821,9 +823,9 @@
       empty.textContent = r.scanning
         ? "曲库正在扫描，请稍候刷新"
         : r.error ||
-          (!r.root
-            ? "先到设置添加你的电脑音乐文件夹"
-            : "没有找到匹配的歌曲，试试歌名或歌手的一部分");
+        (!r.root
+          ? "先到设置添加你的电脑音乐文件夹"
+          : "没有找到匹配的歌曲，试试歌名或歌手的一部分");
       $("libraryTracks").append(empty);
     }
     $("libraryCount").textContent = r.count ?? 0;
@@ -903,7 +905,7 @@
     progEl.addEventListener("pointerdown", (e) => {
       if (!state.board || !(state.music?.duration > 0)) return;
       state.seekingMusic = true;
-      try { progEl.setPointerCapture(e.pointerId); } catch (_) {}
+      try { progEl.setPointerCapture(e.pointerId); } catch (_) { }
       const sec = calcSeekSeconds(e);
       if (sec !== null) {
         progEl.value = sec;
@@ -976,8 +978,8 @@
     try {
       if (!state.board) throw Error("请先连接灯板");
       if (file.size > 20 * 1024 * 1024) throw Error("临时上传不能超过 20 MiB");
-      await pairedHttp("/api/pro/music-upload?visual="+
-        encodeURIComponent($("musicVisual").value),{method:"POST",body:file});
+      await pairedHttp("/api/pro/music-upload?visual=" +
+        encodeURIComponent($("musicVisual").value), { method: "POST", body: file });
       notice(state.simulated ? "模拟音源已提交" : "音乐已开始");
       lastPro = 0;
     } catch (error) {
@@ -1124,19 +1126,19 @@
     $$("#arcadeGameGrid [data-arcade-id]").forEach((btn) => {
       const gid = parseInt(btn.dataset.arcadeId, 10);
       const item = ARCADE_CATALOG_100[gid - 1];
-      const available=ArcadeTransport.registeredIds.includes(gid);
-      btn.disabled=!available;
-      const guide=window.ARCADE_GAME_GUIDES?.[gid];
-      btn.title=guide?.help || "游玩说明尚未加载";
-      if(!btn.querySelector(".arcade-game-description")){
-        const name=document.createElement("strong");name.textContent=btn.textContent;
-        const description=document.createElement("span");description.className="arcade-game-description";
-        description.textContent=guide?.help || "游玩说明尚未加载";
-        btn.replaceChildren(name,description);
+      const available = ArcadeTransport.registeredIds.includes(gid);
+      btn.disabled = !available;
+      const guide = window.ARCADE_GAME_GUIDES?.[gid];
+      btn.title = guide?.help || "游玩说明尚未加载";
+      if (!btn.querySelector(".arcade-game-description")) {
+        const name = document.createElement("strong"); name.textContent = btn.textContent;
+        const description = document.createElement("span"); description.className = "arcade-game-description";
+        description.textContent = guide?.help || "游玩说明尚未加载";
+        btn.replaceChildren(name, description);
       }
-      btn.dataset.available=String(available);
+      btn.dataset.available = String(available);
       const matchCat = cat === "all" || btn.dataset.arcadeCat === cat;
-      const hay = `${btn.dataset.arcadeId} ${gid} ${item ? item[2] + " " + item[3] : btn.textContent} ${guide?.help||""}`.toLowerCase();
+      const hay = `${btn.dataset.arcadeId} ${gid} ${item ? item[2] + " " + item[3] : btn.textContent} ${guide?.help || ""}`.toLowerCase();
       const show = matchCat && (!q || hay.includes(q));
       btn.hidden = !show;
       if (show) visible++;
@@ -1178,9 +1180,9 @@
     const ct = Number(controlType !== undefined ? controlType : 3);
     activeControlType = ct;
     const gNum = Number(gid || state.arcadeGid || 1);
-    const help=document.querySelector(".mario-help");
-    const selectedGuide=window.ARCADE_GAME_GUIDES?.[gNum];
-    if(help)help.textContent=selectedGuide?.help || "游玩说明尚未加载，请刷新页面。";
+    const help = document.querySelector(".mario-help");
+    const selectedGuide = window.ARCADE_GAME_GUIDES?.[gNum];
+    if (help) help.textContent = selectedGuide?.help || "游玩说明尚未加载，请刷新页面。";
 
     if (ct === 0) {
       // CTRL_TAP_SINGLE (#009 Flappy, #010 Stack, #012 Knife Hit, #013 Pendulum, #014 Orbit Hop, #018 Red/Green Light)
@@ -1200,8 +1202,8 @@
       }
     } else if (ct === 1) {
       // CTRL_TWO_BUTTON (#002 Doodle Jump, #021 Breakout, #074 Highway Racer, #075 Slalom Ski, #095 Super Hexagon)
-      if (keyUp) keyUp.style.visibility = gNum===74 ? "visible" : "hidden";
-      if (keyDown) keyDown.style.visibility = gNum===74 ? "visible" : "hidden";
+      if (keyUp) keyUp.style.visibility = gNum === 74 ? "visible" : "hidden";
+      if (keyDown) keyDown.style.visibility = gNum === 74 ? "visible" : "hidden";
       if (actions) actions.style.display = selectedGuide?.a ? "flex" : "none";
     } else if (ct === 2) {
       // CTRL_DPAD_4WAY
@@ -1211,27 +1213,27 @@
       if (gNum === 41 || gNum === 42) {
         if (btnA_sub) btnA_sub.textContent = "旋转";
         if (btnB_sub) btnB_sub.textContent = "快降";
-      } else if(gNum===55) {
-        if(btnA_sub)btnA_sub.textContent="旋转/预览";
-        if(btnB_sub)btnB_sub.textContent="发射/停止";
-      } else if(gNum===57) {
-        if(btnA_sub)btnA_sub.textContent="下一辆";
-        if(btnB_sub)btnB_sub.textContent="上一辆";
-      } else if(gNum===58) {
-        if(btnA_sub)btnA_sub.textContent="执行程序";
-        if(btnB_sub)btnB_sub.textContent="撤销/中止";
-      } else if(gNum===81) {
-        if(btnA_sub)btnA_sub.textContent="开/关画线";
-        if(keyB)keyB.style.display="none";
-      } else if(gNum===98) {
-        if(btnA_sub)btnA_sub.textContent="喷气";
-        if(keyB)keyB.style.display="none";
-      } else if(gNum===85) {
-        if(btnA_sub)btnA_sub.textContent="分配技能";
-        if(btnB_sub)btnB_sub.textContent="切换技能";
-      } else if(gNum===92) {
-        if(btnA_sub)btnA_sub.textContent="挥刀";
-        if(btnB_sub)btnB_sub.textContent="斜挥刀";
+      } else if (gNum === 55) {
+        if (btnA_sub) btnA_sub.textContent = "旋转/预览";
+        if (btnB_sub) btnB_sub.textContent = "发射/停止";
+      } else if (gNum === 57) {
+        if (btnA_sub) btnA_sub.textContent = "下一辆";
+        if (btnB_sub) btnB_sub.textContent = "上一辆";
+      } else if (gNum === 58) {
+        if (btnA_sub) btnA_sub.textContent = "执行程序";
+        if (btnB_sub) btnB_sub.textContent = "撤销/中止";
+      } else if (gNum === 81) {
+        if (btnA_sub) btnA_sub.textContent = "开/关画线";
+        if (keyB) keyB.style.display = "none";
+      } else if (gNum === 98) {
+        if (btnA_sub) btnA_sub.textContent = "喷气";
+        if (keyB) keyB.style.display = "none";
+      } else if (gNum === 85) {
+        if (btnA_sub) btnA_sub.textContent = "分配技能";
+        if (btnB_sub) btnB_sub.textContent = "切换技能";
+      } else if (gNum === 92) {
+        if (btnA_sub) btnA_sub.textContent = "挥刀";
+        if (btnB_sub) btnB_sub.textContent = "斜挥刀";
       } else if (gNum === 38) {
         if (btnA_sub) btnA_sub.textContent = "炸弹";
         if (btnB_sub) btnB_sub.textContent = "动作";
@@ -1271,9 +1273,9 @@
       if (actions) actions.style.display = "none";
       if (versus) versus.style.display = "flex";
     }
-    const b3=selectedGuide;
-    if(b3 && [1,3].includes(ct)){if(btnA_sub)btnA_sub.textContent=b3.a||"确认";if(btnB_sub)btnB_sub.textContent=b3.b||"";if(keyB)keyB.style.display=b3.b?"inline-flex":"none";}
-    if(b3 && ct===0 && tapBtn && b3.a)tapBtn.textContent=b3.a;
+    const b3 = selectedGuide;
+    if (b3 && [1, 3].includes(ct)) { if (btnA_sub) btnA_sub.textContent = b3.a || "确认"; if (btnB_sub) btnB_sub.textContent = b3.b || ""; if (keyB) keyB.style.display = b3.b ? "inline-flex" : "none"; }
+    if (b3 && ct === 0 && tapBtn && b3.a) tapBtn.textContent = b3.a;
 
   }
 
@@ -1336,37 +1338,37 @@
     }
   }
 
-  let arcadeSettingsDirty=false;
-  for(const id of ["arcadeDifficulty","arcadeSoundEnabled","arcadeSoundVolume"])
-    $(id)?.addEventListener("input",()=>{arcadeSettingsDirty=true;});
-  if($("arcadeApplySettings"))$("arcadeApplySettings").onclick=async()=>{
-    const button=$("arcadeApplySettings");button.disabled=true;
+  let arcadeSettingsDirty = false;
+  for (const id of ["arcadeDifficulty", "arcadeSoundEnabled", "arcadeSoundVolume"])
+    $(id)?.addEventListener("input", () => { arcadeSettingsDirty = true; });
+  if ($("arcadeApplySettings")) $("arcadeApplySettings").onclick = async () => {
+    const button = $("arcadeApplySettings"); button.disabled = true;
     try {
-      const data={action:"config",sound_enabled:$("arcadeSoundEnabled").checked,sound_volume:Number($("arcadeSoundVolume").value)};
-      if(!$("arcadeDifficulty").disabled)data.difficulty=Number($("arcadeDifficulty").value);
-      const reply=await api("/api/arcade",data);arcadeSettingsDirty=false;updateArcadeHud(reply.game_status);
+      const data = { action: "config", sound_enabled: $("arcadeSoundEnabled").checked, sound_volume: Number($("arcadeSoundVolume").value) };
+      if (!$("arcadeDifficulty").disabled) data.difficulty = Number($("arcadeDifficulty").value);
+      const reply = await api("/api/arcade", data); arcadeSettingsDirty = false; updateArcadeHud(reply.game_status);
       notice("设置已保存");
-    } catch(error){notice(error.message);}finally{button.disabled=false;}
+    } catch (error) { notice(error.message); } finally { button.disabled = false; }
   };
 
   function updateArcadeHud(status) {
     if (!status) return;
-    const difficulty=$("arcadeDifficulty");
-    if(difficulty) {
-      difficulty.disabled=!status.difficulty_supported || [1,2].includes(status.state);
-      if(!arcadeSettingsDirty) {
-        difficulty.value=String(status.difficulty??1);
-        $("arcadeSoundEnabled").checked=status.sound_enabled===true;
-        $("arcadeSoundVolume").value=String(status.sound_volume??25);
+    const difficulty = $("arcadeDifficulty");
+    if (difficulty) {
+      difficulty.disabled = !status.difficulty_supported || [1, 2].includes(status.state);
+      if (!arcadeSettingsDirty) {
+        difficulty.value = String(status.difficulty ?? 1);
+        $("arcadeSoundEnabled").checked = status.sound_enabled === true;
+        $("arcadeSoundVolume").value = String(status.sound_volume ?? 25);
       }
       $("arcadeSettingsStatus").textContent = status.difficulty_supported
         ? "可在待机或结算画面切换游戏难度。"
         : "当前游戏采用固定标准难度。";
     }
-    if (status.game_id===20 && [1,2].includes(status.player_count)) {
-      state.pongPlayers=status.player_count;
-      const toggle=$("pongAiToggleBtn");
-      if(toggle)toggle.textContent=status.player_count===1?"单人 AI · 切为双人":"本地双人 · 切为 AI";
+    if (status.game_id === 20 && [1, 2].includes(status.player_count)) {
+      state.pongPlayers = status.player_count;
+      const toggle = $("pongAiToggleBtn");
+      if (toggle) toggle.textContent = status.player_count === 1 ? "单人 AI · 切为双人" : "本地双人 · 切为 AI";
     }
     const stateLabels = {
       0: "待机",
@@ -1482,7 +1484,7 @@
       return;
     }
 
-    arcadeSettingsDirty=false;
+    arcadeSettingsDirty = false;
     const gameTitle = ARCADE_TITLE_MAP[gid] || `街机游戏 #${gid}`;
     navigate("interaction");
 
@@ -1492,10 +1494,10 @@
         state.arcadeActive = true;
         state.arcadeGid = gid;
         state.game = "arcade";
-        $("arcadeGameTitle").textContent=gameTitle;
-        $("gameState").textContent=gameTitle;
-        $("marioContainer").style.display="flex";
-        $$("[data-arcade-id]").forEach(btn=>btn.classList.toggle("active",Number(btn.dataset.arcadeId)===gid));
+        $("arcadeGameTitle").textContent = gameTitle;
+        $("gameState").textContent = gameTitle;
+        $("marioContainer").style.display = "flex";
+        $$("[data-arcade-id]").forEach(btn => btn.classList.toggle("active", Number(btn.dataset.arcadeId) === gid));
 
         const badge = $("marioSyncBadge");
         if (badge) {
@@ -1528,28 +1530,28 @@
 
   function startArcadeHeartbeat() {
     if (arcadeHeartbeatTimer) clearInterval(arcadeHeartbeatTimer);
-    let busy=false;
+    let busy = false;
     arcadeHeartbeatTimer = setInterval(async () => {
-      if(busy || document.hidden || state.page!=="interaction")return;
+      if (busy || document.hidden || state.page !== "interaction") return;
       if (!state.arcadeActive) {
         clearInterval(arcadeHeartbeatTimer);
         return;
       }
       try {
-        busy=true;
+        busy = true;
         const hb = await api("/api/arcade", { action: "heartbeat" });
         if (hb && hb.game_status) {
           updateArcadeHud(hb.game_status);
         }
       } catch (err) {
-        if(/^stale_/.test(err.message) || state.page!=="interaction")return;
+        if (/^stale_/.test(err.message) || state.page !== "interaction") return;
         const badge = $("marioSyncBadge");
         if (badge && state.arcadeActive) {
           badge.textContent = "⚠️ 连接波动 · 已自动暂停";
           badge.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
           badge.style.color = "#ef4444";
         }
-      } finally {busy=false;}
+      } finally { busy = false; }
     }, 300);
   }
 
@@ -1584,40 +1586,40 @@
   }
 
   // 手机触屏手柄按键绑定
-  const resetArcadeButtons=[];
+  const resetArcadeButtons = [];
   function releaseArcadeControls() {
-    resetArcadeButtons.forEach(reset=>reset());
+    resetArcadeButtons.forEach(reset => reset());
     clearInterval(arcadeHeartbeatTimer);
-    if(state.arcadeStopping)return Promise.resolve();
-    return arcadeTransport.suspend().then(reply=>{
-      if(reply?.game_status)updateArcadeHud(reply.game_status);
+    if (state.arcadeStopping) return Promise.resolve();
+    return arcadeTransport.suspend().then(reply => {
+      if (reply?.game_status) updateArcadeHud(reply.game_status);
     });
   }
   function bindArcadeTouchKey(btn, keyName) {
     if (!btn) return;
-    const pointers=new Set();
-    resetArcadeButtons.push(()=>{pointers.clear();btn.classList.remove("pressed","active");});
-    btn.style.touchAction="none";
-    btn.addEventListener("pointerdown",e=>{
+    const pointers = new Set();
+    resetArcadeButtons.push(() => { pointers.clear(); btn.classList.remove("pressed", "active"); });
+    btn.style.touchAction = "none";
+    btn.addEventListener("pointerdown", e => {
       e.preventDefault();
-      if(pointers.has(e.pointerId))return;
-      pointers.add(e.pointerId);btn.setPointerCapture(e.pointerId);
-      if(pointers.size!==1)return;
-      btn.classList.add("pressed","active");
-      if(navigator.vibrate)navigator.vibrate(10);
-      api("/api/arcade",{action:"key",key:keyName,down:true}).catch(error=>{
-        pointers.clear();btn.classList.remove("pressed","active");notice(error.message);
+      if (pointers.has(e.pointerId)) return;
+      pointers.add(e.pointerId); btn.setPointerCapture(e.pointerId);
+      if (pointers.size !== 1) return;
+      btn.classList.add("pressed", "active");
+      if (navigator.vibrate) navigator.vibrate(10);
+      api("/api/arcade", { action: "key", key: keyName, down: true }).catch(error => {
+        pointers.clear(); btn.classList.remove("pressed", "active"); notice(error.message);
       });
     });
-    const release=e=>{
+    const release = e => {
       e.preventDefault();
-      if(!pointers.delete(e.pointerId)||pointers.size)return;
-      btn.classList.remove("pressed","active");
-      api("/api/arcade",{action:"key",key:keyName,down:false}).catch(error=>notice(error.message));
+      if (!pointers.delete(e.pointerId) || pointers.size) return;
+      btn.classList.remove("pressed", "active");
+      api("/api/arcade", { action: "key", key: keyName, down: false }).catch(error => notice(error.message));
     };
-    btn.addEventListener("pointerup",release);
-    btn.addEventListener("pointercancel",release);
-    btn.addEventListener("lostpointercapture",release);
+    btn.addEventListener("pointerup", release);
+    btn.addEventListener("pointercancel", release);
+    btn.addEventListener("lostpointercapture", release);
   }
 
   $$("[data-mario-key]").forEach((btn) => {
@@ -1632,7 +1634,7 @@
     arcadeScreenCanvas.addEventListener("pointerdown", (e) => {
       if (!state.arcadeActive || state.arcadeGid !== 92) return;
       swipeOrigin = { x: e.clientX, y: e.clientY, id: e.pointerId, fired: false };
-      try { arcadeScreenCanvas.setPointerCapture(e.pointerId); } catch (_) {}
+      try { arcadeScreenCanvas.setPointerCapture(e.pointerId); } catch (_) { }
     });
     arcadeScreenCanvas.addEventListener("pointermove", (e) => {
       if (!swipeOrigin || swipeOrigin.id !== e.pointerId || swipeOrigin.fired || state.arcadeGid !== 92) return;
@@ -1643,10 +1645,10 @@
         let mask = 16; // KEY_A slash
         if (Math.abs(dx) > 8) mask |= dx > 0 ? 2 : 1;
         if (Math.abs(dy) > 8) mask |= dy > 0 ? 8 : 4;
-        api("/api/arcade", { action: "input", down: mask, pressed: mask }).catch(() => {});
+        api("/api/arcade", { action: "input", down: mask, pressed: mask }).catch(() => { });
         setTimeout(() => {
           if (state.arcadeActive && state.arcadeGid === 92) {
-            api("/api/arcade", { action: "input", down: 0, pressed: 0 }).catch(() => {});
+            api("/api/arcade", { action: "input", down: 0, pressed: 0 }).catch(() => { });
           }
         }, 90);
       }
@@ -1661,9 +1663,9 @@
       e.preventDefault();
       try {
         resetArcadeButtons.forEach(reset => reset());
-        const reply=await api("/api/arcade",{action:"players",count:state.pongPlayers===2?1:2});
+        const reply = await api("/api/arcade", { action: "players", count: state.pongPlayers === 2 ? 1 : 2 });
         updateArcadeHud(reply.game_status);
-        notice(state.pongPlayers===2?"已选择本地双人：P1 ↑/↓，P2 A/B":"已选择单人 AI");
+        notice(state.pongPlayers === 2 ? "已选择本地双人：P1 ↑/↓，P2 A/B" : "已选择单人 AI");
       } catch (err) {
         notice("Pong 模式切换失败: " + err.message);
       }
@@ -1673,7 +1675,7 @@
   if ($("marioStartBtn")) {
     $("marioStartBtn").onclick = async (e) => {
       e.preventDefault();
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       try {
         const res = await api("/api/arcade", { action: "start" });
         if (res && res.game_status) updateArcadeHud(res.game_status);
@@ -1688,7 +1690,7 @@
   if ($("arcadePauseBtn")) {
     $("arcadePauseBtn").onclick = async (e) => {
       e.preventDefault();
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       try {
         const curTag = $("marioStateTag")?.textContent || "";
         const isPaused = curTag.includes("PAUSED") || curTag.includes("暂停");
@@ -1706,7 +1708,7 @@
   if ($("marioResetBtn")) {
     $("marioResetBtn").onclick = async (e) => {
       e.preventDefault();
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       try {
         const res = await api("/api/arcade", { action: "reset" });
         if (res && res.game_status) updateArcadeHud(res.game_status);
@@ -1720,14 +1722,14 @@
   if ($("marioStopBtn")) {
     $("marioStopBtn").onclick = async (e) => {
       e.preventDefault();
-      if(state.arcadeStopping)return;
-      state.arcadeStopping=true;
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (state.arcadeStopping) return;
+      state.arcadeStopping = true;
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       if (arcadeHeartbeatTimer) clearInterval(arcadeHeartbeatTimer);
-      try {await api("/api/arcade", { action: "stop" });}
-      catch(error){resetArcadeButtons.forEach(reset=>reset());notice("本地按键已清除，设备退出未确认，请检查连接后重试。" + error.message);return;}
-      finally {state.arcadeStopping=false;}
-      resetArcadeButtons.forEach(reset=>reset());
+      try { await api("/api/arcade", { action: "stop" }); }
+      catch (error) { resetArcadeButtons.forEach(reset => reset()); notice("本地按键已清除，设备退出未确认，请检查连接后重试。" + error.message); return; }
+      finally { state.arcadeStopping = false; }
+      resetArcadeButtons.forEach(reset => reset());
       state.arcadeActive = false;
       state.game = null;
       if ($("gameState")) $("gameState").textContent = "选择游戏开始";
@@ -1746,20 +1748,20 @@
     overlay.style.display = "flex";
     overlay.setAttribute("aria-hidden", "false");
     document.body.classList.add("fs-gamepad-active");
-    if (navigator.vibrate) try { navigator.vibrate(20); } catch (_) {}
+    if (navigator.vibrate) try { navigator.vibrate(20); } catch (_) { }
     try {
       const el = document.documentElement;
       if (el.requestFullscreen) {
-        el.requestFullscreen().catch(() => {});
+        el.requestFullscreen().catch(() => { });
       } else if (el.webkitRequestFullscreen) {
         el.webkitRequestFullscreen();
       }
-    } catch (_) {}
+    } catch (_) { }
     try {
       if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock("landscape").catch(() => {});
+        screen.orientation.lock("landscape").catch(() => { });
       }
-    } catch (_) {}
+    } catch (_) { }
     updateFsGamepadLayout(activeControlType, state.arcadeGid);
   }
 
@@ -1769,17 +1771,17 @@
     overlay.style.display = "none";
     overlay.setAttribute("aria-hidden", "true");
     document.body.classList.remove("fs-gamepad-active");
-    if (navigator.vibrate) try { navigator.vibrate(10); } catch (_) {}
+    if (navigator.vibrate) try { navigator.vibrate(10); } catch (_) { }
     try {
       if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => { });
       }
-    } catch (_) {}
+    } catch (_) { }
     try {
       if (screen.orientation && screen.orientation.unlock) {
         screen.orientation.unlock();
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   if ($("enterFullscreenPadBtn")) {
@@ -1797,7 +1799,7 @@
   if ($("fsStartBtn")) {
     $("fsStartBtn").onclick = async (e) => {
       e.preventDefault();
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       try {
         const res = await api("/api/arcade", { action: "start" });
         if (res && res.game_status) updateArcadeHud(res.game_status);
@@ -1811,7 +1813,7 @@
   if ($("fsPauseBtn")) {
     $("fsPauseBtn").onclick = async (e) => {
       e.preventDefault();
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       try {
         const curTag = $("marioStateTag")?.textContent || $("fsStateStat")?.textContent || "";
         const isPaused = curTag.includes("PAUSED") || curTag.includes("暂停");
@@ -1828,7 +1830,7 @@
   if ($("fsResetBtn")) {
     $("fsResetBtn").onclick = async (e) => {
       e.preventDefault();
-      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) { }
       try {
         const res = await api("/api/arcade", { action: "reset" });
         if (res && res.game_status) updateArcadeHud(res.game_status);
@@ -1860,13 +1862,13 @@
       e.preventDefault();
       if (e.repeat) return;
       if (k === "reset") {
-        api("/api/arcade", { action: "reset" }).catch(() => {});
+        api("/api/arcade", { action: "reset" }).catch(() => { });
       } else if (k === "pause") {
-        api("/api/arcade", { action: "pause" }).catch(() => {});
+        api("/api/arcade", { action: "pause" }).catch(() => { });
       } else if (k === "start") {
-        api("/api/arcade", { action: "start" }).catch(() => {});
+        api("/api/arcade", { action: "start" }).catch(() => { });
       } else {
-        api("/api/arcade", { action: "key", key: k, down: true }).catch(() => {});
+        api("/api/arcade", { action: "key", key: k, down: true }).catch(() => { });
       }
     }
   });
@@ -1885,21 +1887,21 @@
     };
     const k = keyMap[e.key];
     if (k) {
-      api("/api/arcade", { action: "key", key: k, down: false }).catch(() => {});
+      api("/api/arcade", { action: "key", key: k, down: false }).catch(() => { });
     }
   });
 
   // Disposable 4 Hz preview: prioritize commands over full-frame telemetry.
-  let arcadeFrameBusy=false;
+  let arcadeFrameBusy = false;
   setInterval(async () => {
     if (!arcadeFrameBusy && !document.hidden && state.arcadeActive && $("marioCanvas") && $("marioContainer")?.style.display !== "none") {
       try {
-        arcadeFrameBusy=true;
+        arcadeFrameBusy = true;
         const res = await api("/api/arcade/frame", undefined, "GET", 1500);
         if (res && res.hex) {
           if ($("marioCanvas")) {
             drawMarioFrame($("marioCanvas"), res.hex);
-            $("arcadePreviewStatus").textContent="实时画面 · 帧 "+(res.frame_id??"—");
+            $("arcadePreviewStatus").textContent = "实时画面 · 帧 " + (res.frame_id ?? "—");
           }
           if ($("fsMiniCanvas") && $("fullscreenGamepadOverlay")?.style.display !== "none") {
             drawMarioFrame($("fsMiniCanvas"), res.hex);
@@ -1907,8 +1909,8 @@
         }
         if (res?.game_status || (res?.status && typeof res.status === "object")) updateArcadeHud(res.game_status || res.status);
       } catch (error) {
-        if(!/^stale_|telemetry_busy/.test(error.message))$("arcadePreviewStatus").textContent="画面同步中…";
-      } finally { arcadeFrameBusy=false; }
+        if (!/^stale_|telemetry_busy/.test(error.message)) $("arcadePreviewStatus").textContent = "画面同步中…";
+      } finally { arcadeFrameBusy = false; }
     }
   }, 250);
 
@@ -1919,7 +1921,7 @@
 
   function stopPhoneCamera() {
     if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
-      try { window.AmadeusNative.stopFrontCamera(); } catch(e) {}
+      try { window.AmadeusNative.stopFrontCamera(); } catch (e) { }
     }
     if (phoneUploadTimer) {
       clearInterval(phoneUploadTimer);
@@ -1930,7 +1932,7 @@
     if (phoneStream && phoneStream.getTracks) {
       try {
         phoneStream.getTracks().forEach((t) => t.stop());
-      } catch (e) {}
+      } catch (e) { }
     }
     phoneStream = null;
     const video = $("phoneCameraVideo");
@@ -1974,11 +1976,11 @@
       if (img) img.style.display = "block";
       if (wrapper) wrapper.style.display = "block";
 
-      window.onNativeCameraFrame = function(b64) {
+      window.onNativeCameraFrame = function (b64) {
         if (img) img.src = "data:image/jpeg;base64," + b64;
       };
 
-      window.onNativeCameraObservation = function(res) {
+      window.onNativeCameraObservation = function (res) {
         const obs = res.observation || {};
         if (overlay && img) {
           overlay.width = img.clientWidth || 320;
@@ -2050,7 +2052,7 @@
     });
     phoneStream = stream;
     video.srcObject = stream;
-    await video.play().catch(() => {});
+    await video.play().catch(() => { });
     if (wrapper) wrapper.style.display = "block";
 
     canvas.width = 256;
@@ -2092,483 +2094,438 @@
     }, 150);
   }
 
-        if (response.ok) {
-          const res = await response.json();
-          const obs = res.observation || {};
-
-          if (overlay) {
-            overlay.width = video.videoWidth || 320;
-            overlay.height = video.videoHeight || 240;
-            const octx = overlay.getContext("2d");
-            octx.clearRect(0, 0, overlay.width, overlay.height);
-
-            if (obs.hand) {
-              const h = obs.hand;
-              const hx = (1 - h.x) * overlay.width;
-              const hy = h.y * overlay.height;
-              octx.beginPath();
-              octx.arc(hx, hy, 16, 0, Math.PI * 2);
-              octx.fillStyle = h.pinch
-                ? "rgba(255, 235, 59, 0.9)"
-                : "rgba(76, 175, 80, 0.9)";
-              octx.fill();
-              octx.lineWidth = 3;
-              octx.strokeStyle = "#fff";
-              octx.stroke();
-
-              if (info) {
-                info.textContent = h.pinch ? "✋ 捏合抓取" : "👆 食指追踪中";
-              }
-            } else if (obs.present) {
-              if (info) {
-                info.textContent = obs.identity
-                  ? `👤 识别: ${obs.identity}`
-                  : "👤 人脸就绪";
-              }
-            } else {
-              if (info) info.textContent = "正在捕捉手势/人脸...";
-            }
-          }
-        }
-      } catch (err) {
-      } finally {
-        phoneUploading = false;
-      }
-    }, 65);
-  }
-
   if ($("cameraSource")) {
-    $("cameraSource").addEventListener("change", () => {
-      const src = $("cameraSource").value;
-      if ($("pcCameraConfig")) {
-        $("pcCameraConfig").style.display = src === "pc" ? "block" : "none";
-      }
-    });
-  }
-
-  bind("cameraDetectBtn", async () => {
-    try {
-      const r = await api("/api/pro/camera/devices", undefined, "GET");
-      if (r && r.devices && r.devices.length) {
-        notice(`已检测到 ${r.devices.length} 个可用摄像头: ` + r.devices.map(d => `${d.name}`).join(", "));
-        $("camera").value = r.devices[0].id;
-      } else {
-        notice("未探测到额外摄像头，保持默认 0");
-      }
-    } catch (e) {
-      notice("摄像头探测: " + e.message);
+  $("cameraSource").addEventListener("change", () => {
+    const src = $("cameraSource").value;
+    if ($("pcCameraConfig")) {
+      $("pcCameraConfig").style.display = src === "pc" ? "block" : "none";
     }
   });
+}
 
-  bind("visionStart", async () => {
-    const src = $("cameraSource") ? $("cameraSource").value : "phone";
-    if (src === "phone") {
-      try {
-        if ($("cameraStreamWrapper")) $("cameraStreamWrapper").style.display = "none";
-        await startPhoneCamera();
-        notice("手机前置摄像头已开启，正在向灯板同步");
-        $("visionBadge").textContent = "运行中";
-        $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
-      } catch (err) {
-        notice("前置摄像头启动提示: " + err.message);
-      }
+bind("cameraDetectBtn", async () => {
+  try {
+    const r = await api("/api/pro/camera/devices", undefined, "GET");
+    if (r && r.devices && r.devices.length) {
+      notice(`已检测到 ${r.devices.length} 个可用摄像头: ` + r.devices.map(d => `${d.name}`).join(", "));
+      $("camera").value = r.devices[0].id;
     } else {
-      stopPhoneCamera();
-      await api("/api/pro/vision", { enabled: false });
-      const res = await api("/api/pro/vision", {
-        enabled: true,
-        source: "camera",
-        mode: $("visionMode").value,
-        camera: Number($("camera").value),
-      });
-      if (res && res.error) {
-        notice("摄像头启动提示: " + res.error);
-      } else {
-        notice("已开启电脑摄像头互动");
-        if ($("cameraStreamWrapper")) {
-          $("cameraStreamWrapper").style.display = "block";
-          const tok = getAccessToken();
-          state.token = tok;
-          $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
-        }
-      }
+      notice("未探测到额外摄像头，保持默认 0");
     }
-    lastPro = 0;
-    setTimeout(() => poll(), 500);
-  });
-  bind("visionStop", async () => {
+  } catch (e) {
+    notice("摄像头探测: " + e.message);
+  }
+});
+
+bind("visionStart", async () => {
+  const src = $("cameraSource") ? $("cameraSource").value : "phone";
+  if (src === "phone") {
+    try {
+      if ($("cameraStreamWrapper")) $("cameraStreamWrapper").style.display = "none";
+      await startPhoneCamera();
+      notice("手机前置摄像头已开启，正在向灯板同步");
+      $("visionBadge").textContent = "运行中";
+      $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
+    } catch (err) {
+      notice("前置摄像头启动提示: " + err.message);
+    }
+  } else {
     stopPhoneCamera();
     await api("/api/pro/vision", { enabled: false });
-    if ($("cameraStreamWrapper")) {
-      $("cameraStreamWrapper").style.display = "none";
-      $("cameraStreamImg").src = "";
-    }
-    cancelCalibration();
-    lastPro = 0;
-    $("visionBadge").textContent = "未启用";
-    $("visionSummary").textContent = "摄像头未启用";
-  });
-  let currentPhoneRotation = 90;
-  if ($("rotatePhoneCameraBtn")) {
-    $("rotatePhoneCameraBtn").addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      currentPhoneRotation = (currentPhoneRotation + 90) % 360;
-      if (window.AmadeusNative && window.AmadeusNative.setCameraRotation) {
-        window.AmadeusNative.setCameraRotation(currentPhoneRotation);
-      }
-      notice(`已顺时针旋转至: ${currentPhoneRotation}°`);
+    const res = await api("/api/pro/vision", {
+      enabled: true,
+      source: "camera",
+      mode: $("visionMode").value,
+      camera: Number($("camera").value),
     });
-  }
-  bind("enroll", async () => {
-    const name = $("identity").value.trim();
-    if (!name) throw Error("请填写登记名称");
-    await api("/api/pro/enroll", { name });
-    notice("当前人脸已登记到电脑本地");
-  });
-  const targets = [
-    [0.1, 0.1],
-    [0.5, 0.1],
-    [0.9, 0.1],
-    [0.1, 0.5],
-    [0.5, 0.5],
-    [0.9, 0.5],
-    [0.1, 0.9],
-    [0.5, 0.9],
-    [0.9, 0.9],
-  ];
-  let samples = [],
-    targetDot = null;
-  function cancelCalibration() {
-    targetDot?.remove();
-    targetDot = null;
-  }
-  function calibrationText() {
-    cancelCalibration();
-    const target = targets[samples.length];
-    $("calibration").textContent = target
-      ? `注视橙色圆点，点击采集或按空格 (${samples.length}/9)`
-      : "九点视线校准已完成";
-    if (target) {
-      targetDot = document.createElement("div");
-      targetDot.className = "calibration-dot";
-      targetDot.style.left = target[0] * 100 + "%";
-      targetDot.style.top = target[1] * 100 + "%";
-      document.body.append(targetDot);
-    }
-  }
-  bind("calibrate", () => {
-    if (!state.vision?.running) throw Error("请先启用视觉");
-    samples = [];
-    calibrationText();
-  });
-  bind("sampleGaze", async () => {
-    if (!targetDot) throw Error("请先开始九点校准");
-    const s = await api("/api/pro/status", undefined, "GET"),
-      v = s.vision,
-      o = v.observation;
-    if (
-      !v.running ||
-      v.fresh === false ||
-      !o?.present ||
-      o.iris_x === undefined
-    )
-      throw Error("请正对摄像头以识别人脸与视线");
-    samples.push([o.iris_x, o.iris_y, ...targets[samples.length]]);
-    if (samples.length === 9) {
-      const r = await api("/api/pro/calibrate", { samples });
-      notice(
-        `视线校准已完成（误差 ${Number(r.rms_training_error).toFixed(4)}）`,
-      );
-    }
-    calibrationText();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (
-      e.code === "Space" &&
-      targetDot &&
-      !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(
-        document.activeElement.tagName,
-      )
-    ) {
-      e.preventDefault();
-      $("sampleGaze").click();
-    }
-  });
-  async function listMemory() {
-    const list = await api("/api/pro/memory", undefined, "GET");
-    $("memories").replaceChildren();
-    for (const item of list) {
-      const p = document.createElement("p"),
-        text = document.createElement("span"),
-        b = document.createElement("button");
-      text.textContent = item.text;
-      b.textContent = "删除";
-      b.className = "quiet";
-      b.onclick = async () => {
-        try {
-          await api("/api/pro/memory", { id: item.id }, "DELETE");
-          await listMemory();
-        } catch (e) {
-          notice(e.message);
-        }
-      };
-      p.append(text, b);
-      $("memories").append(p);
-    }
-    if (!list.length) $("memories").textContent = "还没有保存的记忆。";
-  }
-  bind("listMemory", listMemory);
-  bind("addMemory", async () => {
-    const text = $("memoryText").value.trim();
-    if (!text) throw Error("先写下想记住的内容");
-    await api("/api/pro/memory", { text });
-    $("memoryText").value = "";
-    await listMemory();
-    notice("记忆已保存");
-  });
-  bind("addDocument", async () => {
-    const text = $("memoryText").value.trim();
-    if (!text) throw Error("先填写参考资料");
-    const r = await api("/api/pro/documents", { text });
-    notice(`已导入 ${r.chunks} 段资料`);
-  });
-  const draft = new Uint8Array(768),
-    editor = $("editor"),
-    draftContext = editor.getContext("2d");
-  let drawing = false;
-  function drawDraft() {
-    draftContext.fillStyle = "#111316";
-    draftContext.fillRect(0, 0, 320, 320);
-    for (let i = 0; i < 256; i++) {
-      draftContext.fillStyle = `rgb(${draft.slice(i * 3, i * 3 + 3).join(",")})`;
-      draftContext.fillRect((i % 16) * 20, Math.floor(i / 16) * 20, 19, 19);
-    }
-  }
-  function paint(e) {
-    const r = editor.getBoundingClientRect(),
-      x = Math.floor(((e.clientX - r.left) / r.width) * 16),
-      y = Math.floor(((e.clientY - r.top) / r.height) * 16);
-    if (x < 0 || x > 15 || y < 0 || y > 15) return;
-    for (let k = 0; k < 3; k++)
-      draft[(y * 16 + x) * 3 + k] = parseInt(
-        $("color").value.slice(1 + k * 2, 3 + k * 2),
-        16,
-      );
-    drawDraft();
-  }
-  editor.onpointerdown = (e) => {
-    drawing = true;
-    editor.setPointerCapture(e.pointerId);
-    paint(e);
-  };
-  editor.onpointermove = (e) => {
-    if (drawing) paint(e);
-  };
-  editor.onpointerup = editor.onpointercancel = () => (drawing = false);
-  const draftHex = () =>
-    Array.from(draft, (v) => v.toString(16).padStart(2, "0")).join("");
-  bind("clearCanvas", () => {
-    draft.fill(0);
-    drawDraft();
-  });
-  bind("sendCanvas", async () => {
-    await api("/api/pro/canvas", { hex: draftHex() });
-    notice("画布已确认");
-  });
-  bind("saveCanvas", () => {
-    if (navigator.userAgent.includes("AmadeusAndroid")) {
-      location.href = "amadeus://export?hex=" + draftHex();
-      return;
-    }
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify({ width: 16, height: 16, hex: draftHex() })], {
-        type: "application/json",
-      }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "amadeus-canvas.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 3000);
-  });
-  $("loadCanvas").onchange = async (e) => {
-    try {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.size > 16384) throw Error("画布文件过大");
-      const d = JSON.parse(await file.text());
-      if (d.width !== 16 || d.height !== 16 || !/^[0-9a-f]{1536}$/i.test(d.hex))
-        throw Error("需要 16×16 RGB JSON 画布");
-      for (let i = 0; i < 768; i++)
-        draft[i] = parseInt(d.hex.slice(i * 2, i * 2 + 2), 16);
-      drawDraft();
-      notice("画布已导入，点击“应用到灯板”即可显示");
-    } catch (error) {
-      notice(error.message);
-    } finally {
-      e.target.value = "";
-    }
-  };
-  function openConnection() {
-    if (navigator.userAgent.includes("AmadeusAndroid")) {
-      location.href = "amadeus://settings";
-      return;
-    }
-    $("serverUrl").value = location.protocol === "file:" ? "" : location.origin;
-    $("connectionDialog").showModal();
-  }
-  bind("openConnection", openConnection);
-  bind("connectionSettings", openConnection);
-  bind("closeConnection", () => $("connectionDialog").close());
-  $("serverForm").onsubmit = (e) => {
-    e.preventDefault();
-    try {
-      const url = new URL($("serverUrl").value.trim());
-      if (
-        !["http:", "https:"].includes(url.protocol) ||
-        url.username ||
-        url.password
-      )
-        throw Error("请输入完整的 HTTP(S) 服务地址");
-      location.assign(url.origin + "/");
-    } catch (error) {
-      notice(error.message);
-    }
-  };
-  bind("runCeremony", async () => {
-    await api("/api/ceremony", {});
-    notice("已请求播放连接自检提示");
-  });
-  bind("refreshStatus", () => {
-    lastGeneral = lastPro = 0;
-    return poll();
-  });
-  bind("retryConnection", () => {
-    pairedHttp.resetPairing();
-    lastGeneral = lastPro = 0;
-    return poll();
-  });
-  async function poll() {
-    if (polling || document.hidden) return;
-    polling = true;
-    let stage = "service";
-    try {
-      const now = Date.now();
-      if (!state.online || now - lastGeneral > 4000) {
-        const s = await api("/api/status", undefined, "GET", 5000);
-        state.general = s;
-        connection(s);
-        lastGeneral = now;
-        if (!nativeMode) openSocket();
-      }
-      if (nativeMode) {
-        $("status").textContent="APK 直连 ESP32：灯效、亮度、音量、倒计时和街机；AI、音乐和视觉需要电脑服务";
-        if(state.board && state.page!=="settings" && !state.arcadeActive){
-          stage="frame";renderFrame(await api("/api/pro/frame",undefined,"GET"));
-        }
-        lastError="";return;
-      }
-      stage = "features";
-      if (now - lastPro > 1500) {
-        const p = await api("/api/pro/status", undefined, "GET", 6000);
-        state.vision = p.vision;
-        $("status").textContent = JSON.stringify(p, null, 2);
-        $("visionStatus").textContent = JSON.stringify(p.vision, null, 2);
-        const running = p.vision?.running || phoneStream !== null;
-        $("visionBadge").textContent = running ? "运行中" : "未启用";
-        if (phoneStream) {
-          $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
-        } else {
-          $("visionSummary").textContent =
-            p.vision?.error ||
-            (p.vision?.running
-              ? `互动方式：${p.vision.mode}${p.vision.fresh === false ? " · 暂无新鲜观测" : ""}`
-              : "摄像头未启用");
-        }
-        if (!phoneStream && $("cameraStreamWrapper")) {
-          if (p.vision?.running) {
-            $("cameraStreamWrapper").style.display = "block";
-            const img = $("cameraStreamImg");
-            if (!img.src || img.src.indexOf("/api/pro/camera/feed") === -1) {
-              const tok = getAccessToken();
-          state.token = tok;
-              img.src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
-            }
-            if ($("cameraDetectionInfo")) {
-              const obs = p.vision?.observation || {};
-              if (obs.hand) {
-                $("cameraDetectionInfo").textContent = obs.hand.pinch ? "✋ 捏合抓取" : "👆 食指追踪";
-              } else if (obs.present) {
-                $("cameraDetectionInfo").textContent = obs.identity ? `👤 识别: ${obs.identity}` : "👤 人脸就绪";
-              } else {
-                $("cameraDetectionInfo").textContent = "正在捕捉手势/人脸...";
-              }
-            }
-          } else {
-            $("cameraStreamWrapper").style.display = "none";
-            $("cameraStreamImg").src = "";
-          }
-        }
-        updateMusic(p.music);
-        lastPro = now;
-        if (state.page === "music" && libraryDirty) await loadLibrary();
-      }
-      stage = "frame";
-      if (state.board && state.page !== "settings" && !state.arcadeActive) {
-        const f = await api("/api/pro/frame", undefined, "GET", 6000);
-        renderFrame(f);
-      }
-      lastError = "";
-    } catch (error) {
-      if (error.message !== lastError) {
-        lastError = error.message;
-      }
-      $("chatStatus").textContent = error.message;
-      if (stage === "service") {
-        connection(null);
-        state.socket?.close();
-      } else if (stage === "frame") {
-        if(error.message==="telemetry_busy")return;
-        $("frameTag").textContent = "同步中";
-        $("frameSource").textContent = "正在同步灯板画面…";
-      } else {
-        $("status").textContent = "功能状态暂不可用：" + error.message;
-      }
-    } finally {
-      polling = false;
-      clearTimeout(pollTimer);
-      pollTimer = setTimeout(
-        poll,
-        state.online ? (state.page === "lights" ? 500 : 1000) : 4000,
-      );
-    }
-  }
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      if (state.arcadeActive) releaseArcadeControls();
-      clearInterval(arcadeHeartbeatTimer);
-      clearTimeout(pollTimer);
-      state.socket?.close();
+    if (res && res.error) {
+      notice("摄像头启动提示: " + res.error);
     } else {
-      lastGeneral = lastPro = 0;
-      if (state.arcadeActive) startArcadeHeartbeat();
-      poll();
+      notice("已开启电脑摄像头互动");
+      if ($("cameraStreamWrapper")) {
+        $("cameraStreamWrapper").style.display = "block";
+        const tok = getAccessToken();
+        state.token = tok;
+        $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+      }
     }
+  }
+  lastPro = 0;
+  setTimeout(() => poll(), 500);
+});
+bind("visionStop", async () => {
+  stopPhoneCamera();
+  await api("/api/pro/vision", { enabled: false });
+  if ($("cameraStreamWrapper")) {
+    $("cameraStreamWrapper").style.display = "none";
+    $("cameraStreamImg").src = "";
+  }
+  cancelCalibration();
+  lastPro = 0;
+  $("visionBadge").textContent = "未启用";
+  $("visionSummary").textContent = "摄像头未启用";
+});
+let currentPhoneRotation = 90;
+if ($("rotatePhoneCameraBtn")) {
+  $("rotatePhoneCameraBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    currentPhoneRotation = (currentPhoneRotation + 90) % 360;
+    if (window.AmadeusNative && window.AmadeusNative.setCameraRotation) {
+      window.AmadeusNative.setCameraRotation(currentPhoneRotation);
+    }
+    notice(`已顺时针旋转至: ${currentPhoneRotation}°`);
   });
-  window.addEventListener("blur", () => { if (state.arcadeActive) releaseArcadeControls(); });
-  window.addEventListener("pagehide", () => {
+}
+bind("enroll", async () => {
+  const name = $("identity").value.trim();
+  if (!name) throw Error("请填写登记名称");
+  await api("/api/pro/enroll", { name });
+  notice("当前人脸已登记到电脑本地");
+});
+const targets = [
+  [0.1, 0.1],
+  [0.5, 0.1],
+  [0.9, 0.1],
+  [0.1, 0.5],
+  [0.5, 0.5],
+  [0.9, 0.5],
+  [0.1, 0.9],
+  [0.5, 0.9],
+  [0.9, 0.9],
+];
+let samples = [],
+  targetDot = null;
+function cancelCalibration() {
+  targetDot?.remove();
+  targetDot = null;
+}
+function calibrationText() {
+  cancelCalibration();
+  const target = targets[samples.length];
+  $("calibration").textContent = target
+    ? `注视橙色圆点，点击采集或按空格 (${samples.length}/9)`
+    : "九点视线校准已完成";
+  if (target) {
+    targetDot = document.createElement("div");
+    targetDot.className = "calibration-dot";
+    targetDot.style.left = target[0] * 100 + "%";
+    targetDot.style.top = target[1] * 100 + "%";
+    document.body.append(targetDot);
+  }
+}
+bind("calibrate", () => {
+  if (!state.vision?.running) throw Error("请先启用视觉");
+  samples = [];
+  calibrationText();
+});
+bind("sampleGaze", async () => {
+  if (!targetDot) throw Error("请先开始九点校准");
+  const s = await api("/api/pro/status", undefined, "GET"),
+    v = s.vision,
+    o = v.observation;
+  if (
+    !v.running ||
+    v.fresh === false ||
+    !o?.present ||
+    o.iris_x === undefined
+  )
+    throw Error("请正对摄像头以识别人脸与视线");
+  samples.push([o.iris_x, o.iris_y, ...targets[samples.length]]);
+  if (samples.length === 9) {
+    const r = await api("/api/pro/calibrate", { samples });
+    notice(
+      `视线校准已完成（误差 ${Number(r.rms_training_error).toFixed(4)}）`,
+    );
+  }
+  calibrationText();
+});
+document.addEventListener("keydown", (e) => {
+  if (
+    e.code === "Space" &&
+    targetDot &&
+    !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(
+      document.activeElement.tagName,
+    )
+  ) {
+    e.preventDefault();
+    $("sampleGaze").click();
+  }
+});
+async function listMemory() {
+  const list = await api("/api/pro/memory", undefined, "GET");
+  $("memories").replaceChildren();
+  for (const item of list) {
+    const p = document.createElement("p"),
+      text = document.createElement("span"),
+      b = document.createElement("button");
+    text.textContent = item.text;
+    b.textContent = "删除";
+    b.className = "quiet";
+    b.onclick = async () => {
+      try {
+        await api("/api/pro/memory", { id: item.id }, "DELETE");
+        await listMemory();
+      } catch (e) {
+        notice(e.message);
+      }
+    };
+    p.append(text, b);
+    $("memories").append(p);
+  }
+  if (!list.length) $("memories").textContent = "还没有保存的记忆。";
+}
+bind("listMemory", listMemory);
+bind("addMemory", async () => {
+  const text = $("memoryText").value.trim();
+  if (!text) throw Error("先写下想记住的内容");
+  await api("/api/pro/memory", { text });
+  $("memoryText").value = "";
+  await listMemory();
+  notice("记忆已保存");
+});
+bind("addDocument", async () => {
+  const text = $("memoryText").value.trim();
+  if (!text) throw Error("先填写参考资料");
+  const r = await api("/api/pro/documents", { text });
+  notice(`已导入 ${r.chunks} 段资料`);
+});
+const draft = new Uint8Array(768),
+  editor = $("editor"),
+  draftContext = editor.getContext("2d");
+let drawing = false;
+function drawDraft() {
+  draftContext.fillStyle = "#111316";
+  draftContext.fillRect(0, 0, 320, 320);
+  for (let i = 0; i < 256; i++) {
+    draftContext.fillStyle = `rgb(${draft.slice(i * 3, i * 3 + 3).join(",")})`;
+    draftContext.fillRect((i % 16) * 20, Math.floor(i / 16) * 20, 19, 19);
+  }
+}
+function paint(e) {
+  const r = editor.getBoundingClientRect(),
+    x = Math.floor(((e.clientX - r.left) / r.width) * 16),
+    y = Math.floor(((e.clientY - r.top) / r.height) * 16);
+  if (x < 0 || x > 15 || y < 0 || y > 15) return;
+  for (let k = 0; k < 3; k++)
+    draft[(y * 16 + x) * 3 + k] = parseInt(
+      $("color").value.slice(1 + k * 2, 3 + k * 2),
+      16,
+    );
+  drawDraft();
+}
+editor.onpointerdown = (e) => {
+  drawing = true;
+  editor.setPointerCapture(e.pointerId);
+  paint(e);
+};
+editor.onpointermove = (e) => {
+  if (drawing) paint(e);
+};
+editor.onpointerup = editor.onpointercancel = () => (drawing = false);
+const draftHex = () =>
+  Array.from(draft, (v) => v.toString(16).padStart(2, "0")).join("");
+bind("clearCanvas", () => {
+  draft.fill(0);
+  drawDraft();
+});
+bind("sendCanvas", async () => {
+  await api("/api/pro/canvas", { hex: draftHex() });
+  notice("画布已确认");
+});
+bind("saveCanvas", () => {
+  if (navigator.userAgent.includes("AmadeusAndroid")) {
+    location.href = "amadeus://export?hex=" + draftHex();
+    return;
+  }
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify({ width: 16, height: 16, hex: draftHex() })], {
+      type: "application/json",
+    }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "amadeus-canvas.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+});
+$("loadCanvas").onchange = async (e) => {
+  try {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 16384) throw Error("画布文件过大");
+    const d = JSON.parse(await file.text());
+    if (d.width !== 16 || d.height !== 16 || !/^[0-9a-f]{1536}$/i.test(d.hex))
+      throw Error("需要 16×16 RGB JSON 画布");
+    for (let i = 0; i < 768; i++)
+      draft[i] = parseInt(d.hex.slice(i * 2, i * 2 + 2), 16);
+    drawDraft();
+    notice("画布已导入，点击“应用到灯板”即可显示");
+  } catch (error) {
+    notice(error.message);
+  } finally {
+    e.target.value = "";
+  }
+};
+function openConnection() {
+  if (navigator.userAgent.includes("AmadeusAndroid")) {
+    location.href = "amadeus://settings";
+    return;
+  }
+  $("serverUrl").value = location.protocol === "file:" ? "" : location.origin;
+  $("connectionDialog").showModal();
+}
+bind("openConnection", openConnection);
+bind("connectionSettings", openConnection);
+bind("closeConnection", () => $("connectionDialog").close());
+$("serverForm").onsubmit = (e) => {
+  e.preventDefault();
+  try {
+    const url = new URL($("serverUrl").value.trim());
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password
+    )
+      throw Error("请输入完整的 HTTP(S) 服务地址");
+    location.assign(url.origin + "/");
+  } catch (error) {
+    notice(error.message);
+  }
+};
+bind("runCeremony", async () => {
+  await api("/api/ceremony", {});
+  notice("已请求播放连接自检提示");
+});
+bind("refreshStatus", () => {
+  lastGeneral = lastPro = 0;
+  return poll();
+});
+bind("retryConnection", () => {
+  pairedHttp.resetPairing();
+  lastGeneral = lastPro = 0;
+  return poll();
+});
+async function poll() {
+  if (polling || document.hidden) return;
+  polling = true;
+  let stage = "service";
+  try {
+    const now = Date.now();
+    if (!state.online || now - lastGeneral > 4000) {
+      const s = await api("/api/status", undefined, "GET", 5000);
+      state.general = s;
+      connection(s);
+      lastGeneral = now;
+      if (!nativeMode) openSocket();
+    }
+    if (nativeMode) {
+      $("status").textContent = "APK 直连 ESP32：灯效、亮度、音量、倒计时和街机；AI、音乐和视觉需要电脑服务";
+      if (state.board && state.page !== "settings" && !state.arcadeActive) {
+        stage = "frame"; renderFrame(await api("/api/pro/frame", undefined, "GET"));
+      }
+      lastError = ""; return;
+    }
+    stage = "features";
+    if (now - lastPro > 1500) {
+      const p = await api("/api/pro/status", undefined, "GET", 6000);
+      state.vision = p.vision;
+      $("status").textContent = JSON.stringify(p, null, 2);
+      $("visionStatus").textContent = JSON.stringify(p.vision, null, 2);
+      const running = p.vision?.running || phoneStream !== null;
+      $("visionBadge").textContent = running ? "运行中" : "未启用";
+      if (phoneStream) {
+        $("visionSummary").textContent = `手机前置互动：${$("visionMode").value} · 实时传输中`;
+      } else {
+        $("visionSummary").textContent =
+          p.vision?.error ||
+          (p.vision?.running
+            ? `互动方式：${p.vision.mode}${p.vision.fresh === false ? " · 暂无新鲜观测" : ""}`
+            : "摄像头未启用");
+      }
+      if (!phoneStream && $("cameraStreamWrapper")) {
+        if (p.vision?.running) {
+          $("cameraStreamWrapper").style.display = "block";
+          const img = $("cameraStreamImg");
+          if (!img.src || img.src.indexOf("/api/pro/camera/feed") === -1) {
+            const tok = getAccessToken();
+            state.token = tok;
+            img.src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+          }
+          if ($("cameraDetectionInfo")) {
+            const obs = p.vision?.observation || {};
+            if (obs.hand) {
+              $("cameraDetectionInfo").textContent = obs.hand.pinch ? "✋ 捏合抓取" : "👆 食指追踪";
+            } else if (obs.present) {
+              $("cameraDetectionInfo").textContent = obs.identity ? `👤 识别: ${obs.identity}` : "👤 人脸就绪";
+            } else {
+              $("cameraDetectionInfo").textContent = "正在捕捉手势/人脸...";
+            }
+          }
+        } else {
+          $("cameraStreamWrapper").style.display = "none";
+          $("cameraStreamImg").src = "";
+        }
+      }
+      updateMusic(p.music);
+      lastPro = now;
+      if (state.page === "music" && libraryDirty) await loadLibrary();
+    }
+    stage = "frame";
+    if (state.board && state.page !== "settings" && !state.arcadeActive) {
+      const f = await api("/api/pro/frame", undefined, "GET", 6000);
+      renderFrame(f);
+    }
+    lastError = "";
+  } catch (error) {
+    if (error.message !== lastError) {
+      lastError = error.message;
+    }
+    $("chatStatus").textContent = error.message;
+    if (stage === "service") {
+      connection(null);
+      state.socket?.close();
+    } else if (stage === "frame") {
+      if (error.message === "telemetry_busy") return;
+      $("frameTag").textContent = "同步中";
+      $("frameSource").textContent = "正在同步灯板画面…";
+    } else {
+      $("status").textContent = "功能状态暂不可用：" + error.message;
+    }
+  } finally {
+    polling = false;
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(
+      poll,
+      state.online ? (state.page === "lights" ? 500 : 1000) : 4000,
+    );
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
     if (state.arcadeActive) releaseArcadeControls();
     clearInterval(arcadeHeartbeatTimer);
     clearTimeout(pollTimer);
     state.socket?.close();
-    cancelCalibration();
-    dictation?.abort();
-  });
-  matrix2d($("homeMatrix"));
-  matrix2d($("matrixCanvas"));
-  drawDraft();
-  route();
-  connection(null);
-  poll();
-})();
+  } else {
+    lastGeneral = lastPro = 0;
+    if (state.arcadeActive) startArcadeHeartbeat();
+    poll();
+  }
+});
+window.addEventListener("blur", () => { if (state.arcadeActive) releaseArcadeControls(); });
+window.addEventListener("pagehide", () => {
+  if (state.arcadeActive) releaseArcadeControls();
+  clearInterval(arcadeHeartbeatTimer);
+  clearTimeout(pollTimer);
+  state.socket?.close();
+  cancelCalibration();
+  dictation?.abort();
+});
+matrix2d($("homeMatrix"));
+matrix2d($("matrixCanvas"));
+drawDraft();
+route();
+connection(null);
+poll();
+}) ();

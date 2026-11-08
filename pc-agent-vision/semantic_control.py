@@ -186,8 +186,15 @@ def exact_plan(text):
                 return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': 41}]}
             return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': mode}]}
 
-    # 2. Negations, conditions, and disclaimers (e.g. "我不想玩马里奥了", "不要玩游戏", "别打开马里奥", "启动不是马里奥的游戏", "开启贪吃蛇但先不要启动")
-    if re.search(r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|不要启动|别启动)', compact):
+    # 1.1 Countdown stop fast-path
+    if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:停止|结束|关掉|取消|暂停)(?:倒计时|计时|沙漏)(?:吧|一下)?', compact):
+        return {'kind': 'control', 'actions': [{'tool': 'stop_countdown', 'value': 0}]}
+
+    from arcade_catalog import find_arcade_games, resolve_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
+
+    # 2. Arcade negations, conditions, and disclaimers (e.g. "我不想玩马里奥了", "不要玩游戏", "别打开马里奥", "启动不是马里奥的游戏", "开启贪吃蛇但先不要启动")
+    has_game_intent = bool(re.search(r'(?:游戏|街机|卡带)', compact) or find_arcade_games(compact))
+    if has_game_intent and re.search(r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|不要启动|别启动)', compact):
         return {'kind': 'chat', 'actions': []}
 
     # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩", "打开打砖块吗")
@@ -195,7 +202,6 @@ def exact_plan(text):
         return {'kind': 'chat', 'actions': []}
 
     # 4. Multiple games / comparison (e.g. "马里奥还是贪吃蛇", "玩马里奥还是贪吃蛇") -> clarify
-    from arcade_catalog import find_arcade_games, resolve_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
     games = find_arcade_games(compact)
     if len(games) > 1 or (len(games) >= 1 and ('还是' in compact or '或者' in compact)):
         return {'kind': 'clarify', 'actions': []}

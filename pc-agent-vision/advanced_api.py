@@ -235,11 +235,15 @@ class ProApi:
                 if data.get("enabled"):
                     source = data.get("source", "camera")
                     if source in ("remote", "phone"):
-                        session_id = await asyncio.to_thread(
-                            self.vision.start_remote,
-                            data.get("mode", "pet"),
-                        )
-                        result = dict(**self.vision.status(), session_id=session_id)
+                        try:
+                            session_id = await asyncio.to_thread(
+                                self.vision.start_remote,
+                                data.get("mode", "pet"),
+                            )
+                            result = self.vision.status()
+                        except Exception:
+                            await asyncio.to_thread(self.vision.stop)
+                            raise
                     else:
                         await asyncio.to_thread(
                             self.vision.start,

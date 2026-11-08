@@ -83,10 +83,6 @@ public class MainActivity extends Activity {
     }
 
     private void connectServer(String value) {
-        connectServer(value, false);
-    }
-
-    private void connectServer(String value, boolean preVerified) {
         Uri uri = Uri.parse(value.trim());
         if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null) {
             Toast.makeText(this, "请输入完整的 HTTP(S) 服务地址", Toast.LENGTH_LONG).show();
@@ -97,43 +93,17 @@ public class MainActivity extends Activity {
         serverOrigin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
         if (pairParam != null && !pairParam.trim().isEmpty()) {
+            // User explicitly provided pairing token in URL (e.g. from QR scan or explicit pairing link)
             String newTok = pairParam.trim();
             prefs.edit().putString("access_token", newTok).putString("server_url", serverOrigin + "/").apply();
             authenticatedOrigin = serverOrigin;
             android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + newTok + "; path=/; SameSite=Strict");
-        } else if (preVerified) {
-            authenticatedOrigin = serverOrigin;
-            prefs.edit().putString("server_url", serverOrigin + "/").apply();
-            String savedToken = prefs.getString("access_token", "");
-            if (savedToken != null && !savedToken.isEmpty()) {
-                android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + savedToken + "; path=/; SameSite=Strict");
-            }
+            Toast.makeText(this, "已配对服务 (" + serverOrigin + ")", Toast.LENGTH_SHORT).show();
         } else {
-            final String targetOrigin = serverOrigin;
-            final String savedToken = prefs.getString("access_token", "");
-            if (savedToken != null && !savedToken.isEmpty()) {
-                new Thread(() -> {
-                    boolean ok = verifyServerIdentity(targetOrigin, savedToken);
-                    runOnUiThread(() -> {
-                        if (destroyed || !targetOrigin.equals(serverOrigin)) return;
-                        if (ok) {
-                            authenticatedOrigin = targetOrigin;
-                            prefs.edit().putString("server_url", targetOrigin + "/").apply();
-                            android.webkit.CookieManager.getInstance().setCookie(targetOrigin, "kurisu_session=" + savedToken + "; path=/; SameSite=Strict");
-                            Toast.makeText(MainActivity.this, "服务身份验证成功", Toast.LENGTH_SHORT).show();
-                            if (isPageAuthenticated(webView)) {
-                                String js = "try { sessionStorage.setItem('kurisu_access_token', '" + savedToken + "'); localStorage.setItem('kurisu_access_token', '" + savedToken + "'); } catch(e){}";
-                                webView.evaluateJavascript(js, null);
-                            }
-                        } else {
-                            authenticatedOrigin = "";
-                            Toast.makeText(MainActivity.this, "新服务未通过配对身份验证，请重新配对", Toast.LENGTH_LONG).show();
-                        }
-                    });
-                }).start();
-            } else {
-                authenticatedOrigin = "";
-            }
+            // Candidate address without explicit pair token: NEVER send old saved credentials!
+            authenticatedOrigin = "";
+            prefs.edit().putString("server_url", serverOrigin + "/").apply();
+            Toast.makeText(this, "已连接服务，请在页面中进行配对认证", Toast.LENGTH_SHORT).show();
         }
         // Security: Never append ?pair= into candidate or loaded server URLs!
         String targetUrl = serverOrigin + "/";
@@ -476,15 +446,9 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
 
             final String sUrl = foundServerUrl, bIp = foundBoardIp;
-            boolean verifiedPaired = false;
             if (sUrl != null) {
-                android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
-                String savedToken = prefs.getString("access_token", "");
-                if (savedToken != null && !savedToken.isEmpty()) {
-                    verifiedPaired = verifyServerIdentity(sUrl, savedToken);
-                }
+                candidateOrigin = sUrl;
             }
-            final boolean isVerifiedPaired = verifiedPaired;
             runOnUiThread(() -> {
                 discovering = false;
                 if (isFinishing() || destroyed) return;
@@ -497,27 +461,23 @@ public class MainActivity extends Activity {
                 }
                 if (sUrl != null) {
                     ed.apply();
-                    if (isVerifiedPaired) {
-                        Toast.makeText(MainActivity.this, "已验证服务身份并安全重连 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
-                        connectServer(sUrl, true);
+                    // HTTP discovery results are strictly candidate addresses.
+                    // Never automatically send old tokens or set cookies to discovered addresses!
+                    authenticatedOrigin = "";
+                    if (manual) {
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("发现候选服务")
+                            .setMessage("在局域网发现候选电脑服务 (" + sUrl + ")。\n\n为防凭据伪造转发，请确认地址后前往该服务手动配对。（旧凭据绝不会泄露给该服务）")
+                            .setPositiveButton("前往配对", (d, w) -> {
+                                serverOrigin = sUrl;
+                                authenticatedOrigin = "";
+                                webView.loadUrl(sUrl + "/");
+                            })
+                            .setNegativeButton("取消", null)
+                            .show();
                     } else {
-                        // Candidate service is unverified or rogue: NEVER provide saved credentials!
-                        authenticatedOrigin = "";
-                        if (manual) {
-                            new AlertDialog.Builder(MainActivity.this)
-                                .setTitle("发现未认证服务")
-                                .setMessage("在局域网发现服务 (" + sUrl + ")，但未通过身份凭据验证。\n\n是否以未配对访客身份连接？（旧凭据绝不会泄露给该服务）")
-                                .setPositiveButton("前往配对", (d, w) -> {
-                                    serverOrigin = sUrl;
-                                    authenticatedOrigin = "";
-                                    webView.loadUrl(sUrl + "/");
-                                })
-                                .setNegativeButton("取消", null)
-                                .show();
-                        } else {
-                            // Silent auto-discovery in background: remain on OFFLINE page!
-                            Toast.makeText(MainActivity.this, "发现候选服务 (" + sUrl + ")，未验证身份，保持离线", Toast.LENGTH_SHORT).show();
-                        }
+                        // Silent auto-discovery on startup: candidate address discovered, stay offline for security
+                        Toast.makeText(MainActivity.this, "已发现候选服务 (" + sUrl + ")，未配对保持离线", Toast.LENGTH_SHORT).show();
                     }
                 } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(deviceTarget.token)) {
                     serverOrigin = "";

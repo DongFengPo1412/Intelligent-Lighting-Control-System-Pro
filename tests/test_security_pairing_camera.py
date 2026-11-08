@@ -157,27 +157,33 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         self.assertFalse(res_bg, "Camera must not start in background")
 
     def test_unverified_candidate_page_credential_isolation(self):
-        """Unverified candidate server MUST NOT receive cookies, JS storage tokens, or camera access."""
+        """Discovered candidate servers MUST NEVER automatically receive cookies, JS storage tokens, or camera access.
+        Even if a rogue candidate relays an HMAC proof from a genuine PC, discovery candidates remain unauthenticated."""
         saved_token = "genuine_saved_token_secret_12345"
         rogue_origin = "http://192.168.186.199:8080"
         genuine_origin = "http://192.168.186.90:8080"
 
-        # Simulate APK verification & state machine
-        class APKState:
+        # Simulate APK verification & security boundary state machine
+        class APKSecurityStateMachine:
             def __init__(self):
                 self.server_origin = ""
                 self.authenticated_origin = ""
                 self.cookies = {}
                 self.injected_storage = {}
 
-            def on_discovery(self, candidate_origin, server_proof_valid):
-                if server_proof_valid:
-                    self.server_origin = candidate_origin
-                    self.authenticated_origin = candidate_origin
-                    self.cookies[candidate_origin] = f"kurisu_session={saved_token}"
-                else:
-                    self.authenticated_origin = ""
-                    # Stays offline or loads as unauthenticated guest without credentials
+            def on_discovery(self, candidate_origin, relayed_genuine_proof=False):
+                # Discovery results are strictly candidate addresses.
+                # Auto-promotion via unauthenticated HTTP challenge is disabled to prevent relay attacks.
+                self.server_origin = candidate_origin
+                self.authenticated_origin = ""
+
+            def on_explicit_pair_url(self, target_url, pair_param):
+                p = urlparse(target_url)
+                origin = f"{p.scheme}://{p.netloc}"
+                self.server_origin = origin
+                if pair_param and pair_param.strip():
+                    self.authenticated_origin = origin
+                    self.cookies[origin] = f"kurisu_session={pair_param.strip()}"
 
             def is_page_authenticated(self, current_url):
                 if not current_url or current_url.startswith("file:"):
@@ -197,14 +203,14 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
                 upload_origin = f"{u.scheme}://{u.netloc}"
                 return upload_origin == self.authenticated_origin
 
-        apk = APKState()
+        apk = APKSecurityStateMachine()
 
-        # 1. Rogue server discovery (challenge fails)
-        apk.on_discovery(rogue_origin, server_proof_valid=False)
-        self.assertEqual(apk.authenticated_origin, "", "Rogue candidate must not become authenticated_origin")
+        # 1. Rogue candidate discovered (even if it attempts to relay genuine proof)
+        apk.on_discovery(rogue_origin, relayed_genuine_proof=True)
+        self.assertEqual(apk.authenticated_origin, "", "Discovered rogue candidate must NEVER be authenticated")
         self.assertNotIn(rogue_origin, apk.cookies, "Rogue origin must NOT receive session cookie")
 
-        # Even if loaded as guest:
+        # Rogue page loads in webview as guest
         apk.on_page_finished(rogue_origin + "/index.html")
         self.assertNotIn(rogue_origin + "/index.html", apk.injected_storage, "Rogue page must NOT receive storage token")
         self.assertFalse(
@@ -212,14 +218,20 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             "Rogue page must NOT get camera access"
         )
 
-        # 2. Genuine server discovery (challenge passes)
-        apk.on_discovery(genuine_origin, server_proof_valid=True)
+        # 2. Candidate discovery from genuine PC address without explicit pair param also loads unauthenticated
+        apk.on_discovery(genuine_origin)
+        self.assertEqual(apk.authenticated_origin, "")
+        self.assertNotIn(genuine_origin, apk.cookies)
+
+        # 3. Explicit user pairing (via pairParam, e.g., QR scan or manual input) securely establishes authentication
+        apk.on_explicit_pair_url(genuine_origin + "/?pair=" + saved_token, pair_param=saved_token)
         self.assertEqual(apk.authenticated_origin, genuine_origin)
         self.assertIn(genuine_origin, apk.cookies)
         apk.on_page_finished(genuine_origin + "/index.html")
         self.assertEqual(apk.injected_storage.get(genuine_origin + "/index.html"), saved_token)
         self.assertTrue(
-            apk.start_front_camera(genuine_origin + "/index.html", genuine_origin + "/api/pro/camera/frame")
+            apk.start_front_camera(genuine_origin + "/index.html", genuine_origin + "/api/pro/camera/frame"),
+            "Explicitly paired page is authorized for camera upload"
         )
 
 

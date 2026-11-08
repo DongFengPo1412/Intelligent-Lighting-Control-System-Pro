@@ -406,6 +406,92 @@ class TestLightControllerArcadeExecution(unittest.TestCase):
             session._send_esp32_command = orig_send
             session.simulated_mode = orig_sim
 
+    def test_countdown_stopping_and_negation_separation(self):
+        """Regression test: '停止倒计时' must not be intercepted by arcade negation filters."""
+        # Countdown stop variants
+        for phrase in ("停止倒计时", "帮我停止倒计时", "关掉倒计时", "取消计时吧", "结束沙漏", "请暂停倒计时一下"):
+            res = exact_plan(phrase)
+            self.assertEqual(
+                res,
+                {"kind": "control", "actions": [{"tool": "stop_countdown", "value": 0}]},
+                f"Phrase '{phrase}' must resolve to stop_countdown tool"
+            )
+
+        # Game negations and exclusions must still return chat
+        game_negations = (
+            "打开打砖块吗",
+            "启动打砖块吗？",
+            "启动不是马里奥的游戏",
+            "开启贪吃蛇但先不要启动",
+            "我不想玩马里奥了",
+            "不要玩游戏",
+            "别打开马里奥",
+        )
+        for neg in game_negations:
+            res = exact_plan(neg)
+            self.assertEqual(res, {"kind": "chat", "actions": []}, f"Game negation '{neg}' must route to chat")
+
+    def test_advanced_api_remote_vision_lifecycle(self):
+        """Verify ProApi vision handler starts remote session without dict collisions,
+        returns HTTP 200 with session_id, accepts frames, stops cleanly, and rejects late frames."""
+        import asyncio
+        import json
+        import cv2
+        import numpy as np
+        from advanced_api import ProApi
+        from light_controller import LightController
+
+        ctrl = LightController()
+        # Non-simulation port so camera/vision is allowed
+        ctrl.port = "COM99"
+        mock_agent = MagicMock()
+        mock_agent.memory = {}
+        mock_voice = MagicMock()
+
+        api = ProApi(controller=ctrl, agent=mock_agent, voice=mock_voice)
+
+        class FakeRequest:
+            def __init__(self, action, payload):
+                self.match_info = {"action": action}
+                self.method = "POST"
+                self._payload = payload
+                self.app = {}
+
+            async def json(self):
+                return self._payload
+
+        async def run_lifecycle():
+            # 1. Start remote vision session via ProApi.handle
+            req_start = FakeRequest("vision", {"enabled": True, "source": "remote", "mode": "pet"})
+            resp_start = await api.handle(req_start)
+            self.assertEqual(resp_start.status, 200, "Remote vision start must return HTTP 200")
+            body_start = json.loads(resp_start.body.decode("utf-8"))
+            self.assertTrue(body_start.get("running"))
+            session_id = body_start.get("session_id")
+            self.assertIsNotNone(session_id, "Response must include valid session_id")
+
+            # 2. Process remote frame with valid session_id
+            img = np.zeros((40, 40, 3), dtype=np.uint8)
+            _, enc = cv2.imencode(".jpg", img)
+            raw_jpeg = enc.tobytes()
+
+            api.vision.process_remote_frame(raw_jpeg, mode="pet", session_id=session_id)
+            self.assertTrue(api.vision.started)
+
+            # 3. Stop remote vision session via ProApi.handle
+            req_stop = FakeRequest("vision", {"enabled": False})
+            resp_stop = await api.handle(req_stop)
+            self.assertEqual(resp_stop.status, 200)
+            body_stop = json.loads(resp_stop.body.decode("utf-8"))
+            self.assertFalse(body_stop.get("running"))
+            self.assertIsNone(body_stop.get("session_id"))
+
+            # 4. Late frame with former session_id must be rejected
+            with self.assertRaises(RuntimeError):
+                api.vision.process_remote_frame(raw_jpeg, mode="pet", session_id=session_id)
+
+        asyncio.run(run_lifecycle())
+
 
 if __name__ == "__main__":
     unittest.main()
