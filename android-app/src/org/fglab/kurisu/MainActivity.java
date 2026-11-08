@@ -82,6 +82,18 @@ public class MainActivity extends Activity {
         autoDiscoverAndConnect(false);
     }
 
+    private void purgeCookiesAndStorage() {
+        try {
+            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            cm.removeAllCookies(null);
+            cm.flush();
+            cm.setAcceptCookie(false);
+        } catch (Exception ignored) {}
+        try {
+            android.webkit.WebStorage.getInstance().deleteAllData();
+        } catch (Exception ignored) {}
+    }
+
     private void connectServer(String value) {
         Uri uri = Uri.parse(value.trim());
         if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) || uri.getHost() == null || uri.getUserInfo() != null) {
@@ -93,17 +105,22 @@ public class MainActivity extends Activity {
         serverOrigin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
         android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
         if (pairParam != null && !pairParam.trim().isEmpty()) {
-            // User explicitly provided pairing token in URL (e.g. from QR scan or explicit pairing link)
+            // User explicitly provided pairing token in URL (e.g. from QR scan, manual pairing, or explicit link)
             String newTok = pairParam.trim();
             prefs.edit().putString("access_token", newTok).putString("server_url", serverOrigin + "/").apply();
             authenticatedOrigin = serverOrigin;
-            android.webkit.CookieManager.getInstance().setCookie(serverOrigin, "kurisu_session=" + newTok + "; path=/; SameSite=Strict");
+            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            cm.setAcceptCookie(true);
+            cm.removeAllCookies(null); // Purge any prior cookies from previous hosts/ports to prevent cross-port leakage
+            cm.setCookie(serverOrigin, "kurisu_session=" + newTok + "; path=/; SameSite=Strict");
+            cm.flush();
             Toast.makeText(this, "已配对服务 (" + serverOrigin + ")", Toast.LENGTH_SHORT).show();
         } else {
-            // Candidate address without explicit pair token: NEVER send old saved credentials!
+            // Candidate / unauthenticated connection: strictly isolate from any paired credentials!
             authenticatedOrigin = "";
+            purgeCookiesAndStorage();
             prefs.edit().putString("server_url", serverOrigin + "/").apply();
-            Toast.makeText(this, "已连接服务，请在页面中进行配对认证", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "已连接服务（隔离模式），请在页面中进行配对认证", Toast.LENGTH_SHORT).show();
         }
         // Security: Never append ?pair= into candidate or loaded server URLs!
         String targetUrl = serverOrigin + "/";
@@ -137,13 +154,39 @@ public class MainActivity extends Activity {
         }).setNegativeButton("取消",null).show();
     }
     private void configureServer() {
-        EditText input = new EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        input.setSingleLine(true);
-        input.setText(getSharedPreferences("config", MODE_PRIVATE).getString("server_url", ""));
-        input.setHint("http://电脑局域网IP:8080");
-        new AlertDialog.Builder(this).setTitle("连接光影实验室").setMessage("手机需能访问运行服务的电脑。")
-            .setView(input).setPositiveButton("连接", (d,w) -> connectServer(input.getText().toString()))
+        configureServer(getSharedPreferences("config", MODE_PRIVATE).getString("server_url", ""));
+    }
+
+    private void configureServer(String initialUrl) {
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(40, 20, 40, 10);
+
+        EditText urlInput = new EditText(this);
+        urlInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        urlInput.setSingleLine(true);
+        urlInput.setHint("http://电脑IP:8080");
+        urlInput.setText(initialUrl != null && !initialUrl.isEmpty() ? initialUrl : "http://192.168.");
+
+        EditText tokenInput = new EditText(this);
+        tokenInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        tokenInput.setSingleLine(true);
+        tokenInput.setHint("配对凭据 access_token (可选)");
+
+        layout.addView(urlInput);
+        layout.addView(tokenInput);
+
+        new AlertDialog.Builder(this).setTitle("连接电脑服务").setMessage("手机需能访问运行服务的电脑。输入地址与配对凭据可安全配对。")
+            .setView(layout).setPositiveButton("连接", (d,w) -> {
+                String u = urlInput.getText().toString().trim();
+                String tok = tokenInput.getText().toString().trim();
+                if (!tok.isEmpty()) {
+                    String full = u.contains("?") ? (u + "&pair=" + tok) : (u + "?pair=" + tok);
+                    connectServer(full);
+                } else {
+                    connectServer(u);
+                }
+            })
             .setNeutralButton("发现服务", (d,w) -> discoverServer()).setNegativeButton("取消", null).show();
     }
 
@@ -274,6 +317,9 @@ public class MainActivity extends Activity {
                 if (frontCameraBridge != null) frontCameraBridge.stop();
                 if(bridgeTrusted)releaseDeviceInput();
                 bridgeTrusted=false;bridgeEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
+                if (!isPageAuthenticated(view)) {
+                    purgeCookiesAndStorage();
+                }
                 super.onPageStarted(view,url,favicon);
             }
             @Override public void onPageFinished(WebView view,String url) {
@@ -303,6 +349,7 @@ public class MainActivity extends Activity {
                 if (request.isForMainFrame() && !request.getUrl().toString().startsWith("file:")) {
                     serverOrigin = "";
                     authenticatedOrigin = "";
+                    purgeCookiesAndStorage();
                     view.loadUrl(OFFLINE);
                     Toast.makeText(MainActivity.this, "已切换至手机直连模式", Toast.LENGTH_SHORT).show();
                 }
@@ -467,12 +514,9 @@ public class MainActivity extends Activity {
                     if (manual) {
                         new AlertDialog.Builder(MainActivity.this)
                             .setTitle("发现候选服务")
-                            .setMessage("在局域网发现候选电脑服务 (" + sUrl + ")。\n\n为防凭据伪造转发，请确认地址后前往该服务手动配对。（旧凭据绝不会泄露给该服务）")
-                            .setPositiveButton("前往配对", (d, w) -> {
-                                serverOrigin = sUrl;
-                                authenticatedOrigin = "";
-                                webView.loadUrl(sUrl + "/");
-                            })
+                            .setMessage("在局域网发现候选电脑服务地址：\n" + sUrl + "\n\n为防跨端口凭据窃取，候选服务需先确认配对。\n请确认该服务可信，并输入配对凭据完成连接。")
+                            .setPositiveButton("手动配对", (d, w) -> configureServer(sUrl))
+                            .setNeutralButton("访客打开(隔离模式)", (d, w) -> connectServer(sUrl))
                             .setNegativeButton("取消", null)
                             .show();
                     } else {
@@ -509,8 +553,17 @@ public class MainActivity extends Activity {
                     public void onServiceResolved(NsdServiceInfo s) {
                         String host=s.getHost().getHostAddress(); if (host.indexOf(':')>=0) host="["+host+"]";
                         final String url="http://"+host+":"+s.getPort();
-                        runOnUiThread(() -> { if (!isFinishing()) new AlertDialog.Builder(MainActivity.this).setTitle("发现光影实验室")
-                            .setMessage(url).setPositiveButton("连接",(d,w)->connectServer(url)).setNegativeButton("取消",null).show(); });
+                        runOnUiThread(() -> {
+                            if (!isFinishing()) {
+                                new AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("发现候选服务")
+                                    .setMessage("在局域网发现候选电脑服务：\n" + url + "\n\n请确认该服务可信，并输入配对凭据完成连接。")
+                                    .setPositiveButton("手动配对", (d, w) -> configureServer(url))
+                                    .setNeutralButton("访客打开(隔离模式)", (d, w) -> connectServer(url))
+                                    .setNegativeButton("取消", null)
+                                    .show();
+                            }
+                        });
                         stopDiscovery();
                     }
                 });

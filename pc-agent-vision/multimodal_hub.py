@@ -119,6 +119,28 @@ class MultimodalHub:
         }
         self.automatic_enabled = mode in compatible[self.mode]
 
+    def stop_remote(self, session_id=None):
+        """Only stops an active remote vision session.
+        If local PC camera is running (source == 'camera'), local camera is never touched."""
+        if self.source == "remote":
+            if session_id is None or self.active_session_id == session_id:
+                self.started = False
+                self.source = "none"
+                self.active_session_id = None
+                self.session_epoch += 1
+                self._record_face(None)
+                if hasattr(self, "frame_lock"):
+                    with self.frame_lock:
+                        self.latest_jpeg = None
+                if hasattr(self, "_remote_hands") and self._remote_hands:
+                    try:
+                        self._remote_hands.close()
+                        self._remote_face.close()
+                    except Exception:
+                        pass
+                    self._remote_hands = None
+                    self._remote_face = None
+
     def stop(self):
         self.stop_event.set()
         if self.thread:

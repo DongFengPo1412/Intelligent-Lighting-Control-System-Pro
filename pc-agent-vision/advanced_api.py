@@ -232,9 +232,10 @@ class ProApi:
                     raise ValueError(
                         "Simulation does not open a camera; use observations"
                     )
+                source = data.get("source", "camera")
                 if data.get("enabled"):
-                    source = data.get("source", "camera")
                     if source in ("remote", "phone"):
+                        session_id = None
                         try:
                             session_id = await asyncio.to_thread(
                                 self.vision.start_remote,
@@ -242,7 +243,8 @@ class ProApi:
                             )
                             result = self.vision.status()
                         except Exception:
-                            await asyncio.to_thread(self.vision.stop)
+                            if session_id:
+                                await asyncio.to_thread(self.vision.stop_remote, session_id)
                             raise
                     else:
                         await asyncio.to_thread(
@@ -252,8 +254,13 @@ class ProApi:
                         )
                         result = self.vision.status()
                 else:
-                    await asyncio.to_thread(self.vision.stop)
-                    result = self.vision.status()
+                    if source in ("remote", "phone"):
+                        session_id = data.get("session_id")
+                        await asyncio.to_thread(self.vision.stop_remote, session_id)
+                        result = self.vision.status()
+                    else:
+                        await asyncio.to_thread(self.vision.stop)
+                        result = self.vision.status()
             elif action == "observations":
                 if data.get("mode", "pet") not in self.vision.MODES or not isinstance(
                     data.get("observation"), dict
@@ -328,7 +335,7 @@ class ProApi:
             else:
                 raise ValueError("Unknown operation")
             return web.json_response(result)
-        except (KeyError, ValueError, TypeError) as exc:
+        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
             return web.json_response({"error": str(exc)}, status=400)
         except ConnectionError as exc:
             return web.json_response({"error": str(exc)}, status=503)

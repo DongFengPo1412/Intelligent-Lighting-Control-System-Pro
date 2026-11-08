@@ -1920,6 +1920,7 @@
   let currentVisionSessionId = null;
 
   function stopPhoneCamera() {
+    const sidToStop = currentVisionSessionId;
     if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
       try { window.AmadeusNative.stopFrontCamera(); } catch (e) { }
     }
@@ -1945,6 +1946,9 @@
     if (overlay) {
       const ctx = overlay.getContext("2d");
       ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+    if (sidToStop) {
+      api("/api/pro/vision", { enabled: false, source: "remote", session_id: sidToStop }).catch(() => {});
     }
   }
 
@@ -2042,14 +2046,20 @@
     if (video) video.style.display = "block";
 
     const canvas = $("phoneCameraHidden") || document.createElement("canvas");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user",
-        width: { ideal: 480 },
-        height: { ideal: 480 },
-      },
-      audio: false,
-    });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 480 },
+          height: { ideal: 480 },
+        },
+        audio: false,
+      });
+    } catch (err) {
+      stopPhoneCamera();
+      throw Error("未授予摄像头权限或摄像头无法打开: " + (err.message || err));
+    }
     phoneStream = stream;
     video.srcObject = stream;
     await video.play().catch(() => { });

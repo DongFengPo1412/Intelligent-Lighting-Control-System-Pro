@@ -492,6 +492,127 @@ class TestLightControllerArcadeExecution(unittest.TestCase):
 
         asyncio.run(run_lifecycle())
 
+    def test_pc_camera_running_phone_rejected_pc_camera_keeps_running(self):
+        """Regression test for Codex P1:
+        When PC camera is running, a phone camera start request is rejected with HTTP 400,
+        and the running PC camera is NOT stopped (it continues running)."""
+        import asyncio
+        import json
+        from advanced_api import ProApi
+        from light_controller import LightController
+
+        ctrl = LightController()
+        ctrl.port = "COM99"
+        mock_agent = MagicMock()
+        mock_agent.memory = {}
+        mock_voice = MagicMock()
+
+        api = ProApi(controller=ctrl, agent=mock_agent, voice=mock_voice)
+
+        # Simulate active local PC camera thread
+        fake_thread = MagicMock()
+        fake_thread.is_alive.return_value = True
+        api.vision.thread = fake_thread
+        api.vision.started = True
+        api.vision.source = "camera"
+        api.vision.stop_event.clear()
+
+        class FakeRequest:
+            def __init__(self, action, payload):
+                self.match_info = {"action": action}
+                self.method = "POST"
+                self._payload = payload
+                self.app = {}
+
+            async def json(self):
+                return self._payload
+
+        async def run_test():
+            req_phone = FakeRequest("vision", {"enabled": True, "source": "remote", "mode": "pet"})
+            resp_phone = await api.handle(req_phone)
+
+            # 1. Phone start request MUST be rejected
+            self.assertEqual(resp_phone.status, 400, "Phone start request must return HTTP 400 when PC camera is running")
+            body = json.loads(resp_phone.body.decode("utf-8"))
+            self.assertIn("Stop the local camera before starting remote session", body.get("error", ""))
+
+            # 2. PC camera MUST CONTINUE RUNNING completely unaffected!
+            self.assertTrue(api.vision.started, "PC camera must remain running (started == True)")
+            self.assertEqual(api.vision.source, "camera", "Vision source must remain 'camera'")
+            self.assertFalse(api.vision.stop_event.is_set(), "stop_event must not be set")
+            fake_thread.join.assert_not_called()
+
+        asyncio.run(run_test())
+
+    def test_phone_permission_denied_only_closes_remote_session(self):
+        """Regression test for Codex P1:
+        When backend starts a remote session, but phone permissions are denied,
+        stopping the remote session revokes ONLY that remote session, and does not touch local camera."""
+        import asyncio
+        import json
+        from advanced_api import ProApi
+        from light_controller import LightController
+
+        ctrl = LightController()
+        ctrl.port = "COM99"
+        mock_agent = MagicMock()
+        mock_agent.memory = {}
+        mock_voice = MagicMock()
+
+        api = ProApi(controller=ctrl, agent=mock_agent, voice=mock_voice)
+
+        class FakeRequest:
+            def __init__(self, action, payload):
+                self.match_info = {"action": action}
+                self.method = "POST"
+                self._payload = payload
+                self.app = {}
+
+            async def json(self):
+                return self._payload
+
+        async def run_test():
+            # 1. Start remote session on backend
+            req_start = FakeRequest("vision", {"enabled": True, "source": "remote", "mode": "pet"})
+            resp_start = await api.handle(req_start)
+            self.assertEqual(resp_start.status, 200)
+            body_start = json.loads(resp_start.body.decode("utf-8"))
+            sid = body_start.get("session_id")
+            self.assertIsNotNone(sid)
+            self.assertTrue(api.vision.started)
+            self.assertEqual(api.vision.source, "remote")
+            self.assertEqual(api.vision.active_session_id, sid)
+
+            # 2. Phone permission denied on frontend -> sends stop with session_id
+            req_stop = FakeRequest("vision", {"enabled": False, "source": "remote", "session_id": sid})
+            resp_stop = await api.handle(req_stop)
+            self.assertEqual(resp_stop.status, 200)
+            body_stop = json.loads(resp_stop.body.decode("utf-8"))
+            self.assertFalse(body_stop.get("running"))
+            self.assertIsNone(body_stop.get("session_id"))
+            self.assertFalse(api.vision.started)
+            self.assertEqual(api.vision.source, "none")
+            self.assertIsNone(api.vision.active_session_id)
+
+            # 3. Simulate PC camera running and ensure remote stop request cannot stop it
+            fake_thread = MagicMock()
+            fake_thread.is_alive.return_value = True
+            api.vision.thread = fake_thread
+            api.vision.started = True
+            api.vision.source = "camera"
+            api.vision.stop_event.clear()
+
+            req_stale_remote_stop = FakeRequest("vision", {"enabled": False, "source": "remote", "session_id": "stale_sid_xyz"})
+            resp_stale = await api.handle(req_stale_remote_stop)
+            self.assertEqual(resp_stale.status, 200)
+            # PC camera is STILL running
+            self.assertTrue(api.vision.started)
+            self.assertEqual(api.vision.source, "camera")
+            self.assertFalse(api.vision.stop_event.is_set())
+            fake_thread.join.assert_not_called()
+
+        asyncio.run(run_test())
+
 
 if __name__ == "__main__":
     unittest.main()

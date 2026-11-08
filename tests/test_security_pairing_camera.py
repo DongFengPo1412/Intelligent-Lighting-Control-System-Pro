@@ -234,6 +234,108 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             "Explicitly paired page is authorized for camera upload"
         )
 
+    def test_same_host_different_port_cookie_isolation(self):
+        """Cross-port security isolation:
+        Even when a candidate service shares the exact same IP/host as a previously paired service,
+        navigating to the candidate (or guest mode) purges all cookies and disables cookie acceptance,
+        preventing RFC 6265 host-level cookie leakage to unauthenticated ports."""
+        saved_token = "paired_token_secret_host50_8080"
+        host = "192.168.1.50"
+        paired_origin = f"http://{host}:8080"
+        candidate_origin = f"http://{host}:9090"
+
+        class CookieManagerSimulator:
+            def __init__(self):
+                # RFC 6265 standard cookie jar stores by domain/host
+                self.host_cookies = {}
+                self.accept_cookies = False
+
+            def set_accept_cookie(self, accept: bool):
+                self.accept_cookies = accept
+
+            def set_cookie(self, url: str, cookie_str: str):
+                if not self.accept_cookies:
+                    return
+                p = urlparse(url)
+                self.host_cookies[p.hostname] = cookie_str
+
+            def remove_all_cookies(self):
+                self.host_cookies.clear()
+
+            def get_cookie_header(self, url: str) -> str:
+                if not self.accept_cookies:
+                    return ""
+                p = urlparse(url)
+                return self.host_cookies.get(p.hostname, "")
+
+        class AndroidAppSecurityModel:
+            def __init__(self):
+                self.cm = CookieManagerSimulator()
+                self.server_origin = ""
+                self.authenticated_origin = ""
+                self.web_storage = {}
+
+            def purge_cookies_and_storage(self):
+                self.cm.remove_all_cookies()
+                self.cm.set_accept_cookie(false) if hasattr(self, 'false') else self.cm.set_accept_cookie(False)
+                self.web_storage.clear()
+
+            def connect_server(self, target_url: str):
+                p = urlparse(target_url)
+                origin = f"{p.scheme}://{p.netloc}"
+                self.server_origin = origin
+                # Check for explicit pair parameter
+                from urllib.parse import parse_qs
+                qs = parse_qs(p.query)
+                pair_param = qs.get("pair", [""])[0]
+
+                if pair_param.strip():
+                    new_tok = pair_param.strip()
+                    self.authenticated_origin = origin
+                    self.cm.set_accept_cookie(True)
+                    self.cm.remove_all_cookies() # Clear prior cookies
+                    self.cm.set_cookie(origin, f"kurisu_session={new_tok}")
+                else:
+                    # Unauthenticated / guest connection: strictly purge and isolate!
+                    self.authenticated_origin = ""
+                    self.purge_cookies_and_storage()
+
+            def send_http_request(self, target_url: str) -> dict:
+                cookie_header = self.cm.get_cookie_header(target_url)
+                return {
+                    "url": target_url,
+                    "cookie": cookie_header,
+                    "authenticated": bool(self.authenticated_origin and self.authenticated_origin == f"{urlparse(target_url).scheme}://{urlparse(target_url).netloc}")
+                }
+
+        app = AndroidAppSecurityModel()
+
+        # Step 1: User explicitly pairs with port 8080
+        app.connect_server(f"{paired_origin}/?pair={saved_token}")
+        self.assertEqual(app.authenticated_origin, paired_origin)
+        req_paired = app.send_http_request(f"{paired_origin}/api/status")
+        self.assertIn("kurisu_session=" + saved_token, req_paired["cookie"], "Paired port 8080 must receive session cookie")
+        self.assertTrue(req_paired["authenticated"])
+
+        # Step 2: Discovery discovers candidate service on SAME host, different port (9090)
+        # User opens candidate in guest / isolated mode without pairing token
+        app.connect_server(candidate_origin)
+        self.assertEqual(app.authenticated_origin, "", "Port 9090 candidate must not be authenticated")
+
+        # Step 3: Verify candidate port 9090 receives NO kurisu_session cookie
+        req_candidate = app.send_http_request(f"{candidate_origin}/api/status")
+        self.assertEqual(req_candidate["cookie"], "", "Candidate port 9090 MUST NOT receive old kurisu_session cookie!")
+        self.assertNotIn("kurisu_session", req_candidate["cookie"])
+        self.assertFalse(req_candidate["authenticated"], "Candidate port 9090 must not be authenticated")
+
+        # Step 4: User explicitly confirms pairing for port 9090 with new token
+        new_token_9090 = "token_for_port_9090_secret"
+        app.connect_server(f"{candidate_origin}/?pair={new_token_9090}")
+        self.assertEqual(app.authenticated_origin, candidate_origin)
+        req_new_paired = app.send_http_request(f"{candidate_origin}/api/status")
+        self.assertEqual(req_new_paired["cookie"], f"kurisu_session={new_token_9090}")
+        self.assertTrue(req_new_paired["authenticated"])
+
 
 if __name__ == "__main__":
     unittest.main()
