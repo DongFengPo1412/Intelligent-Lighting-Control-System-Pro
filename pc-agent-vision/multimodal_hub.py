@@ -198,17 +198,15 @@ class MultimodalHub:
         import mediapipe as mp
 
         if mode and mode in self.MODES:
-            if self.mode != mode:
-                desired = {"pet": 17, "identity": 17, "fingertip": 26, "sandbox": 27}.get(mode)
-                if desired is not None:
-                    self.controller.send_json({"cmd": "mode", "val": desired})
             self.mode = mode
-            self.automatic_enabled = True
-            self.arbiter.until = 0
 
         if not hasattr(self, "_remote_hands") or self._remote_hands is None:
-            self._remote_hands = mp.solutions.hands.Hands(max_num_hands=1, model_complexity=0)
-            self._remote_face = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
+            if hasattr(mp, "solutions"):
+                self._remote_hands = mp.solutions.hands.Hands(max_num_hands=1, model_complexity=0)
+                self._remote_face = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
+            else:
+                self._remote_hands = None
+                self._remote_face = None
 
         nparr = np.frombuffer(raw_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -216,7 +214,9 @@ class MultimodalHub:
             raise ValueError("Failed to decode image")
 
         self.started = True
-        return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True)
+        if self._remote_hands and self._remote_face:
+            return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True)
+        return {"present": False}
 
     def _capture(self):
         cap = None

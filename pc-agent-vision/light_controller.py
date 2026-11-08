@@ -475,6 +475,38 @@ class LightController(ProControlMixin):
             self._mic_enabled = bool(enable)
         return ok
 
+    def start_arcade(self, target: Any) -> Dict[str, Any]:
+        """Launch any of the 100 canonical arcade cartridges via unified ArcadeSession."""
+        from arcade_catalog import resolve_arcade_game
+        resolved = resolve_arcade_game(target)
+        if not resolved:
+            return {
+                "status": "error",
+                "error": "unknown_game",
+                "message": f"未知的街机游戏: {target}",
+            }
+        gid, name = resolved
+        if hasattr(self, '_arbiter'):
+            self._arbiter.claim_user()
+        if hasattr(self, '_vision_hub'):
+            self._vision_hub.manual_mode(32)
+        from arcade_runner import get_arcade_session
+        session = get_arcade_session(self)
+        sel_res = session.select_game(gid)
+        if sel_res.get("status") != "ok":
+            return sel_res
+        start_res = session.start()
+        if start_res.get("status") != "ok":
+            return start_res
+        return {
+            "status": "ok",
+            "game_id": gid,
+            "game_name": name,
+            "source": start_res.get("source", "esp32_hardware"),
+            "simulated": start_res.get("simulated", False),
+            "message": f"已成功启动 #{gid:03d} {name}",
+        }
+
     def set_mode(self, mode_num: int) -> bool:
         """Select a direct mode (0..31 except 18/25); countdown requires seconds."""
         print(f"[具身指令] 设置模式编号: {mode_num}")
@@ -483,10 +515,8 @@ class LightController(ProControlMixin):
         if mode_num not in DIRECT_MODES:
             raise ValueError("Invalid display mode")
         if mode_num in (19,21):
-            from arcade_runner import get_arcade_session
-            if hasattr(self,'_arbiter'):self._arbiter.claim_user()
-            if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(32)
-            return get_arcade_session(self).legacy_control(33 if mode_num==19 else 41,'start').get('status')=='ok'
+            res = self.start_arcade(33 if mode_num==19 else 41)
+            return res.get('status') == 'ok'
         if hasattr(self,'_arbiter'):self._arbiter.claim_user()
         if hasattr(self,'_vision_hub'):self._vision_hub.manual_mode(mode_num)
         ok = self.send_json({"cmd": "mode", "val": mode_num})

@@ -1,0 +1,129 @@
+"""Canonical catalog and fuzzy resolution for LED Mini Arcade 100 cartridges."""
+
+import json
+import os
+import re
+from pathlib import Path
+from typing import Optional, Tuple, Dict, Any
+
+_CATALOG_CACHE: Dict[int, Dict[str, Any]] = {}
+_NAME_TO_ID: Dict[str, int] = {}
+
+
+def _init_catalog():
+    global _CATALOG_CACHE, _NAME_TO_ID
+    if _CATALOG_CACHE:
+        return
+    manifest_path = Path(__file__).parent.parent / "games_100_manifest.json"
+    if not manifest_path.exists():
+        manifest_path = Path(r"C:\workspace\Intelligent-Lighting-Control-System-Pro\games_100_manifest.json")
+    if manifest_path.exists():
+        try:
+            items = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for it in items:
+                gid = int(it["id"])
+                raw_name = it["name"]
+                clean_name = re.sub(r'[（\(].*?[）\)]|——.*', '', raw_name).strip()
+                en_match = re.search(r'[（\(](.*?)[）\)]', raw_name)
+                en_name = en_match.group(1).strip() if en_match else ""
+                _CATALOG_CACHE[gid] = {
+                    "id": gid,
+                    "name": clean_name,
+                    "full_name": raw_name,
+                    "en_name": en_name,
+                    "category": it.get("category", ""),
+                }
+                _NAME_TO_ID[clean_name.lower()] = gid
+                if en_name:
+                    _NAME_TO_ID[en_name.lower()] = gid
+        except Exception:
+            pass
+
+    # Aliases & common synonyms for popular cartridges
+    aliases = {
+        # #001 Super Mario Bros.
+        "mario": 1, "超级马里奥": 1, "马里奥": 1, "马力欧": 1, "超级玛丽": 1, "super mario": 1, "super mario bros": 1,
+        # #002 Doodle Jump
+        "doodle": 2, "doodle jump": 2, "涂鸦跳跃": 2, "涂鸦": 2,
+        # #003 Celeste
+        "celeste": 3, "空中冲刺": 3, "蔚蓝": 3,
+        # #004 VVVVVV
+        "vvvvvv": 4, "重力翻转": 4,
+        # #009 Flappy Bird
+        "flappy": 9, "flappy bird": 9, "飞翔小鸟": 9, "小鸟": 9, "像素鸟": 9,
+        # #010 Stack
+        "stack": 10, "堆叠大师": 10, "堆叠": 10,
+        # #011 Chrome Dino
+        "dino": 11, "chrome dino": 11, "恐龙跑酷": 11, "小恐龙": 11,
+        # #020 Pong
+        "pong": 20, "双人乒乓": 20, "乒乓": 20, "乒乓球": 20,
+        # #021 Breakout
+        "breakout": 21, "打砖块": 21, "经典打砖块": 21,
+        # #026 Space Invaders
+        "space invaders": 26, "space_invaders": 26, "太空侵略者": 26, "小蜜蜂": 26, "侵略者": 26,
+        # #033 Snake
+        "snake": 33, "贪吃蛇": 33, "吃蛇": 33,
+        # #034 Pac-Man
+        "pacman": 34, "pac-man": 34, "吃豆人": 34, "吃豆": 34,
+        # #038 Bomberman
+        "bomberman": 38, "炸弹人": 38,
+        # #041 Tetris
+        "tetris": 41, "俄罗斯方块": 41, "方块": 41,
+        # #042 Puyo Puyo
+        "puyo": 42, "puyo puyo": 42, "魔法气泡": 42, "彩球连锁": 42,
+        # #043 2048
+        "2048": 43,
+        # #054 Sokoban
+        "sokoban": 54, "推箱子": 54,
+        # #074 Highway Racer
+        "highway": 74, "highway racer": 74, "变道赛车": 74, "公路赛车": 74, "赛车": 74,
+        # #092 Fruit Ninja
+        "fruit ninja": 92, "fruit_ninja": 92, "水果忍者": 92, "切水果": 92,
+        # #097 Frogger
+        "frogger": 97, "青蛙过河": 97, "过河青蛙": 97,
+    }
+    for k, v in aliases.items():
+        _NAME_TO_ID[k.lower()] = v
+
+
+def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
+    """Resolve an arcade game name, alias or ID to (target_id, clean_name)."""
+    _init_catalog()
+    if query is None:
+        return None
+    # Integer direct lookup
+    if isinstance(query, int):
+        if 1 <= query <= 100 and query in _CATALOG_CACHE:
+            return query, _CATALOG_CACHE[query]["name"]
+        return None
+
+    raw = str(query).strip()
+    if not raw:
+        return None
+
+    # Digits direct lookup
+    if raw.isdigit():
+        val = int(raw)
+        if 1 <= val <= 100 and val in _CATALOG_CACHE:
+            return val, _CATALOG_CACHE[val]["name"]
+        return None
+
+    norm = raw.lower().strip()
+    norm = re.sub(r'^[#＃第]+', '', norm)
+    norm = re.sub(r'[号款关个]+$', '', norm)
+    if norm.isdigit():
+        val = int(norm)
+        if 1 <= val <= 100 and val in _CATALOG_CACHE:
+            return val, _CATALOG_CACHE[val]["name"]
+
+    # Exact alias match
+    if norm in _NAME_TO_ID:
+        gid = _NAME_TO_ID[norm]
+        return gid, _CATALOG_CACHE.get(gid, {}).get("name", norm)
+
+    # Substring / fuzzy match
+    for name, gid in _NAME_TO_ID.items():
+        if name in norm or norm in name:
+            return gid, _CATALOG_CACHE.get(gid, {}).get("name", name)
+
+    return None

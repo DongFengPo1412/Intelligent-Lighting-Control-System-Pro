@@ -47,19 +47,21 @@ WIRE_SCHEMA = {'type': 'object', 'properties': {
     'timer_seconds': {'type': 'integer', 'minimum': 0, 'maximum': 86400},
     'brightness': {'type': 'integer', 'minimum': -1, 'maximum': 60},
     'volume': {'type': 'integer', 'minimum': -1, 'maximum': 100},
+    'game_id': {'type': 'integer', 'minimum': 0, 'maximum': 100},
     'stop_countdown': {'type': 'boolean'}, 'query_status': {'type': 'boolean'}, 'worldline': {'type': 'boolean'},
-}, 'required': ['kind', 'effect', 'timer_seconds', 'brightness', 'volume', 'stop_countdown', 'query_status', 'worldline'], 'additionalProperties': False}
+}, 'required': ['kind', 'effect', 'timer_seconds', 'brightness', 'volume', 'game_id', 'stop_countdown', 'query_status', 'worldline'], 'additionalProperties': False}
 
 
 def to_wire(kind='control', actions=()):
     wire = dict(kind=kind, effect='保持现状', timer_seconds=0, brightness=-1, volume=-1,
-                stop_countdown=False, query_status=False, worldline=False)
+                game_id=0, stop_countdown=False, query_status=False, worldline=False)
     for action in actions:
         tool, value = action['tool'], action['value']
         if tool == 'set_light_mode': wire['effect'] = EFFECTS[value][0]
         elif tool == 'start_countdown': wire.update(effect=EFFECTS[25][0], timer_seconds=value)
         elif tool == 'set_brightness': wire['brightness'] = value
         elif tool == 'set_volume': wire['volume'] = value
+        elif tool == 'start_game': wire['game_id'] = value
         elif tool == 'stop_countdown': wire['stop_countdown'] = True
         elif tool == 'get_device_status': wire['query_status'] = True
         elif tool == 'trigger_steins_gate_worldline': wire['worldline'] = True
@@ -88,13 +90,16 @@ def from_wire(wire):
     for field, tool in [('brightness', 'set_brightness'), ('volume', 'set_volume')]:
         value = wire[field]
         if value != -1: actions.append({'tool': tool, 'value': value})
+    if wire.get('game_id', 0) > 0:
+        actions.append({'tool': 'start_game', 'value': wire['game_id']})
     for field, tool in [('stop_countdown', 'stop_countdown'), ('query_status', 'get_device_status'), ('worldline', 'trigger_steins_gate_worldline')]:
         if type(wire[field]) is not bool: raise ValueError('Invalid flag')
         if wire[field]: actions.append({'tool': tool, 'value': 0})
     return validate_plan({'kind': 'control', 'actions': actions})
 
 ARGUMENTS = {'set_light_mode': 'mode', 'start_countdown': 'seconds',
-             'set_brightness': 'brightness', 'set_volume': 'volume'}
+             'set_brightness': 'brightness', 'set_volume': 'volume',
+             'start_game': 'game'}
 
 
 def validate_plan(plan):
@@ -120,6 +125,7 @@ def validate_plan(plan):
                  (tool == 'start_countdown' and 1 <= value <= 86400) or
                  (tool == 'set_brightness' and 1 <= value <= 60) or
                  (tool == 'set_volume' and 0 <= value <= 100) or
+                 (tool == 'start_game' and 1 <= value <= 100) or
                  (tool in ('stop_countdown', 'get_device_status', 'trigger_steins_gate_worldline') and value == 0))
         if not valid:
             raise ValueError(f'Unsupported control: {tool}={value}')
@@ -133,7 +139,7 @@ def validate_plan(plan):
     tools = {action['tool'] for action in normalized}
     if 'start_countdown' in tools and 'stop_countdown' in tools:
         raise ValueError('Plan contradicts itself: both start and stop countdown. Keep only the requested final operation.')
-    display = [a for a in normalized if a['tool'] in ('set_light_mode', 'start_countdown', 'trigger_steins_gate_worldline')]
+    display = [a for a in normalized if a['tool'] in ('set_light_mode', 'start_countdown', 'trigger_steins_gate_worldline', 'start_game')]
     if len(display) > 1:
         return {'kind': 'clarify', 'actions': []}
     return {'kind': 'control', 'actions': normalized}
@@ -165,6 +171,30 @@ def exact_plan(text):
     """Fast path for an entire literal command; everything else uses semantic planning."""
     compact = re.sub(r'[，,。.!！\s]', '', text)
     compact = compact.replace('音乐流体','音乐光环')
+
+    # 1. Negation for games and general control
+    if re.search(r'(?:不要|别|不想|不用)(?:再)?(?:去)?(?:玩|启动|打开|进入|运行)?(?:街机|游戏)', compact):
+        return {'kind': 'chat', 'actions': []}
+    neg_m = re.fullmatch(r'(?:请)?(?:不要|别|不想|不用)(?:再)?(?:去)?(?:玩|启动|打开|进入|运行)?\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:了)?(?:吧|一下)?', compact)
+    if neg_m:
+        from arcade_catalog import resolve_arcade_game
+        cand = re.sub(r'[了吧一下]+$', '', neg_m.group(1))
+        if not cand or cand in ('游戏', '街机', '卡带') or resolve_arcade_game(cand):
+            return {'kind': 'chat', 'actions': []}
+
+    # 2. Ambiguous game request without specific title -> clarify
+    if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:玩|启动|打开|开启|进入|运行|来[个局把]|玩一[局把下])?(?:街机|游戏)(?:吧|一下)?', compact):
+        return {'kind': 'clarify', 'actions': []}
+
+    # 3. Specific arcade game launch
+    from arcade_catalog import resolve_arcade_game
+    game_m = re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:启动|打开|开启|玩|运行|切换到|进入|来[个局把]|玩一[局把下])\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:吧|一下)?', compact)
+    if game_m:
+        candidate = game_m.group(1)
+        res = resolve_arcade_game(candidate)
+        if res:
+            return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
+
     color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)
     if color:
         return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}
@@ -172,7 +202,17 @@ def exact_plan(text):
         if mode == 25:
             continue
         if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想看|我要看|显示|打开|开启|切换成|切换到|换成|改成)?' + re.escape(name) + r'(?:模式)?(?:吧|一下)?', compact):
+            if mode == 19:
+                return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': 33}]}
+            if mode == 21:
+                return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': 41}]}
             return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': mode}]}
+
+    # 4. Direct game name mention fallback
+    res = resolve_arcade_game(compact)
+    if res:
+        return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
+
     return None
 
 
@@ -288,8 +328,9 @@ effect：选择目录中最符合意图的中文名称；不换灯效为保持�
 timer_seconds：仅当请求倒计时时填写秒数，分钟换成秒；否则0。没说时长的倒计时用clarify。
 brightness：仅当请求调灯光亮度才填1..60；一半亮度=30。没要求填-1。不是声音音量。
 volume：仅当请求调播报声音大小才填0..100；没要求填-1。不是灯光亮度。
+game_id：仅当请求启动或游玩100款像素街机游戏时填入1..100正式卡带编号；否则0。
 stop_countdown、query_status、worldline：只在请求停止计时/查设备状态/触发世界线彩蛋时为true，否则false。
-chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,volume-1,其余false。
+chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,volume-1,game_id0,其余false。
 目录：
 """ + catalog
         context = [{'role': item['role'], 'content': item.get('content', '')}
@@ -309,6 +350,9 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
             ('别改灯效，也不要关灯', []),
             ('我想让红莉栖的半身立绘回到灯板上', [{'tool': 'set_light_mode', 'value': 17}]),
             ('开始沙漏，时长两分钟', [{'tool': 'start_countdown', 'value': 120}]),
+            ('启动超级马里奥游戏', [{'tool': 'start_game', 'value': 1}]),
+            ('来局双人乒乓', [{'tool': 'start_game', 'value': 20}]),
+            ('不要玩游戏', []),
         ]
         few_shot = []
         for utterance, actions in examples:
@@ -347,6 +391,11 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
 
 def describe_action(action):
     tool, value = action['tool'], action['value']
+    if tool == 'start_game':
+        from arcade_catalog import resolve_arcade_game
+        res = resolve_arcade_game(value)
+        gname = res[1] if res else f'街机 #{value}'
+        return f'已为你启动{gname}。', f'{gname}を起動したわ。'
     if tool == 'set_light_mode':
         zh, ja, _ = EFFECTS[value]
         return f'已切换为{zh}。', f'{ja}に切り替えたわ。'

@@ -158,14 +158,13 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "start_game",
-            "description": "在 16x16 矩阵光场上启动并游玩经典像素游戏 (贪吃蛇 snake 或 俄罗斯方块 tetris)。",
+            "description": "在 16x16 矩阵光场上启动并游玩 100 款经典像素街机卡带游戏 (支持编号 1~100 或游戏名称/别名，如 mario/超级马里奥 #001、snake/贪吃蛇 #033、tetris/俄罗斯方块 #041、pong/双人乒乓 #020 等)。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "game": {
                         "type": "string",
-                        "enum": ["snake", "tetris"],
-                        "description": "游戏名称: snake(贪吃蛇, 对应模式19), tetris(俄罗斯方块, 对应模式21)"
+                        "description": "游戏名称、别名或编号 (例如 '1', 'mario', '超级马里奥', 'snake', '贪吃蛇', 'tetris', '俄罗斯方块', 'pong', '打砖块' 等)"
                     }
                 },
                 "required": ["game"]
@@ -254,15 +253,21 @@ def _execute_tool_impl(func_name: str, arguments: Dict[str, Any]) -> Dict[str, A
             return {"status": "success" if ok else "error", "message": f"全局亮度已设为 {val}"}
 
         elif func_name == "start_game":
-            game = arguments.get("game", "snake").lower()
-            if game == "snake":
-                ok = controller.set_mode(19)
-                return {"status": "success" if ok else "error", "message": "已成功启动贪吃蛇游戏 (模式 19)"}
-            elif game == "tetris":
-                ok = controller.set_mode(21)
-                return {"status": "success" if ok else "error", "message": "已成功启动俄罗斯方块游戏 (模式 21)"}
+            target = arguments.get("game", "")
+            res = controller.start_arcade(target)
+            if res.get("status") == "ok":
+                gid = res.get("game_id", 0)
+                gname = res.get("game_name", "")
+                return {
+                    "status": "success",
+                    "game_id": gid,
+                    "game_name": gname,
+                    "message": f"已成功启动街机 #{gid:03d} {gname}",
+                }
             else:
-                return {"status": "error", "message": f"未知游戏名称: {game}"}
+                err = res.get("error", "start_failed")
+                msg = res.get("message", f"启动游戏失败: {err}")
+                return {"status": "error", "error": err, "message": msg}
 
         elif func_name == "set_kurisu_pet":
             ok = controller.set_mode(17)
