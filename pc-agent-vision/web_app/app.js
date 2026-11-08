@@ -1920,8 +1920,7 @@
   let currentVisionSessionId = null;
   let activeVisionSource = null;
 
-  async function stopPhoneCamera() {
-    const sidToStop = currentVisionSessionId;
+  function releaseLocalPhoneCapture() {
     if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
       try { window.AmadeusNative.stopFrontCamera(); } catch (e) { }
     }
@@ -1930,8 +1929,6 @@
       phoneUploadTimer = null;
     }
     phoneUploading = false;
-    currentVisionSessionId = null;
-    activeVisionSource = null;
     if (phoneStream && phoneStream.getTracks) {
       try {
         phoneStream.getTracks().forEach((t) => t.stop());
@@ -1949,13 +1946,53 @@
       const ctx = overlay.getContext("2d");
       ctx.clearRect(0, 0, overlay.width, overlay.height);
     }
-    if (sidToStop) {
-      return await api("/api/pro/vision", { enabled: false, source: "remote", session_id: sidToStop }).catch(() => {});
+  }
+
+  async function stopPhoneCamera(force = false) {
+    releaseLocalPhoneCapture();
+    const sidToStop = currentVisionSessionId;
+    if (!sidToStop) {
+      activeVisionSource = null;
+      return { running: false };
+    }
+
+    try {
+      const res = await api("/api/pro/vision", {
+        enabled: false,
+        source: "remote",
+        session_id: sidToStop,
+      });
+
+      if (res && res.error) {
+        if (force) {
+          currentVisionSessionId = null;
+          activeVisionSource = null;
+        }
+        return res;
+      }
+
+      if (res && res.running === true) {
+        if (force) {
+          currentVisionSessionId = null;
+          activeVisionSource = null;
+        }
+        return res;
+      }
+
+      currentVisionSessionId = null;
+      activeVisionSource = null;
+      return res || { running: false };
+    } catch (err) {
+      if (force) {
+        currentVisionSessionId = null;
+        activeVisionSource = null;
+      }
+      return { error: err.message || "网络请求失败", networkError: true };
     }
   }
 
   async function startPhoneCamera() {
-    stopPhoneCamera();
+    await stopPhoneCamera(true);
     const wrapper = $("phoneCameraWrapper");
     const video = $("phoneCameraVideo");
     const img = $("phoneCameraImg");
@@ -2034,7 +2071,7 @@
 
       const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
       if (!started) {
-        await stopPhoneCamera();
+        await stopPhoneCamera(true);
         throw Error("硬件前置摄像头无法打开，请确认已授予相机权限");
       }
       phoneStream = { isNative: true };
@@ -2043,7 +2080,7 @@
 
     // 2. WebRTC getUserMedia for secure browser contexts
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      await stopPhoneCamera();
+      await stopPhoneCamera(true);
       throw Error("当前浏览器运行环境未开放 WebRTC 权限，请使用最新版 APK 或选择【电脑摄像头】");
     }
     if (img) img.style.display = "none";
@@ -2061,12 +2098,12 @@
         audio: false,
       });
     } catch (err) {
-      await stopPhoneCamera();
+      await stopPhoneCamera(true);
       throw Error("未授予摄像头权限或摄像头无法打开: " + (err.message || err));
     }
     phoneStream = stream;
     video.srcObject = stream;
-    await video.play().catch(() => { });
+    if (video.play) { await video.play().catch(() => { }); }
     if (wrapper) wrapper.style.display = "block";
 
     canvas.width = 256;
@@ -2145,7 +2182,7 @@ bind("visionStart", async () => {
       notice("前置摄像头启动提示: " + err.message);
     }
   } else {
-    await stopPhoneCamera();
+    await stopPhoneCamera(true);
     const res = await api("/api/pro/vision", {
       enabled: true,
       source: "camera",
@@ -2175,9 +2212,13 @@ bind("visionStop", async () => {
   const isPhone = Boolean(currentVisionSessionId || (phoneStream && phoneStream.isNative) || activeVisionSource === "remote");
   let res;
   if (isPhone) {
-    res = await stopPhoneCamera();
+    res = await stopPhoneCamera(false);
   } else {
-    res = await api("/api/pro/vision", { enabled: false, source: "camera" });
+    try {
+      res = await api("/api/pro/vision", { enabled: false, source: "camera" });
+    } catch (err) {
+      res = { error: err.message || "网络请求失败", networkError: true };
+    }
   }
   if ($("cameraStreamWrapper")) {
     $("cameraStreamWrapper").style.display = "none";
@@ -2185,12 +2226,24 @@ bind("visionStop", async () => {
   }
   cancelCalibration();
   lastPro = 0;
-  if (!res || !res.error) {
+
+  if (res && res.networkError) {
+    notice("停止未确认");
+    $("visionBadge").textContent = "停止未确认";
+    $("visionSummary").textContent = "停止未确认，点击可重试";
+  } else if (res && res.error) {
+    notice("停止未确认: " + res.error);
+    $("visionBadge").textContent = "停止未确认";
+    $("visionSummary").textContent = "停止未确认: " + res.error;
+  } else if (res && res.running === true) {
+    notice("停止未确认: 服务端仍在运行");
+    $("visionBadge").textContent = "运行中";
+    $("visionSummary").textContent = res.error || (res.mode ? `互动方式：${res.mode}` : "运行中");
+  } else {
+    currentVisionSessionId = null;
     activeVisionSource = null;
     $("visionBadge").textContent = "未启用";
     $("visionSummary").textContent = "摄像头未启用";
-  } else {
-    notice("停止摄像头提示: " + (res.error || "服务端停止失败"));
   }
 });
 let currentPhoneRotation = 90;

@@ -12,6 +12,7 @@ function createEnvironment(options = {}) {
   const elements = {};
   const capturedRequests = [];
   const eventListeners = {};
+  const envObj = { elements, capturedRequests, eventListeners, fetchHook: options.fetchHook || null };
 
   function getEl(id) {
     if (!elements[id]) {
@@ -42,6 +43,8 @@ function createEnvironment(options = {}) {
         dataset: {},
         textContent: '',
         disabled: false,
+        play: () => Promise.resolve(),
+        pause: () => {},
         addEventListener: (event, fn) => {
           eventListeners[id + ':' + event] = (e = {}) => fn({ currentTarget: elements[id], preventDefault: () => {}, ...e });
         },
@@ -67,6 +70,10 @@ function createEnvironment(options = {}) {
     fetch: async (url, opts = {}) => {
       const body = opts.body ? JSON.parse(opts.body) : {};
       capturedRequests.push({ url, method: opts.method || 'GET', body });
+      if (envObj.fetchHook) {
+        const hookRes = await envObj.fetchHook(url, opts, body);
+        if (hookRes !== undefined) return hookRes;
+      }
       if (url.includes('/api/pro/vision')) {
         if (body.enabled === true) {
           return {
@@ -135,7 +142,8 @@ function createEnvironment(options = {}) {
   vm.runInNewContext(codePaired, context);
   vm.runInNewContext(codeApp, context);
 
-  return { context, elements, capturedRequests, eventListeners };
+  envObj.context = context;
+  return envObj;
 }
 
 async function runTests() {
@@ -173,6 +181,7 @@ async function runTests() {
 
     const globalStops = stopReqs.filter(r => r.body.enabled === false && !r.body.session_id);
     assert.strictEqual(globalStops.length, 0, "No global stop request must be sent!");
+    assert.strictEqual(env.elements['visionBadge'].textContent, '未启用', "Badge must show '未启用' on successful stop");
     console.log("  -> PASS: Exactly 1 stop request with session_id sent; 0 global stops.");
   }
 
@@ -290,7 +299,110 @@ async function runTests() {
     console.log("  -> PASS: Changing dropdown to phone did not misroute stop request; PC camera stopped cleanly and badge shows '未启用'.");
   }
 
-  console.log("ALL 5 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
+  // 6. Network error during phone stop -> notice "停止未确认" -> retry retains session_id without falling back to PC
+  {
+    console.log("Test 6: Phone stop network outage -> notice '停止未确认' -> retry retains session_id without falling back to PC...");
+    const env = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_phone_net_outage',
+    });
+
+    const visionStartBtn = env.eventListeners['visionStart:click'];
+    const visionStopBtn = env.eventListeners['visionStop:click'];
+
+    // Start phone camera
+    await visionStartBtn({ preventDefault: () => {} });
+    assert.strictEqual(env.elements['visionBadge'].textContent, '运行中');
+
+    // Simulate network error on stop
+    env.capturedRequests.length = 0;
+    env.fetchHook = async (url, opts, body) => {
+      if (url.includes('/api/pro/vision') && body.enabled === false) {
+        throw new TypeError('Failed to fetch (network down)');
+      }
+    };
+
+    // Click stop button during network outage
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Notice displays "停止未确认", badge shows "停止未确认"
+    assert(env.elements['toast'].textContent.includes('停止未确认'), "Toast must indicate '停止未确认'");
+    assert.strictEqual(env.elements['visionBadge'].textContent, '停止未确认', "Badge must show '停止未确认'");
+
+    // Network recovers
+    env.fetchHook = null;
+    env.capturedRequests.length = 0;
+
+    // Click stop button again (Retry)
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Retry request MUST be targeted remote stop with original session_id!
+    const retryReqs = env.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(retryReqs.length, 1, "Must send exactly 1 stop request on retry");
+    assert.strictEqual(retryReqs[0].body.enabled, false);
+    assert.strictEqual(retryReqs[0].body.source, 'remote', "Retry MUST NOT fall back to source: camera");
+    assert.strictEqual(retryReqs[0].body.session_id, 'sess_phone_net_outage', "Retry MUST use preserved session_id");
+    assert.strictEqual(env.elements['visionBadge'].textContent, '未启用', "Badge must update to '未启用' upon backend confirmation");
+    console.log("  -> PASS: Network outage properly handled: notice shown, session_id preserved, retry remained remote stop.");
+  }
+
+  // 7. Backend returns HTTP 200 with running: true on stop -> retry retains session_id
+  {
+    console.log("Test 7: Phone stop returns HTTP 200 running: true -> badge shows '运行中' -> retry retains session_id without falling back to PC...");
+    const env = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_phone_still_running',
+    });
+
+    const visionStartBtn = env.eventListeners['visionStart:click'];
+    const visionStopBtn = env.eventListeners['visionStop:click'];
+
+    // Start phone camera
+    await visionStartBtn({ preventDefault: () => {} });
+    assert.strictEqual(env.elements['visionBadge'].textContent, '运行中');
+
+    // Backend returns running: true on stop
+    env.capturedRequests.length = 0;
+    env.fetchHook = async (url, opts, body) => {
+      if (url.includes('/api/pro/vision') && body.enabled === false) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            running: true,
+            source: 'remote',
+            mode: 'pet',
+            session_id: 'sess_phone_still_running'
+          })
+        };
+      }
+    };
+
+    // Click stop button
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Badge shows actual state '运行中', notice indicates '停止未确认'
+    assert.strictEqual(env.elements['visionBadge'].textContent, '运行中', "Badge must show actual state '运行中'");
+    assert(env.elements['toast'].textContent.includes('停止未确认'), "Toast must indicate '停止未确认'");
+
+    // Backend stop now succeeds (running: false)
+    env.fetchHook = null;
+    env.capturedRequests.length = 0;
+
+    // Click stop button again (Retry)
+    await visionStopBtn({ preventDefault: () => {} });
+
+    // Assert: Retry request MUST be targeted remote stop with original session_id!
+    const retryReqs = env.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(retryReqs.length, 1, "Must send exactly 1 stop request on retry");
+    assert.strictEqual(retryReqs[0].body.enabled, false);
+    assert.strictEqual(retryReqs[0].body.source, 'remote', "Retry MUST NOT fall back to source: camera");
+    assert.strictEqual(retryReqs[0].body.session_id, 'sess_phone_still_running', "Retry MUST use preserved session_id");
+    assert.strictEqual(env.elements['visionBadge'].textContent, '未启用', "Badge must update to '未启用' upon backend confirmation");
+    console.log("  -> PASS: Backend still running properly handled: actual state displayed, session_id preserved, retry remained remote stop.");
+  }
+
+  console.log("ALL 7 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
 }
 
 runTests().catch(err => {
