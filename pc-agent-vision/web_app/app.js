@@ -1919,7 +1919,7 @@
   let phoneUploading = false;
   let currentVisionSessionId = null;
 
-  function stopPhoneCamera() {
+  async function stopPhoneCamera() {
     const sidToStop = currentVisionSessionId;
     if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
       try { window.AmadeusNative.stopFrontCamera(); } catch (e) { }
@@ -1948,7 +1948,7 @@
       ctx.clearRect(0, 0, overlay.width, overlay.height);
     }
     if (sidToStop) {
-      api("/api/pro/vision", { enabled: false, source: "remote", session_id: sidToStop }).catch(() => {});
+      return await api("/api/pro/vision", { enabled: false, source: "remote", session_id: sidToStop }).catch(() => {});
     }
   }
 
@@ -2031,7 +2031,7 @@
 
       const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
       if (!started) {
-        stopPhoneCamera();
+        await stopPhoneCamera();
         throw Error("硬件前置摄像头无法打开，请确认已授予相机权限");
       }
       phoneStream = { isNative: true };
@@ -2040,6 +2040,7 @@
 
     // 2. WebRTC getUserMedia for secure browser contexts
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      await stopPhoneCamera();
       throw Error("当前浏览器运行环境未开放 WebRTC 权限，请使用最新版 APK 或选择【电脑摄像头】");
     }
     if (img) img.style.display = "none";
@@ -2057,7 +2058,7 @@
         audio: false,
       });
     } catch (err) {
-      stopPhoneCamera();
+      await stopPhoneCamera();
       throw Error("未授予摄像头权限或摄像头无法打开: " + (err.message || err));
     }
     phoneStream = stream;
@@ -2140,8 +2141,7 @@ bind("visionStart", async () => {
       notice("前置摄像头启动提示: " + err.message);
     }
   } else {
-    stopPhoneCamera();
-    await api("/api/pro/vision", { enabled: false });
+    await stopPhoneCamera();
     const res = await api("/api/pro/vision", {
       enabled: true,
       source: "camera",
@@ -2164,8 +2164,12 @@ bind("visionStart", async () => {
   setTimeout(() => poll(), 500);
 });
 bind("visionStop", async () => {
-  stopPhoneCamera();
-  await api("/api/pro/vision", { enabled: false });
+  const isPhone = Boolean(currentVisionSessionId || (phoneStream && phoneStream.isNative) || ($("cameraSource") && $("cameraSource").value === "phone"));
+  if (currentVisionSessionId || isPhone) {
+    await stopPhoneCamera();
+  } else {
+    await api("/api/pro/vision", { enabled: false, source: "camera" });
+  }
   if ($("cameraStreamWrapper")) {
     $("cameraStreamWrapper").style.display = "none";
     $("cameraStreamImg").src = "";

@@ -58,6 +58,7 @@ Thumbs.db
 secrets.json
 .env.local
 pc-agent-vision/.device_state.json
+scratch/
 
 pc-agent-vision/.voice_cache/
 pc-agent-vision/.voice_diagnostics/
