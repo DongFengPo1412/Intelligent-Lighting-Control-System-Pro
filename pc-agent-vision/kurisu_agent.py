@@ -73,6 +73,18 @@ class KurisuAgent:
     def _execute_action(self, name, arguments):
         cancel=getattr(self,'_cancel_turn',None)
         if cancel and cancel.is_set():return {'status':'error','error':'turn_cancelled'}
+        if name == 'start_game':
+            last_msg = getattr(self, '_current_user_message', '')
+            if last_msg:
+                from semantic_control import extract_negated_games
+                all_neg, neg_games = extract_negated_games(last_msg)
+                game_val = arguments.get('game')
+                from arcade_catalog import resolve_arcade_game
+                res = resolve_arcade_game(game_val)
+                gid = res[0] if res else (int(game_val) if str(game_val).isdigit() else None)
+                if all_neg or (gid and gid in neg_games):
+                    print(f"[安全拦截] 阻止执行与本轮用户明确否定冲突的游戏指令: {name}={arguments}")
+                    return {'status': 'error', 'error': 'negated_by_user', 'message': f'Game #{gid} was negated by user'}
         key = (name, json.dumps(arguments, sort_keys=True, ensure_ascii=False))
         if key not in self._tool_results:
             self._tool_results[key] = execute_tool(name, arguments)
@@ -103,6 +115,7 @@ class KurisuAgent:
                 self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000,1)
 
     def _chat_locked(self, user_message: str) -> str:
+        self._current_user_message = user_message
         context = self.history[1:]
         self.history.append({'role': 'user', 'content': user_message})
         self.memory.append_turn('user', user_message)

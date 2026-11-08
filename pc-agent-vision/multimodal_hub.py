@@ -140,6 +140,8 @@ class MultimodalHub:
                         pass
                     self._remote_hands = None
                     self._remote_face = None
+                return True
+        return False
 
     def stop(self):
         self.stop_event.set()
@@ -170,7 +172,22 @@ class MultimodalHub:
             self.last_face = image.copy() if image is not None else None
             self.face_sample_at = time.monotonic() if image is not None else None
 
-    def _process_cv_frame(self, image, hands, face, is_flipped=False):
+    def _is_frame_valid(self, frame_meta=None):
+        """Check whether in-flight frame still belongs to the active session and epoch."""
+        if not self.started or self.stop_event.is_set():
+            return False
+        if frame_meta is None:
+            return True
+        source, session_id, epoch = frame_meta
+        if self.source != source:
+            return False
+        if self.session_epoch != epoch:
+            return False
+        if self.active_session_id != session_id:
+            return False
+        return True
+
+    def _process_cv_frame(self, image, hands, face, is_flipped=False, frame_meta=None):
         import cv2
         import numpy as np
         import mediapipe as mp
@@ -186,6 +203,11 @@ class MultimodalHub:
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         hand = hands.process(rgb)
         faces = face.process(rgb)
+
+        # Check validity right after ML inference; if session was stopped or switched, discard
+        if not self._is_frame_valid(frame_meta):
+            return {"present": False, "stale": True}
+
         observation = {"present": bool(faces.multi_face_landmarks)}
         if hand.multi_hand_landmarks:
             hl = hand.multi_hand_landmarks[0]
@@ -218,25 +240,32 @@ class MultimodalHub:
                 cv2.resize(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), (100, 100))
                 if crop.size else None
             )
-            self._record_face(image_sample)
+            if self._is_frame_valid(frame_meta):
+                self._record_face(image_sample)
             if self.mode == "identity" and self.identity is None:
                 from identity_store import IdentityStore
 
                 self.identity = IdentityStore()
-            if self.mode == "identity" and self.identity:
+            if self.mode == "identity" and self.identity and self._is_frame_valid(frame_meta):
                 label, confidence = self.identity.predict(self.last_face)
                 observation["identity"] = label
                 observation["identity_distance"] = confidence
                 cv2.putText(preview, f"{label}", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
         else:
-            self._record_face(None)
+            if self._is_frame_valid(frame_meta):
+                self._record_face(None)
+
+        if not self._is_frame_valid(frame_meta):
+            return {"present": False, "stale": True}
 
         enc_ok, enc_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if enc_ok and hasattr(self, "frame_lock"):
+        if enc_ok and hasattr(self, "frame_lock") and self._is_frame_valid(frame_meta):
             with self.frame_lock:
-                self.latest_jpeg = enc_buf.tobytes()
+                if self._is_frame_valid(frame_meta):
+                    self.latest_jpeg = enc_buf.tobytes()
 
-        self.process(observation)
+        if self._is_frame_valid(frame_meta):
+            self.process(observation, frame_meta=frame_meta)
         return observation
 
     def process_remote_frame(self, raw_bytes, mode=None, session_id=None):
@@ -258,6 +287,9 @@ class MultimodalHub:
         if mode and mode in self.MODES:
             self.mode = mode
 
+        # Bind this frame to the active session generation snapshot
+        frame_meta = (self.source, session_id, self.session_epoch)
+
         if not hasattr(self, "_remote_hands") or self._remote_hands is None:
             if hasattr(mp, "solutions"):
                 self._remote_hands = mp.solutions.hands.Hands(max_num_hands=1, model_complexity=0)
@@ -272,7 +304,7 @@ class MultimodalHub:
             raise ValueError("Failed to decode image")
 
         if self._remote_hands and self._remote_face:
-            return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True)
+            return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True, frame_meta=frame_meta)
         return {"present": False}
 
     def _capture(self):
@@ -302,7 +334,8 @@ class MultimodalHub:
                     ok, image = cap.read()
                     if not ok:
                         raise RuntimeError("Camera stream ended")
-                    self._process_cv_frame(image, hands, face, is_flipped=False)
+                    meta = (self.source, self.active_session_id, self.session_epoch)
+                    self._process_cv_frame(image, hands, face, is_flipped=False, frame_meta=meta)
                     self.stop_event.wait(0.04)
         except Exception as exc:
             self.error = str(exc)
@@ -315,7 +348,9 @@ class MultimodalHub:
                 with self.frame_lock:
                     self.latest_jpeg = None
 
-    def process(self, observation, now=None):
+    def process(self, observation, now=None, frame_meta=None):
+        if not self._is_frame_valid(frame_meta):
+            return
         self.observed_at = time.time()
         now = time.monotonic() if now is None else now
         self.last_observation = dict(observation)
@@ -330,6 +365,8 @@ class MultimodalHub:
         self.strain_since = (
             (now if self.strain_since is None else self.strain_since) if strained else None
         )
+        if not self._is_frame_valid(frame_meta):
+            return
         # Context does not switch a user-selected display mode.
         self.controller.pet_context(
             datetime.now().hour,
@@ -338,7 +375,7 @@ class MultimodalHub:
             bool(observation.get("tired", False)),
         )
         allowed = self.automatic_enabled and self.arbiter.allows_automatic()
-        if not allowed:
+        if not allowed or not self._is_frame_valid(frame_meta):
             return
         hand = observation.get("hand", {})
         from wifi_gateway import get_wifi_gateway
@@ -349,8 +386,12 @@ class MultimodalHub:
         if self.mode in ("fingertip", "sandbox"):
             desired = 26 if self.mode == "fingertip" else 27
             if mode != desired:
+                if not self._is_frame_valid(frame_meta):
+                    return
                 if not self.controller.send_json({"cmd": "mode", "val": desired}):
                     return
+            if not self._is_frame_valid(frame_meta):
+                return
             if self.mode == "fingertip":
                 self.controller.track(
                     hand.get("x", 0.5), hand.get("y", 0.5), bool(hand), 1 if hand else 0
@@ -364,6 +405,8 @@ class MultimodalHub:
                     bool(hand),
                 )
         elif self.mode in ("gaze_game", "gesture_game") and mode in (19, 21,32):
+            if not self._is_frame_valid(frame_meta):
+                return
             game_mode=mode
             if mode==32:
                 from arcade_runner import get_arcade_session
@@ -413,6 +456,8 @@ class MultimodalHub:
                         {"left": "left", "right": "right", "up": "rot", "down": "drop"}[direction]
                     )
         elif self.mode == "pet":
+            if not self._is_frame_valid(frame_meta):
+                return
             if now - self.last_seen > 15 and mode == 17:
                 if self.controller.send_json({"cmd": "mode", "val": 31}):
                     self.previous_auto_mode = 17

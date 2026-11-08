@@ -3,7 +3,7 @@ import json
 import os
 import re
 import threading
-from typing import Optional
+from typing import Optional, Tuple, Set
 import urllib.request
 
 # Keep every physical display mode in one catalog, including the two score screens.
@@ -68,13 +68,61 @@ def to_wire(kind='control', actions=()):
     return wire
 
 
-def from_wire(wire):
+def extract_negated_games(text: str) -> Tuple[bool, Set[int]]:
+    """Extract whether all games are negated, and which specific cartridge IDs are explicitly negated."""
+    if not text:
+        return False, set()
+    from arcade_catalog import find_arcade_games, resolve_arcade_game
+
+    compact = re.sub(r'\s+', '', text)
+    neg_pattern = r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)'
+    has_game_intent = bool(re.search(r'(?:小?游戏|街机|卡带)', compact) or find_arcade_games(compact))
+
+    all_negated = False
+    negated_ids = set()
+
+    # 1. Match clauses
+    clauses = [c.strip() for c in re.split(r'[，,。；;！!\n\r]+|同时|并且|然后|但是|不过|但', text) if c.strip()]
+    for c in clauses:
+        c_compact = re.sub(r'\s+', '', c)
+        c_games = find_arcade_games(c_compact)
+        has_neg = bool(re.search(neg_pattern, c_compact))
+        if has_neg:
+            if c_games:
+                negated_ids.update(c_games)
+            elif re.search(r'(?:小?游戏|街机|卡带)', c_compact) or has_game_intent:
+                all_negated = True
+
+    # 2. Match regex patterns across whole text
+    # e.g. "不要启动#041", "别玩第41款游戏", "不想玩俄罗斯方块"
+    pattern = (
+        r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)'
+        r'\s*(?:启动|打开|开启|玩|运行)?\s*(?:街机|游戏|卡带)?\s*'
+        r'([#＃]\d{1,3}|第\s*[0-9一二三四五六七八九十百两]+[款个号关]?|[0-9一二三四五六七八九十百两]+[号款关]|(?:小?游戏|街机|卡带)|[^\s，,。；;！!]+?)(?:小?游戏|街机|卡带)?'
+    )
+    for m in re.finditer(pattern, text):
+        target = m.group(1).strip()
+        if target in ('游戏', '街机', '卡带', '小游戏'):
+            all_negated = True
+        else:
+            resolved = resolve_arcade_game(target)
+            if resolved:
+                negated_ids.add(resolved[0])
+            else:
+                g = find_arcade_games(target)
+                if g:
+                    negated_ids.update(g)
+
+    return all_negated, negated_ids
+
+
+def from_wire(wire, user_text=None):
     if set(wire) != set(WIRE_SCHEMA['required']):
         raise ValueError('Incomplete semantic plan')
     if wire['kind'] != 'control':
         if wire != to_wire(wire['kind']):
             raise ValueError('Non-control response contains settings')
-        return validate_plan({'kind': wire['kind'], 'actions': []})
+        return validate_plan({'kind': wire['kind'], 'actions': []}, user_text=user_text)
     mode = next((mode for mode, entry in EFFECTS.items() if entry[0] == wire['effect']), None)
     if wire['effect'] == '保持现状' and wire['timer_seconds']:
         mode = 25
@@ -95,14 +143,14 @@ def from_wire(wire):
     for field, tool in [('stop_countdown', 'stop_countdown'), ('query_status', 'get_device_status'), ('worldline', 'trigger_steins_gate_worldline')]:
         if type(wire[field]) is not bool: raise ValueError('Invalid flag')
         if wire[field]: actions.append({'tool': tool, 'value': 0})
-    return validate_plan({'kind': 'control', 'actions': actions})
+    return validate_plan({'kind': 'control', 'actions': actions}, user_text=user_text)
 
 ARGUMENTS = {'set_light_mode': 'mode', 'start_countdown': 'seconds',
              'set_brightness': 'brightness', 'set_volume': 'volume',
              'start_game': 'game'}
 
 
-def validate_plan(plan):
+def validate_plan(plan, user_text=None):
     if not isinstance(plan, dict) or plan.get('kind') not in ('control', 'chat', 'clarify'):
         raise ValueError('Invalid intent')
     actions = plan.get('actions')
@@ -131,6 +179,17 @@ def validate_plan(plan):
             raise ValueError(f'Unsupported control: {tool}={value}')
         if action not in normalized:
             normalized.append(action)
+
+    if user_text:
+        all_neg, neg_ids = extract_negated_games(user_text)
+        for a in normalized:
+            if a['tool'] == 'start_game':
+                gid = a['value']
+                if all_neg or gid in neg_ids:
+                    from arcade_catalog import resolve_arcade_game
+                    res = resolve_arcade_game(gid)
+                    gname = res[1] if res else f"#{gid}"
+                    raise ValueError(f"Plan contradicts user explicit negation: game #{gid} ({gname}) was explicitly negated")
     # Mode 28 and the worldline tool refer to the same board operation.
     equivalent={'tool':'set_light_mode','value':28}
     if equivalent in normalized and {'tool':'trigger_steins_gate_worldline','value':0} in normalized:
@@ -160,7 +219,7 @@ def has_control_intent(text):
     Literal mode names are handled separately by exact_plan().
     """
     return bool(re.search(
-        r'帮我|给我|我想|我要|想看|想玩|让|把|将|切换|换一|亮成|打开|开启|关闭|关掉|关灯|开灯|'
+        r'帮我|给我|我想|我要|想看|想玩|让|把|将|切换|换[个种一]|亮成|打开|开启|关闭|关掉|关灯|开灯|'
         r'设为|设置|改成|换成|调[整节大小高低亮暗到成为]|开始|停止|暂停|继续|恢复|'
         r'显示|展示|播放|来个|来点|来一|回到|返回|进入|退出|启动|结束|触发|'
         r'点亮|熄灭|亮一点|暗一点|大声|小声|查.*(?:设备|灯板)|'
@@ -173,13 +232,13 @@ def exact_plan(text):
     compact = compact.replace('音乐流体','音乐光环')
 
     # 1. Explicit color & lighting modes first (prevents lighting commands like "切换到红灯" from hitting arcade)
-    color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)
+    color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|切到|切成|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成|调成|变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)
     if color:
         return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}
     for mode, (name, _, _) in EFFECTS.items():
         if mode == 25:
             continue
-        if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想看|我要看|显示|打开|开启|切换成|切换到|换成|改成)?' + re.escape(name) + r'(?:模式)?(?:吧|一下)?', compact):
+        if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想看|我要看|显示|打开|开启|切换成|切换到|切到|切成|换成|改成)?' + re.escape(name) + r'(?:模式)?(?:吧|一下)?', compact):
             if mode == 19:
                 return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': 33}]}
             if mode == 21:
@@ -192,9 +251,33 @@ def exact_plan(text):
 
     from arcade_catalog import find_arcade_games, resolve_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
 
-    # 2. Arcade negations, conditions, and disclaimers (e.g. "我不想玩马里奥了", "不要玩游戏", "别打开马里奥", "启动不是马里奥的游戏", "开启贪吃蛇但先不要启动")
-    has_game_intent = bool(re.search(r'(?:游戏|街机|卡带)', compact) or find_arcade_games(compact))
-    if has_game_intent and re.search(r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|不要启动|别启动)', compact):
+    # 2. Arcade negations, conditions, mixed clauses, and disclaimers
+    has_game_intent = bool(re.search(r'(?:小?游戏|街机|卡带)', compact) or find_arcade_games(compact))
+    has_neg_or_condition = bool(re.search(r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)', compact))
+    all_neg, neg_games = extract_negated_games(text)
+
+    if has_game_intent and has_neg_or_condition:
+        # Check if there is a separable positive clause for NON-game control (e.g. "不要启动#041，给我切到红灯")
+        neg_pattern = r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)'
+        clauses = [c.strip() for c in re.split(r'[，,。；;！!\n\r]+|同时|并且|然后|但是|不过|但', text) if c.strip()]
+        pos_clauses = []
+        for c in clauses:
+            c_compact = re.sub(r'\s+', '', c)
+            if not re.search(neg_pattern, c_compact):
+                pos_clauses.append(c)
+        if pos_clauses:
+            combined_pos = '，'.join(pos_clauses)
+            pos_plan = exact_plan(combined_pos)
+            if pos_plan and pos_plan.get('kind') == 'control':
+                # Only execute allowed non-game actions (e.g. lights, timer, volume, brightness)
+                non_game_actions = [
+                    a for a in pos_plan['actions']
+                    if a['tool'] != 'start_game'
+                ]
+                if non_game_actions:
+                    return {'kind': 'control', 'actions': non_game_actions}
+            if any(has_control_intent(c) for c in pos_clauses) and not all(bool(find_arcade_games(c)) for c in pos_clauses):
+                return {'kind': 'clarify', 'actions': []}
         return {'kind': 'chat', 'actions': []}
 
     # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩", "打开打砖块吗")
@@ -393,12 +476,19 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                 if parameters and wire.get('kind') != 'clarify':
                     wire.update(parameters)
                     wire['kind'] = 'control'
-                return from_wire(wire)
+                return from_wire(wire, user_text=text)
             except (ValueError, TypeError, KeyError) as error:
                 if attempt:
+                    # On final attempt, if failing due to negation, strip the forbidden game action
+                    all_neg, neg_ids = extract_negated_games(text)
+                    if (all_neg or neg_ids) and isinstance(wire, dict):
+                        actions = [a for a in wire.get('actions', []) if not (a.get('tool') == 'start_game' and (all_neg or a.get('value') in neg_ids))]
+                        if actions:
+                            return {'kind': 'control', 'actions': actions}
+                        return {'kind': 'chat', 'actions': []}
                     raise
                 payload['messages'] += [{'role': 'assistant', 'content': raw}, {'role': 'user',
-                    'content': f'计划校验失败：{error}。纠正你的计划，只保留原用户请求的操作，不添加设置。'}]
+                    'content': f'计划校验失败：{error}。纠正你的计划，只保留原用户请求的操作，不添加设置，严禁执行被用户否定的操作。'}]
 
 
 def describe_action(action):

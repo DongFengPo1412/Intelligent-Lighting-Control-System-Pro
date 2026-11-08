@@ -96,14 +96,53 @@ RESERVED_LIGHTING_WORDS = {
 }
 
 
+def parse_chinese_number_1_to_100(s: str) -> Optional[int]:
+    """Parse integer or Chinese numeral up to 100."""
+    if not s:
+        return None
+    s = str(s).strip()
+    if s.isdigit():
+        val = int(s)
+        return val if 1 <= val <= 100 else None
+    digits = dict(zip('零一二三四五六七八九', range(10)))
+    if s == '一百':
+        return 100
+    s = s.replace('两', '二')
+    if len(s) == 1 and s in digits and digits[s] > 0:
+        return digits[s]
+    if '十' in s:
+        parts = s.split('十')
+        if len(parts) == 2:
+            left, right = parts
+            tens = digits[left] if left else 1
+            units = digits[right] if right else 0
+            val = tens * 10 + units
+            return val if 1 <= val <= 100 else None
+    return None
+
+
 def find_arcade_games(text: str) -> set:
-    """Find all unique cartridge IDs mentioned in text."""
+    """Find all unique cartridge IDs mentioned in text by name, alias or ID."""
     _init_catalog()
     norm = text.lower().strip()
     found = set()
     for name, gid in _NAME_TO_ID.items():
         if len(name) >= 2 and name not in RESERVED_LIGHTING_WORDS and name in norm:
             found.add(gid)
+
+    # Recognize #041, #41
+    for m in re.finditer(r'[#＃](\d{1,3})', norm):
+        val = int(m.group(1))
+        if 1 <= val <= 100 and val in _CATALOG_CACHE:
+            found.add(val)
+
+    # Recognize 第41款 / 第41个 / 41号 / 第四十一款游戏 / 41款
+    for m in re.finditer(r'(?:第\s*([0-9]{1,3}|[零一二三四五六七八九十百两]+)\s*[款个号关]?|([0-9]{1,3}|[零一二三四五六七八九十百两]+)\s*[号款关])\s*(?:小?游戏|街机|卡带)?', norm):
+        num_str = m.group(1) or m.group(2)
+        val = parse_chinese_number_1_to_100(num_str)
+        if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
+            found.add(val)
+
     return found
 
 
@@ -136,10 +175,9 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
     norm_clean = re.sub(r'^[#＃第]+', '', norm)
     norm_clean = re.sub(r'(?:小?游戏|卡带|街机)$', '', norm_clean).strip()
     norm_clean = re.sub(r'[号款关个]+$', '', norm_clean)
-    if norm_clean.isdigit():
-        val = int(norm_clean)
-        if 1 <= val <= 100 and val in _CATALOG_CACHE:
-            return val, _CATALOG_CACHE[val]["name"]
+    val = parse_chinese_number_1_to_100(norm_clean)
+    if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
+        return val, _CATALOG_CACHE[val]["name"]
 
     # Exact alias match
     if norm in _NAME_TO_ID:
