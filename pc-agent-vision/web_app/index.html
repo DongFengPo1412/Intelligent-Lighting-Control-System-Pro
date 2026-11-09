@@ -119,7 +119,7 @@
             id="connectionText">连接中</span></span><button class="icon-button" id="openConnection" aria-label="连接设置">
           <svg>
             <use href="#i-link" />
-          </svg></button><img class="avatar-small" src="assets/kurisu-hero.png" alt="红莉栖头像" />
+          </svg></button><button class="icon-button" id="toggleThemeBtn" aria-label="切换日夜主题" title="切换日夜主题" style="font-size:16px;">🌙</button><img class="avatar-small" src="assets/kurisu-hero.png" alt="红莉栖头像" />
       </div>
     </header>
     <div id="offlineBanner" class="connection-banner" hidden>
@@ -470,14 +470,11 @@
         </article>
         <details class="card">
           <summary>
-            临时音源 <span>选择单个音频文件，或播放直接音频链接</span>
+            临时音源 <span>选择本地音频文件播放</span>
           </summary>
           <div class="upload-row">
-            <label class="file-label">选择音频<input id="musicFile" type="file" accept="audio/*" /></label><input
-              id="musicUrl" type="url" aria-label="音频直链" placeholder="HTTP(S) 直接音频链接" /><button id="playUrl"
-              class="secondary" data-hardware>
-              播放链接
-            </button>
+            <label class="file-label">选择音频<input id="musicFile" type="file" accept="audio/*" /></label>
+            <input id="musicUrl" type="hidden" /><button id="playUrl" style="display:none;"></button>
           </div>
           <p class="field-help">
             临时上传上限 20 MiB；本地曲库不受此上传限制。音乐最长 30

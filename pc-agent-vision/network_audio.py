@@ -73,10 +73,12 @@ class WiFiPcmClient:
             )
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(3)
-            token = gateway.control_token
-            if len(token) != 64:
-                raise ValueError("Board pairing required (KURISU_CONTROL_TOKEN)")
-            sock.sendall(packet(4, HELLO + b"|" + token.encode("ascii")))
+            token = getattr(gateway, "control_token", "")
+            if len(token) == 64:
+                payload = HELLO + b"|" + token.encode("ascii")
+            else:
+                payload = HELLO
+            sock.sendall(packet(4, payload))
             if receive(sock) != (4, HELLO):
                 raise ValueError("Unsupported PCM protocol")
             self.sock = sock

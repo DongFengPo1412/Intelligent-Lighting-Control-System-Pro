@@ -116,6 +116,41 @@ def extract_negated_games(text: str) -> Tuple[bool, Set[int]]:
     return all_negated, negated_ids
 
 
+def extract_negations(text: str) -> dict:
+    """Extract explicit negations for all device tools: games, countdown, brightness, volume, lighting."""
+    if not text:
+        return {}
+    neg_pattern = r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)'
+    result = {
+        'all_games': False,
+        'games': set(),
+        'countdown': False,
+        'brightness': set(),
+        'volume': set(),
+        'modes': set(),
+    }
+    all_neg, neg_games = extract_negated_games(text)
+    result['all_games'] = all_neg
+    result['games'] = neg_games
+
+    clauses = [c.strip() for c in re.split(r'[，,。；;！!\n\r]+|同时|并且|然后|但是|不过|但', text) if c.strip()]
+    for c in clauses:
+        c_compact = re.sub(r'\s+', '', c)
+        if re.search(neg_pattern, c_compact):
+            if re.search(r'倒计时|计时|沙漏', c_compact):
+                result['countdown'] = True
+            for m, (mname, _, _) in EFFECTS.items():
+                if mname in c_compact:
+                    result['modes'].add(m)
+            bm = re.search(r'(?:亮度).*?(\d+)', c_compact)
+            if bm:
+                result['brightness'].add(int(bm.group(1)))
+            vm = re.search(r'(?:音量|声音).*?(\d+)', c_compact)
+            if vm:
+                result['volume'].add(int(vm.group(1)))
+    return result
+
+
 def from_wire(wire, user_text=None):
     if set(wire) != set(WIRE_SCHEMA['required']):
         raise ValueError('Incomplete semantic plan')
@@ -193,15 +228,27 @@ def validate_plan(plan, user_text=None):
             normalized.append(action)
 
     if user_text:
-        all_neg, neg_ids = extract_negated_games(user_text)
+        negs = extract_negations(user_text)
         for a in normalized:
-            if a['tool'] == 'start_game':
-                gid = a['value']
-                if all_neg or gid in neg_ids:
+            tool, val = a['tool'], a['value']
+            if tool == 'start_game':
+                if negs.get('all_games') or val in negs.get('games', set()):
                     from arcade_catalog import resolve_arcade_game
-                    res = resolve_arcade_game(gid)
-                    gname = res[1] if res else f"#{gid}"
-                    raise ValueError(f"Plan contradicts user explicit negation: game #{gid} ({gname}) was explicitly negated")
+                    res = resolve_arcade_game(val)
+                    gname = res[1] if res else f"#{val}"
+                    raise ValueError(f"Plan contradicts user explicit negation: game #{val} ({gname}) was explicitly negated")
+            elif tool == 'start_countdown':
+                if negs.get('countdown'):
+                    raise ValueError("Plan contradicts user explicit negation: countdown was explicitly negated")
+            elif tool == 'set_light_mode':
+                if val in negs.get('modes', set()):
+                    raise ValueError(f"Plan contradicts user explicit negation: light mode {val} was explicitly negated")
+            elif tool == 'set_brightness':
+                if val in negs.get('brightness', set()):
+                    raise ValueError(f"Plan contradicts user explicit negation: brightness {val} was explicitly negated")
+            elif tool == 'set_volume':
+                if val in negs.get('volume', set()):
+                    raise ValueError(f"Plan contradicts user explicit negation: volume {val} was explicitly negated")
     # Mode 28 and the worldline tool refer to the same board operation.
     equivalent={'tool':'set_light_mode','value':28}
     if equivalent in normalized and {'tool':'trigger_steins_gate_worldline','value':0} in normalized:
@@ -261,10 +308,50 @@ def exact_plan(text):
     if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:停止|结束|关掉|取消|暂停)(?:倒计时|计时|沙漏)(?:吧|一下)?', compact):
         return {'kind': 'control', 'actions': [{'tool': 'stop_countdown', 'value': 0}]}
 
+    # 1.2 Countdown start fast-path
+    cd_start = re.fullmatch(
+        r'(?:请)?(?:帮我|给我)?(?:开始|启动|开启|打开|设定|设置|来个|计时)?(?:倒计时|计时|沙漏)'
+        r'([零一二三四五六七八九十百两\d]+|半)(秒钟|秒|分钟|分|小时|个半小时)?(?:吧|一下)?',
+        compact
+    )
+    if cd_start and not re.search(r'不要|别|不想|不用|不玩|停止|关掉|结束', compact):
+        raw_num, unit = cd_start.group(1), cd_start.group(2) or '秒'
+        sec = None
+        if raw_num == '半':
+            if '分' in unit: sec = 30
+            elif '小时' in unit: sec = 1800
+        else:
+            digits = dict(zip('零一二三四五六七八九', range(10)))
+            if raw_num.isdigit():
+                val = int(raw_num)
+            elif raw_num == '一百':
+                val = 100
+            elif raw_num in digits:
+                val = digits[raw_num]
+            elif '十' in raw_num:
+                parts = raw_num.split('十')
+                tens = digits.get(parts[0], 1) if parts[0] else 1
+                units_d = digits.get(parts[1], 0) if len(parts) > 1 and parts[1] else 0
+                val = tens * 10 + units_d
+            else:
+                val = None
+            if val is not None:
+                if '小时' in unit: sec = val * 3600
+                elif '分' in unit: sec = val * 60
+                else: sec = val
+        if sec is not None:
+            if 1 <= sec <= 86400:
+                return {'kind': 'control', 'actions': [{'tool': 'start_countdown', 'value': sec}]}
+            return {'kind': 'clarify', 'actions': []}
+
+    # 1.3 Ambiguous countdown without duration
+    if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:开始|启动|开启|打开|进入)?(?:倒计时|计时|沙漏)(?:模式)?(?:吧|一下)?', compact):
+        return {'kind': 'clarify', 'actions': []}
+
     from arcade_catalog import find_arcade_games, resolve_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
 
     # 2. Arcade negations, conditions, mixed clauses, and disclaimers
-    has_game_intent = bool(re.search(r'(?:小?游戏|街机|卡带)', compact) or find_arcade_games(compact))
+    has_game_intent = bool(re.search(r'(?:小?游戏|街机|卡带)', compact) or find_arcade_games(text) or find_arcade_games(compact))
     has_neg_or_condition = bool(re.search(r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|但|但是|不过|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)', compact))
     all_neg, neg_games = extract_negated_games(text)
 

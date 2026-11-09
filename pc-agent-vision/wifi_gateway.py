@@ -53,6 +53,7 @@ class WiFiGateway:
         self.last_seen = 0.0
         self.last_mode = None
         self.last_result = {"status": "error", "error": "not_connected"}
+        self._trust_private = os.environ.get("KURISU_TRUST_PRIVATE", "1") == "1"
         self._pending = {}
         self._pending_lock = threading.Lock()
         self._send_lock = threading.RLock()
@@ -94,8 +95,16 @@ class WiFiGateway:
                 if not isinstance(payload, dict):
                     continue
                 if payload.get("event") in ("beacon", "board_online"):
-                    # Discovery is unauthenticated. Never send credentials to an
-                    # address advertised by an arbitrary beacon or trust it as online.
+                    if payload.get("event") == "board_online":
+                        sender_ip = addr[0]
+                        sta_ip = payload.get("sta_ip")
+                        if (isinstance(sta_ip, str) and sta_ip == sender_ip and
+                                self._is_trusted_hotspot_ip(sender_ip)):
+                            if self.board_sta_ip != sender_ip:
+                                print(f"[WiFiGateway] 校验信标来源通过，灯板 STA IP 动态更新: {self.board_sta_ip} -> {sender_ip}")
+                                self.board_sta_ip = sender_ip
+                                self.boot_id = None
+                                self._remember_board()
                     continue
                 elif isinstance(payload.get("request_id"), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,64}', payload['request_id']):
                     if 'pixels_b64' in payload:
@@ -143,6 +152,25 @@ class WiFiGateway:
             except OSError:
                 pass
 
+    @staticmethod
+    def _is_private_ip(ip_str: str) -> bool:
+        try:
+            addr = ipaddress.ip_address(ip_str)
+            return addr.is_loopback or addr.is_private
+        except (ValueError, TypeError):
+            return False
+
+    @staticmethod
+    def _is_trusted_hotspot_ip(ip_str: str) -> bool:
+        try:
+            addr = ipaddress.ip_address(ip_str)
+            if addr.is_loopback:
+                return True
+            trusted_net = ipaddress.ip_network(os.environ.get("KURISU_HOTSPOT_SUBNET", "192.168.186.0/24"), strict=False)
+            return addr in trusted_net
+        except (ValueError, TypeError):
+            return False
+
     def is_online(self) -> bool:
         return self.last_seen > 0 and time.monotonic() - self.last_seen < 8.0
 
@@ -151,16 +179,24 @@ class WiFiGateway:
             return [self.board_sta_ip]
         return [self.board_sta_ip or self.board_ap_ip]
 
-    def send_command(self, cmd_str: str, timeout: float = 0.6, retries: int = 2,
+    def send_command(self, cmd_str: str, timeout: Optional[float] = None, retries: Optional[int] = None,
                      request_id: Optional[str] = None) -> bool:
         """True means the board dispatcher acknowledged the command, not optical verification."""
+        if timeout is None:
+            timeout = float(os.environ.get("KURISU_UDP_TIMEOUT", "0.6"))
+        if retries is None:
+            retries = int(os.environ.get("KURISU_UDP_RETRIES", "2"))
         with self._send_lock:
             if not self.sock or not self.is_running or not cmd_str.strip():
                 self.last_result = {"status": "error", "error": "transport_unavailable"}
                 return False
             if len(self.control_token) != 64 or any(c not in '0123456789abcdef' for c in self.control_token):
-                self.last_result = {"status": "error", "error": "pairing_required"}
-                return False
+                target_is_trusted = all(
+                    self._is_trusted_hotspot_ip(ip) for ip in self.get_target_ips()
+                )
+                if not (self._trust_private and target_is_trusted):
+                    self.last_result = {"status": "error", "error": "pairing_required"}
+                    return False
             if not self.boot_id:
                 # This probe only obtains a boot nonce. No command is executed.
                 probe_id = uuid.uuid4().hex
@@ -196,7 +232,7 @@ class WiFiGateway:
                 return False
             pending = {"event": threading.Event(), "result": None, "targets": self.get_target_ips()}
             data = json.dumps({"request_id": rid, "command": cmd_str.strip(),
-                               "token": self.control_token, "boot_id": self.boot_id,
+                               "token": self.control_token or "", "boot_id": self.boot_id,
                                "client_id": self.client_id, "seq": self._sequence}, separators=(",", ":")).encode("utf-8")
             if len(cmd_str.encode('utf-8')) > 2048 or len(data) >= 4096:
                 self.last_result = {"status": "error", "error": "command_too_large"}
@@ -273,7 +309,9 @@ class WiFiGateway:
                     command=json.dumps(query,separators=(',',':'))
                 # Measured hotspot readbacks take up to 375 ms. One bounded
                 # disposable read, no retry storm; controls never take this lock.
-                channel.send_command(command,timeout=0.45,retries=0)
+                frame_timeout = float(os.environ.get("KURISU_FRAME_TIMEOUT", "0.45"))
+                frame_retries = int(os.environ.get("KURISU_FRAME_RETRIES", "0"))
+                channel.send_command(command, timeout=frame_timeout, retries=frame_retries)
                 if health:self._status_sequence=channel._sequence;self._status_boot=channel.boot_id
                 else:self._read_sequence=channel._sequence;self._read_boot=channel.boot_id
                 return dict(channel.last_result)

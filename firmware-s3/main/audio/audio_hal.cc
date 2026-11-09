@@ -123,11 +123,11 @@ esp_err_t AudioHAL::Init(
     ESP_LOGI(TAG, "  - MAX98357 扬声器: DOUT=%d, BCLK=%d, LRCK=%d", spk_dout, spk_bclk, spk_lrck);
 
     // 1. 初始化 MAX98357A 扬声器输出通道 (TX) 绑定至 I2S_NUM_0 (对齐中阶 NoAudioCodecSimplex)
-    // 采用 12 个 DMA 描述符 (180ms 深度抗欠载缓冲)
+    // 采用 6 个 DMA 描述符 (DMA 6x240, 24kHz 输出)
     i2s_chan_config_t tx_chan_cfg = {
         .id = I2S_NUM_0,
         .role = I2S_ROLE_MASTER,
-        .dma_desc_num = 12,
+        .dma_desc_num = 6,
         .dma_frame_num = 240,
         .auto_clear_after_cb = true,
         .auto_clear_before_cb = false,
@@ -140,10 +140,10 @@ esp_err_t AudioHAL::Init(
         return failed(ret);
     }
 
-    // Mid NoAudioCodecSimplex: mono, 32-bit left slot, Philips bit shift.
+    // Mid NoAudioCodecSimplex: mono, 32-bit left slot, Philips bit shift, 24kHz output.
     i2s_std_config_t tx_std_cfg = {
         .clk_cfg = {
-            .sample_rate_hz = 16000,
+            .sample_rate_hz = 24000,
             .clk_src = I2S_CLK_SRC_DEFAULT,
             .mclk_multiple = I2S_MCLK_MULTIPLE_256,
         },
@@ -274,14 +274,36 @@ esp_err_t AudioHAL::EnableMic(bool enable) {
 
 esp_err_t AudioHAL::PlayBeep(uint32_t freq_hz, uint32_t duration_ms) {
     if (!freq_hz || freq_hz > 8000 || !duration_ms || duration_ms > 1000) return ESP_ERR_INVALID_ARG;
-    // Use the same bounded, serialized PCM path as speech playback. Keep the
-    // waveform off the UDP task's limited stack and the notification gentle.
-    const size_t count = 16000 * duration_ms / 1000;
+    // Synthesize directly at 24000 Hz actual I2S rate
+    const size_t count = 24000 * duration_ms / 1000;
     std::vector<int16_t> samples(count);
     for (size_t i = 0; i < count; ++i) {
-        samples[i] = (int16_t)(std::sin(6.28318530718f * freq_hz * i / 16000.0f) * 6000.0f);
+        samples[i] = (int16_t)(std::sin(6.28318530718f * freq_hz * i / 24000.0f) * 6000.0f);
     }
-    return PlayMonoPcm(samples.data(), samples.size());
+    if (!initialized_ || !tx_chan_) return ESP_ERR_INVALID_STATE;
+    if (!playback_mutex_ || xSemaphoreTake(playback_mutex_, pdMS_TO_TICKS(500)) != pdTRUE) return ESP_ERR_TIMEOUT;
+    if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
+    esp_err_t ret = EnableSpeaker(true);
+    if (ret != ESP_OK) {
+        xSemaphoreGive(playback_mutex_);
+        return ret;
+    }
+    const size_t chunk_size = 240;
+    const uint32_t v_factor = volume_factor_.load();
+    size_t written_total = 0;
+    while (written_total < count) {
+        size_t frames = std::min(chunk_size, count - written_total);
+        audio_pcm::PackMono(samples.data() + written_total, frames, v_factor, tx_buffer_);
+        size_t bytes_out = 0;
+        ret = i2s_channel_write(tx_chan_, tx_buffer_, frames * audio_pcm::kI2sBytesPerSample, &bytes_out, 200);
+        if (ret != ESP_OK || bytes_out != frames * audio_pcm::kI2sBytesPerSample) {
+            break;
+        }
+        written_total += frames;
+    }
+    ResetSpeakerTimer();
+    xSemaphoreGive(playback_mutex_);
+    return ret;
 }
 
 esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* bytes_written) {
@@ -299,24 +321,24 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
         return ret;
     }
 
-    const size_t chunk_size = 240;
+    const size_t chunk_size = 160; // 160 frames @ 16kHz -> 240 frames @ 24kHz
     int32_t* bit32_buf = tx_buffer_;
     size_t written_total = 0;
 
-    // 采用对齐中阶 NoAudioCodec 的音量平方律映射:
+    // 采用对齐中阶 NoAudioCodec 的音量平方律映射与 16k -> 24k 重采样:
     const uint32_t v_factor = volume_factor_.load();
 
     while (written_total < count) {
-        size_t frames = std::min(chunk_size, count - written_total);
-        audio_pcm::PackMono(mono_samples + written_total, frames, v_factor, bit32_buf);
+        size_t frames_in = std::min(chunk_size, count - written_total);
+        size_t frames_out = audio_pcm::PackMono16kTo24k(mono_samples + written_total, frames_in, v_factor, bit32_buf);
         size_t bytes_out = 0;
-        ret = i2s_channel_write(tx_chan_, bit32_buf, frames * audio_pcm::kI2sBytesPerSample, &bytes_out, 200);
-        if (ret != ESP_OK || bytes_out != frames * audio_pcm::kI2sBytesPerSample) {
+        ret = i2s_channel_write(tx_chan_, bit32_buf, frames_out * audio_pcm::kI2sBytesPerSample, &bytes_out, 200);
+        if (ret != ESP_OK || bytes_out != frames_out * audio_pcm::kI2sBytesPerSample) {
             if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
             ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
             break;
         }
-        written_total += frames;
+        written_total += frames_in;
     }
 
     ResetSpeakerTimer();
@@ -338,10 +360,14 @@ arcade::AudioWriteResult AudioHAL::TryPlayGamePcm(const int16_t* data,size_t cou
         if(spk_power_timer_)esp_timer_stop(spk_power_timer_);
         esp_err_t error=EnableSpeaker(true);
         if(error==ESP_OK) {
-            audio_pcm::PackMono(data, count, volume_factor_.load(), tx_buffer_);
+            // Game sound generated at 16kHz; resample to 24kHz output to preserve exact 1.0x pitch
+            size_t frames_out = audio_pcm::PackMono16kTo24k(data, count, volume_factor_.load(), tx_buffer_);
             size_t written=0;
-            error=i2s_channel_write(tx_chan_,tx_buffer_,count*audio_pcm::kI2sBytesPerSample,&written,0);
-            result=arcade::GameWriteFromBytes(count,written,
+            error=i2s_channel_write(tx_chan_,tx_buffer_,frames_out*audio_pcm::kI2sBytesPerSample,&written,0);
+            size_t written_samples = written / audio_pcm::kI2sBytesPerSample;
+            size_t consumed = (frames_out > 0) ? (written_samples * count + frames_out / 2) / frames_out : 0;
+            if (consumed > count) consumed = count;
+            result=arcade::GameWriteFromBytes(count,consumed*audio_pcm::kI2sBytesPerSample,
                 error==ESP_OK?State::Ready:error==ESP_ERR_TIMEOUT?State::Busy:State::Fault,
                 audio_pcm::kI2sBytesPerSample);
         } else result={0,State::Fault};
@@ -372,11 +398,27 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
     }
 
     size_t count = bytes_read / sizeof(int32_t);
+#if defined(CONFIG_AUDIO_MIC_SHIFT_12)
+    constexpr int kMicShift = 12;
+#else
+    constexpr int kMicShift = 16;
+#endif
+    static uint32_t s_total_samples = 0;
+    static uint32_t s_clipped_samples = 0;
     for (size_t i = 0; i < count; ++i) {
-        // Preserve native PCM16 headroom. Shifting by 12 applies 16x gain
-        // before clipping; host gain cannot recover those destroyed samples.
-        int32_t value = bit32_buffer[i] >> 16;
+        int32_t value = bit32_buffer[i] >> kMicShift;
+        if (value > INT16_MAX || value < -INT16_MAX) {
+            s_clipped_samples++;
+        }
+        s_total_samples++;
         dest_buf[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
+    }
+    if (s_total_samples >= 160000) {
+        ESP_LOGD(TAG, "MIC (shift=%d) clipping rate: %.2f%% (%u/%u)",
+                 kMicShift, (double)s_clipped_samples * 100.0 / s_total_samples,
+                 (unsigned)s_clipped_samples, (unsigned)s_total_samples);
+        s_total_samples = 0;
+        s_clipped_samples = 0;
     }
 
     if (samples_read) {

@@ -95,6 +95,8 @@ void WifiManager::WifiEventHandler(void* arg, esp_event_base_t event_base, int32
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = static_cast<ip_event_got_ip_t*>(event_data);
         esp_ip4addr_ntoa(&event->ip_info.ip, self->sta_ip_, sizeof(self->sta_ip_));
+        self->sta_ip_addr_ = event->ip_info.ip;
+        self->sta_netmask_ = event->ip_info.netmask;
         self->is_sta_connected_ = true;
         esp_timer_stop(self->reconnect_timer_);
         // Mid Idle is off; blue solid means opening a voice connection, not
@@ -334,8 +336,11 @@ void WifiManager::UdpServerTaskLoop()
                 size_t n = strlen(v);
                 return n && n <= maximum && strspn(v, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == n;
             };
+            bool is_sta_peer = IsStaSubnet(source_addr.sin_addr);
+            const char* supplied_token = text("token");
+            bool token_ok = auth.Check(supplied_token);
             if (!cJSON_IsObject(envelope) || !identifier(id, 64)) { error = "invalid_envelope"; id = ""; }
-            else if (!auth.Check(text("token"))) error = "pairing_required";
+            else if (!is_sta_peer && !token_ok) error = "pairing_required";
             else if (strcmp(text("boot_id"), auth.BootId())) error = "boot_changed";
             else if (!identifier(client, 32) || !command[0] || strlen(command) > 2048) error = "invalid_envelope";
             cJSON* seq_item = item("seq");

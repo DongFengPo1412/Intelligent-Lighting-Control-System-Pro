@@ -34,13 +34,44 @@ def load_access_token():
 
 
 class AccessPolicy:
-    def __init__(self, token=None, origins=()):
+    def __init__(self, token=None, origins=(), trust_private=None):
         if token and len(token) < 32:
             raise ValueError("KURISU_ACCESS_TOKEN must contain at least 32 characters")
         self.token = token or secrets.token_urlsafe(32)
         self.xiaozhi_token = os.environ.get('KURISU_XIAOZHI_TOKEN','')
         self.origins = frozenset(origins)
         self.buckets = {}
+        if trust_private is None:
+            self.trust_private = os.environ.get("KURISU_TRUST_PRIVATE") == "1"
+        else:
+            self.trust_private = bool(trust_private)
+
+    @classmethod
+    def get_trusted_subnets(cls):
+        subnets = [
+            ipaddress.ip_network("127.0.0.0/8"),
+            ipaddress.ip_network("192.168.186.0/24"),
+        ]
+        custom = os.environ.get("KURISU_HOTSPOT_SUBNET")
+        if custom:
+            try:
+                subnets.append(ipaddress.ip_network(custom, strict=False))
+            except ValueError:
+                pass
+        return subnets
+
+    @classmethod
+    def is_trusted_peer(cls, remote):
+        try:
+            addr = ipaddress.ip_address(remote)
+            if addr.is_loopback:
+                return True
+            for net in cls.get_trusted_subnets():
+                if addr in net:
+                    return True
+            return False
+        except (ValueError, TypeError):
+            return False
 
     @staticmethod
     def local(request):
@@ -57,6 +88,8 @@ class AccessPolicy:
         return not origin or origin == f"{request.scheme}://{request.host}" or origin in self.origins
 
     def authorized(self, request):
+        if self.trust_private and self.is_trusted_peer(request.remote or ""):
+            return True
         supplied = request.headers.get("Authorization", "")
         bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
         query_token = request.query.get("token", "")

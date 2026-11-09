@@ -323,13 +323,10 @@ class ProApi:
                     visual = data.get("visual", "fluid")
                     if visual not in ("fluid", "spectrum"):
                         raise ValueError("Music visual must be fluid or spectrum")
-                    await asyncio.to_thread(self.playback.detach)
-                    await asyncio.to_thread(
-                        self.music.play_url, data["url"], visual == "fluid"
-                    )
+                    raise ValueError("网络音频直链已被安全策略禁用，请使用本地音乐上传(/api/pro/music-upload)或本地曲库")
                 else:
                     raise ValueError(
-                        "Specify stop or a direct audio URL; upload files via /api/pro/music-upload"
+                        "Specify stop or an uploaded track; upload files via /api/pro/music-upload"
                     )
                 result = self.music_status()
             else:

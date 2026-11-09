@@ -725,7 +725,8 @@ async def handle_ws(request: web.Request):
 # ==========================================
 async def handle_index(request: web.Request):
     index_path = os.path.join(STATIC_DIR, "index.html")
-    return web.FileResponse(index_path)
+    response = web.FileResponse(index_path)
+    return response
 
 async def handle_apk_download(request: web.Request):
     apk_path = os.environ.get("KURISU_APK_PATH") or os.path.join(STATIC_DIR, "Kurisu_Amadeus.apk")
@@ -1269,8 +1270,10 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     shutting_down = False
     from access_control import AccessPolicy, access_middleware, pair, auth_challenge
     app = web.Application(client_max_size=21*1024*1024, middlewares=[access_middleware, no_cache_cors_middleware])
+    trust_private = os.environ.get('KURISU_TRUST_PRIVATE', '1') == '1'
     app['access_policy'] = AccessPolicy(token=os.environ.get('KURISU_ACCESS_TOKEN'),
-        origins=filter(None, os.environ.get('KURISU_ALLOWED_ORIGINS','').split(',')))
+        origins=filter(None, os.environ.get('KURISU_ALLOWED_ORIGINS','').split(',')),
+        trust_private=trust_private)
     app.router.add_post('/api/pair', pair)
     app.router.add_post('/api/auth/challenge', auth_challenge)
     app['simulate']=simulate;app['no_audio']=no_audio

@@ -1,6 +1,7 @@
 #include "network_audio.h"
 #include "command_dispatcher.h"
 #include "network_auth.h"
+#include "wifi_manager.h"
 #include "pcm_frame_writer.h"
 #include "wifi_audio_power.h"
 #include "pcm_tx_queue.h"
@@ -106,24 +107,32 @@ void NetworkAudio::Run(){
     }
     ESP_LOGI("NetworkAudio","PCM listener ready on TCP 8889");
     for(;;){
-        int fd=accept(server,nullptr,nullptr);if(fd<0){vTaskDelay(pdMS_TO_TICKS(100));continue;}
+        sockaddr_in client_addr = {};
+        socklen_t client_len = sizeof(client_addr);
+        int fd = accept(server, (sockaddr*)&client_addr, &client_len);
+        if(fd<0){vTaskDelay(pdMS_TO_TICKS(100));continue;}
         // PCM chunks are 15-32 ms long. Do not hold a small header/payload
         // behind Nagle while waiting for the peer's delayed acknowledgement.
         int no_delay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&no_delay,sizeof(no_delay));
         timeval timeout={2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
         timeout={0,200000};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
-        uint8_t header[7],payload[2048];
+        uint8_t header[7];
+        uint8_t payload[256];
         // Authenticate BEFORE assigning the mic/output connection. Unpaired peers
         // cannot capture audio or displace the active authenticated connection.
-        if (!read_all(fd,header,sizeof(header))) { close(fd); continue; }
-        size_t first_size=((size_t)header[5]<<8)|header[6];
+        if (!read_all(fd, header, sizeof(header))) { close(fd); continue; }
+        size_t first_size = ((size_t)header[5] << 8) | header[6];
         const size_t prefix = strlen(hello);
-        if (memcmp(header,"KAP1",4) || header[4]!=4 || first_size!=prefix+1+64 ||
-            !read_all(fd,payload,first_size) || memcmp(payload,hello,prefix) || payload[prefix]!='|') {
-            close(fd); continue;
+        bool valid_hello = false;
+        if (memcmp(header, "KAP1", 4) == 0 && header[4] == 4 && first_size < sizeof(payload) && read_all(fd, payload, first_size)) {
+            payload[first_size] = 0;
+            if (first_size == prefix + 1 + 64 && memcmp(payload, hello, prefix) == 0 && payload[prefix] == '|') {
+                if (NetworkAuth::GetInstance().Check((const char*)payload + prefix + 1)) {
+                    valid_hello = true;
+                }
+            }
         }
-        payload[first_size]=0;
-        if (!NetworkAuth::GetInstance().Check((const char*)payload+prefix+1)) { close(fd); continue; }
+        if (!valid_hello) { close(fd); continue; }
         pcm_transport::WifiAudioPowerSession power;
         const esp_err_t power_result=power.Activate();
         if(power_result!=ESP_OK){

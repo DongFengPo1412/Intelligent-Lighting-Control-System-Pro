@@ -1,0 +1,16 @@
+menu "Kurisu Pro Audio Configuration"
+
+    config AUDIO_MIC_SHIFT_16
+        bool "INMP441 Microphone 16-bit shift (Clean, Zero Clipping)"
+        default y
+        help
+            Selects MSB 16 bits of INMP441 24-bit PCM data in 32-bit slot (shift by 16).
+            Prevents digital saturation clipping while maintaining clear voice capture.
+
+    config AUDIO_MIC_SHIFT_12
+        bool "INMP441 Microphone 12-bit shift (+24dB High Sensitivity)"
+        default n
+        help
+            Selects 12-bit shift for high sensitivity. Warning: loud speech may cause clipping.
+
+endmenu

@@ -163,6 +163,14 @@ class Game033Snake(BaseCartridge):
         new_hx = hx + dx
         new_hy = hy + dy
 
+        # 防快速连击导致的 180 度掉头撞颈
+        if len(self._snake) > 1 and (new_hx, new_hy) == self._snake[1]:
+            self._next_dir = (self._snake[0][0] - self._snake[1][0], self._snake[0][1] - self._snake[1][1])
+            self._dir = self._next_dir
+            dx, dy = self._dir
+            new_hx = hx + dx
+            new_hy = hy + dy
+
         # 边界碰撞检测
         if self._wrap_walls:
             new_hx = (new_hx + 16) % 16

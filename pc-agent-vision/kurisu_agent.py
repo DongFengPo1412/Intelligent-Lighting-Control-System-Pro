@@ -101,8 +101,11 @@ class KurisuAgent:
 
     def chat(self, user_message: str, speak=True, cancelled=None) -> str:
         with self._chat_lock:
-            self._speak_turn=speak;self._cancel_turn=cancelled
-            if cancelled and cancelled.is_set():return ''
+            self._speak_turn = speak
+            self._cancel_turn = cancelled
+            self._pending_speech = None
+            if cancelled and cancelled.is_set():
+                return ''
             self._tool_results = {}
             self.last_model_error = None
             self.last_translation_error = None
@@ -115,9 +118,15 @@ class KurisuAgent:
             if len(users) >= 12:
                 self.history = self.history[:1] + self.history[users[-11]:]
             try:
-                return self._chat_locked(user_message)
+                reply = self._chat_locked(user_message)
             finally:
-                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000,1)
+                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+            pending = self._pending_speech
+            self._pending_speech = None
+
+        if pending and reply:
+            reply = self._execute_speech(pending)
+        return reply
 
     def _chat_locked(self, user_message: str) -> str:
         self._current_user_message = user_message
@@ -138,12 +147,7 @@ class KurisuAgent:
             self.history = self.history[:1]
             self.memory.clear()
             reply = '已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。'
-            if getattr(self, '_speak_turn', True):
-                if hasattr(self.voice, 'last_tts_error'):
-                    self.voice.last_tts_error = None
-                self.voice.speak(reply, block=True)
-                self.last_tts_error = getattr(self.voice, 'last_tts_error', None)
-            return reply
+            return self._finish_reply(reply)
         is_query = bool(re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', user_message.strip()))
         auto_mem_pattern = (
             r'(?:(?:我)?希望(?:你)?(?:以后)?(?:叫我|称呼我|把?我称作)|(?:我)?希望被称(?:作|呼)|'
@@ -194,34 +198,52 @@ class KurisuAgent:
         return self._converse()
 
     def _finish_reply(self, reply, speak=True, speech_text=None):
-        cancel=getattr(self,'_cancel_turn',None)
+        cancel = getattr(self, '_cancel_turn', None)
         if cancel and cancel.is_set():
             if self.history and self.history[-1].get('role') == 'user':
                 self.history.pop()
+            self._pending_speech = None
             return ''
         self.history.append({'role': 'assistant', 'content': reply})
         self.memory.append_turn('assistant', reply)
-        if speak and getattr(self,'_speak_turn',True):
-            if hasattr(self.voice, 'last_tts_error'):
-                self.voice.last_tts_error = None
-            dispatch_started = time.perf_counter()
-            if cancel is not None:
-                self.voice.speak(speech_text or reply, block=True, cancelled=cancel)
-            else:
-                self.voice.speak(speech_text or reply, block=True)
-            if cancel is not None and cancel.is_set():
-                return ''
-            first_pcm = getattr(self.voice, 'last_speech_timings', {}).get('first_pcm_ms')
-            if first_pcm is not None:
-                self.last_turn_timings['first_audio_dispatch_ms'] = round(
-                    (dispatch_started-self._turn_started)*1000 + first_pcm, 1)
-            self.last_tts_error = getattr(self.voice, 'last_tts_error', None)
-            self.last_translation_error = getattr(self.voice, 'last_translation_error', None)
-            if getattr(self.voice, 'chinese_first', False) and not speech_text:
-                spoken = getattr(self.voice, 'last_spoken_text', '')
-                if spoken:
-                    reply = spoken
-                    self.history[-1]['content'] = reply
+        if speak and getattr(self, '_speak_turn', True):
+            self._pending_speech = {
+                'reply': reply,
+                'speech_text': speech_text,
+                'cancel': cancel
+            }
+        else:
+            self._pending_speech = None
+        return reply
+
+    def _execute_speech(self, pending):
+        reply = pending['reply']
+        speech_text = pending['speech_text']
+        cancel = pending['cancel']
+        if cancel is not None and cancel.is_set():
+            return ''
+        if hasattr(self.voice, 'last_tts_error'):
+            self.voice.last_tts_error = None
+        dispatch_started = time.perf_counter()
+        if cancel is not None:
+            self.voice.speak(speech_text or reply, block=True, cancelled=cancel)
+        else:
+            self.voice.speak(speech_text or reply, block=True)
+        if cancel is not None and cancel.is_set():
+            return ''
+        first_pcm = getattr(self.voice, 'last_speech_timings', {}).get('first_pcm_ms')
+        if first_pcm is not None:
+            self.last_turn_timings['first_audio_dispatch_ms'] = round(
+                (dispatch_started-self._turn_started)*1000 + first_pcm, 1)
+        self.last_tts_error = getattr(self.voice, 'last_tts_error', None)
+        self.last_translation_error = getattr(self.voice, 'last_translation_error', None)
+        if getattr(self.voice, 'chinese_first', False) and not speech_text:
+            spoken = getattr(self.voice, 'last_spoken_text', '')
+            if spoken:
+                reply = spoken
+                with self._chat_lock:
+                    if self.history and self.history[-1]['role'] == 'assistant':
+                        self.history[-1]['content'] = reply
         return reply
 
     def _search_lore(self, query: str, limit: int = 2):
@@ -444,7 +466,8 @@ class KurisuAgent:
                     getattr(self.voice, 'last_translation_error', None)
                     or '日语翻译失败，未使用固定台词替代'
                 )
-                return self._finish_reply(zh, speak=False)
+                should_speak = bool(getattr(self.voice, 'chinese_first', False))
+                return self._finish_reply(zh, speak=should_speak)
             return self._finish_reply(zh + '\n' + ja)
         except Exception as error:
             self.last_model_error = str(error)

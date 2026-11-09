@@ -101,28 +101,11 @@ public class MainActivity extends Activity {
             if (serverOrigin.isEmpty()) webView.loadUrl(OFFLINE);
             return;
         }
-        String pairParam = uri.getQueryParameter("pair");
         serverOrigin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
+        authenticatedOrigin = serverOrigin;
         android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
-        if (pairParam != null && !pairParam.trim().isEmpty()) {
-            // User explicitly provided pairing token in URL (e.g. from QR scan, manual pairing, or explicit link)
-            String newTok = pairParam.trim();
-            prefs.edit().putString("access_token", newTok).putString("server_url", serverOrigin + "/").apply();
-            authenticatedOrigin = serverOrigin;
-            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
-            cm.setAcceptCookie(true);
-            cm.removeAllCookies(null); // Purge any prior cookies from previous hosts/ports to prevent cross-port leakage
-            cm.setCookie(serverOrigin, "kurisu_session=" + newTok + "; path=/; SameSite=Strict");
-            cm.flush();
-            Toast.makeText(this, "已配对服务 (" + serverOrigin + ")", Toast.LENGTH_SHORT).show();
-        } else {
-            // Candidate / unauthenticated connection: strictly isolate from any paired credentials!
-            authenticatedOrigin = "";
-            purgeCookiesAndStorage();
-            prefs.edit().putString("server_url", serverOrigin + "/").apply();
-            Toast.makeText(this, "已连接服务（隔离模式），请在页面中进行配对认证", Toast.LENGTH_SHORT).show();
-        }
-        // Security: Never append ?pair= into candidate or loaded server URLs!
+        prefs.edit().putString("server_url", serverOrigin + "/").apply();
+        Toast.makeText(this, "已连接服务 (" + serverOrigin + ")", Toast.LENGTH_SHORT).show();
         String targetUrl = serverOrigin + "/";
         webView.loadUrl(targetUrl);
     }
@@ -147,9 +130,9 @@ public class MainActivity extends Activity {
         layout.addView(host);layout.addView(token);
         new AlertDialog.Builder(this).setTitle("配对灯板").setView(layout).setPositiveButton("保存直连",(d,w)->{
             String ip=host.getText().toString().trim(),key=token.getText().toString().trim();
-            if(!BridgePolicy.privateIpv4(ip)||!BridgePolicy.token(key)) {Toast.makeText(this,"需要内网 IPv4 和 64 位十六进制凭据",Toast.LENGTH_LONG).show();return;}
+            if(!BridgePolicy.privateIpv4(ip)||!BridgePolicy.tokenOrPrivate(ip,key)) {Toast.makeText(this,"需要内网 IPv4（私人热点下凭据可选，或输入 64 位十六进制凭据）",Toast.LENGTH_LONG).show();return;}
             releaseDeviceInput();deviceTarget=new DeviceTarget(ip,key);serverOrigin="";
-            getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_host",ip).putString("device_token",key).remove("server_url").apply();
+            getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_host",ip).putString("device_token",key).apply();
             webView.loadUrl(OFFLINE);
         }).setNegativeButton("取消",null).show();
     }
@@ -196,7 +179,9 @@ public class MainActivity extends Activity {
         if (current == null || isOfflinePage(current)) return false;
         Uri uri = Uri.parse(current);
         String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
-        return !authenticatedOrigin.isEmpty() && authenticatedOrigin.equalsIgnoreCase(origin);
+        if (!authenticatedOrigin.isEmpty() && authenticatedOrigin.equalsIgnoreCase(origin)) return true;
+        if (!serverOrigin.isEmpty() && serverOrigin.equalsIgnoreCase(origin) && BridgePolicy.privateIpv4(uri.getHost())) return true;
+        return false;
     }
 
     private boolean trustedPage(WebView view) {
@@ -323,7 +308,7 @@ public class MainActivity extends Activity {
                 super.onPageStarted(view,url,favicon);
             }
             @Override public void onPageFinished(WebView view,String url) {
-                bridgeTrusted=isOfflinePage(url);super.onPageFinished(view,url);
+                bridgeTrusted=isOfflinePage(url) || isPageAuthenticated(view);super.onPageFinished(view,url);
                 if (isPageAuthenticated(view)) {
                     android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
                     String tok = prefs.getString("access_token", "");
@@ -447,6 +432,15 @@ public class MainActivity extends Activity {
                     sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName("255.255.255.255"), 8890));
                     sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName("255.255.255.255"), 8888));
                     sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName("192.168.4.1"), 8888));
+                    if (BridgePolicy.privateIpv4(deviceTarget.host)) {
+                        sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName(deviceTarget.host), 8888));
+                    }
+                    if (!savedUrl.isEmpty()) {
+                        String sHost = Uri.parse(savedUrl).getHost();
+                        if (BridgePolicy.privateIpv4(sHost)) {
+                            sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName(sHost), 8890));
+                        }
+                    }
                 } catch (Exception ignored) {}
 
                 for (String prefix : prefixes) {
@@ -507,28 +501,21 @@ public class MainActivity extends Activity {
                     ed.putString("device_host", finalBoardIp);
                 }
                 if (sUrl != null) {
-                    ed.apply();
-                    // HTTP discovery results are strictly candidate addresses.
-                    // Never automatically send old tokens or set cookies to discovered addresses!
-                    authenticatedOrigin = "";
-                    if (manual) {
-                        new AlertDialog.Builder(MainActivity.this)
-                            .setTitle("发现候选服务")
-                            .setMessage("在局域网发现候选电脑服务地址：\n" + sUrl + "\n\n为防跨端口凭据窃取，候选服务需先确认配对。\n请确认该服务可信，并输入配对凭据完成连接。")
-                            .setPositiveButton("手动配对", (d, w) -> configureServer(sUrl))
-                            .setNeutralButton("访客打开(隔离模式)", (d, w) -> connectServer(sUrl))
-                            .setNegativeButton("取消", null)
-                            .show();
-                    } else {
-                        // Silent auto-discovery on startup: candidate address discovered, stay offline for security
-                        Toast.makeText(MainActivity.this, "已发现候选服务 (" + sUrl + ")，未配对保持离线", Toast.LENGTH_SHORT).show();
+                    serverOrigin = sUrl;
+                    authenticatedOrigin = sUrl;
+                    ed.putString("server_url", sUrl + "/").apply();
+                    String curUrl = webView.getUrl();
+                    if (curUrl == null || curUrl.equals(OFFLINE) || !curUrl.startsWith(sUrl)) {
+                        Toast.makeText(MainActivity.this, "已连接电脑服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
+                        webView.loadUrl(sUrl + "/");
                     }
-                } else if (BridgePolicy.privateIpv4(finalBoardIp) && BridgePolicy.token(deviceTarget.token)) {
-                    serverOrigin = "";
-                    authenticatedOrigin = "";
-                    ed.remove("server_url").apply();
-                    Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
-                    if (!isOfflinePage(webView.getUrl())) webView.loadUrl(OFFLINE);
+                } else if (BridgePolicy.privateIpv4(finalBoardIp)) {
+                    ed.apply();
+                    String curUrl = webView.getUrl();
+                    if (curUrl == null || (!isOfflinePage(curUrl) && (serverOrigin == null || serverOrigin.isEmpty()))) {
+                        Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
+                        webView.loadUrl(OFFLINE);
+                    }
                 } else {
                     ed.apply();
                     if (manual) {
@@ -555,13 +542,11 @@ public class MainActivity extends Activity {
                         final String url="http://"+host+":"+s.getPort();
                         runOnUiThread(() -> {
                             if (!isFinishing()) {
-                                new AlertDialog.Builder(MainActivity.this)
-                                    .setTitle("发现候选服务")
-                                    .setMessage("在局域网发现候选电脑服务：\n" + url + "\n\n请确认该服务可信，并输入配对凭据完成连接。")
-                                    .setPositiveButton("手动配对", (d, w) -> configureServer(url))
-                                    .setNeutralButton("访客打开(隔离模式)", (d, w) -> connectServer(url))
-                                    .setNegativeButton("取消", null)
-                                    .show();
+                                serverOrigin = url;
+                                authenticatedOrigin = url;
+                                getSharedPreferences("config", MODE_PRIVATE).edit().putString("server_url", url + "/").apply();
+                                Toast.makeText(MainActivity.this, "已自动连接电脑服务 (" + url + ")", Toast.LENGTH_SHORT).show();
+                                webView.loadUrl(url + "/");
                             }
                         });
                         stopDiscovery();
@@ -583,7 +568,12 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript("window.dispatchEvent(new Event('blur'))",null);
         webView.onPause();super.onPause();
     }
-    @Override protected void onResume() { super.onResume();backgrounded=false;if(webView!=null)webView.onResume(); }
+    @Override protected void onResume() {
+        super.onResume();
+        backgrounded=false;
+        if(webView!=null)webView.onResume();
+        autoDiscoverAndConnect(false);
+    }
     @Override protected void onDestroy() { if (frontCameraBridge != null) frontCameraBridge.stop(); releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();readExecutor.shutdownNow();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
 
@@ -595,7 +585,7 @@ public class MainActivity extends Activity {
     private void releaseDeviceInput() {
         bridgeEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
         final DeviceTarget target=deviceTarget;
-        if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.token(target.token))return;
+        if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.tokenOrPrivate(target.host,target.token))return;
         final String host=target.host,key=target.token;
         try { udpExecutor.execute(()->{
             for(String command:new String[]{"{\"cmd\":\"arcade\",\"action\":\"input\",\"down\":0,\"pressed\":0}","{\"cmd\":\"arcade\",\"action\":\"pause\"}"}) {
@@ -671,7 +661,7 @@ public class MainActivity extends Activity {
             if(!bridgeTrusted||backgrounded||destroyed||message==null||message.length()>3000) {
                 dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"forbidden_page"));return;
             }
-            if(!BridgePolicy.privateIpv4(target.host)||!BridgePolicy.token(target.token)) {
+            if(!BridgePolicy.privateIpv4(target.host)) {
                 dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"pairing_required"));return;
             }
             // Each lane is serial with its own stable replay identity. A dropped
@@ -681,7 +671,7 @@ public class MainActivity extends Activity {
             final String identity=readOnly?java.util.UUID.nameUUIDFromBytes((clientId+":read").getBytes(StandardCharsets.UTF_8)).toString().replace("-",""):clientId;
             try { (readOnly?readExecutor:udpExecutor).execute(()->{
                 if(epoch!=bridgeEpoch.get()||backgrounded||destroyed)return;
-                String result=client.request(target.host,target.token,identity,message,readOnly?150:timeoutMs,readOnly?0:retries,callbackId);
+                String result=client.request(target.host,target.token,identity,message,readOnly?1200:Math.max(timeoutMs, 1200),readOnly?0:retries,callbackId);
                 dispatchResult(epoch,callbackId,result);
             }); } catch(java.util.concurrent.RejectedExecutionException full) {
                 dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"queue_full"));

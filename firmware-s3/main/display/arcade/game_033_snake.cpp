@@ -164,6 +164,16 @@ void Game033Snake::Step()
     int new_hx = snake_x_[0] + dir_x_;
     int new_hy = snake_y_[0] + dir_y_;
 
+    // 防快速连击导致的 180 度掉头撞颈
+    if (snake_len_ > 1 && new_hx == snake_x_[1] && new_hy == snake_y_[1]) {
+        next_dir_x_ = snake_x_[0] - snake_x_[1];
+        next_dir_y_ = snake_y_[0] - snake_y_[1];
+        dir_x_ = next_dir_x_;
+        dir_y_ = next_dir_y_;
+        new_hx = snake_x_[0] + dir_x_;
+        new_hy = snake_y_[0] + dir_y_;
+    }
+
     // 边界检测
     if (wrap_walls_) {
         new_hx = (new_hx + 16) % 16;

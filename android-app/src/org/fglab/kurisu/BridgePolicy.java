@@ -16,4 +16,8 @@ public final class BridgePolicy {
     }
     public static boolean requestId(String id) { return id!=null && id.matches("[a-zA-Z0-9_-]{1,64}"); }
     public static boolean token(String token) { return token!=null && token.matches("[0-9a-f]{64}"); }
+    public static boolean tokenOrPrivate(String host, String token) {
+        if (privateIpv4(host)) return token == null || token.isEmpty() || token(token);
+        return token(token);
+    }
 }

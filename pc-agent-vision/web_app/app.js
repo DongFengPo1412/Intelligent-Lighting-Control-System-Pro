@@ -2053,7 +2053,7 @@
         serverBase = savedUrl || "http://192.168.186.90:8080";
       }
       serverBase = serverBase.replace(/\/+$/, "");
-      const uploadUrl = `${serverBase}/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(mode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
+      const uploadUrl = `${serverBase}/api/pro/camera/frame?mode=${encodeURIComponent(mode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
 
       const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
       if (!started) {
@@ -2107,7 +2107,7 @@
         if (!blob) return;
 
         const currentMode = $("visionMode") ? $("visionMode").value : "fingertip";
-        const url = `/api/pro/camera/frame?token=${encodeURIComponent(tok)}&mode=${encodeURIComponent(currentMode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
+        const url = `/api/pro/camera/frame?mode=${encodeURIComponent(currentMode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
 
         const response = await fetch(url, {
           method: "POST",
@@ -2193,7 +2193,7 @@ bind("visionStart", async () => {
         $("cameraStreamWrapper").style.display = "block";
         const tok = getAccessToken();
         state.token = tok;
-        $("cameraStreamImg").src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+        $("cameraStreamImg").src = `/api/pro/camera/feed?t=${Date.now()}`;
       }
     }
   }
@@ -2509,7 +2509,14 @@ async function poll() {
       state.vision = p.vision;
       $("status").textContent = JSON.stringify(p, null, 2);
       $("visionStatus").textContent = JSON.stringify(p.vision, null, 2);
-      const running = p.vision?.running || phoneStream !== null || currentVisionSessionId !== null;
+      if (p.vision && p.vision.running === false) {
+        if (phoneStream) {
+          stopPhoneCameraPreview();
+        }
+        currentVisionSessionId = null;
+        activeVisionSource = null;
+      }
+      const running = Boolean(p.vision?.running);
       $("visionBadge").textContent = running ? "运行中" : "未启用";
       if (p.vision?.running) {
         if (!phoneStream && !currentVisionSessionId) {
@@ -2534,7 +2541,7 @@ async function poll() {
           if (!img.src || img.src.indexOf("/api/pro/camera/feed") === -1) {
             const tok = getAccessToken();
             state.token = tok;
-            img.src = `/api/pro/camera/feed?token=${encodeURIComponent(tok)}&t=${Date.now()}`;
+            img.src = `/api/pro/camera/feed?t=${Date.now()}`;
           }
           if ($("cameraDetectionInfo")) {
             const obs = p.vision?.observation || {};
@@ -2606,6 +2613,28 @@ window.addEventListener("pagehide", () => {
   cancelCalibration();
   dictation?.abort();
 });
+function applyTheme(theme) {
+  const isDay = theme === "day";
+  if (typeof document !== "undefined" && document && document.documentElement && document.documentElement.setAttribute) {
+    document.documentElement.setAttribute("data-theme", isDay ? "day" : "night");
+  }
+  const btn = $("toggleThemeBtn");
+  if (btn) {
+    btn.textContent = isDay ? "☀️" : "🌙";
+    btn.title = isDay ? "切换为夜间模式" : "切换为日间模式";
+  }
+}
+const currentTheme = localStorage.getItem("kurisu_theme") || "night";
+applyTheme(currentTheme);
+if ($("toggleThemeBtn")) {
+  $("toggleThemeBtn").addEventListener("click", () => {
+    const cur = (document && document.documentElement && document.documentElement.getAttribute) ? document.documentElement.getAttribute("data-theme") : "night";
+    const nextTheme = cur === "day" ? "night" : "day";
+    localStorage.setItem("kurisu_theme", nextTheme);
+    applyTheme(nextTheme);
+  });
+}
+
 matrix2d($("homeMatrix"));
 matrix2d($("matrixCanvas"));
 drawDraft();

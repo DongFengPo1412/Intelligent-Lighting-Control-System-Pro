@@ -131,16 +131,16 @@ final class DeviceUdpClient {
                 socket.connect(InetAddress.getByName(host),8888);
                 if(bootId.isEmpty()) {
                     JSONObject probe=new JSONObject();probe.put("request_id","probe_"+UUID.randomUUID().toString().replace("-",""));
-                    JSONObject challenge=roundTrip(socket,probe,400,1);
+                    JSONObject challenge=roundTrip(socket,probe,1200,1);
                     bootId=challenge.optString("boot_id");
                     if(!bootId.matches("[0-9a-f]{32}")){bootId="";return error(callback,"invalid_boot_id");}
                 }
-                envelope.put("token",token);envelope.put("boot_id",bootId);
+                envelope.put("token",token!=null?token:"");envelope.put("boot_id",bootId);
                 envelope.put("client_id",clientId);envelope.put("seq",++sequence);
                 String wireId=sequence+"_"+callback;
                 if(!BridgePolicy.requestId(wireId))return error(callback,"invalid_request_id");
                 envelope.put("request_id",wireId);
-                JSONObject reply=roundTrip(socket,envelope,Math.max(100,Math.min(timeout,1000)),Math.max(0,Math.min(retries,2)));
+                JSONObject reply=roundTrip(socket,envelope,Math.max(100,Math.min(timeout,2500)),Math.max(0,Math.min(retries,2)));
                 if("boot_changed".equals(reply.optString("error")))bootId="";
                 // roundTrip matched the exact wire ID; now restore this page's callback ID.
                 reply.put("request_id",callback);

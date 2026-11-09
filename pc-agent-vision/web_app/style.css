@@ -9,8 +9,53 @@
   --accent: #e39a8b;
   --lab-red: #943c50;
   --lab-amber: #deb17e;
+  --sidebar-bg: #15171b;
   --sidebar: 228px;
   font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+[data-theme="day"] {
+  color-scheme: light;
+  --bg: #f5f2ee;
+  --surface: #ffffff;
+  --raised: #e9e4dc;
+  --line: #d8d0c5;
+  --text: #211e1c;
+  --muted: #6e675f;
+  --accent: #b84a3c;
+  --lab-red: #943c50;
+  --lab-amber: #c48b4e;
+  --sidebar-bg: #ece7e0;
+}
+[data-theme="day"] body {
+  background: radial-gradient(ellipse at 90% 0, #f6e6e8 0, transparent 45%), var(--bg);
+}
+[data-theme="day"] .sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--line);
+}
+[data-theme="day"] .topbar {
+  background: #f5f2eeee;
+  border-bottom: 1px solid var(--line);
+}
+[data-theme="day"] .card {
+  border-color: var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+[data-theme="day"] .icon-button {
+  border-color: var(--line);
+}
+[data-theme="day"] .icon-button:hover {
+  background: var(--raised);
+}
+[data-theme="day"] .mobile-nav {
+  background: var(--sidebar-bg);
+  border-top: 1px solid var(--line);
+}
+[data-theme="day"] .modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
 }
 * {
   box-sizing: border-box;

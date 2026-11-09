@@ -98,6 +98,15 @@ class TestArcade033Snake(unittest.TestCase):
         self.game.update(0.36, 0, 0)
         self.assertEqual(self.game.get_status()["state"], STATE_GAMEOVER)
 
+    def test_08_rapid_double_key_reverse_blocked(self):
+        # Force next_dir into neck to simulate rapid turn override
+        self.game._next_dir = (-1, 0)
+        self.game.update(0.36, 0, 0)
+        # Should not have died by reversing into neck (4, 7)
+        self.assertNotEqual(self.game.get_status()["state"], STATE_GAMEOVER)
+        self.assertEqual(self.game._snake[0], (6, 7))
+
+
 
 if __name__ == "__main__":
     unittest.main()

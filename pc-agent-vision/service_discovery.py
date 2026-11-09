@@ -82,7 +82,8 @@ class ServiceAdvertisement:
         except Exception:
             pass
         # Security: Never transmit access_token or control_token over unauthenticated discovery broadcast.
-        # Clients must authenticate/pair independently via explicit user authorization.
+        # In trusted private hotspot mode (KURISU_TRUST_PRIVATE=1), pairing_required is False.
+        pairing_req = not (os.environ.get("KURISU_TRUST_PRIVATE") == "1")
         return json.dumps({
             "service": "KurisuPro",
             "server_url": f"http://{host_ip}:{port}",
@@ -90,7 +91,7 @@ class ServiceAdvertisement:
             "port": port,
             "version": "2.1.2",
             "board_ip": board_ip,
-            "pairing_required": True,
+            "pairing_required": pairing_req,
         }, separators=(",", ":")).encode("utf-8")
 
     def _udp_loop(self, default_host, port):

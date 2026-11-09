@@ -3,7 +3,9 @@
 #include <stdint.h>
 #include <esp_err.h>
 #include <esp_event.h>
+#include <esp_netif.h>
 #include <esp_timer.h>
+#include <netinet/in.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -26,6 +28,12 @@ public:
     bool IsStaConnected() const { return is_sta_connected_; }
     bool IsApActive() const { return is_ap_active_; }
     bool IsConnected() const { return is_sta_connected_ || is_ap_active_; }
+
+    // 检查 IP 是否位于板端 Station 局域网/私人热点网段 (受信任免口令控制)
+    bool IsStaSubnet(struct in_addr addr) const {
+        if (!is_sta_connected_ || sta_ip_addr_.addr == 0) return false;
+        return (addr.s_addr & sta_netmask_.addr) == (sta_ip_addr_.addr & sta_netmask_.addr);
+    }
 
     // 获取当前板端局域网 IPv4 字符串
     const char* GetStaIp() const { return sta_ip_; }
@@ -51,6 +59,8 @@ private:
     char ap_password_[65];
     char sta_ip_[16];
     char ap_ip_[16];
+    esp_ip4_addr_t sta_ip_addr_{};
+    esp_ip4_addr_t sta_netmask_{};
     uint16_t udp_port_;
     volatile bool is_sta_connected_;
     volatile bool is_ap_active_;

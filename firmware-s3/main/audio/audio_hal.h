@@ -74,7 +74,7 @@ private:
     SemaphoreHandle_t playback_mutex_;
     SemaphoreHandle_t settings_mutex_;
     AudioPriorityGate playback_priority_;
-    int32_t tx_buffer_[240]; // Mono; protected by playback_mutex_, off the task stack.
+    int32_t tx_buffer_[480]; // Mono; protected by playback_mutex_, off the task stack. Holds resampled 24k frames.
     std::atomic<int> output_volume_;
     std::atomic<uint32_t> volume_factor_;
     int saved_volume_;

@@ -472,13 +472,15 @@ class MultimodalHub:
                 self.controller.send_json({"cmd": "mode", "val": 17})
                 self.previous_auto_mode = None
             if (
-                observation.get("tired")
-                or (self.strain_since is not None and now - self.strain_since > 2)
-            ) and now - self.last_greet > 120:
+                (observation.get("tired")
+                or (self.strain_since is not None and now - self.strain_since > 2))
+                and mode == 17
+                and now - self.last_greet > 120
+            ):
                 self.last_greet = now
                 if self.controller.send_json({"cmd": "mode", "val": 31}):
                     self.previous_auto_mode = 17
-                if self.voice:
+                if self.voice and self._is_frame_valid(frame_meta):
                     self.voice.speak("休息一下眼睛吧。\n少し目を休めてね。", block=False)
             elif (
                 mode == 17
@@ -490,7 +492,7 @@ class MultimodalHub:
                     self.last_celebration = now
         elif self.mode == "identity" and observation.get("identity") and now - self.last_greet > 15:
             self.last_greet = now
-            if self.voice:
+            if self.voice and self._is_frame_valid(frame_meta):
                 self.voice.speak(
                     f"欢迎回来，{observation['identity']}。\nおかえりなさい。", block=False
                 )
