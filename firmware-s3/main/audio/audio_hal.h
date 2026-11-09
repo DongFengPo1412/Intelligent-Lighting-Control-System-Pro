@@ -11,6 +11,7 @@
 #include <atomic>
 #include "audio_priority.h"
 #include "game_audio_stream.h"
+#include "audio_sample_format.h"
 
 class AudioHAL {
 public:
@@ -75,6 +76,10 @@ private:
     SemaphoreHandle_t settings_mutex_;
     AudioPriorityGate playback_priority_;
     int32_t tx_buffer_[480]; // Mono; protected by playback_mutex_, off the task stack. Holds resampled 24k frames.
+    int32_t pending_game_buf_[240];
+    size_t pending_game_frames_ = 0;
+    size_t pending_game_offset_ = 0;
+    audio_pcm::Resampler16kTo24k game_resampler_;
     std::atomic<int> output_volume_;
     std::atomic<uint32_t> volume_factor_;
     int saved_volume_;

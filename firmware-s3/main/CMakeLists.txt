@@ -156,6 +156,7 @@ idf_component_register(
         lwip
         mbedtls
         bootloader_support
+        espressif__esp-sr
     )
 
 target_compile_definitions(${COMPONENT_LIB} PUBLIC

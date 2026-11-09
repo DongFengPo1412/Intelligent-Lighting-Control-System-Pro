@@ -330,14 +330,22 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
 
     while (written_total < count) {
         size_t frames_in = std::min(chunk_size, count - written_total);
-        size_t frames_out = audio_pcm::PackMono16kTo24k(mono_samples + written_total, frames_in, v_factor, bit32_buf);
-        size_t bytes_out = 0;
-        ret = i2s_channel_write(tx_chan_, bit32_buf, frames_out * audio_pcm::kI2sBytesPerSample, &bytes_out, 200);
-        if (ret != ESP_OK || bytes_out != frames_out * audio_pcm::kI2sBytesPerSample) {
-            if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
-            ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
-            break;
+        bool is_last_chunk = (written_total + frames_in >= count);
+        size_t frames_out = audio_pcm::PackMono16kTo24k(mono_samples + written_total, frames_in, v_factor, bit32_buf, is_last_chunk);
+        size_t written_frames = 0;
+        while (written_frames < frames_out) {
+            size_t bytes_out = 0;
+            ret = i2s_channel_write(tx_chan_, bit32_buf + written_frames,
+                                    (frames_out - written_frames) * audio_pcm::kI2sBytesPerSample,
+                                    &bytes_out, 200);
+            if (ret != ESP_OK || bytes_out == 0) {
+                if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
+                ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
+                break;
+            }
+            written_frames += bytes_out / audio_pcm::kI2sBytesPerSample;
         }
+        if (written_frames < frames_out) break;
         written_total += frames_in;
     }
 
@@ -360,16 +368,38 @@ arcade::AudioWriteResult AudioHAL::TryPlayGamePcm(const int16_t* data,size_t cou
         if(spk_power_timer_)esp_timer_stop(spk_power_timer_);
         esp_err_t error=EnableSpeaker(true);
         if(error==ESP_OK) {
-            // Game sound generated at 16kHz; resample to 24kHz output to preserve exact 1.0x pitch
-            size_t frames_out = audio_pcm::PackMono16kTo24k(data, count, volume_factor_.load(), tx_buffer_);
-            size_t written=0;
-            error=i2s_channel_write(tx_chan_,tx_buffer_,frames_out*audio_pcm::kI2sBytesPerSample,&written,0);
-            size_t written_samples = written / audio_pcm::kI2sBytesPerSample;
-            size_t consumed = (frames_out > 0) ? (written_samples * count + frames_out / 2) / frames_out : 0;
-            if (consumed > count) consumed = count;
-            result=arcade::GameWriteFromBytes(count,consumed*audio_pcm::kI2sBytesPerSample,
-                error==ESP_OK?State::Ready:error==ESP_ERR_TIMEOUT?State::Busy:State::Fault,
-                audio_pcm::kI2sBytesPerSample);
+            // Drain any pending unwritten 24kHz frames from earlier short writes first
+            if (pending_game_frames_ > 0) {
+                size_t written = 0;
+                size_t bytes_to_write = pending_game_frames_ * audio_pcm::kI2sBytesPerSample;
+                error = i2s_channel_write(tx_chan_, pending_game_buf_ + pending_game_offset_, bytes_to_write, &written, 0);
+                size_t written_frames = written / audio_pcm::kI2sBytesPerSample;
+                pending_game_offset_ += written_frames;
+                pending_game_frames_ -= written_frames;
+                if (pending_game_frames_ > 0) {
+                    ResetSpeakerTimer();
+                    xSemaphoreGive(playback_mutex_);
+                    return {0, State::Busy};
+                }
+                pending_game_offset_ = 0;
+            }
+
+            // Resample 16kHz chunk to 24kHz
+            size_t frames_out = game_resampler_.Process(data, count, volume_factor_.load(), tx_buffer_, false);
+            size_t written = 0;
+            error = i2s_channel_write(tx_chan_, tx_buffer_, frames_out * audio_pcm::kI2sBytesPerSample, &written, 0);
+            size_t written_frames = written / audio_pcm::kI2sBytesPerSample;
+            if (written_frames < frames_out) {
+                // Short write: save remainder into pending buffer to maintain continuous sample timeline
+                size_t remainder = frames_out - written_frames;
+                if (remainder <= sizeof(pending_game_buf_) / sizeof(pending_game_buf_[0])) {
+                    memcpy(pending_game_buf_, tx_buffer_ + written_frames, remainder * audio_pcm::kI2sBytesPerSample);
+                    pending_game_frames_ = remainder;
+                    pending_game_offset_ = 0;
+                }
+            }
+            // Report entire input chunk consumed: all samples have been converted and written or queued
+            result = {unsigned(count), (error == ESP_OK || error == ESP_ERR_TIMEOUT) ? State::Ready : State::Fault};
         } else result={0,State::Fault};
         ResetSpeakerTimer();
     }

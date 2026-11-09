@@ -473,7 +473,12 @@ public class MainActivity extends Activity {
                     try {
                         org.json.JSONObject json = new org.json.JSONObject(text);
                         if ("KurisuPro".equals(json.optString("service"))) {
-                            foundServerUrl = "http://" + senderIp + ":8080";
+                            int port = json.optInt("port", 8080);
+                            String sUrl = json.optString("server_url", "http://" + senderIp + ":" + port);
+                            if (sUrl == null || sUrl.isEmpty() || !sUrl.startsWith("http")) {
+                                sUrl = "http://" + senderIp + ":" + port;
+                            }
+                            foundServerUrl = sUrl;
                             String bIp = json.optString("board_ip", "");
                             if (BridgePolicy.privateIpv4(bIp)) foundBoardIp = bIp;
                             break;
@@ -485,6 +490,23 @@ public class MainActivity extends Activity {
                     } catch (Exception ignored) {}
                 }
             } catch (Exception ignored) {}
+
+            if (foundServerUrl != null) {
+                try {
+                    java.net.URL healthUrl = new java.net.URL(foundServerUrl + "/api/auth/challenge");
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) healthUrl.openConnection();
+                    conn.setConnectTimeout(800);
+                    conn.setReadTimeout(800);
+                    conn.setRequestMethod("GET");
+                    int code = conn.getResponseCode();
+                    conn.disconnect();
+                    if (code != 200 && code != 401 && code != 403) {
+                        foundServerUrl = null;
+                    }
+                } catch (Exception e) {
+                    foundServerUrl = null;
+                }
+            }
 
             final String sUrl = foundServerUrl, bIp = foundBoardIp;
             if (sUrl != null) {

@@ -79,8 +79,22 @@ class WiFiPcmClient:
             else:
                 payload = HELLO
             sock.sendall(packet(4, payload))
-            if receive(sock) != (4, HELLO):
+            rx_kind, rx_payload = receive(sock)
+            if rx_kind != 4 or not rx_payload.startswith(HELLO):
                 raise ValueError("Unsupported PCM protocol")
+            if b"|" in rx_payload:
+                parts = rx_payload.split(b"|", 1)
+                new_token = parts[1].decode("ascii", errors="ignore").strip()
+                if len(new_token) == 64:
+                    gateway.control_token = new_token
+                    try:
+                        from pro_paths import data_dir
+                        (data_dir() / "control-pairing.json").write_text(
+                            json.dumps({"control_token": new_token}, indent=2),
+                            encoding="utf-8",
+                        )
+                    except Exception:
+                        pass
             self.sock = sock
             self.boot_id = gateway.boot_id
             self.connected = True

@@ -124,9 +124,12 @@ void NetworkAudio::Run(){
         size_t first_size = ((size_t)header[5] << 8) | header[6];
         const size_t prefix = strlen(hello);
         bool valid_hello = false;
+        bool is_sta_peer = WifiManager::GetInstance().IsStaSubnet(client_addr.sin_addr);
         if (memcmp(header, "KAP1", 4) == 0 && header[4] == 4 && first_size < sizeof(payload) && read_all(fd, payload, first_size)) {
             payload[first_size] = 0;
-            if (first_size == prefix + 1 + 64 && memcmp(payload, hello, prefix) == 0 && payload[prefix] == '|') {
+            if (first_size == prefix && memcmp(payload, hello, prefix) == 0 && is_sta_peer) {
+                valid_hello = true;
+            } else if (first_size == prefix + 1 + 64 && memcmp(payload, hello, prefix) == 0 && payload[prefix] == '|') {
                 if (NetworkAuth::GetInstance().Check((const char*)payload + prefix + 1)) {
                     valid_hello = true;
                 }
@@ -141,7 +144,19 @@ void NetworkAudio::Run(){
         }
         ESP_LOGI("NetworkAudio","Authenticated PCM active: Wi-Fi power save NONE");
         xSemaphoreTake(tx_,portMAX_DELAY);queue_->Clear();SyncStatsLocked();client_=fd;xSemaphoreGive(tx_);
-        if (!Send(4,hello,prefix)) {
+        char hello_resp[128];
+        size_t hello_resp_len = prefix;
+        memcpy(hello_resp, hello, prefix);
+        if (is_sta_peer) {
+            const char* cur_tok = NetworkAuth::GetInstance().TokenForUsbPairing();
+            if (cur_tok && cur_tok[0]) {
+                int written = snprintf(hello_resp, sizeof(hello_resp), "%s|%s", hello, cur_tok);
+                if (written > 0 && (size_t)written < sizeof(hello_resp)) {
+                    hello_resp_len = (size_t)written;
+                }
+            }
+        }
+        if (!Send(4, hello_resp, hello_resp_len)) {
             xSemaphoreTake(tx_,portMAX_DELAY);client_=-1;close(fd);xSemaphoreGive(tx_);continue;
         }
         ready_=true;

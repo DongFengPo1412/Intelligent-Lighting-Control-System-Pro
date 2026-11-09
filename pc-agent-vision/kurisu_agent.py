@@ -33,7 +33,9 @@ class KurisuAgent:
         self.backend = backend or os.environ.get("KURISU_LLM_BACKEND")
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "ollama")
         self.model = model
-        self._chat_lock = threading.Lock()
+        self._chat_lock = threading.RLock()
+        self._turn_counter = 0
+        self._active_turn_id = 0
         self.semantic = SemanticControl(model=self.model, api_base=self.api_base, backend=self.backend)
         self._tool_results = {}
         self.model_status = "uninitialized"
@@ -101,6 +103,9 @@ class KurisuAgent:
 
     def chat(self, user_message: str, speak=True, cancelled=None) -> str:
         with self._chat_lock:
+            self._turn_counter += 1
+            turn_id = self._turn_counter
+            self._active_turn_id = turn_id
             self._speak_turn = speak
             self._cancel_turn = cancelled
             self._pending_speech = None
@@ -117,70 +122,99 @@ class KurisuAgent:
             users = [i for i, msg in enumerate(self.history) if msg.get("role") == "user"]
             if len(users) >= 12:
                 self.history = self.history[:1] + self.history[users[-11]:]
-            try:
-                reply = self._chat_locked(user_message)
-            finally:
+
+            self._current_user_message = user_message
+            self.history.append({'role': 'user', 'content': user_message, '_turn_id': turn_id})
+            self.memory.append_turn('user', user_message)
+
+            from conversation_session import ConversationSession
+            if ConversationSession.should_end(user_message):
+                reply = self._finish_reply('好，需要时再叫我。\n分かったわ。また必要になったら呼んでね。', turn_id=turn_id)
                 self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
-            pending = self._pending_speech
-            self._pending_speech = None
+                pending = self._pending_speech
+                self._pending_speech = None
+                if pending and reply:
+                    reply = self._execute_speech(pending)
+                return reply
 
-        if pending and reply:
-            reply = self._execute_speech(pending)
-        return reply
+            remember = re.fullmatch(r'请?记住[：:，,\s]*(.+)', user_message.strip(), re.S)
+            if remember:
+                if hasattr(self.memory, 'remember_preference'):
+                    self.memory.remember_preference(remember.group(1))
+                else:
+                    self.memory.remember(remember.group(1))
+                reply = self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。', turn_id=turn_id)
+                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+                pending = self._pending_speech
+                self._pending_speech = None
+                if pending and reply:
+                    reply = self._execute_speech(pending)
+                return reply
 
-    def _chat_locked(self, user_message: str) -> str:
-        self._current_user_message = user_message
-        context = self.history[1:]
-        self.history.append({'role': 'user', 'content': user_message})
-        self.memory.append_turn('user', user_message)
-        from conversation_session import ConversationSession
-        if ConversationSession.should_end(user_message):
-            return self._finish_reply('好，需要时再叫我。\n分かったわ。また必要になったら呼んでね。')
-        remember = re.fullmatch(r'请?记住[：:，,\s]*(.+)', user_message.strip(), re.S)
-        if remember:
-            if hasattr(self.memory, 'remember_preference'):
-                self.memory.remember_preference(remember.group(1))
-            else:
-                self.memory.remember(remember.group(1))
-            return self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。')
-        if re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
-            self.history = self.history[:1]
-            self.memory.clear()
-            reply = '已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。'
-            return self._finish_reply(reply)
-        is_query = bool(re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', user_message.strip()))
-        auto_mem_pattern = (
-            r'(?:(?:我)?希望(?:你)?(?:以后)?(?:叫我|称呼我|把?我称作)|(?:我)?希望被称(?:作|呼)|'
-            r'以后请?(?:改)?叫我|请(?:改)?叫我|改叫我|叫我|称呼我|'
-            r'(?:不用|不要|别)(?:再)?(?:叫我|称呼我)|'
-            r'我的(?:本名|真名|名字|姓名)是|我(?:本名|真名)?叫|'
-            r'我(?:最|改|也|还)?喜欢|我不再喜欢|我不喜欢|我习惯|我每天)'
-        )
-        if not is_query and os.environ.get('KURISU_AUTO_MEMORY','1')=='1' and re.search(auto_mem_pattern, user_message.strip()):
-            if hasattr(self.memory, 'remember_preference'):
-                self.memory.remember_preference(user_message.strip())
-            else:
-                self.memory.remember(user_message, kind='preference')
-        music_commands = getattr(self, 'music_commands', None)
-        if music_commands:
-            music_result = music_commands.handle(user_message)
-            if music_result is not None:
-                return self._finish_reply(music_result['reply'], speak=music_result['speak'],
-                                          speech_text=music_result.get('spoken_reply'))
+            if re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
+                self.history = self.history[:1]
+                self.memory.clear()
+                reply = self._finish_reply('已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。', turn_id=turn_id)
+                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+                pending = self._pending_speech
+                self._pending_speech = None
+                if pending and reply:
+                    reply = self._execute_speech(pending)
+                return reply
+
+            is_query = bool(re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', user_message.strip()))
+            auto_mem_pattern = (
+                r'(?:(?:我)?希望(?:你)?(?:以后)?(?:叫我|称呼我|把?我称作)|(?:我)?希望被称(?:作|呼)|'
+                r'以后请?(?:改)?叫我|请(?:改)?叫我|改叫我|叫我|称呼我|'
+                r'(?:不用|不要|别)(?:再)?(?:叫我|称呼我)|'
+                r'我的(?:本名|真名|名字|姓名)是|我(?:本名|真名)?叫|'
+                r'我(?:最|改|也|还)?喜欢|我不再喜欢|我不喜欢|我习惯|我每天)'
+            )
+            if not is_query and os.environ.get('KURISU_AUTO_MEMORY','1')=='1' and re.search(auto_mem_pattern, user_message.strip()):
+                if hasattr(self.memory, 'remember_preference'):
+                    self.memory.remember_preference(user_message.strip())
+                else:
+                    self.memory.remember(user_message, kind='preference')
+
+            music_commands = getattr(self, 'music_commands', None)
+            if music_commands:
+                music_result = music_commands.handle(user_message)
+                if music_result is not None:
+                    reply = self._finish_reply(music_result['reply'], turn_id=turn_id, speak=music_result['speak'],
+                                              speech_text=music_result.get('spoken_reply'))
+                    self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+                    pending = self._pending_speech
+                    self._pending_speech = None
+                    if pending and reply:
+                        reply = self._execute_speech(pending)
+                    return reply
+
+            context = [m for m in self.history[1:] if m.get('_turn_id') != turn_id or m.get('role') != 'user']
+
         try:
+            if (cancelled and cancelled.is_set()) or self._active_turn_id != turn_id:
+                return ''
             planning_started = time.perf_counter()
             plan = self.semantic.plan(user_message, context)
-            self.last_turn_timings['planning_ms'] = round((time.perf_counter()-planning_started)*1000,1)
+            self.last_turn_timings['planning_ms'] = round((time.perf_counter()-planning_started)*1000, 1)
             print(f'[语义控制计划]: {json.dumps(plan, ensure_ascii=False)}')
         except Exception as error:
             self.last_model_error = str(error)
             print(f'[语义规划错误]: {type(error).__name__}: {error}')
-            return self._finish_reply('控制意图暂时无法确认，请稍后重试。\n操作の意図を確認できなかったわ。少し待ってからもう一度お願い。')
+            reply = self._finish_reply('控制意图暂时无法确认，请稍后重试。\n操作の意図を確認できなかったわ。少し待ってからもう一度お願い。', turn_id=turn_id)
+            self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+            return reply
+
+        if (cancelled and cancelled.is_set()) or self._active_turn_id != turn_id:
+            return ''
+
         if plan['kind'] == 'clarify':
-            return self._finish_reply('请说清想要哪一种灯效；如果是倒计时，也请告诉我时长。\nどの光の効果にするか教えて。カウントダウンなら時間も教えてね。')
-        if plan['kind'] == 'control':
+            reply = self._finish_reply('请说清想要哪一种灯效；如果是倒计时，也请告诉我时长。\nどの光の効果にするか教えて。カウントダウンなら時間も教えてね。', turn_id=turn_id)
+        elif plan['kind'] == 'control':
             zh, ja = [], []
             for action in plan['actions']:
+                if (cancelled and cancelled.is_set()) or self._active_turn_id != turn_id:
+                    return ''
                 tool, value = action['tool'], action['value']
                 arguments = {ARGUMENTS[tool]: value} if tool in ARGUMENTS else {}
                 result = self._execute_action(tool, arguments)
@@ -194,33 +228,55 @@ class KurisuAgent:
                 else:
                     line_zh, line_ja = describe_action(action)
                     zh.append(line_zh); ja.append(line_ja)
-            return self._finish_reply(''.join(zh) + '\n' + ''.join(ja))
-        return self._converse()
-
-    def _finish_reply(self, reply, speak=True, speech_text=None):
-        cancel = getattr(self, '_cancel_turn', None)
-        if cancel and cancel.is_set():
-            if self.history and self.history[-1].get('role') == 'user':
-                self.history.pop()
-            self._pending_speech = None
-            return ''
-        self.history.append({'role': 'assistant', 'content': reply})
-        self.memory.append_turn('assistant', reply)
-        if speak and getattr(self, '_speak_turn', True):
-            self._pending_speech = {
-                'reply': reply,
-                'speech_text': speech_text,
-                'cancel': cancel
-            }
+            reply = self._finish_reply(''.join(zh) + '\n' + ''.join(ja), turn_id=turn_id)
         else:
-            self._pending_speech = None
+            reply = self._converse(user_message=user_message, turn_id=turn_id, cancelled=cancelled)
+
+        self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+
+        with self._chat_lock:
+            if self._active_turn_id == turn_id:
+                pending = self._pending_speech
+                self._pending_speech = None
+            else:
+                pending = None
+                reply = ''
+
+        if pending and reply:
+            reply = self._execute_speech(pending)
         return reply
+
+    def _finish_reply(self, reply, turn_id=None, speak=True, speech_text=None):
+        with self._chat_lock:
+            if turn_id is not None and self._active_turn_id != turn_id:
+                return ''
+            cancel = getattr(self, '_cancel_turn', None)
+            if cancel and cancel.is_set():
+                if self.history and self.history[-1].get('role') == 'user' and (turn_id is None or self.history[-1].get('_turn_id') == turn_id):
+                    self.history.pop()
+                self._pending_speech = None
+                return ''
+            self.history.append({'role': 'assistant', 'content': reply, '_turn_id': turn_id})
+            self.memory.append_turn('assistant', reply)
+            if speak and getattr(self, '_speak_turn', True):
+                self._pending_speech = {
+                    'reply': reply,
+                    'speech_text': speech_text,
+                    'cancel': cancel,
+                    'turn_id': turn_id,
+                }
+            else:
+                self._pending_speech = None
+            return reply
 
     def _execute_speech(self, pending):
         reply = pending['reply']
         speech_text = pending['speech_text']
         cancel = pending['cancel']
+        turn_id = pending.get('turn_id')
         if cancel is not None and cancel.is_set():
+            return ''
+        if turn_id is not None and self._active_turn_id != turn_id:
             return ''
         if hasattr(self.voice, 'last_tts_error'):
             self.voice.last_tts_error = None
@@ -230,6 +286,8 @@ class KurisuAgent:
         else:
             self.voice.speak(speech_text or reply, block=True)
         if cancel is not None and cancel.is_set():
+            return ''
+        if turn_id is not None and self._active_turn_id != turn_id:
             return ''
         first_pcm = getattr(self.voice, 'last_speech_timings', {}).get('first_pcm_ms')
         if first_pcm is not None:
@@ -242,8 +300,10 @@ class KurisuAgent:
             if spoken:
                 reply = spoken
                 with self._chat_lock:
-                    if self.history and self.history[-1]['role'] == 'assistant':
-                        self.history[-1]['content'] = reply
+                    for msg in reversed(self.history):
+                        if msg.get('role') == 'assistant' and (turn_id is None or msg.get('_turn_id') == turn_id):
+                            msg['content'] = reply
+                            break
         return reply
 
     def _search_lore(self, query: str, limit: int = 2):
@@ -287,7 +347,7 @@ class KurisuAgent:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [text[:120] for _, text in scored[:limit]]
 
-    def _converse(self):
+    def _converse(self, user_message=None, turn_id=None, cancelled=None):
         # Conversation cannot execute tools or parse instructions from model prose.
         # Step 1: finalize clean Chinese meaning first; Step 2: generate strictly equivalent Japanese.
         import urllib.request
@@ -303,7 +363,7 @@ class KurisuAgent:
             if is_ollama
             else self.api_base.rstrip('/') + '/chat/completions'
         )
-        user_query = self.history[-1]['content']
+        user_query = user_message or (self.history[-1]['content'] if self.history else '')
         try:
             recalled = self.memory.search(user_query)
         except Exception as error:
@@ -412,7 +472,8 @@ class KurisuAgent:
                 + json.dumps(rendered_memories, ensure_ascii=False)
             )
 
-        messages = [{'role': 'system', 'content': '\n\n'.join(system_sections)}] + list(self.history[1:])
+        conv_history = [{'role': m['role'], 'content': m['content']} for m in self.history[1:] if m.get('role') in ('user', 'assistant')]
+        messages = [{'role': 'system', 'content': '\n\n'.join(system_sections)}] + conv_history
         payload = {'model': self.model, 'messages': messages, 'stream': False}
         if is_ollama:
             payload['options'] = {
@@ -429,11 +490,15 @@ class KurisuAgent:
             headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'},
         )
         try:
+            if (cancelled and cancelled.is_set()) or (turn_id is not None and self._active_turn_id != turn_id):
+                return ''
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             generation_started = time.perf_counter()
             with opener.open(request, timeout=40) as response:
                 result = json.loads(response.read().decode('utf-8'))
             self.last_turn_timings['generation_ms'] = round((time.perf_counter()-generation_started)*1000,1)
+            if (cancelled and cancelled.is_set()) or (turn_id is not None and self._active_turn_id != turn_id):
+                return ''
             message = result.get('message') or result.get('choices', [{}])[0].get('message', {})
             raw_content = re.sub(r'<tool_call>.*?</tool_call>', '', message.get('content', ''), flags=re.S).strip()
             zh_cand, ja_cand = split_bilingual_text(raw_content)
@@ -442,11 +507,11 @@ class KurisuAgent:
                 raise ValueError('Empty model response')
 
             if getattr(self.voice, 'chinese_first', False) and getattr(self, '_speak_turn', True):
-                return self._finish_reply(zh)
+                return self._finish_reply(zh, turn_id=turn_id)
 
             cancel = getattr(self, '_cancel_turn', None)
-            if cancel is not None and cancel.is_set():
-                return self._finish_reply('')
+            if (cancel is not None and cancel.is_set()) or (turn_id is not None and self._active_turn_id != turn_id):
+                return self._finish_reply('', turn_id=turn_id)
 
             ja = ''
             if ja_cand:
@@ -467,11 +532,11 @@ class KurisuAgent:
                     or '日语翻译失败，未使用固定台词替代'
                 )
                 should_speak = bool(getattr(self.voice, 'chinese_first', False))
-                return self._finish_reply(zh, speak=should_speak)
-            return self._finish_reply(zh + '\n' + ja)
+                return self._finish_reply(zh, turn_id=turn_id, speak=should_speak)
+            return self._finish_reply(zh + '\n' + ja, turn_id=turn_id)
         except Exception as error:
             self.last_model_error = str(error)
-            return self._finish_reply('本地模型暂时无法回复，请稍后再试。\nローカルモデルは今応答できないわ。後でもう一度試して。')
+            return self._finish_reply('本地模型暂时无法回复，请稍后再试。\nローカルモデルは今応答できないわ。後でもう一度試して。', turn_id=turn_id)
 
 if __name__ == "__main__":
     agent = KurisuAgent()

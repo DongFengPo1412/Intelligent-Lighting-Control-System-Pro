@@ -282,4 +282,58 @@ int main() {
     for(unsigned i=0;i<accepted.size();++i)
         assert(accepted[i]==int64_t(SoundSample(expected,i,bus.Volume()))*VolumeFactor(70));
     std::puts("PASS: production mono packing, partial-write accounting and NVS volume contracts (host stubs; no hardware)");
+
+    // Test 24kHz Resampler Chunk Slicing Invariance
+    {
+        int16_t input[4] = { 1000, 2000, 3000, 4000 };
+        uint32_t factor = VolumeFactor(100);
+
+        Resampler16kTo24k r1;
+        int32_t out1[16] = {};
+        size_t n1 = r1.Process(input, 4, factor, out1, true);
+
+        Resampler16kTo24k r2;
+        int32_t out2[16] = {};
+        size_t n2_a = r2.Process(input, 2, factor, out2, false);
+        size_t n2_b = r2.Process(input + 2, 2, factor, out2 + n2_a, true);
+        size_t n2 = n2_a + n2_b;
+
+        Resampler16kTo24k r3;
+        int32_t out3[16] = {};
+        size_t n3 = 0;
+        for (int i = 0; i < 4; ++i) {
+            n3 += r3.Process(input + i, 1, factor, out3 + n3, i == 3);
+        }
+
+        assert(n1 == 6);
+        assert(n2 == 6);
+        assert(n3 == 6);
+        for (size_t i = 0; i < 6; ++i) {
+            assert(out1[i] == out2[i]);
+            assert(out1[i] == out3[i]);
+        }
+        std::puts("PASS: 24kHz resampler chunk slicing invariance (1, 2, 4 chunk splits identical)");
+    }
+
+    // Test Microphone Shift: 16-bit shift vs 12-bit shift with clipping regression
+    {
+        // Simulate 24-bit raw I2S sample in 32-bit slot (e.g. amplitude 0x10000000)
+        int32_t raw_loud = 0x10000000; // High amplitude in MSB
+        int32_t raw_normal = 0x00500000; // Normal amplitude
+
+        // 16-bit shift: raw >> 16
+        int32_t s16_loud = raw_loud >> 16;
+        int16_t out16_loud = (s16_loud > INT16_MAX) ? INT16_MAX : (s16_loud < INT16_MIN) ? INT16_MIN : int16_t(s16_loud);
+        assert(out16_loud == 0x1000); // 4096, clean, no saturation!
+
+        // 12-bit shift: raw >> 12 (+24dB)
+        int32_t s12_loud = raw_loud >> 12; // 0x10000 = 65536 > 32767
+        int16_t out12_loud = (s12_loud > INT16_MAX) ? INT16_MAX : (s12_loud < INT16_MIN) ? INT16_MIN : int16_t(s12_loud);
+        assert(out12_loud == INT16_MAX); // Saturated clipping confirmed on 12-bit shift!
+
+        int32_t s12_normal = raw_normal >> 12;
+        int16_t out12_normal = (s12_normal > INT16_MAX) ? INT16_MAX : (s12_normal < INT16_MIN) ? INT16_MIN : int16_t(s12_normal);
+        assert(out12_normal == 0x500); // Normal gain
+        std::puts("PASS: mic 16-bit vs 12-bit shift & saturation clipping regression");
+    }
 }

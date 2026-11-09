@@ -888,6 +888,8 @@ class VoiceListener:
         if (not self.is_awake or self.is_paused or self._speech_active or
                 self._is_processing or not self._utterance_queue.empty()):
             return False
+        if getattr(self.session, 'continuous', False):
+            return False
         if time.time() - self.last_awake_time <= self.awake_timeout:
             return False
         print(f"\n[待命超时]: 空闲等待超过 {self.awake_timeout:g} 秒，退回暗红待命状态。")

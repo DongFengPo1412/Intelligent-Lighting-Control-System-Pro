@@ -24,18 +24,21 @@ inline void PackMono(const int16_t* source, size_t count, uint32_t factor, int32
 //   y_1 = (1/3)*x_0 + (2/3)*x_1
 //   y_2 = (2/3)*x_1 + (1/3)*x_2
 // Uniform output time interval: dt = 2/3 of input sample period.
+// Maintains cross-chunk phase, history and pending outputs invariant of chunk slicing.
 class Resampler16kTo24k {
 public:
     int16_t last_sample_ = 0;
     bool has_history_ = false;
+    uint8_t phase_ = 0; // 0: even sample next, 1: odd sample next
 
     void Reset() {
         last_sample_ = 0;
         has_history_ = false;
+        phase_ = 0;
     }
 
-    size_t Process(const int16_t* source, size_t count_16k, uint32_t factor, int32_t* output) {
-        if (!source || count_16k == 0 || !output) return 0;
+    size_t Process(const int16_t* source, size_t count_16k, uint32_t factor, int32_t* output, bool flush = false) {
+        if (!output) return 0;
         size_t out_idx = 0;
 
         auto scale = [factor](int64_t s) -> int32_t {
@@ -43,37 +46,54 @@ public:
             return scaled > INT32_MAX ? INT32_MAX : scaled < INT32_MIN ? INT32_MIN : int32_t(scaled);
         };
 
-        size_t i = 0;
-        for (; i + 1 < count_16k; i += 2) {
-            int64_t x0 = source[i];
-            int64_t x1 = source[i + 1];
-            int64_t x2 = (i + 2 < count_16k) ? int64_t(source[i + 2]) : x1;
-
-            int64_t y0 = x0;
-            int64_t y1 = (x0 + 2 * x1 + 1) / 3;
-            int64_t y2 = (2 * x1 + x2 + 1) / 3;
-
-            output[out_idx++] = scale(y0);
-            output[out_idx++] = scale(y1);
-            output[out_idx++] = scale(y2);
+        if (source && count_16k > 0) {
+            for (size_t i = 0; i < count_16k; ++i) {
+                int64_t curr = source[i];
+                if (!has_history_) {
+                    // First sample of stream: y_0 = x_0
+                    output[out_idx++] = scale(curr);
+                    last_sample_ = source[i];
+                    has_history_ = true;
+                    phase_ = 0;
+                } else if (phase_ == 0) {
+                    // Previous was even (x_{2k}), current is odd (x_{2k+1}):
+                    // y_1 = (x_{2k} + 2*x_{2k+1} + 1) / 3
+                    int64_t y1 = (last_sample_ + 2 * curr + 1) / 3;
+                    output[out_idx++] = scale(y1);
+                    last_sample_ = source[i];
+                    phase_ = 1;
+                } else {
+                    // Previous was odd (x_{2k+1}), current is even (x_{2k+2}):
+                    // y_2 = (2*x_{2k+1} + x_{2k+2} + 1) / 3
+                    // y_3 = x_{2k+2}
+                    int64_t y2 = (2 * last_sample_ + curr + 1) / 3;
+                    int64_t y3 = curr;
+                    output[out_idx++] = scale(y2);
+                    output[out_idx++] = scale(y3);
+                    last_sample_ = source[i];
+                    phase_ = 0;
+                }
+            }
         }
 
-        if (i < count_16k) {
-            int64_t x0 = source[i];
-            output[out_idx++] = scale(x0);
-            last_sample_ = source[i];
-            has_history_ = true;
-        } else if (count_16k > 0) {
-            last_sample_ = source[count_16k - 1];
-            has_history_ = true;
+        if (flush && has_history_) {
+            if (phase_ == 1) {
+                // End of stream at odd sample x_{2k+1}: extrapolate end sample as last_sample_
+                output[out_idx++] = scale(last_sample_);
+            }
+            Reset();
         }
 
         return out_idx;
     }
+
+    size_t Flush(uint32_t factor, int32_t* output) {
+        return Process(nullptr, 0, factor, output, true);
+    }
 };
 
-inline size_t PackMono16kTo24k(const int16_t* source, size_t count_16k, uint32_t factor, int32_t* output) {
+inline size_t PackMono16kTo24k(const int16_t* source, size_t count_16k, uint32_t factor, int32_t* output, bool flush = false) {
     static Resampler16kTo24k s_resampler;
-    return s_resampler.Process(source, count_16k, factor, output);
+    return s_resampler.Process(source, count_16k, factor, output, flush);
 }
 }
