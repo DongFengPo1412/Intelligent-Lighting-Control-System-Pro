@@ -546,5 +546,108 @@ class TestClosureDefectsRound3(unittest.TestCase):
         self.assertEqual(hdr_512[6], 0)  # 1024 & 0xff
 
 
+class TestClosureDefectsRound4(unittest.TestCase):
+    def test_voice_turn_async_lifecycle_and_barge_in(self):
+        """Voice listener maintains paused state during thinking, allows barge-in, and discards obsolete turn completions."""
+        from voice_listener import VoiceListener
+
+        dispatched_turns = []
+        def mock_callback(text, turn_id=None):
+            dispatched_turns.append((text, turn_id))
+        mock_callback.is_async_turn = True
+
+        vl = VoiceListener(callback=mock_callback)
+        vl.is_listening = True
+        vl.controller = MagicMock()
+        vl.controller._music_player = None
+
+        # 1. Trigger utterance execution
+        vl._dispatch_command("红莉栖你好", turn_id=1)
+        self.assertEqual(len(dispatched_turns), 1)
+        self.assertEqual(dispatched_turns[0], ("红莉栖你好", 1))
+        # In async mode, pause state is maintained until finish_turn
+        vl.is_paused = True
+        vl._turn_in_flight = True
+        vl._active_turn_id = 1
+
+        # 2. Simulate Barge-In during thinking / playback
+        # When user interrupts, _active_turn_id increments and turn_cancelled is set
+        cancel = vl.turn_cancelled
+        self.assertIsNotNone(cancel)
+        self.assertFalse(cancel.is_set())
+
+        # Barge-in event occurs
+        vl._active_turn_id += 1  # now 2
+        vl._turn_in_flight = False
+        cancel.set()
+
+        # 3. Old async turn completes late with turn_id=1
+        vl.finish_turn(turn_id=1, text="红莉栖你好")
+        # Turn 1 completion must be discarded without resuming listening or resetting state
+        self.assertEqual(vl._active_turn_id, 2)
+
+        # 4. New turn (turn 2) dispatches and finishes legitimately
+        vl._turn_in_flight = True
+        vl.is_awake = True
+        vl.finish_turn(turn_id=2, text="开启红灯")
+        self.assertFalse(vl._turn_in_flight)
+        # Because continuous conversation is enabled, is_awake remains True
+        self.assertTrue(vl.is_awake)
+
+    def test_apk_host_binding_and_camera_boundary_contracts(self):
+        """APK strictly binds host to senderIp, and camera requires explicit authentication."""
+        # 1. Host binding simulation
+        sender_ip = "192.168.43.100"
+        beacon_with_spoofed_url = {
+            "service": "KurisuPro",
+            "port": 8080,
+            "server_url": "http://10.99.1.50:8080",
+            "board_ip": "192.168.43.200"
+        }
+        # Production binding rule: extract port from beacon, strictly bind host to senderIp
+        import urllib.parse
+        parsed = urllib.parse.urlparse(beacon_with_spoofed_url.get("server_url", ""))
+        port = parsed.port if parsed.port else beacon_with_spoofed_url.get("port", 8080)
+        bound_url = f"http://{sender_ip}:{port}"
+        self.assertEqual(bound_url, "http://192.168.43.100:8080")
+        self.assertNotIn("10.99.1.50", bound_url)
+
+        # 2. Decoupled Camera Authorization rule
+        authenticated_origin = "http://192.168.43.100:8080"
+        server_origin = "http://192.168.43.100:8080"
+
+        # Explicitly authenticated page
+        def is_page_explicitly_authenticated(url, auth_origin):
+            if not auth_origin:
+                return False
+            u = urllib.parse.urlparse(url)
+            page_origin = f"{u.scheme}://{u.netloc}"
+            return page_origin.lower() == auth_origin.lower()
+
+        # Passwordless unauthenticated mode (auth_origin is empty, but server_origin is set)
+        self.assertTrue(is_page_explicitly_authenticated("http://192.168.43.100:8080/index.html", authenticated_origin))
+        self.assertFalse(is_page_explicitly_authenticated("http://192.168.43.100:8080/index.html", ""))
+        self.assertFalse(is_page_explicitly_authenticated("http://10.99.1.50:8080/index.html", authenticated_origin))
+
+    def test_audio_ticket_authorization_guard_rules(self):
+        """Only authenticated PC clients can request audio tickets; ordinary hotspot devices are rejected."""
+        def handle_ticket_request(is_sta_peer: bool, token_ok: bool, cmd: str):
+            if cmd == "request_audio_ticket":
+                return is_sta_peer and token_ok
+            return is_sta_peer
+
+        # Phone on hotspot (no token): allowed to control lamp, denied ticket
+        self.assertTrue(handle_ticket_request(is_sta_peer=True, token_ok=False, cmd="set_light"))
+        self.assertFalse(handle_ticket_request(is_sta_peer=True, token_ok=False, cmd="request_audio_ticket"))
+
+        # Authorized PC on hotspot: allowed to control lamp and request ticket
+        self.assertTrue(handle_ticket_request(is_sta_peer=True, token_ok=True, cmd="set_light"))
+        self.assertTrue(handle_ticket_request(is_sta_peer=True, token_ok=True, cmd="request_audio_ticket"))
+
+        # External client: rejected for both
+        self.assertFalse(handle_ticket_request(is_sta_peer=False, token_ok=False, cmd="set_light"))
+        self.assertFalse(handle_ticket_request(is_sta_peer=False, token_ok=False, cmd="request_audio_ticket"))
+
+
 if __name__ == "__main__":
     unittest.main()

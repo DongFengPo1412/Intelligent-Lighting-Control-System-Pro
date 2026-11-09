@@ -61,6 +61,10 @@ bool NetworkAudio::CreateAudioTicket(struct in_addr ip, char* out_ticket_64) {
     out_ticket_64[64] = '\0';
     if (!tx_) tx_ = xSemaphoreCreateMutex();
     if (tx_) xSemaphoreTake(tx_, portMAX_DELAY);
+    if (audio_ticket_[0] != '\0' && ticket_expire_ms_ > now_ms() && ticket_ip_.s_addr != ip.s_addr) {
+        if (tx_) xSemaphoreGive(tx_);
+        return false;
+    }
     memcpy(audio_ticket_, out_ticket_64, 65);
     ticket_ip_ = ip;
     ticket_expire_ms_ = now_ms() + 30000;
@@ -80,6 +84,7 @@ bool NetworkAudio::CheckAudioTicket(const char* token, struct in_addr ip) {
             if (diff == 0) {
                 match = true;
                 audio_ticket_[0] = '\0';
+                ticket_expire_ms_ = 0;
             }
         }
     }

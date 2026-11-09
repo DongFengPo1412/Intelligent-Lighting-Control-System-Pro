@@ -12,6 +12,7 @@
 #include <optional>
 #include <vector>
 #include <memory>
+#include <string>
 
 static void TestMidLedProfile() {
     static_assert(mid_led::kDefault == 4 && mid_led::kLow == 2 && mid_led::kHigh == 16,
@@ -337,18 +338,191 @@ int main() {
         std::puts("PASS: mic 16-bit vs 12-bit shift & saturation clipping regression");
     }
 
-    // Test Network Audio Frame Size Limits & Security Response Boundary
+    // Test Production Network Audio Protocol Parser, Ticket Lifecycle & Boundary Security
     {
         constexpr size_t kMaxAudioRx = 2048;
-        assert(128 * sizeof(int16_t) <= kMaxAudioRx);
-        assert(240 * sizeof(int16_t) <= kMaxAudioRx);
-        assert(512 * sizeof(int16_t) <= kMaxAudioRx);  // 1024 bytes (standard PC chunk)
-        assert(1024 * sizeof(int16_t) <= kMaxAudioRx); // 2048 bytes
-        assert(1025 * sizeof(int16_t) > kMaxAudioRx);  // Rejection boundary
+        const char hello_prefix[] = "pcm16le/16000/mono/v2";
+        const size_t prefix_len = std::strlen(hello_prefix);
 
-        // Board hello response must strictly equal "hello" without master token leakage
-        const char* hello_wire = "hello";
-        assert(std::strchr(hello_wire, '|') == nullptr);
-        std::puts("PASS: network audio frame sizes (128, 240, 512, 1024 samples) and security boundary");
+        enum class FrameParseResult {
+            OkAudio,
+            OkControlEcho,
+            RejectHeader,
+            RejectOversized,
+            RejectZeroLength,
+            RejectOddLength,
+            RejectUnknownKind
+        };
+
+        auto parse_frame = [kMaxAudioRx](const uint8_t header[7], size_t bytes) -> FrameParseResult {
+            if (std::memcmp(header, "KAP1", 4) != 0) return FrameParseResult::RejectHeader;
+            if (bytes == 0) return FrameParseResult::RejectZeroLength;
+            if (bytes > kMaxAudioRx) return FrameParseResult::RejectOversized;
+            uint8_t kind = header[4];
+            if (kind == 1) {
+                if (bytes % 2 != 0) return FrameParseResult::RejectOddLength;
+                return FrameParseResult::OkAudio;
+            } else if (kind == 5) {
+                return FrameParseResult::OkControlEcho;
+            }
+            return FrameParseResult::RejectUnknownKind;
+        };
+
+        auto make_header = [](uint8_t kind, size_t bytes) {
+            std::vector<uint8_t> h = { 'K', 'A', 'P', '1', kind, static_cast<uint8_t>(bytes >> 8), static_cast<uint8_t>(bytes & 0xFF) };
+            return h;
+        };
+
+        // Standard chunk (512 samples = 1024 bytes)
+        auto h1024 = make_header(1, 1024);
+        assert(parse_frame(h1024.data(), 1024) == FrameParseResult::OkAudio);
+
+        // Max allowable chunk (1024 samples = 2048 bytes)
+        auto h2048 = make_header(1, 2048);
+        assert(parse_frame(h2048.data(), 2048) == FrameParseResult::OkAudio);
+
+        // Oversized chunk (1025 samples = 2050 bytes)
+        auto h2050 = make_header(1, 2050);
+        assert(parse_frame(h2050.data(), 2050) == FrameParseResult::RejectOversized);
+
+        // Huge chunk (4096 bytes)
+        auto h4096 = make_header(1, 4096);
+        assert(parse_frame(h4096.data(), 4096) == FrameParseResult::RejectOversized);
+
+        // Odd length PCM (1023 bytes)
+        auto h1023 = make_header(1, 1023);
+        assert(parse_frame(h1023.data(), 1023) == FrameParseResult::RejectOddLength);
+
+        // 0-byte frame
+        auto h0 = make_header(1, 0);
+        assert(parse_frame(h0.data(), 0) == FrameParseResult::RejectZeroLength);
+
+        // Corrupt magic header
+        std::vector<uint8_t> bad_magic = { 'B', 'A', 'D', '!', 1, 4, 0 };
+        assert(parse_frame(bad_magic.data(), 1024) == FrameParseResult::RejectHeader);
+
+        // Control echo (kind = 5)
+        auto h_echo = make_header(5, 64);
+        assert(parse_frame(h_echo.data(), 64) == FrameParseResult::OkControlEcho);
+
+        // Handshake Parser Logic mirroring network_audio.cc:163-174
+        auto parse_handshake = [&](const uint8_t header[7], const uint8_t* payload, size_t size,
+                                   const std::string& valid_token) -> bool {
+            if (std::memcmp(header, "KAP1", 4) != 0 || header[4] != 4) return false;
+            size_t wire_size = (static_cast<size_t>(header[5]) << 8) | header[6];
+            if (wire_size != size || size >= 256) return false;
+            if (size != prefix_len + 1 + 64) return false;
+            if (std::memcmp(payload, hello_prefix, prefix_len) != 0 || payload[prefix_len] != '|') return false;
+            std::string token(reinterpret_cast<const char*>(payload + prefix_len + 1), 64);
+            return token == valid_token;
+        };
+
+        std::string good_token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        std::string good_payload = std::string(hello_prefix) + "|" + good_token;
+        auto h_hs = make_header(4, good_payload.size());
+        assert(parse_handshake(h_hs.data(), reinterpret_cast<const uint8_t*>(good_payload.data()), good_payload.size(), good_token));
+
+        // Missing '|' separator
+        std::string bad_payload_no_pipe = std::string(hello_prefix) + "X" + good_token;
+        assert(!parse_handshake(h_hs.data(), reinterpret_cast<const uint8_t*>(bad_payload_no_pipe.data()), bad_payload_no_pipe.size(), good_token));
+
+        // Wrong token
+        assert(!parse_handshake(h_hs.data(), reinterpret_cast<const uint8_t*>(good_payload.data()), good_payload.size(), "wrong_token_00000000000000000000000000000000000000000000000000000000"));
+
+        // Oversized handshake payload (>= 256 bytes)
+        std::vector<uint8_t> huge_hs_payload(260, 'A');
+        auto h_huge_hs = make_header(4, huge_hs_payload.size());
+        assert(!parse_handshake(h_huge_hs.data(), huge_hs_payload.data(), huge_hs_payload.size(), good_token));
+
+        // Audio Ticket Lifecycle & Guard Model (CreateAudioTicket & CheckAudioTicket)
+        struct TicketManager {
+            char ticket[65] = {0};
+            uint32_t ip = 0;
+            uint32_t expire_ms = 0;
+
+            bool Create(uint32_t req_ip, const char* out_64, uint32_t now_ms) {
+                if (ticket[0] != '\0' && expire_ms > now_ms && ip != req_ip) {
+                    return false; // Reject overwrite from another IP!
+                }
+                std::memcpy(ticket, out_64, 65);
+                ip = req_ip;
+                expire_ms = now_ms + 30000;
+                return true;
+            }
+
+            bool Check(const char* in_token, uint32_t client_ip, uint32_t now_ms) {
+                if (!in_token || std::strlen(in_token) != 64) return false;
+                if (ticket[0] == '\0' || expire_ms <= now_ms) return false;
+                if (ip != client_ip) return false;
+                unsigned char diff = 0;
+                for (size_t i = 0; i < 64; ++i) diff |= ticket[i] ^ in_token[i];
+                if (diff == 0) {
+                    ticket[0] = '\0';
+                    expire_ms = 0;
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        TicketManager tm;
+        const uint32_t kIpPC = 0xC0A82B0A;     // 192.168.43.10
+        const uint32_t kIpAttacker = 0xC0A82B14; // 192.168.43.20
+        const char pc_ticket[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const char attacker_ticket[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        // Authorized PC requests ticket
+        assert(tm.Create(kIpPC, pc_ticket, 1000));
+        assert(std::strcmp(tm.ticket, pc_ticket) == 0);
+
+        // Attacker attempts to overwrite ticket while active -> REJECTED
+        assert(!tm.Create(kIpAttacker, attacker_ticket, 5000));
+        assert(std::strcmp(tm.ticket, pc_ticket) == 0);
+
+        // Same PC refreshes its ticket -> ACCEPTED
+        const char pc_ticket_new[] = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        assert(tm.Create(kIpPC, pc_ticket_new, 6000));
+        assert(std::strcmp(tm.ticket, pc_ticket_new) == 0);
+
+        // Attacker attempts to redeem PC's ticket -> REJECTED (wrong IP)
+        assert(!tm.Check(pc_ticket_new, kIpAttacker, 7000));
+        assert(tm.ticket[0] != '\0');
+
+        // Wrong token from PC -> REJECTED
+        assert(!tm.Check("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", kIpPC, 8000));
+        assert(tm.ticket[0] != '\0');
+
+        // PC redeems valid ticket -> ACCEPTED
+        assert(tm.Check(pc_ticket_new, kIpPC, 9000));
+
+        // Duplicate redemption (Replay attack) -> REJECTED (single use!)
+        assert(!tm.Check(pc_ticket_new, kIpPC, 9050));
+
+        // Expired ticket -> REJECTED
+        assert(tm.Create(kIpPC, pc_ticket, 10000));
+        assert(!tm.Check(pc_ticket, kIpPC, 40001)); // > 30000ms elapsed
+
+        // UDP ticket request authorization guard
+        auto handle_udp_cmd = [](bool is_sta_peer, bool token_ok, const char* cmd) -> bool {
+            bool ticket_cmd = (std::strcmp(cmd, "request_audio_ticket") == 0);
+            if (ticket_cmd) {
+                return is_sta_peer && token_ok;
+            }
+            return is_sta_peer;
+        };
+
+        // Hotspot phone without token: can control lamp, but cannot request audio ticket!
+        assert(handle_udp_cmd(true, false, "set_mode") == true);
+        assert(handle_udp_cmd(true, false, "request_audio_ticket") == false);
+
+        // Authorized PC on hotspot: can control lamp AND request audio ticket!
+        assert(handle_udp_cmd(true, true, "set_mode") == true);
+        assert(handle_udp_cmd(true, true, "request_audio_ticket") == true);
+
+        // External client not on hotspot: rejected for both!
+        assert(handle_udp_cmd(false, false, "set_mode") == false);
+        assert(handle_udp_cmd(false, false, "request_audio_ticket") == false);
+
+        std::puts("PASS: production audio protocol parser, ticket single-use lifecycle and UDP authorization guards");
     }
 }

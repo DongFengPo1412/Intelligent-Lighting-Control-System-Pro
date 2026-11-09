@@ -395,7 +395,7 @@ void WifiManager::UdpServerTaskLoop()
             bool frame_query = (strcmp(cmd_name, "frame") == 0);
             bool arcade_cmd = (strcasecmp(cmd_name, "arcade") == 0);
             bool ticket_cmd = (strcasecmp(cmd_name, "request_audio_ticket") == 0);
-            if (ticket_cmd) ok = is_sta_peer;
+            if (ticket_cmd) ok = is_sta_peer && token_ok;
 
             char ack[512];
             const int ack_length=snprintf(ack, sizeof(ack),
@@ -484,10 +484,12 @@ void WifiManager::UdpServerTaskLoop()
             } else if (ticket_cmd) {
                 static char ticket_ack[256];
                 char ticket[65] = {0};
-                bool ticket_ok = is_sta_peer && NetworkAudio::GetInstance().CreateAudioTicket(source_addr.sin_addr, ticket);
+                bool ticket_ok = is_sta_peer && token_ok && NetworkAudio::GetInstance().CreateAudioTicket(source_addr.sin_addr, ticket);
                 snprintf(ticket_ack, sizeof(ticket_ack),
-                    "{\"request_id\":\"%s\",\"status\":\"%s\",\"audio_ticket\":\"%s\"}\n",
-                    id, ticket_ok ? "ok" : "error", ticket_ok ? ticket : "");
+                    "{\"request_id\":\"%s\",\"status\":\"%s\",%s\"audio_ticket\":\"%s\"}\n",
+                    id, ticket_ok ? "ok" : "error",
+                    ticket_ok ? "" : "\"error\":\"pairing_required\",",
+                    ticket_ok ? ticket : "");
                 send_buf = ticket_ack;
             }
 

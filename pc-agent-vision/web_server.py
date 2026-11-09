@@ -796,19 +796,21 @@ async def handle_ceremony(request: web.Request):
 # ==========================================
 # 全自动麦克风免触语音拾音交互链路
 # ==========================================
-def on_voice_detected(speech_text: str):
+def on_voice_detected(speech_text: str, turn_id: Optional[int] = None):
     """当麦克风检测到用户说话时的回调"""
-    global server_loop
+    global server_loop, listener
     if globals().get('shutting_down', False):
         print("[WebServer] 关停中，丢弃新的免触语音输入。")
         return
     if not speech_text or not speech_text.strip():
         return
-    print(f"\n[免触麦克风输入]: {speech_text}")
+    if turn_id is None and listener is not None:
+        turn_id = getattr(listener, '_active_turn_id', 0)
+    print(f"\n[免触麦克风输入]: {speech_text} (turn={turn_id})")
     if server_loop and not server_loop.is_closed():
         # The ASR worker stays responsive. Inference and playback are managed asynchronously.
         # This callback runs on the ASR thread, never block with future.result().
-        future = asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text), server_loop)
+        future = asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text, turn_id=turn_id), server_loop)
         def _on_voice_done(fut):
             try:
                 exc = fut.exception()
@@ -818,10 +820,14 @@ def on_voice_detected(speech_text: str):
                 pass
         future.add_done_callback(_on_voice_done)
 
-async def process_voice_interaction(speech_text: str):
+on_voice_detected.is_async_turn = True
+
+async def process_voice_interaction(speech_text: str, turn_id: Optional[int] = None):
     """异步执行大模型思考并向全端广播"""
     global listener, agent
     if globals().get('shutting_down', False):
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
     try:
         cancel = getattr(listener, 'turn_cancelled', None) if listener else None
@@ -840,6 +846,9 @@ async def process_voice_interaction(speech_text: str):
         })
     except Exception as e:
         print(f"[免触语音交互异常]: {e}")
+    finally:
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
 
 # ==========================================
 # 主启动器

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <atomic>
+#include <vector>
 #include "audio_priority.h"
 #include "game_audio_stream.h"
 #include "audio_sample_format.h"
@@ -63,6 +64,10 @@ public:
 
     // 硬件状态查询
     bool IsInitialized() const { return initialized_; }
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+    uint32_t GetAfeProcessedSamples() const { return afe_processed_samples_.load(); }
+    uint32_t GetAfeFallbackSamples() const { return afe_fallback_samples_.load(); }
+#endif
 
 private:
     AudioHAL();
@@ -93,5 +98,11 @@ private:
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     const esp_afe_sr_iface_t* afe_iface_ = nullptr;
     esp_afe_sr_data_t* afe_data_ = nullptr;
+    std::vector<int16_t> afe_in_buf_;
+    std::vector<int16_t> afe_out_buf_;
+    int afe_feed_chunk_ = 0;
+    int afe_fetch_chunk_ = 0;
+    std::atomic<uint32_t> afe_processed_samples_{0};
+    std::atomic<uint32_t> afe_fallback_samples_{0};
 #endif
 };

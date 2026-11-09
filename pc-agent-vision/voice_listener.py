@@ -33,6 +33,8 @@ if not os.environ.get("HTTP_PROXY") and not os.environ.get("http_proxy"):
 
 class VoiceListener:
     INCOMPLETE_PREFIXES = {"我想看", "想看", "要看", "我要看", "帮我开", "帮我换", "换成", "改成", "把灯", "切换到", "显示", "展示"}
+    _active_turn_id = 0
+    _turn_in_flight = False
     def __init__(self, callback: Optional[Callable[[str], None]] = None):
         self.callback = callback
 
@@ -81,6 +83,8 @@ class VoiceListener:
         self._barge_pending = None
         self._barge_woke = False
         self.turn_cancelled = None
+        self._active_turn_id = 0
+        self._turn_in_flight = False
         self._wake_ack_active = False
         self._music_monitor = False
         self._music_suspended = False
@@ -704,26 +708,44 @@ class VoiceListener:
                     print(f"[执行指令]: \"{cmd_to_exec}\"")
                     self._update_board_led("thinking")
                     self.pause()
-                    try:
-                        self._dispatch_command(cmd_to_exec)
-                    finally:
-                        self._finish_turn(cmd_to_exec)
+                    is_async = bool(getattr(self.callback, 'is_async_turn', False))
+                    if is_async:
+                        self._active_turn_id += 1
+                        self._turn_in_flight = True
+                        cur_turn = self._active_turn_id
+                        try:
+                            self._dispatch_command(cmd_to_exec, turn_id=cur_turn)
+                        except Exception:
+                            self._turn_in_flight = False
+                            self._finish_turn(cmd_to_exec)
+                            raise
+                    else:
+                        try:
+                            self._dispatch_command(cmd_to_exec)
+                        finally:
+                            self._finish_turn(cmd_to_exec)
 
             except Exception as e:
                 print(f"[VoiceListener 处理异常]: {e}")
                 self._update_board_led("listening")
 
-    def _dispatch_command(self, text):
+    def _dispatch_command(self, text, turn_id=None):
         # Recognition owns _work_lock, but inference/playback must not hold it:
         # the independent wake worker needs the same recognizer to interrupt.
         self.turn_cancelled = threading.Event()
-        print('[语音状态] thinking: 新一轮开始')
-        self._work_lock.release()
+        print(f'[语音状态] thinking: 新一轮开始 (turn={turn_id or self._active_turn_id})')
+        had_lock = self._work_lock.locked()
+        if had_lock:
+            self._work_lock.release()
         try:
             if self.callback:
-                self.callback(text)
+                try:
+                    self.callback(text, turn_id=turn_id)
+                except TypeError:
+                    self.callback(text)
         finally:
-            self._work_lock.acquire()
+            if had_lock:
+                self._work_lock.acquire()
 
     def _check_barge(self, pcm):
         # The experimental duplex path keeps the same two-stage wake gate.
@@ -766,6 +788,8 @@ class VoiceListener:
             # Retain an acoustically AND text-confirmed attached command, as in
             # the existing music wake path. Standalone wake opens a new turn.
             self._barge_pending=pcm if len(command)>=2 else None
+            self._active_turn_id += 1
+            self._turn_in_flight = False
             cancel = getattr(self, 'turn_cancelled', None)
             if cancel is not None:cancel.set()
             audio=getattr(self.controller,'_network_audio',None)
@@ -811,6 +835,17 @@ class VoiceListener:
             except queue.Full:pass
         self._update_board_led('active' if self.is_awake else 'listening')
         print('[语音状态] ' + ('listening: 回答结束，继续收音' if self.is_awake else 'standby: 会话结束，等待唤醒'))
+
+    def finish_turn(self, turn_id: Optional[int] = None, text: str = ""):
+        """从异步链路（思考完成或打断清理）收尾本轮会话"""
+        with self._work_lock:
+            if turn_id is not None and turn_id != self._active_turn_id:
+                print(f"[语音状态] discarded: 丢弃过时或已取消轮次回执 (turn_id={turn_id}, active={self._active_turn_id})")
+                return
+            if turn_id is not None and not self._turn_in_flight:
+                return
+            self._turn_in_flight = False
+            self._finish_turn(text)
 
     def _watchdog_loop(self):
         """后台看门狗：空闲超时检测，以及核心工作线程存活监测与受控自愈"""
@@ -1232,6 +1267,8 @@ class VoiceListener:
             self._pending_prefix = ""
             self._is_processing = False
             self.turn_cancelled = None
+            self._active_turn_id = 0
+            self._turn_in_flight = False
             self._barge_woke = False
             self._barge_pending = None
             if hasattr(self, '_barge_audio'):self._barge_audio.clear()

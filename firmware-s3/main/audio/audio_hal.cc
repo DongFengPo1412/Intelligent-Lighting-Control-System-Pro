@@ -269,17 +269,23 @@ esp_err_t AudioHAL::Init(
     afe_config_t* afe_config = afe_config_init("M", nullptr, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
     if (afe_config) {
         afe_config->aec_init = false;
-        afe_config->vad_init = false;
-        afe_config->ns_init = false;
+        afe_config->vad_init = true;
+        afe_config->vad_mode = VAD_MODE_0;
+        afe_config->vad_model_name = nullptr;
+        afe_config->vad_min_noise_ms = 100;
+        afe_config->ns_init = true;
+        afe_config->afe_ns_mode = AFE_NS_MODE_WEBRTC;
+        afe_config->ns_model_name = nullptr;
         afe_config->agc_init = false;
         afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
         afe_iface_ = esp_afe_handle_from_config(afe_config);
         if (afe_iface_) {
             afe_data_ = afe_iface_->create_from_config(afe_config);
             if (afe_data_) {
-                ESP_LOGI(TAG, "ESP-SR AFE initialized (feed_chunk=%d, fetch_chunk=%d)",
-                         afe_iface_->get_feed_chunksize(afe_data_),
-                         afe_iface_->get_fetch_chunksize(afe_data_));
+                afe_feed_chunk_ = afe_iface_->get_feed_chunksize(afe_data_);
+                afe_fetch_chunk_ = afe_iface_->get_fetch_chunksize(afe_data_);
+                ESP_LOGI(TAG, "ESP-SR AFE initialized: WebRTC NS + VAD (feed_chunk=%d, fetch_chunk=%d)",
+                         afe_feed_chunk_, afe_fetch_chunk_);
             } else {
                 ESP_LOGW(TAG, "ESP-SR AFE create_from_config failed, fallback to raw PCM");
             }
@@ -296,6 +302,13 @@ esp_err_t AudioHAL::Init(
 esp_err_t AudioHAL::EnableMic(bool enable) {
     if (enable && (!initialized_ || !rx_chan_)) return ESP_ERR_INVALID_STATE;
     mic_enabled_ = enable;
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+    if (!enable && afe_iface_ && afe_data_) {
+        afe_iface_->reset_buffer(afe_data_);
+        afe_in_buf_.clear();
+        afe_out_buf_.clear();
+    }
+#endif
     return ESP_OK;
 }
 
@@ -462,13 +475,14 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
 #endif
     static uint32_t s_total_samples = 0;
     static uint32_t s_clipped_samples = 0;
+    int16_t shifted_buf[256];
     for (size_t i = 0; i < count; ++i) {
         int32_t value = bit32_buffer[i] >> kMicShift;
         if (value > INT16_MAX || value < -INT16_MAX) {
             s_clipped_samples++;
         }
         s_total_samples++;
-        dest_buf[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
+        shifted_buf[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
     }
     if (s_total_samples >= 160000) {
         ESP_LOGD(TAG, "MIC (shift=%d) clipping rate: %.2f%% (%u/%u)",
@@ -480,19 +494,31 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
 
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     if (afe_iface_ && afe_data_ && count > 0) {
-        int feed_chunk = afe_iface_->get_feed_chunksize(afe_data_);
-        if (feed_chunk > 0 && (int)count >= feed_chunk) {
-            for (size_t offset = 0; offset + feed_chunk <= count; offset += feed_chunk) {
-                afe_iface_->feed(afe_data_, dest_buf + offset);
-                afe_fetch_result_t* res = afe_iface_->fetch_with_delay(afe_data_, 0);
-                if (res && res->ret_value == ESP_OK && res->data && res->data_size > 0) {
-                    size_t out_samples = res->data_size / sizeof(int16_t);
-                    size_t copy_samples = std::min(out_samples, (size_t)feed_chunk);
-                    memcpy(dest_buf + offset, res->data, copy_samples * sizeof(int16_t));
-                }
+        afe_in_buf_.insert(afe_in_buf_.end(), shifted_buf, shifted_buf + count);
+        while (afe_feed_chunk_ > 0 && afe_in_buf_.size() >= (size_t)afe_feed_chunk_) {
+            afe_iface_->feed(afe_data_, afe_in_buf_.data());
+            afe_in_buf_.erase(afe_in_buf_.begin(), afe_in_buf_.begin() + afe_feed_chunk_);
+            afe_fetch_result_t* res = afe_iface_->fetch_with_delay(afe_data_, 0);
+            while (res && res->ret_value == ESP_OK && res->data && res->data_size > 0) {
+                size_t out_samples = res->data_size / sizeof(int16_t);
+                afe_out_buf_.insert(afe_out_buf_.end(), (const int16_t*)res->data, (const int16_t*)res->data + out_samples);
+                res = afe_iface_->fetch_with_delay(afe_data_, 0);
             }
         }
+        if (afe_out_buf_.size() >= count) {
+            memcpy(dest_buf, afe_out_buf_.data(), count * sizeof(int16_t));
+            afe_out_buf_.erase(afe_out_buf_.begin(), afe_out_buf_.begin() + count);
+            afe_processed_samples_.fetch_add(count, std::memory_order_relaxed);
+        } else {
+            // Cold start priming fallback (preserve throughput without blocking)
+            memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
+            afe_fallback_samples_.fetch_add(count, std::memory_order_relaxed);
+        }
+    } else {
+        memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
     }
+#else
+    memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
 #endif
 
     if (samples_read) {

@@ -518,6 +518,8 @@ class ListenerLifecycleTests(unittest.TestCase):
         listener._work_lock = threading.Lock()
         listener._pending_prefix = ""
         listener._speech_active = False
+        listener._active_turn_id = 0
+        listener._turn_in_flight = False
         listener.is_awake = False
         listener.session = ConversationSession(continuous=False)
         listener.duplex = False

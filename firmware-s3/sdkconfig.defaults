@@ -10,3 +10,5 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # Full 256-pixel canvas commands exceed a 1500-byte Ethernet MTU once wrapped
 # for acknowledged UDP delivery. Accept their IPv4 fragments before parsing.
 CONFIG_LWIP_IP4_REASSEMBLY=y
+CONFIG_AUDIO_MIC_SHIFT_16=y
+CONFIG_AUDIO_ENABLE_AFE=y

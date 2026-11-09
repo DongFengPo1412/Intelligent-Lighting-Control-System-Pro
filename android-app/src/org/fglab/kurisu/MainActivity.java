@@ -184,6 +184,15 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    public boolean isPageExplicitlyAuthenticated(WebView view) {
+        if (view == null) return false;
+        String current = view.getUrl();
+        if (current == null || isOfflinePage(current)) return false;
+        Uri uri = Uri.parse(current);
+        String origin = new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
+        return !authenticatedOrigin.isEmpty() && authenticatedOrigin.equalsIgnoreCase(origin);
+    }
+
     private boolean trustedPage(WebView view) {
         String current = view.getUrl();
         if (current == null) return false;
@@ -474,11 +483,15 @@ public class MainActivity extends Activity {
                         org.json.JSONObject json = new org.json.JSONObject(text);
                         if ("KurisuPro".equals(json.optString("service"))) {
                             int port = json.optInt("port", 8080);
-                            String sUrl = json.optString("server_url", "http://" + senderIp + ":" + port);
-                            if (sUrl == null || sUrl.isEmpty() || !sUrl.startsWith("http")) {
-                                sUrl = "http://" + senderIp + ":" + port;
+                            String rawUrl = json.optString("server_url", "");
+                            if (rawUrl != null && !rawUrl.isEmpty()) {
+                                try {
+                                    java.net.URI u = new java.net.URI(rawUrl);
+                                    if (u.getPort() > 0 && u.getPort() <= 65535) port = u.getPort();
+                                } catch (Exception ignored) {}
                             }
-                            foundServerUrl = sUrl;
+                            // Strictly bind host to actual packet senderIp
+                            foundServerUrl = "http://" + senderIp + ":" + port;
                             String bIp = json.optString("board_ip", "");
                             if (BridgePolicy.privateIpv4(bIp)) foundBoardIp = bIp;
                             break;
@@ -495,6 +508,7 @@ public class MainActivity extends Activity {
                 try {
                     java.net.URL healthUrl = new java.net.URL(foundServerUrl + "/api/health");
                     java.net.HttpURLConnection conn = (java.net.HttpURLConnection) healthUrl.openConnection();
+                    conn.setInstanceFollowRedirects(false);
                     conn.setConnectTimeout(800);
                     conn.setReadTimeout(800);
                     conn.setRequestMethod("GET");
@@ -502,9 +516,13 @@ public class MainActivity extends Activity {
                     if (code == 200) {
                         try (java.io.InputStream in = conn.getInputStream();
                              java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+                            long deadlineRead = System.nanoTime() + 800_000_000L;
                             byte[] buf = new byte[256];
-                            int r = in.read(buf);
-                            if (r > 0) out.write(buf, 0, r);
+                            int r;
+                            while (System.nanoTime() < deadlineRead && (r = in.read(buf)) != -1) {
+                                out.write(buf, 0, r);
+                                if (out.size() > 16384) break;
+                            }
                             String body = out.toString("UTF-8");
                             org.json.JSONObject obj = new org.json.JSONObject(body);
                             if (!"ok".equals(obj.optString("status")) || !"KurisuPro".equals(obj.optString("service"))) {
@@ -642,7 +660,7 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public boolean startFrontCamera(final String uploadUrl, final String mode) {
             if (backgrounded || destroyed) return false;
-            if (authenticatedOrigin == null || authenticatedOrigin.isEmpty() || !isPageAuthenticated(webView)) {
+            if (authenticatedOrigin == null || authenticatedOrigin.isEmpty() || !isPageExplicitlyAuthenticated(webView)) {
                 android.util.Log.w("MainActivity", "Camera upload rejected: page is not authenticated");
                 return false;
             }
