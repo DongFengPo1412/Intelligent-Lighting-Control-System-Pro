@@ -73,15 +73,20 @@ class KurisuAgent:
     def _execute_action(self, name, arguments):
         cancel=getattr(self,'_cancel_turn',None)
         if cancel and cancel.is_set():return {'status':'error','error':'turn_cancelled'}
+        target_gid = None
         if name == 'start_game':
+            target_gid = arguments.get('game')
+        elif name == 'set_light_mode' and arguments.get('mode') in (19, 21):
+            target_gid = 33 if arguments.get('mode') == 19 else 41
+
+        if target_gid is not None:
             last_msg = getattr(self, '_current_user_message', '')
             if last_msg:
                 from semantic_control import extract_negated_games
                 all_neg, neg_games = extract_negated_games(last_msg)
-                game_val = arguments.get('game')
                 from arcade_catalog import resolve_arcade_game
-                res = resolve_arcade_game(game_val)
-                gid = res[0] if res else (int(game_val) if str(game_val).isdigit() else None)
+                res = resolve_arcade_game(target_gid)
+                gid = res[0] if res else (int(target_gid) if str(target_gid).isdigit() else None)
                 if all_neg or (gid and gid in neg_games):
                     print(f"[安全拦截] 阻止执行与本轮用户明确否定冲突的游戏指令: {name}={arguments}")
                     return {'status': 'error', 'error': 'negated_by_user', 'message': f'Game #{gid} was negated by user'}

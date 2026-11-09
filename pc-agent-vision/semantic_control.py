@@ -98,7 +98,7 @@ def extract_negated_games(text: str) -> Tuple[bool, Set[int]]:
     pattern = (
         r'(?:不要|别|不想|不用|不玩|别玩|停止|退出|关掉|结束|不是|先不要|先别|暂不|千万别|绝不|禁止|不要启动|别启动)'
         r'\s*(?:启动|打开|开启|玩|运行)?\s*(?:街机|游戏|卡带)?\s*'
-        r'([#＃]\d{1,3}|第\s*[0-9一二三四五六七八九十百两]+[款个号关]?|[0-9一二三四五六七八九十百两]+[号款关]|(?:小?游戏|街机|卡带)|[^\s，,。；;！!]+?)(?:小?游戏|街机|卡带)?'
+        r'([#＃]\d{1,3}|第\s*[0-9一二三四五六七八九十百两]+[款个号关]?|[0-9]{1,3}|[零一二三四五六七八九十百两]+[号款关]?|(?:小?游戏|街机|卡带)|[^\s，,。；;！!]+?)(?:小?游戏|街机|卡带)?'
     )
     for m in re.finditer(pattern, text):
         target = m.group(1).strip()
@@ -132,7 +132,12 @@ def from_wire(wire, user_text=None):
             return {'kind': 'clarify', 'actions': []}
         actions.append({'tool': 'start_countdown', 'value': wire['timer_seconds']})
     elif mode is not None:
-        actions.append({'tool': 'set_light_mode', 'value': mode})
+        if mode == 19:
+            actions.append({'tool': 'start_game', 'value': 33})
+        elif mode == 21:
+            actions.append({'tool': 'start_game', 'value': 41})
+        else:
+            actions.append({'tool': 'set_light_mode', 'value': mode})
     if wire['timer_seconds'] and mode != 25:
         raise ValueError('Timer duration without timer intent')
     for field, tool in [('brightness', 'set_brightness'), ('volume', 'set_volume')]:
@@ -169,6 +174,13 @@ def validate_plan(plan, user_text=None):
         tool, value = action['tool'], action['value']
         if type(value) is not int:
             raise ValueError('Action value must be an integer')
+        # Normalize legacy mode 19/21 to formal arcade game IDs 33/41
+        if tool == 'set_light_mode' and value == 19:
+            tool, value = 'start_game', 33
+            action = {'tool': 'start_game', 'value': 33}
+        elif tool == 'set_light_mode' and value == 21:
+            tool, value = 'start_game', 41
+            action = {'tool': 'start_game', 'value': 41}
         valid = ((tool == 'set_light_mode' and value in EFFECTS and value != 25) or
                  (tool == 'start_countdown' and 1 <= value <= 86400) or
                  (tool == 'set_brightness' and 1 <= value <= 60) or
@@ -479,14 +491,8 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                 return from_wire(wire, user_text=text)
             except (ValueError, TypeError, KeyError) as error:
                 if attempt:
-                    # On final attempt, if failing due to negation, strip the forbidden game action
-                    all_neg, neg_ids = extract_negated_games(text)
-                    if (all_neg or neg_ids) and isinstance(wire, dict):
-                        actions = [a for a in wire.get('actions', []) if not (a.get('tool') == 'start_game' and (all_neg or a.get('value') in neg_ids))]
-                        if actions:
-                            return {'kind': 'control', 'actions': actions}
-                        return {'kind': 'chat', 'actions': []}
-                    raise
+                    # Final attempt failed validation: never return unvalidated actions.
+                    raise ValueError(f"Semantic plan failed validation after retry: {error}")
                 payload['messages'] += [{'role': 'assistant', 'content': raw}, {'role': 'user',
                     'content': f'计划校验失败：{error}。纠正你的计划，只保留原用户请求的操作，不添加设置，严禁执行被用户否定的操作。'}]
 

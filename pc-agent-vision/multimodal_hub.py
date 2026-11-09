@@ -174,11 +174,14 @@ class MultimodalHub:
 
     def _is_frame_valid(self, frame_meta=None):
         """Check whether in-flight frame still belongs to the active session and epoch."""
+        if frame_meta is None:
+            # Allow explicit synthetic/simulation observation injection
+            if getattr(self.controller, "port", None) == "SIMULATION" or not self.started:
+                return True
+            return self.started and not self.stop_event.is_set()
+        source, session_id, epoch = frame_meta
         if not self.started or self.stop_event.is_set():
             return False
-        if frame_meta is None:
-            return True
-        source, session_id, epoch = frame_meta
         if self.source != source:
             return False
         if self.session_epoch != epoch:
@@ -443,9 +446,13 @@ class MultimodalHub:
                         observation.get("success", observation.get("frustration", 0) <= 0.6),
                     )
                 )
+                if not self._is_frame_valid(frame_meta):
+                    return
                 self.controller.performance(
                     reaction, observation.get("frustration", 0), game_success
                 )
+                if not self._is_frame_valid(frame_meta):
+                    return
                 if game_mode == 19:
                     dx, dy = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}[
                         direction

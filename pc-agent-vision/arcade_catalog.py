@@ -143,6 +143,13 @@ def find_arcade_games(text: str) -> set:
         if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
             found.add(val)
 
+    # Recognize bare numbers in arcade commands: (启动/打开/开启/玩/运行/切换到/选/进/去玩/卡带/小?游戏/街机) + (41 / 四十一)
+    for m in re.finditer(r'(?:启动|打开|开启|玩|运行|切换到|选|进|去玩|卡带|小?游戏|街机)\s*([0-9]{1,3}|[零一二三四五六七八九十百两]+)|([0-9]{1,3}|[零一二三四五六七八九十百两]+)\s*(?:小?游戏|街机|卡带)', norm):
+        num_str = m.group(1) or m.group(2)
+        val = parse_chinese_number_1_to_100(num_str)
+        if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
+            found.add(val)
+
     return found
 
 
@@ -174,6 +181,7 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
 
     norm_clean = re.sub(r'^[#＃第]+', '', norm)
     norm_clean = re.sub(r'(?:小?游戏|卡带|街机)$', '', norm_clean).strip()
+    norm_clean = re.sub(r'^(?:启动|打开|开启|玩|运行|切换到|选|进|去玩)\s*', '', norm_clean)
     norm_clean = re.sub(r'[号款关个]+$', '', norm_clean)
     val = parse_chinese_number_1_to_100(norm_clean)
     if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
