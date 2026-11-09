@@ -48,6 +48,45 @@ void NetworkAudio::Task(void* arg){
 void NetworkAudio::SyncStatsLocked(){
     queued_=queue_->Queued();busy_=queue_->Busy();mic_dropped_=queue_->DroppedSamples();
 }
+
+bool NetworkAudio::CreateAudioTicket(struct in_addr ip, char* out_ticket_64) {
+    if (!out_ticket_64) return false;
+    unsigned char rand_bytes[32];
+    esp_fill_random(rand_bytes, sizeof(rand_bytes));
+    const char* hex = "0123456789abcdef";
+    for (size_t i = 0; i < 32; ++i) {
+        out_ticket_64[2 * i] = hex[rand_bytes[i] >> 4];
+        out_ticket_64[2 * i + 1] = hex[rand_bytes[i] & 15];
+    }
+    out_ticket_64[64] = '\0';
+    if (!tx_) tx_ = xSemaphoreCreateMutex();
+    if (tx_) xSemaphoreTake(tx_, portMAX_DELAY);
+    memcpy(audio_ticket_, out_ticket_64, 65);
+    ticket_ip_ = ip;
+    ticket_expire_ms_ = now_ms() + 30000;
+    if (tx_) xSemaphoreGive(tx_);
+    return true;
+}
+
+bool NetworkAudio::CheckAudioTicket(const char* token, struct in_addr ip) {
+    if (!token || strlen(token) != 64) return false;
+    if (!tx_) return false;
+    xSemaphoreTake(tx_, portMAX_DELAY);
+    bool match = false;
+    if (audio_ticket_[0] != '\0' && ticket_expire_ms_ > now_ms()) {
+        if (ticket_ip_.s_addr == ip.s_addr) {
+            unsigned char diff = 0;
+            for (size_t i = 0; i < 64; ++i) diff |= audio_ticket_[i] ^ token[i];
+            if (diff == 0) {
+                match = true;
+                audio_ticket_[0] = '\0';
+            }
+        }
+    }
+    xSemaphoreGive(tx_);
+    return match;
+}
+
 void NetworkAudio::FailLocked(const char* reason,int error){
     ready_=false;++tx_errors_;queue_->Clear();SyncStatsLocked();
     if(client_>=0)shutdown(client_,SHUT_RDWR);
@@ -117,20 +156,18 @@ void NetworkAudio::Run(){
         timeval timeout={2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
         timeout={0,200000};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
         uint8_t header[7];
-        uint8_t payload[256];
+        uint8_t handshake_payload[256];
         // Authenticate BEFORE assigning the mic/output connection. Unpaired peers
         // cannot capture audio or displace the active authenticated connection.
         if (!read_all(fd, header, sizeof(header))) { close(fd); continue; }
         size_t first_size = ((size_t)header[5] << 8) | header[6];
         const size_t prefix = strlen(hello);
         bool valid_hello = false;
-        bool is_sta_peer = WifiManager::GetInstance().IsStaSubnet(client_addr.sin_addr);
-        if (memcmp(header, "KAP1", 4) == 0 && header[4] == 4 && first_size < sizeof(payload) && read_all(fd, payload, first_size)) {
-            payload[first_size] = 0;
-            if (first_size == prefix && memcmp(payload, hello, prefix) == 0 && is_sta_peer) {
-                valid_hello = true;
-            } else if (first_size == prefix + 1 + 64 && memcmp(payload, hello, prefix) == 0 && payload[prefix] == '|') {
-                if (NetworkAuth::GetInstance().Check((const char*)payload + prefix + 1)) {
+        if (memcmp(header, "KAP1", 4) == 0 && header[4] == 4 && first_size < sizeof(handshake_payload) && read_all(fd, handshake_payload, first_size)) {
+            handshake_payload[first_size] = 0;
+            if (first_size == prefix + 1 + 64 && memcmp(handshake_payload, hello, prefix) == 0 && handshake_payload[prefix] == '|') {
+                const char* token = (const char*)handshake_payload + prefix + 1;
+                if (NetworkAuth::GetInstance().Check(token) || CheckAudioTicket(token, client_addr.sin_addr)) {
                     valid_hello = true;
                 }
             }
@@ -144,19 +181,7 @@ void NetworkAudio::Run(){
         }
         ESP_LOGI("NetworkAudio","Authenticated PCM active: Wi-Fi power save NONE");
         xSemaphoreTake(tx_,portMAX_DELAY);queue_->Clear();SyncStatsLocked();client_=fd;xSemaphoreGive(tx_);
-        char hello_resp[128];
-        size_t hello_resp_len = prefix;
-        memcpy(hello_resp, hello, prefix);
-        if (is_sta_peer) {
-            const char* cur_tok = NetworkAuth::GetInstance().TokenForUsbPairing();
-            if (cur_tok && cur_tok[0]) {
-                int written = snprintf(hello_resp, sizeof(hello_resp), "%s|%s", hello, cur_tok);
-                if (written > 0 && (size_t)written < sizeof(hello_resp)) {
-                    hello_resp_len = (size_t)written;
-                }
-            }
-        }
-        if (!Send(4, hello_resp, hello_resp_len)) {
+        if (!Send(4, hello, prefix)) {
             xSemaphoreTake(tx_,portMAX_DELAY);client_=-1;close(fd);xSemaphoreGive(tx_);continue;
         }
         ready_=true;
@@ -175,12 +200,12 @@ void NetworkAudio::Run(){
             if(!selected){if(uint32_t(now_ms()-last_rx)>2000)break;continue;}
             if(!read_all(fd,header,sizeof(header)))break;
             size_t bytes=((size_t)header[5]<<8)|header[6];
-            if(memcmp(header,"KAP1",4)||bytes>sizeof(payload)||!bytes||!read_all(fd,payload,bytes))break;
+            if(memcmp(header,"KAP1",4)||bytes>kMaxAudioRx||!bytes||!read_all(fd,rx_payload_,bytes))break;
             last_rx=now_ms();
             if(header[4]==1 && ready_ && bytes%2==0){
-                CommandDispatcher::GetInstance().EnqueuePcm(payload,bytes);
+                CommandDispatcher::GetInstance().EnqueuePcm(rx_payload_,bytes);
             } else if(header[4]==5 && ready_){
-                if(!Send(5,payload,bytes))break;
+                if(!Send(5,rx_payload_,bytes))break;
             } else break;
         }
         ready_=false;xSemaphoreTake(tx_,portMAX_DELAY);shutdown(fd,SHUT_RDWR);close(fd);client_=-1;

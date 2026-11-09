@@ -68,33 +68,21 @@ class WiFiPcmClient:
         if not self.controller.wait_for_control():
             return False
         try:
+            token = getattr(gateway, "control_token", "")
+            if len(token) != 64:
+                token = gateway.request_audio_ticket() or ""
+            if len(token) != 64:
+                raise PermissionError("PCM authentication required: no valid token or audio ticket")
             sock = socket.create_connection(
                 (gateway.board_sta_ip or gateway.board_ap_ip, 8889), timeout=3
             )
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(3)
-            token = getattr(gateway, "control_token", "")
-            if len(token) == 64:
-                payload = HELLO + b"|" + token.encode("ascii")
-            else:
-                payload = HELLO
+            payload = HELLO + b"|" + token.encode("ascii")
             sock.sendall(packet(4, payload))
             rx_kind, rx_payload = receive(sock)
-            if rx_kind != 4 or not rx_payload.startswith(HELLO):
-                raise ValueError("Unsupported PCM protocol")
-            if b"|" in rx_payload:
-                parts = rx_payload.split(b"|", 1)
-                new_token = parts[1].decode("ascii", errors="ignore").strip()
-                if len(new_token) == 64:
-                    gateway.control_token = new_token
-                    try:
-                        from pro_paths import data_dir
-                        (data_dir() / "control-pairing.json").write_text(
-                            json.dumps({"control_token": new_token}, indent=2),
-                            encoding="utf-8",
-                        )
-                    except Exception:
-                        pass
+            if rx_kind != 4 or rx_payload != HELLO:
+                raise ValueError("Unsupported PCM protocol or handshake rejected")
             self.sock = sock
             self.boot_id = gateway.boot_id
             self.connected = True
@@ -103,7 +91,7 @@ class WiFiPcmClient:
             threading.Thread(target=self._read, args=(sock, self.closed), daemon=True).start()
             threading.Thread(target=self._heartbeat, args=(sock, self.closed), daemon=True).start()
             return True
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, PermissionError) as exc:
             self.last_error = str(exc)
             if "sock" in locals():
                 sock.close()

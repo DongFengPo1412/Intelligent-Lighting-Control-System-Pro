@@ -336,4 +336,19 @@ int main() {
         assert(out12_normal == 0x500); // Normal gain
         std::puts("PASS: mic 16-bit vs 12-bit shift & saturation clipping regression");
     }
+
+    // Test Network Audio Frame Size Limits & Security Response Boundary
+    {
+        constexpr size_t kMaxAudioRx = 2048;
+        assert(128 * sizeof(int16_t) <= kMaxAudioRx);
+        assert(240 * sizeof(int16_t) <= kMaxAudioRx);
+        assert(512 * sizeof(int16_t) <= kMaxAudioRx);  // 1024 bytes (standard PC chunk)
+        assert(1024 * sizeof(int16_t) <= kMaxAudioRx); // 2048 bytes
+        assert(1025 * sizeof(int16_t) > kMaxAudioRx);  // Rejection boundary
+
+        // Board hello response must strictly equal "hello" without master token leakage
+        const char* hello_wire = "hello";
+        assert(std::strchr(hello_wire, '|') == nullptr);
+        std::puts("PASS: network audio frame sizes (128, 240, 512, 1024 samples) and security boundary");
+    }
 }

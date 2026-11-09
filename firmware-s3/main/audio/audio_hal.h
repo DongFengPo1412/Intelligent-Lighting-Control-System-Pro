@@ -12,6 +12,10 @@
 #include "audio_priority.h"
 #include "game_audio_stream.h"
 #include "audio_sample_format.h"
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+#include "esp_afe_sr_iface.h"
+#include "esp_afe_sr_models.h"
+#endif
 
 class AudioHAL {
 public:
@@ -86,4 +90,8 @@ private:
     bool initialized_;
     bool speaker_enabled_;
     bool mic_enabled_;
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+    const esp_afe_sr_iface_t* afe_iface_ = nullptr;
+    esp_afe_sr_data_t* afe_data_ = nullptr;
+#endif
 };

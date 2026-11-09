@@ -132,7 +132,7 @@ async def access_middleware(request, handler):
                 response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id"
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
             return response
-        if not policy.authorized(request) and request.path not in ("/api/auth/challenge",):
+        if not policy.authorized(request) and request.path not in ("/api/auth/challenge", "/api/health"):
             return web.json_response({"status":"error", "error":"pairing_required"}, status=401)
         limit = (20*1024*1024 if request.path in ("/api/pro/music-upload", "/api/pro/camera/frame", "/api/pro/vision/frame") else
                  1024*1024 if request.path == "/api/pro/documents" else 64*1024)

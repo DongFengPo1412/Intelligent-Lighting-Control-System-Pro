@@ -10,6 +10,7 @@
    - Synthetic observation injection allowed for simulation/testing without active camera.
    - Non-blocking bounded stop.
 """
+import asyncio
 import io
 import json
 import os
@@ -445,6 +446,104 @@ class TestVisionStopStaleFrameIsolation(unittest.TestCase):
         self.hub.stop_remote(sess)
         elapsed = time.perf_counter() - t0
         self.assertLess(elapsed, 0.1, "stop_remote must be bounded and immediate")
+
+
+class TestClosureDefectsRound3(unittest.TestCase):
+    def test_health_probe_endpoint(self):
+        """APK health probe requires GET /api/health returning HTTP 200 with status ok and service KurisuPro."""
+        from aiohttp.test_utils import TestServer, TestClient
+        import web_server
+
+        async def run_test():
+            app = web_server.create_app(simulate=True, no_audio=True)
+            async with TestServer(app) as server:
+                async with TestClient(server) as client:
+                    resp = await client.get("/api/health")
+                    self.assertEqual(resp.status, 200)
+                    data = await resp.json()
+                    self.assertEqual(data.get("status"), "ok")
+                    self.assertEqual(data.get("service"), "KurisuPro")
+
+                    # GET /api/auth/challenge must not return 405
+                    resp_chal = await client.get("/api/auth/challenge")
+                    self.assertNotEqual(resp_chal.status, 405)
+        asyncio.run(run_test())
+
+    def test_run_chat_non_blocking_preemption(self):
+        """A new chat turn immediately preempts prior turn without waiting for its LLM completion."""
+        import web_server
+
+        async def run_test():
+            web_server.shutting_down = False
+            turn1_started = threading.Event()
+            turn1_cancelled = threading.Event()
+            turn2_completed = threading.Event()
+
+            class MockPreemptibleAgent:
+                def __init__(self):
+                    self.last_model_error = None
+                    self.last_translation_error = None
+                    self.last_tts_error = None
+                    self.last_turn_timings = {}
+
+                def chat(self, msg, cancelled=None):
+                    if msg == "turn1":
+                        turn1_started.set()
+                        # Wait up to 3s or until cancelled
+                        for _ in range(300):
+                            if cancelled and cancelled.is_set():
+                                turn1_cancelled.set()
+                                return "turn1_aborted"
+                            time.sleep(0.01)
+                        return "turn1_finished"
+                    elif msg == "turn2":
+                        turn2_completed.set()
+                        return "turn2_fast"
+                    return "unknown"
+
+            orig_agent = web_server.agent
+            web_server.agent = MockPreemptibleAgent()
+            try:
+                task1 = asyncio.create_task(web_server.run_chat("turn1"))
+                await asyncio.sleep(0.05)
+                self.assertTrue(turn1_started.wait(timeout=1.0))
+
+                # Start turn2 while turn1 is still running
+                t0 = time.monotonic()
+                task2 = asyncio.create_task(web_server.run_chat("turn2"))
+                res2 = await asyncio.wait_for(task2, timeout=1.0)
+                elapsed = time.monotonic() - t0
+
+                # turn2 must complete fast (< 0.5s), proving chat_lock was released during turn1
+                self.assertLess(elapsed, 0.5)
+                self.assertEqual(res2["reply"], "turn2_fast")
+                self.assertTrue(turn2_completed.is_set())
+                self.assertTrue(turn1_cancelled.wait(timeout=1.0), "Turn 1 must receive cancellation signal")
+
+                try:
+                    await task1
+                except (asyncio.CancelledError, Exception):
+                    pass
+                self.assertTrue(task1.cancelled(), "Turn 1 task must be cancelled by Turn 2")
+            finally:
+                web_server.agent = orig_agent
+
+        asyncio.run(run_test())
+
+    def test_pcm_frame_sizes(self):
+        """PCM receive buffer accepts standard 512-sample (1024-byte) and 1024-sample frames without truncation."""
+        import network_audio
+        hdr_128 = network_audio.packet(1, b'\x00' * (128 * 2))
+        hdr_512 = network_audio.packet(1, b'\x00' * (512 * 2))
+        hdr_1024 = network_audio.packet(1, b'\x00' * (1024 * 2))
+
+        self.assertEqual(len(hdr_128), 7 + 256)
+        self.assertEqual(len(hdr_512), 7 + 1024)
+        self.assertEqual(len(hdr_1024), 7 + 2048)
+        self.assertEqual(hdr_512[:4], b'KAP1')
+        self.assertEqual(hdr_512[4], 1)
+        self.assertEqual(hdr_512[5], 4)  # 1024 >> 8
+        self.assertEqual(hdr_512[6], 0)  # 1024 & 0xff
 
 
 if __name__ == "__main__":

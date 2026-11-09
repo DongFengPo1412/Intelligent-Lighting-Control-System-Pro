@@ -43,6 +43,12 @@ AudioHAL::~AudioHAL() {
     }
     if (playback_mutex_) vSemaphoreDelete(playback_mutex_);
     if (settings_mutex_) vSemaphoreDelete(settings_mutex_);
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+    if (afe_iface_ && afe_data_) {
+        afe_iface_->destroy(afe_data_);
+        afe_data_ = nullptr;
+    }
+#endif
 }
 
 esp_err_t AudioHAL::SetVolume(int volume_percent) {
@@ -259,6 +265,27 @@ esp_err_t AudioHAL::Init(
     output_volume_.store(volume.value);
     volume_factor_.store(audio_pcm::VolumeFactor(volume.value));
     saved_volume_ = volume.saved ? volume.value : -1;
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+    afe_config_t* afe_config = afe_config_init("M", nullptr, AFE_TYPE_VC, AFE_MODE_HIGH_PERF);
+    if (afe_config) {
+        afe_config->aec_init = false;
+        afe_config->vad_init = false;
+        afe_config->ns_init = false;
+        afe_config->agc_init = false;
+        afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
+        afe_iface_ = esp_afe_handle_from_config(afe_config);
+        if (afe_iface_) {
+            afe_data_ = afe_iface_->create_from_config(afe_config);
+            if (afe_data_) {
+                ESP_LOGI(TAG, "ESP-SR AFE initialized (feed_chunk=%d, fetch_chunk=%d)",
+                         afe_iface_->get_feed_chunksize(afe_data_),
+                         afe_iface_->get_fetch_chunksize(afe_data_));
+            } else {
+                ESP_LOGW(TAG, "ESP-SR AFE create_from_config failed, fallback to raw PCM");
+            }
+        }
+    }
+#endif
     initialized_ = true;
     ESP_LOGI(TAG, "I2S ready: mono left slot, 16kHz, volume=%d%% (%s)", volume.value,
              volume.saved ? "restored from NVS" : "default; no saved valid volume");
@@ -450,6 +477,23 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
         s_total_samples = 0;
         s_clipped_samples = 0;
     }
+
+#if defined(CONFIG_AUDIO_ENABLE_AFE)
+    if (afe_iface_ && afe_data_ && count > 0) {
+        int feed_chunk = afe_iface_->get_feed_chunksize(afe_data_);
+        if (feed_chunk > 0 && (int)count >= feed_chunk) {
+            for (size_t offset = 0; offset + feed_chunk <= count; offset += feed_chunk) {
+                afe_iface_->feed(afe_data_, dest_buf + offset);
+                afe_fetch_result_t* res = afe_iface_->fetch_with_delay(afe_data_, 0);
+                if (res && res->ret_value == ESP_OK && res->data && res->data_size > 0) {
+                    size_t out_samples = res->data_size / sizeof(int16_t);
+                    size_t copy_samples = std::min(out_samples, (size_t)feed_chunk);
+                    memcpy(dest_buf + offset, res->data, copy_samples * sizeof(int16_t));
+                }
+            }
+        }
+    }
+#endif
 
     if (samples_read) {
         *samples_read = count;

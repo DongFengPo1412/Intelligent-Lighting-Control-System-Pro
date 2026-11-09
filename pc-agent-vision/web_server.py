@@ -113,6 +113,9 @@ _chat_job_counter = 0
 active_chat_threads: Set[threading.Thread] = set()
 active_chat_tasks: Set[asyncio.Task] = set()
 chat_lock = asyncio.Lock()
+active_chat_turn_task: Optional[asyncio.Task] = None
+active_chat_turn_cancel: Optional[threading.Event] = None
+active_chat_turn_id: int = 0
 
 
 def get_active_chat_jobs() -> List[ChatJob]:
@@ -173,6 +176,9 @@ def check_reinit_allowed():
         active_chat_threads.clear()
     if active_chat_tasks:
         active_chat_tasks.clear()
+    global active_chat_turn_task, active_chat_turn_cancel, active_chat_turn_id
+    active_chat_turn_task = None
+    active_chat_turn_cancel = None
 
 
 async def run_chat(message: str, cancelled=None):
@@ -212,6 +218,23 @@ async def run_chat(message: str, cancelled=None):
     if current_task and 'active_chat_tasks' in globals():
         active_chat_tasks.add(current_task)
 
+    global active_chat_turn_task, active_chat_turn_cancel, active_chat_turn_id
+    if active_chat_turn_cancel is not None:
+        active_chat_turn_cancel.set()
+    if active_chat_turn_task is not None and not active_chat_turn_task.done() and active_chat_turn_task is not current_task:
+        active_chat_turn_task.cancel()
+
+    turn_cancel = threading.Event()
+    class ChainedCancel:
+        def __init__(self, *evs):
+            self._evs = [e for e in evs if e is not None]
+        def is_set(self):
+            return any(e.is_set() for e in self._evs)
+        def set(self):
+            for e in self._evs:
+                e.set()
+    effective_cancel = ChainedCancel(cancelled, turn_cancel)
+
     try:
         async with chat_lock:
             if globals().get('shutting_down', False):
@@ -237,8 +260,6 @@ async def run_chat(message: str, cancelled=None):
                 try:
                     await asyncio.shield(pause_fut)
                 except asyncio.CancelledError:
-                    # 关键保障：若在等待暂停时被取消，必须等待底层 pause() 真正执行结束！
-                    # 底层暂停结束前，ChatJob 绝不提前标记完成，也绝不能恢复收音
                     try:
                         await pause_fut
                     except Exception:
@@ -253,6 +274,11 @@ async def run_chat(message: str, cancelled=None):
             if job:
                 job.state = "queued"
 
+            active_chat_turn_id += 1
+            this_turn_id = active_chat_turn_id
+            active_chat_turn_task = current_task
+            active_chat_turn_cancel = turn_cancel
+
             def _sync_chat_worker():
                 nonlocal worker_started
                 th = threading.current_thread()
@@ -260,15 +286,16 @@ async def run_chat(message: str, cancelled=None):
                     active_chat_threads.add(th)
 
                 # 排队取消检查 (Item 2)
-                if job and job.cancel_requested:
+                if (job and job.cancel_requested) or effective_cancel.is_set():
                     if 'active_chat_threads' in globals():
                         active_chat_threads.discard(th)
                     _finish_job("queued_cancelled", "Cancelled while queued in thread pool")
                     if owns_pause and listener and not globals().get('shutting_down', False):
-                        try:
-                            listener.resume()
-                        except Exception:
-                            pass
+                        if active_chat_turn_id == this_turn_id:
+                            try:
+                                listener.resume()
+                            except Exception:
+                                pass
                     return None
 
                 worker_started = True
@@ -277,21 +304,21 @@ async def run_chat(message: str, cancelled=None):
                     job.state = "running"
 
                 try:
-                    if cancelled is not None:
-                        return agent.chat(message, cancelled=cancelled)
-                    return agent.chat(message)
+                    try:
+                        return agent.chat(message, cancelled=effective_cancel)
+                    except TypeError:
+                        return agent.chat(message)
                 except Exception as ex:
                     if job:
                         job.error = str(ex)
                     raise
                 finally:
-                    # Item 3: 收音恢复顺序！
-                    # 必须在底层工作真正结束（完成 LLM 推理与回复播报）后才允许恢复；关停时严禁恢复！
                     if owns_pause and listener and not globals().get('shutting_down', False):
-                        try:
-                            listener.resume()
-                        except Exception as resume_ex:
-                            print(f"[WebServer] 恢复收音异常: {resume_ex}")
+                        if active_chat_turn_id == this_turn_id:
+                            try:
+                                listener.resume()
+                            except Exception as resume_ex:
+                                print(f"[WebServer] 恢复收音异常: {resume_ex}")
 
                     if 'active_chat_threads' in globals():
                         active_chat_threads.discard(th)
@@ -311,24 +338,25 @@ async def run_chat(message: str, cancelled=None):
                         pass
                 raise
 
-            try:
-                response_text = await executor_fut
-                return {
-                    "reply": response_text,
-                    "model_error": getattr(agent, 'last_model_error', None),
-                    "translation_error": getattr(agent, 'last_translation_error', None),
-                    "tts_error": getattr(agent, 'last_tts_error', None),
-                    "timings": dict(getattr(agent, 'last_turn_timings', {}),
-                                    **getattr(voice, 'last_speech_timings', {})),
-                }
-            except asyncio.CancelledError:
-                if job:
-                    job.cancel_requested = True
-                    if not worker_started:
-                        job.state = "queued_cancelled"
-                    else:
-                        job.state = "running_cancelled"
-                raise
+        try:
+            response_text = await executor_fut
+            return {
+                "reply": response_text,
+                "model_error": getattr(agent, 'last_model_error', None),
+                "translation_error": getattr(agent, 'last_translation_error', None),
+                "tts_error": getattr(agent, 'last_tts_error', None),
+                "timings": dict(getattr(agent, 'last_turn_timings', {}),
+                                **getattr(voice, 'last_speech_timings', {})),
+            }
+        except asyncio.CancelledError:
+            turn_cancel.set()
+            if job:
+                job.cancel_requested = True
+                if not worker_started:
+                    job.state = "queued_cancelled"
+                else:
+                    job.state = "running_cancelled"
+            raise
 
     except (asyncio.CancelledError, Exception) as outer_ex:
         # 如果在 worker 启动前发生取消或异常，清理未执行的 job 与收音状态
@@ -740,6 +768,14 @@ async def handle_apk_download(request: web.Request):
         },
     )
 
+async def handle_health(request: web.Request):
+    """PC 端服务健康探测接口，供 APK 与客户端探活"""
+    return web.json_response({
+        "status": "ok",
+        "service": "KurisuPro",
+        "version": "2.2.0"
+    })
+
 async def handle_ceremony(request: web.Request):
     """手动触发上电自检与配对握手正向反馈仪式"""
     loop = asyncio.get_running_loop()
@@ -770,13 +806,17 @@ def on_voice_detected(speech_text: str):
         return
     print(f"\n[免触麦克风输入]: {speech_text}")
     if server_loop and not server_loop.is_closed():
-        # The ASR worker stays paused until inference AND playback finish.
-        # This callback runs on the ASR thread, never on the event-loop thread.
+        # The ASR worker stays responsive. Inference and playback are managed asynchronously.
+        # This callback runs on the ASR thread, never block with future.result().
         future = asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text), server_loop)
-        try:
-            future.result()
-        except Exception as e:
-            print(f"[免触语音交互异常]: {e}")
+        def _on_voice_done(fut):
+            try:
+                exc = fut.exception()
+                if exc:
+                    print(f"[免触语音交互异常]: {exc}")
+            except Exception:
+                pass
+        future.add_done_callback(_on_voice_done)
 
 async def process_voice_interaction(speech_text: str):
     """异步执行大模型思考并向全端广播"""
@@ -1276,6 +1316,8 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
         trust_private=trust_private)
     app.router.add_post('/api/pair', pair)
     app.router.add_post('/api/auth/challenge', auth_challenge)
+    app.router.add_get('/api/health', handle_health)
+    app.router.add_get('/api/auth/challenge', auth_challenge)
     app['simulate']=simulate;app['no_audio']=no_audio
     warmup_abort_ev = threading.Event()
     app['warmup_state'] = {

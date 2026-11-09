@@ -493,16 +493,30 @@ public class MainActivity extends Activity {
 
             if (foundServerUrl != null) {
                 try {
-                    java.net.URL healthUrl = new java.net.URL(foundServerUrl + "/api/auth/challenge");
+                    java.net.URL healthUrl = new java.net.URL(foundServerUrl + "/api/health");
                     java.net.HttpURLConnection conn = (java.net.HttpURLConnection) healthUrl.openConnection();
                     conn.setConnectTimeout(800);
                     conn.setReadTimeout(800);
                     conn.setRequestMethod("GET");
                     int code = conn.getResponseCode();
-                    conn.disconnect();
-                    if (code != 200 && code != 401 && code != 403) {
+                    if (code == 200) {
+                        try (java.io.InputStream in = conn.getInputStream();
+                             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+                            byte[] buf = new byte[256];
+                            int r = in.read(buf);
+                            if (r > 0) out.write(buf, 0, r);
+                            String body = out.toString("UTF-8");
+                            org.json.JSONObject obj = new org.json.JSONObject(body);
+                            if (!"ok".equals(obj.optString("status")) || !"KurisuPro".equals(obj.optString("service"))) {
+                                foundServerUrl = null;
+                            }
+                        } catch (Exception e) {
+                            foundServerUrl = null;
+                        }
+                    } else {
                         foundServerUrl = null;
                     }
+                    conn.disconnect();
                 } catch (Exception e) {
                     foundServerUrl = null;
                 }
