@@ -103,7 +103,7 @@ class KurisuAgent:
 
     def chat(self, user_message: str, speak=True, cancelled=None) -> str:
         with self._chat_lock:
-            self._turn_counter += 1
+            self._turn_counter = getattr(self, '_turn_counter', 0) + 1
             turn_id = self._turn_counter
             self._active_turn_id = turn_id
             self._speak_turn = speak
@@ -120,12 +120,16 @@ class KurisuAgent:
             self._turn_started = turn_started
             # Keep complete user turns so tool messages are never orphaned.
             users = [i for i, msg in enumerate(self.history) if msg.get("role") == "user"]
-            if len(users) >= 12:
-                self.history = self.history[:1] + self.history[users[-11]:]
+            if len(users) >= 11:
+                self.history = self.history[:1] + self.history[users[-10]:]
 
             self._current_user_message = user_message
             self.history.append({'role': 'user', 'content': user_message, '_turn_id': turn_id})
             self.memory.append_turn('user', user_message)
+
+            chat_hook = getattr(self, '_chat_locked', None)
+            if chat_hook:
+                return chat_hook(user_message)
 
             from conversation_session import ConversationSession
             if ConversationSession.should_end(user_message):

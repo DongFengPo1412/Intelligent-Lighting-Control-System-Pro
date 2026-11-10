@@ -381,7 +381,7 @@ def exact_plan(text):
         return {'kind': 'chat', 'actions': []}
 
     # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩", "打开打砖块吗")
-    if re.search(r'(?:吗|呢|好吗|行吗|可以吗|是什么|是什么意思|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则是什么|有什么|多少关|哪个好玩|\?|？)', compact):
+    if has_game_intent and re.search(r'(?:吗|呢|好吗|行吗|可以吗|是什么|是什么意思|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则是什么|有什么|多少关|哪个好玩|\?|？)', compact):
         return {'kind': 'chat', 'actions': []}
 
     # 4. Multiple games / comparison (e.g. "马里奥还是贪吃蛇", "玩马里奥还是贪吃蛇") -> clarify
