@@ -62,6 +62,7 @@ public:
     // 麦克风通道硬件启停控制 (按需启动 DMA，防止长时间空载溢出)
     esp_err_t EnableMic(bool enable);
     bool IsMicEnabled() const { return mic_enabled_; }
+    uint32_t GetMicStreamGeneration() const { return mic_stream_generation_.load(std::memory_order_relaxed); }
 
     // 硬件状态查询
     bool IsInitialized() const { return initialized_; }
@@ -97,6 +98,7 @@ private:
     bool initialized_;
     bool speaker_enabled_;
     bool mic_enabled_;
+    std::atomic<uint32_t> mic_stream_generation_{0};
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     const esp_afe_sr_iface_t* afe_iface_ = nullptr;
     esp_afe_sr_data_t* afe_data_ = nullptr;

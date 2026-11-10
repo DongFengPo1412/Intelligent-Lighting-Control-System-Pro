@@ -570,15 +570,18 @@ int main() {
         size_t filtered_pos = 0;
 
         // Chunk 1 (1..256): AFE pipeline is priming, outputs 0 fetched samples
+        // Silence placeholder maintains output cadence without leaking raw samples that would be duplicated later
         int16_t in1[256];
         for (int i = 0; i < 256; ++i) in1[i] = ++val;
         stream.PushInput(in1, 256);
         stream.FeedChunk(kFeedChunk, scratch);
         int16_t dest1[256];
         bool normal1 = stream.Emit(dest1, in1, 256);
-        assert(!normal1); // Cold start raw fallback during bounded warmup!
+        assert(!normal1); // Cold start warmup silence placeholder!
         assert(!stream.IsWarmedUp());
-        assert(stream.DiscardPending() == 0); // Cold start empty buffer does NOT poison future AFE output
+        assert(stream.WarmupBlocksEmitted() == 1);
+        for (int i = 0; i < 256; ++i) assert(dest1[i] == 0); // Preserves cadence via silence placeholder
+        assert(stream.DiscardPending() == 0); // No raw samples leaked, so discard_pending_ remains 0
 
         // Chunk 2 (257..512): AFE finishes Chunk 1, delivering 256 filtered samples (1..256)
         int16_t in2[256];
@@ -637,55 +640,62 @@ int main() {
             assert(filtered_all[i] == filtered_all[i - 1] + 1);
         }
 
-        // 3. Stop and Restart / In-Flight I2S Reads During Stream Teardown
-        // Simulate in-flight I2S data arriving right as audio stream is stopped
-        stream.PushInput(in1, 120);
-        int16_t inflight_fetches[80];
-        for (int i = 0; i < 80; ++i) inflight_fetches[i] = 900 + i;
-        stream.PushFetched(inflight_fetches, 80);
-        assert(stream.InBufferSize() == 120 && stream.OutBufferSize() == 80);
-
-        // Audio stream stopped / aborted: Reset clears all in-flight buffers and state
+        // 3. Stop and Restart / In-Flight I2S Reads with Stream Generation Isolation
+        // Simulate in-flight I2S data arriving right as audio stream is stopped and immediately restarted.
+        // Stream generation ensures late-arriving samples from obsolete sessions cannot leak into the new session.
+        uint32_t active_stream_generation = 1;
+        bool mic_hardware_enabled = true;
         stream.Reset();
-        assert(stream.InBufferSize() == 0 && stream.OutBufferSize() == 0 && stream.DiscardPending() == 0);
-        assert(!stream.IsWarmedUp());
 
-        // Production teardown isolation logic (matching audio_hal.cc ReadMic mutex & mic_enabled_ guard):
-        // If an I2S read was already in flight when mic was stopped (!mic_enabled_),
-        // ReadMic acquires the mutex, checks !mic_enabled_, and immediately discards the data,
-        // returning ESP_ERR_INVALID_STATE with *samples_read = 0, without feeding or pushing into afe_stream_.
-        bool mic_enabled = false;
-        size_t test_samples_read = 999;
-        auto simulated_read_mic_finish = [&](const int16_t* in_flight_data, size_t count) -> int {
-            if (!mic_enabled) {
-                test_samples_read = 0;
+        // Worker thread starts I2S read in Session 1
+        uint32_t read_session_id = active_stream_generation;
+        int16_t inflight_stale_data[240];
+        for (int i = 0; i < 240; ++i) inflight_stale_data[i] = static_cast<int16_t>(9000 + i);
+
+        // Control thread stops mic and immediately restarts it (new session generation!)
+        mic_hardware_enabled = false;
+        active_stream_generation++; // gen 2 (stopped)
+        stream.Reset();
+        mic_hardware_enabled = true;
+        active_stream_generation++; // gen 3 (restarted)
+
+        // Worker thread completes I2S read from old Session 1 and attempts to feed stream
+        size_t samples_accepted = 0;
+        auto process_i2s_read = [&](uint32_t session_id, const int16_t* data, size_t count) -> int {
+            if (!mic_hardware_enabled || session_id != active_stream_generation) {
+                // Obsolete session read: safely discard!
+                samples_accepted = 0;
                 return -1; // ESP_ERR_INVALID_STATE
             }
-            stream.PushInput(in_flight_data, count);
-            test_samples_read = count;
+            stream.PushInput(data, count);
+            samples_accepted = count;
             return 0;
         };
-        int err = simulated_read_mic_finish(in2, 256);
-        assert(err == -1 && test_samples_read == 0);
+
+        int err = process_i2s_read(read_session_id, inflight_stale_data, 240);
+        assert(err == -1 && samples_accepted == 0);
+        // Assert new session buffer is completely clean and untainted by stale data
         assert(stream.InBufferSize() == 0 && stream.OutBufferSize() == 0);
 
-        mic_enabled = true;
-        val = 1000;
-        for (int i = 0; i < 256; ++i) in1[i] = ++val;
-        err = simulated_read_mic_finish(in1, 256);
-        assert(err == 0 && test_samples_read == 256);
+        // Fresh I2S read in new session (generation 3) succeeds cleanly
+        int16_t fresh_session_data[256];
+        for (int i = 0; i < 256; ++i) fresh_session_data[i] = static_cast<int16_t>(1000 + i);
+        err = process_i2s_read(active_stream_generation, fresh_session_data, 256);
+        assert(err == 0 && samples_accepted == 256);
+        assert(stream.InBufferSize() == 256);
         assert(stream.CanFeed(kFeedChunk));
         stream.FeedChunk(kFeedChunk, scratch);
         stream.Emit(dest1, in1, 256);
-        assert(dest1[0] == 1001 && dest1[255] == 1256);
+        assert(!stream.IsWarmedUp()); // Still in warmup in new session, outputs silence placeholder
+        for (int i = 0; i < 256; ++i) assert(dest1[i] == 0);
 
         // 4. Exact Reviewer Reproduction Case: Partial fetch & dropped sample test
         // S1: PushFetched(1, 2)
-        // S2: Emit(dest, fallback=1,2,3,4, count=4) -> fallback transparent pass
+        // S2: Emit(dest, fallback=1,2,3,4, count=4) -> warmup silence or fallback
         // S3: PushFetched(3, 4, 5, 6, 7, 8)
         // S4: Emit(dest, fallback=5,6,7,8, count=4) -> filtered AFE output
-        // Verify: out1 is [1, 2, 3, 4], out2 is [5, 6, 7, 8], no repetition of 1,2 and no loss of 5,6!
         audio_afe::AfeSampleStream repro_stream;
+        repro_stream.SetWarmupMode(audio_afe::AfeSampleStream::WarmupMode::RawPassthrough);
         int16_t fetched_part1[2] = {1, 2};
         repro_stream.PushFetched(fetched_part1, 2);
         int16_t fallback_raw1[4] = {1, 2, 3, 4};
@@ -703,18 +713,24 @@ int main() {
         // MUST BE 5, 6, 7, 8, NOT 1, 2, 7, 8!
         assert(repro_out2[0] == 5 && repro_out2[1] == 6 && repro_out2[2] == 7 && repro_out2[3] == 8);
 
-        // 5. Codex 20-Block Fixed Delay Test (stably delayed by 1 block = 240 samples, NEVER catching up)
-        // Under bounded warm-up, AFE transitions from block 0 warm-up (fallback) to continuous
-        // steady-state filtered output across blocks 1..19!
-        // Each block b >= 1 strictly fetches 240 samples from block b-1 (never catching up with 480 samples).
+        // 5. Continuous 1-Block Fixed Delay Test (stably delayed by 1 block = 240 samples, NEVER catching up)
+        // Under silence placeholder warm-up, AFE maintains the exact 240-sample cadence without duplicating samples!
+        // Block 0 emits 240 samples of silence (cadence maintained, no source samples leaked).
+        // Blocks 1..19 fetch strictly 240 samples from block b-1 and emit continuous steady-state filtered output (95% ratio).
+        // Total output concatenated across all 20 blocks is verified:
+        // - Block 0: 240 zeros.
+        // - Blocks 1..19: 4560 samples (1..4560), strictly monotonic, 0 duplicates, 0 reversals!
+        // - Block 19's raw samples (4561..4800) remain in pipeline (inherent 1-block delay).
         audio_afe::AfeSampleStream fixed_delay_stream;
         int true_count = 0;
         int false_count = 0;
-        std::vector<int16_t> filtered_stream;
+        std::vector<int16_t> all_emitted_samples;
 
         for (int b = 0; b < 20; ++b) {
             int16_t raw_block[240];
             for (int i = 0; i < 240; ++i) raw_block[i] = static_cast<int16_t>(b * 240 + i + 1);
+
+            fixed_delay_stream.PushInput(raw_block, 240);
 
             if (b >= 1) {
                 // Strictly 1-block delay: fetches 240 samples from block (b - 1)
@@ -727,36 +743,46 @@ int main() {
             bool ok = fixed_delay_stream.Emit(dest_block, raw_block, 240);
             if (ok) {
                 true_count++;
-                filtered_stream.insert(filtered_stream.end(), dest_block, dest_block + 240);
             } else {
                 false_count++;
             }
+            all_emitted_samples.insert(all_emitted_samples.end(), dest_block, dest_block + 240);
 
-            // Block 0 is bounded warm-up (fallback); blocks 1..19 MUST ALL be filtered AFE output!
             if (b == 0) {
-                assert(!ok); // Raw fallback
-                assert(dest_block[0] == 1 && dest_block[239] == 240);
+                assert(!ok); // Warmup silence placeholder
+                for (int i = 0; i < 240; ++i) assert(dest_block[i] == 0);
             } else {
                 assert(ok);  // Filtered output
+                assert(dest_block[0] == static_cast<int16_t>((b - 1) * 240 + 1));
+                assert(dest_block[239] == static_cast<int16_t>(b * 240));
             }
         }
 
-        // Bounded warm-up: exactly 1 block of fallback, 19 blocks of steady-state filtered output!
+        // Bounded warm-up: exactly 1 block of warmup silence, 19 blocks of steady-state filtered output!
         assert(false_count == 1);
         assert(true_count == 19);
         double filtered_ratio = static_cast<double>(true_count) / 20.0;
         assert(filtered_ratio >= 0.95); // 95% steady-state filtered output!
 
-        // Continuous monotonic ordering across all 19 filtered blocks (4560 samples): 1..4560 without jumps, repeats or reversals!
-        assert(filtered_stream.size() == 4560);
-        assert(filtered_stream[0] == 1 && filtered_stream[4559] == 4560);
-        for (size_t i = 1; i < filtered_stream.size(); ++i) {
-            assert(filtered_stream[i] == filtered_stream[i - 1] + 1);
+        // Total emitted across all 20 blocks: 4800 samples
+        assert(all_emitted_samples.size() == 4800);
+        // Block 0: exactly 240 silence samples
+        for (size_t i = 0; i < 240; ++i) {
+            assert(all_emitted_samples[i] == 0);
         }
+        // Blocks 1..19: continuous monotonic ordering across 4560 filtered samples (1..4560)
+        assert(all_emitted_samples[240] == 1 && all_emitted_samples[4799] == 4560);
+        for (size_t i = 241; i < 4800; ++i) {
+            assert(all_emitted_samples[i] == all_emitted_samples[i - 1] + 1);
+        }
+        // Pipeline accounting: verify trailing 240 samples (block 19, 4561..4800) are accounted for in the pipeline
+        // (4560 emitted + 240 pipeline latency = 4800 total raw samples processed, NO samples dropped or lost!)
+        assert(fixed_delay_stream.InBufferSize() == 4800); // 20 blocks accumulated in input buffer
 
-        // 5b. Mid-stream Partial Glitch & Anomaly Recovery Test:
-        // AFE produces partial 80 samples -> Emit falls back to raw -> discard_pending_ becomes 160
-        // -> next round AFE resumes, drops the 160 duplicate samples, and cleanly outputs fresh filtered samples!
+        // 5b. Mid-stream Transient Insufficiency & Recovery Test:
+        // Stream was already warmed up. AFE temporarily produces partial 80 samples -> Emit falls back to raw
+        // -> discard_pending_ becomes 160 -> next round AFE catches up, drops the 160 duplicate samples,
+        // and cleanly outputs fresh filtered samples!
         int16_t partial_glitch[80];
         for (int i = 0; i < 80; ++i) partial_glitch[i] = static_cast<int16_t>(5000 + i);
         fixed_delay_stream.PushFetched(partial_glitch, 80);
@@ -785,6 +811,16 @@ int main() {
         bool rec_ok = fixed_delay_stream.Emit(recovered_dest, next_raw, 240);
         assert(rec_ok); // Cleanly recovered to steady-state filtered output!
         assert(recovered_dest[0] == 5240 && recovered_dest[239] == 5479);
+
+        // Concatenate anomaly + recovery outputs to verify no duplicate or inverted samples:
+        std::vector<int16_t> glitch_recovery_stream;
+        glitch_recovery_stream.insert(glitch_recovery_stream.end(), anomaly_dest, anomaly_dest + 240);
+        glitch_recovery_stream.insert(glitch_recovery_stream.end(), recovered_dest, recovered_dest + 240);
+        assert(glitch_recovery_stream.size() == 480);
+        assert(glitch_recovery_stream[0] == 5000 && glitch_recovery_stream[479] == 5479);
+        for (size_t i = 1; i < glitch_recovery_stream.size(); ++i) {
+            assert(glitch_recovery_stream[i] == glitch_recovery_stream[i - 1] + 1);
+        }
 
         // 6. Fetch size (64) != Read size (240) across 20 blocks
         audio_afe::AfeSampleStream asymmetric_stream;

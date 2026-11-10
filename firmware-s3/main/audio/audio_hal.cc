@@ -305,6 +305,7 @@ esp_err_t AudioHAL::EnableMic(bool enable) {
     if (enable && (!initialized_ || !rx_chan_)) return ESP_ERR_INVALID_STATE;
     if (mic_mutex_) xSemaphoreTake(mic_mutex_, portMAX_DELAY);
     mic_enabled_ = enable;
+    mic_stream_generation_.fetch_add(1, std::memory_order_relaxed);
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     if (!enable && afe_iface_ && afe_data_) {
         afe_iface_->reset_buffer(afe_data_);
@@ -452,6 +453,8 @@ arcade::AudioWriteResult AudioHAL::TryPlayGamePcm(const int16_t* data,size_t cou
 esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* samples_read, uint32_t timeout_ms) {
     if (!initialized_ || !rx_chan_ || !dest_buf) return ESP_ERR_INVALID_STATE;
 
+    uint32_t session_generation = mic_stream_generation_.load(std::memory_order_relaxed);
+
     const size_t raw_buffer_size = 256;
     int32_t bit32_buffer[raw_buffer_size];
     size_t samples_to_read = std::min(max_samples, raw_buffer_size);
@@ -497,8 +500,9 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
 
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     if (mic_mutex_) xSemaphoreTake(mic_mutex_, portMAX_DELAY);
-    if (!mic_enabled_) {
-        // Stream teardown / stop occurred while I2S read was in flight: discard in-flight samples
+    if (!mic_enabled_ || session_generation != mic_stream_generation_.load(std::memory_order_relaxed)) {
+        // Stream teardown, stop, or stop-and-restart occurred while I2S read was in flight:
+        // discard stale in-flight samples from obsolete generation
         if (mic_mutex_) xSemaphoreGive(mic_mutex_);
         if (samples_read) *samples_read = 0;
         return ESP_ERR_INVALID_STATE;
@@ -525,7 +529,14 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
     }
     if (mic_mutex_) xSemaphoreGive(mic_mutex_);
 #else
+    if (mic_mutex_) xSemaphoreTake(mic_mutex_, portMAX_DELAY);
+    if (!mic_enabled_ || session_generation != mic_stream_generation_.load(std::memory_order_relaxed)) {
+        if (mic_mutex_) xSemaphoreGive(mic_mutex_);
+        if (samples_read) *samples_read = 0;
+        return ESP_ERR_INVALID_STATE;
+    }
     memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
+    if (mic_mutex_) xSemaphoreGive(mic_mutex_);
 #endif
 
     if (samples_read) {
