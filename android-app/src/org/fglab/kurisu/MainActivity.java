@@ -502,23 +502,17 @@ public class MainActivity extends Activity {
                         sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName(prefix + "255"), 8890));
                         sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName(prefix + "255"), 8888));
                     } catch (Exception ignored) {}
-                    for (int host = 1; host <= 254; host++) {
-                        try {
-                            java.net.InetAddress target = java.net.InetAddress.getByName(prefix + host);
-                            sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, target, 8890));
-                            sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, target, 8888));
-                        } catch (Exception ignored) {}
-                    }
                 }
 
-                long deadline = System.nanoTime() + 850_000_000L;
+                // Phase 1: Fast receive window after broadcast (600ms)
+                long deadline = System.nanoTime() + 600_000_000L;
                 byte[] buf = new byte[2048];
                 while (System.nanoTime() < deadline) {
                     java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
                     try {
                         sock.receive(pkt);
                     } catch (java.net.SocketTimeoutException timeout) {
-                        if (foundServerUrl != null) break;
+                        if (foundServerUrl != null && foundBoardIp != null) break;
                         continue;
                     }
                     String senderIp = pkt.getAddress().getHostAddress();
@@ -535,17 +529,65 @@ public class MainActivity extends Activity {
                                     if (u.getPort() > 0 && u.getPort() <= 65535) port = u.getPort();
                                 } catch (Exception ignored) {}
                             }
-                            // Strictly bind host to actual packet senderIp
                             foundServerUrl = "http://" + senderIp + ":" + port;
                             String bIp = json.optString("board_ip", "");
                             if (BridgePolicy.privateIpv4(bIp)) foundBoardIp = bIp;
-                            break;
+                            if (foundBoardIp != null) break;
                         }
                         if (json.has("boot_id") || "Kurisu-Matrix".equals(json.optString("device"))) {
                             String staIp = json.optString("sta_ip", "");
                             foundBoardIp = BridgePolicy.privateIpv4(staIp) ? staIp : senderIp;
+                            if (foundServerUrl != null) break;
                         }
                     } catch (Exception ignored) {}
+                }
+
+                // Phase 2: If either is missing, do targeted fallback scan
+                if (foundServerUrl == null || foundBoardIp == null) {
+                    for (String prefix : prefixes) {
+                        for (int host = 1; host <= 254; host++) {
+                            try {
+                                java.net.InetAddress target = java.net.InetAddress.getByName(prefix + host);
+                                if (foundServerUrl == null) sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, target, 8890));
+                                if (foundBoardIp == null) sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, target, 8888));
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                    deadline = System.nanoTime() + 1_000_000_000L;
+                    while (System.nanoTime() < deadline) {
+                        java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
+                        try {
+                            sock.receive(pkt);
+                        } catch (java.net.SocketTimeoutException timeout) {
+                            if (foundServerUrl != null && foundBoardIp != null) break;
+                            continue;
+                        }
+                        String senderIp = pkt.getAddress().getHostAddress();
+                        if (!BridgePolicy.privateIpv4(senderIp)) continue;
+                        String text = new String(pkt.getData(), 0, pkt.getLength(), StandardCharsets.UTF_8).trim();
+                        try {
+                            org.json.JSONObject json = new org.json.JSONObject(text);
+                            if ("KurisuPro".equals(json.optString("service"))) {
+                                int port = json.optInt("port", 8080);
+                                String rawUrl = json.optString("server_url", "");
+                                if (rawUrl != null && !rawUrl.isEmpty()) {
+                                    try {
+                                        java.net.URI u = new java.net.URI(rawUrl);
+                                        if (u.getPort() > 0 && u.getPort() <= 65535) port = u.getPort();
+                                    } catch (Exception ignored) {}
+                                }
+                                foundServerUrl = "http://" + senderIp + ":" + port;
+                                String bIp = json.optString("board_ip", "");
+                                if (BridgePolicy.privateIpv4(bIp)) foundBoardIp = bIp;
+                                if (foundBoardIp != null) break;
+                            }
+                            if (json.has("boot_id") || "Kurisu-Matrix".equals(json.optString("device"))) {
+                                String staIp = json.optString("sta_ip", "");
+                                foundBoardIp = BridgePolicy.privateIpv4(staIp) ? staIp : senderIp;
+                                if (foundServerUrl != null) break;
+                            }
+                        } catch (Exception ignored) {}
+                    }
                 }
             } catch (Exception ignored) {}
 

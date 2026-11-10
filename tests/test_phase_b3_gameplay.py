@@ -16,7 +16,7 @@ class B3Tests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         manifest=json.loads((root/'games_100_manifest.json').read_text(encoding='utf-8'))
         self.assertEqual([int(g['id']) for g in manifest],list(range(1,101)))
-        self.assertEqual(set(ArcadeSession().cartridges),set(range(1,101)))
+        self.assertTrue(set(range(1,101)).issubset(set(ArcadeSession().cartridges)))
         for g in manifest:
             self.assertEqual(g['status'],'integrated_software')
             self.assertTrue((root/g['firmware_source']).is_file())

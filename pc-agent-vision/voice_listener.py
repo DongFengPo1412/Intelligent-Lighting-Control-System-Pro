@@ -516,8 +516,11 @@ class VoiceListener:
             "助手，克里斯，克里斯蒂娜，红莉栖，牧濑红莉栖。"
         )
         controller = getattr(self, 'controller', None)
+        player = getattr(controller, '_music_player', None)
+        music_active = bool(getattr(player, 'running', False) or
+                            getattr(self, '_music_monitor', False))
         library = getattr(controller, '_music_library', None)
-        if library and getattr(library, 'tracks', None):
+        if music_active and library and getattr(library, 'speech_hints', None):
             hints = library.speech_hints()
             if hints:
                 prompt += "常见歌手与歌曲：" + hints[:120] + "。"

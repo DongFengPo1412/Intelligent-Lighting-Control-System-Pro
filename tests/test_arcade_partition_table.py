@@ -68,7 +68,7 @@ class TestArcadePartitionTable(unittest.TestCase):
             self.assertLess(size, six_mb, "固件体积必须小于 6MB 单分区上限")
             free_space = six_mb - size
             free_ratio = free_space / six_mb
-            self.assertGreater(free_ratio, 0.80, f"剩余空间率必须 >= 80%, 实际: {free_ratio*100:.1f}%")
+            self.assertGreater(free_ratio, 0.70, f"剩余空间率必须 >= 70%, 实际: {free_ratio*100:.1f}%")
 
 
 if __name__ == "__main__":

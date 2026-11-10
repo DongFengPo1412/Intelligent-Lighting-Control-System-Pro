@@ -95,16 +95,18 @@ class WiFiGateway:
                 if not isinstance(payload, dict):
                     continue
                 if payload.get("event") in ("beacon", "board_online"):
-                    if payload.get("event") == "board_online":
-                        sender_ip = addr[0]
-                        sta_ip = payload.get("sta_ip")
-                        if (isinstance(sta_ip, str) and sta_ip == sender_ip and
-                                self._is_trusted_hotspot_ip(sender_ip)):
-                            if self.board_sta_ip != sender_ip:
-                                print(f"[WiFiGateway] 校验信标来源通过，灯板 STA IP 动态更新: {self.board_sta_ip} -> {sender_ip}")
-                                self.board_sta_ip = sender_ip
-                                self.boot_id = None
-                                self._remember_board()
+                    sender_ip = addr[0]
+                    sta_ip = payload.get("sta_ip")
+                    valid_sender = (isinstance(sta_ip, str) and (sta_ip == sender_ip or sta_ip == "0.0.0.0")) or payload.get("device") == "Kurisu-Matrix"
+                    if valid_sender and self._is_trusted_hotspot_ip(sender_ip):
+                        self.last_seen = time.monotonic()
+                        if "mode" in payload and isinstance(payload["mode"], int):
+                            self.last_mode = payload["mode"]
+                        if self.board_sta_ip != sender_ip:
+                            print(f"[WiFiGateway] 校验信标来源通过，灯板 STA IP 动态更新: {self.board_sta_ip} -> {sender_ip}")
+                            self.board_sta_ip = sender_ip
+                            self.boot_id = None
+                            self._remember_board()
                     continue
                 elif isinstance(payload.get("request_id"), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,64}', payload['request_id']):
                     if 'pixels_b64' in payload:
@@ -123,15 +125,21 @@ class WiFiGateway:
                         pending = self._pending.get(payload["request_id"])
                         if pending and payload.get("status") in ("ok", "error"):
                             # A reply must come from the board port and one of the
-                            # selected destinations (broadcast discovery may vary).
-                            if addr[1] != self.port or addr[0] not in pending["targets"]:
+                            # selected destinations (or trusted hotspot IP when broadcast probe was sent).
+                            is_target = (addr[0] in pending["targets"]) or (
+                                any(t.endswith(".255") or t == "255.255.255.255" for t in pending["targets"])
+                                and self._is_trusted_hotspot_ip(addr[0])
+                            )
+                            if addr[1] != self.port or not is_target:
                                 continue
                             pending["result"] = payload
-                            pending["reply_bytes"]=len(data)
+                            pending["reply_bytes"] = len(data)
                             if payload.get('status') == 'ok':
                                 self.last_seen = time.monotonic()
                             if not addr[0].startswith("127.") and addr[0] != self.board_ap_ip:
-                                self.board_sta_ip = addr[0]
+                                if self.board_sta_ip != addr[0]:
+                                    print(f"[WiFiGateway] 探活回执确认，更新灯板 STA IP: {self.board_sta_ip} -> {addr[0]}")
+                                    self.board_sta_ip = addr[0]
                             if "mode" in payload:
                                 self.last_mode = int(payload["mode"])
                             self._remember_board()
@@ -175,9 +183,24 @@ class WiFiGateway:
         return self.last_seen > 0 and time.monotonic() - self.last_seen < 8.0
 
     def get_target_ips(self) -> List[str]:
-        if self.board_sta_ip and self.is_online():
+        if self.board_sta_ip and (self.is_online() or self.board_sta_ip.startswith("127.")):
             return [self.board_sta_ip]
-        return [self.board_sta_ip or self.board_ap_ip]
+        targets: List[str] = []
+        if self.board_sta_ip:
+            targets.append(self.board_sta_ip)
+        trusted_net = os.environ.get("KURISU_HOTSPOT_SUBNET", "192.168.186.0/24")
+        try:
+            net = ipaddress.ip_network(trusted_net, strict=False)
+            bcast = str(net.broadcast_address)
+            if bcast not in targets:
+                targets.append(bcast)
+        except Exception:
+            pass
+        if "255.255.255.255" not in targets:
+            targets.append("255.255.255.255")
+        if self.board_ap_ip and self.board_ap_ip not in targets:
+            targets.append(self.board_ap_ip)
+        return targets
 
     def send_command(self, cmd_str: str, timeout: Optional[float] = None, retries: Optional[int] = None,
                      request_id: Optional[str] = None) -> bool:
@@ -205,8 +228,16 @@ class WiFiGateway:
                     self._pending[probe_id] = probe
                 try:
                     wire = json.dumps({"request_id": probe_id}).encode('utf-8')
+                    sent_any = False
                     for ip in probe['targets']:
-                        self.sock.sendto(wire, (ip, self.port))
+                        try:
+                            self.sock.sendto(wire, (ip, self.port))
+                            sent_any = True
+                        except OSError:
+                            continue
+                    if not sent_any:
+                        self.last_result = {"status": "error", "error": "transport_unavailable"}
+                        return False
                     if not probe['event'].wait(timeout):
                         self.last_result = {"status": "error", "error": "discovery_timeout"}
                         return False
@@ -309,7 +340,7 @@ class WiFiGateway:
                     command=json.dumps(query,separators=(',',':'))
                 # Measured hotspot readbacks take up to 375 ms. One bounded
                 # disposable read, no retry storm; controls never take this lock.
-                frame_timeout = float(os.environ.get("KURISU_FRAME_TIMEOUT", "1.2"))
+                frame_timeout = float(os.environ.get("KURISU_FRAME_TIMEOUT", "0.45"))
                 frame_retries = int(os.environ.get("KURISU_FRAME_RETRIES", "0"))
                 channel.send_command(command, timeout=frame_timeout, retries=frame_retries)
                 if health:self._status_sequence=channel._sequence;self._status_boot=channel.boot_id

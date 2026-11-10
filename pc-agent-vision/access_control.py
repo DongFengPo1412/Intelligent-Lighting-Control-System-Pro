@@ -13,6 +13,11 @@ from urllib.parse import urlsplit
 from aiohttp import web
 
 
+REVOKED_TOKENS = frozenset({
+    "dPBYG-Ew4zA8U3rMAAS5tX6sA0_fWrbsWTrr1IjBMZk",
+})
+
+
 def load_access_token():
     token = os.environ.get("KURISU_ACCESS_TOKEN", "").strip()
     if token:
@@ -37,7 +42,7 @@ class AccessPolicy:
     def __init__(self, token=None, origins=(), trust_private=None):
         if token and len(token) < 32:
             raise ValueError("KURISU_ACCESS_TOKEN must contain at least 32 characters")
-        self.token = token or secrets.token_urlsafe(32)
+        self.token = token or load_access_token()
         self.xiaozhi_token = os.environ.get('KURISU_XIAOZHI_TOKEN','')
         self.origins = frozenset(origins)
         self.buckets = {}
@@ -88,14 +93,16 @@ class AccessPolicy:
         return not origin or origin == f"{request.scheme}://{request.host}" or origin in self.origins
 
     def authorized(self, request):
-        if self.trust_private and self.is_trusted_peer(request.remote or ""):
-            return True
         supplied = request.headers.get("Authorization", "")
         bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
         query_token = request.query.get("token", "")
         header_token = request.headers.get("X-Access-Token", "")
         token_candidate = bearer or query_token or header_token
         cookie = request.cookies.get("kurisu_session", "")
+        if token_candidate in REVOKED_TOKENS or cookie in REVOKED_TOKENS:
+            return False
+        if self.trust_private and self.is_trusted_peer(request.remote or ""):
+            return True
         if request.path == '/xiaozhi/v1/' and len(self.xiaozhi_token) >= 32 and hmac.compare_digest(
                 bearer.encode('utf-8'),self.xiaozhi_token.encode('utf-8')):
             return True # Scoped compatibility with the existing optional native adapter.

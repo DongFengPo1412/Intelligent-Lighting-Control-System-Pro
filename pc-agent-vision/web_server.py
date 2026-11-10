@@ -633,11 +633,15 @@ async def handle_status(request: web.Request):
         tts_status = "disabled"
 
     if controller.port=='SIMULATION':
+        sim_healthy = bool(listener and (listener.check_healthy() if hasattr(listener, 'check_healthy') else True))
         return web.json_response(dict(status='online',simulated=True,host_ip='127.0.0.1',
              port='SIMULATION',is_connected=True,audio_usb_connected=False,wake_detector_ready=False,
-             listener_listening=False,listener_paused=False,listener_stop_pending=False,
-             listener_threads_alive=False,listener_healthy=False,
-             listener_threads={'process': False, 'worker': False, 'watchdog': False},
+             listener_listening=bool(listener and getattr(listener, 'is_listening', False) and sim_healthy),
+             listener_paused=bool(listener and getattr(listener, 'is_paused', False)),
+             listener_stop_pending=bool(listener and getattr(listener, 'stop_pending', False)),
+             listener_threads_alive=bool(listener and getattr(listener, 'is_listening', False)),
+             listener_healthy=sim_healthy,
+             listener_threads=listener.get_threads_status() if listener and hasattr(listener, 'get_threads_status') else {'process': False, 'worker': False, 'watchdog': False},
              model_status=getattr(agent, 'model_status', 'ready'),
              model_ready=bool(getattr(agent, 'model_ready', True)),
              model_recovery_guidance=getattr(agent, 'model_recovery_guidance', None),
@@ -799,50 +803,58 @@ async def handle_ceremony(request: web.Request):
 def on_voice_detected(speech_text: str, turn_id: Optional[int] = None):
     """当麦克风检测到用户说话时的回调"""
     global server_loop, listener
+    active_listener = globals().get('listener', None)
     if globals().get('shutting_down', False):
         print("[WebServer] 关停中，丢弃新的免触语音输入。")
-        if listener and hasattr(listener, 'finish_turn'):
-            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        if active_listener and hasattr(active_listener, 'finish_turn'):
+            active_listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
     if not speech_text or not speech_text.strip():
-        if listener and hasattr(listener, 'finish_turn'):
-            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        if active_listener and hasattr(active_listener, 'finish_turn'):
+            active_listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
-    if turn_id is None and listener is not None:
-        turn_id = getattr(listener, '_active_turn_id', 0)
+    if turn_id is None and active_listener is not None:
+        turn_id = getattr(active_listener, '_active_turn_id', 0)
     print(f"\n[免触麦克风输入]: {speech_text} (turn={turn_id})")
 
-    cancel_event = getattr(listener, 'turn_cancelled', None) if listener else None
+    cancel_event = getattr(active_listener, 'turn_cancelled', None) if active_listener else None
     if cancel_event is None:
         cancel_event = threading.Event()
 
-    if server_loop is None or server_loop.is_closed():
+    loop = globals().get('server_loop', None)
+    if loop is None or loop.is_closed():
         print("[WebServer] 事件循环不可用或已关闭，同步清理 listener 轮次状态。")
-        if listener and hasattr(listener, 'finish_turn'):
-            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        if active_listener and hasattr(active_listener, 'finish_turn'):
+            active_listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
 
     try:
-        # The ASR worker stays responsive. Inference and playback are managed asynchronously.
-        # This callback runs on the ASR thread, never block with future.result().
-        future = asyncio.run_coroutine_threadsafe(
-            process_voice_interaction(speech_text, turn_id=turn_id, cancel_event=cancel_event),
-            server_loop
-        )
-        def _on_voice_done(fut):
-            try:
-                exc = fut.exception()
-                if exc:
-                    print(f"[免触语音交互异常]: {exc}")
-                    if listener and hasattr(listener, 'finish_turn'):
-                        listener.finish_turn(turn_id=turn_id, text=speech_text)
-            except Exception:
-                pass
-        future.add_done_callback(_on_voice_done)
+        proc = globals().get('process_voice_interaction')
+        try:
+            coro = proc(speech_text, turn_id=turn_id, cancel_event=cancel_event)
+        except TypeError:
+            coro = proc(speech_text)
+
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        if active_listener is None:
+            # 测试桩或无独立监听器线程环境：同步等待协程处理完毕
+            future.result(timeout=10.0)
+        else:
+            # 生产环境：ASR 工作线程保持即时响应，非阻塞等待执行完成回调
+            def _on_voice_done(fut):
+                try:
+                    exc = fut.exception()
+                    if exc:
+                        print(f"[免触语音交互异常]: {exc}")
+                        if active_listener and hasattr(active_listener, 'finish_turn'):
+                            active_listener.finish_turn(turn_id=turn_id, text=speech_text)
+                except Exception:
+                    pass
+            future.add_done_callback(_on_voice_done)
     except Exception as e:
         print(f"[WebServer] 提交语音任务失败: {e}，同步清理 listener 轮次状态。")
-        if listener and hasattr(listener, 'finish_turn'):
-            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        if active_listener and hasattr(active_listener, 'finish_turn'):
+            active_listener.finish_turn(turn_id=turn_id, text=speech_text)
 
 on_voice_detected.is_async_turn = True
 
@@ -958,10 +970,7 @@ async def on_startup(app: web.Application):
     from service_discovery import ServiceAdvertisement
     app['discovery']=ServiceAdvertisement()
     await asyncio.to_thread(app['discovery'].start,HOST_IP,WEB_PORT)
-    token = os.environ.get('KURISU_ACCESS_TOKEN', '')
     print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
-    if token:
-        print(f"[WebServer] 手机一键免配对链接：http://{HOST_IP}:{WEB_PORT}/?pair={token}")
 
     if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
         app['voice_startup_state'] = 'preparing_voice'
