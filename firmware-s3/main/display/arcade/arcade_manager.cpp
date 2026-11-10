@@ -1,3 +1,4 @@
+#include "game_101_microlight.h"
 #include "game_100_memory_match.h"
 #include "game_099_auto_survivor.h"
 #include "game_096_ice_maze.h"
@@ -247,6 +248,8 @@ static Game099AutoSurvivor s_game_099;
 
 static Game100MemoryMatch s_game_100;
 
+static Game101MicroLight s_game_101;
+
 ArcadeManager& ArcadeManager::GetInstance()
 {
     static ArcadeManager instance;
@@ -271,6 +274,7 @@ void ArcadeManager::Init()
 Cartridge* ArcadeManager::FindCartridge(uint8_t game_id)
 {
     switch (game_id) {
+        case 101: return &s_game_101;
         case 100: return &s_game_100;
         case 99: return &s_game_099;
         case 96: return &s_game_096;

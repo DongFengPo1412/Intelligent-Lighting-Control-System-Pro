@@ -25,6 +25,7 @@ idf_component_register(
         "display/board_led.cc"
         "display/mario_game.cpp"
         "display/arcade/arcade_manager.cpp"
+        "display/arcade/game_101_microlight.cpp"
         "display/arcade/game_100_memory_match.cpp"
         "display/arcade/game_099_auto_survivor.cpp"
         "display/arcade/game_096_ice_maze.cpp"

@@ -171,6 +171,7 @@ from arcade.game_096_ice_maze import Game096IceMaze
 from arcade.game_099_auto_survivor import Game099AutoSurvivor
 
 from arcade.game_100_memory_match import Game100MemoryMatch
+from arcade.game_101_microlight import Game101MicroLight
 
 KEY_MAP = {
     "left": KEY_LEFT,
@@ -312,6 +313,7 @@ class ArcadeSession:
         self.cartridges[96]=Game096IceMaze()
         self.cartridges[99]=Game099AutoSurvivor()
         self.cartridges[100]=Game100MemoryMatch()
+        self.cartridges[101]=Game101MicroLight()
         self.current_cartridge: Optional[BaseCartridge] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None

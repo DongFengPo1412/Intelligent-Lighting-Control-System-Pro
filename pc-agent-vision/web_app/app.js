@@ -1113,7 +1113,8 @@
     [97, "P", "青蛙过河", "Frogger 1981"],
     [98, "P", "月球着陆", "Lunar Lander"],
     [99, "P", "自动攻击生存", "Pixel Survivor"],
-    [100, "P", "翻牌配对", "Memory Match"]
+    [100, "P", "翻牌配对", "Memory Match"],
+    [101, "A", "微光纪元", "MicroLight"]
   ];
   const ARCADE_TITLE_MAP = Object.fromEntries(ARCADE_CATALOG_100.map(([id, , zh, en]) => [id, `[#${String(id).padStart(3, "0")}] ${zh} (${en})`]));
   let arcadeHeartbeatTimer = null;
@@ -1144,7 +1145,7 @@
       if (show) visible++;
     });
     if ($("arcadeVisibleCount")) {
-      $("arcadeVisibleCount").textContent = `${visible} / 100 目录 · ${ArcadeTransport.registeredIds.length} 已接入（实机待验）`;
+      $("arcadeVisibleCount").textContent = `${visible} / ${ARCADE_CATALOG_100.length} 目录 · ${ArcadeTransport.registeredIds.length} 已接入（实机待验）`;
     }
   }
   if ($("arcadeCategoryFilter")) $("arcadeCategoryFilter").onchange = filterArcadeCatalog;

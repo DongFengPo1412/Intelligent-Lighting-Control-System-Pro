@@ -498,5 +498,10 @@
     "id": 100,
     "module": "game_100_memory_match",
     "class": "Game100MemoryMatch"
+  },
+  {
+    "id": 101,
+    "module": "game_101_microlight",
+    "class": "Game101MicroLight"
   }
 ]
