@@ -130,6 +130,7 @@ idf_component_register(
         "display/arcade/game_097_frogger.cpp"
         "protocol/command_dispatcher.cc"
         "protocol/interaction_commands.cc"
+        "protocol/jetson_uart.cc"
         "protocol/network_audio.cc"
         "protocol/network_auth.cc"
         "protocol/wifi_manager.cc"
@@ -144,6 +145,7 @@ idf_component_register(
     REQUIRES
         esp_driver_gpio
         esp_driver_i2s
+        esp_driver_uart
         led_strip
         esp_timer
         json

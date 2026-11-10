@@ -8,6 +8,7 @@
 #include "network_audio.h"
 #include "board_led.h"
 #include "command_dispatcher.h"
+#include "jetson_uart.h"
 #include "audio_hal.h"
 #include "arcade_audio_task.h"
 #include "wifi_manager.h"
@@ -94,6 +95,15 @@ extern "C" void app_main(void)
     // 5. 启动后台串口指令调度中枢 (运行在 Core 0，优先级 4，负责 USB 极速解析)
     CommandDispatcher& dispatcher = CommandDispatcher::GetInstance();
     ESP_ERROR_CHECK(dispatcher.StartSerialTask(4, 0));
+
+    // 5.1 启动 Jetson Nano 独立硬件串口通信 (UART1: RX=GPIO8, TX=GPIO9, 115200 8N1 无流控)
+    jetson::JetsonUart& jetson_uart = jetson::JetsonUart::GetInstance();
+    esp_err_t jetson_ret = jetson_uart.Init(jetson::kDefaultUartPort, jetson::kDefaultRxPin, jetson::kDefaultTxPin, jetson::kDefaultBaudRate);
+    if (jetson_ret == ESP_OK) {
+        jetson_uart.StartTask(3, 0);
+    } else {
+        ESP_LOGE(TAG, "Jetson UART init failed: %s; system functions remain normal", esp_err_to_name(jetson_ret));
+    }
 
     // 6. 启动全时无线 WiFi APSTA 双模共存与 UDP 8888 监听 (脱离 USB 数据线，外部电源供电依然100%互联！)
     WifiManager& wifi = WifiManager::GetInstance();
