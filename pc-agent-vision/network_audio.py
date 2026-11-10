@@ -69,10 +69,18 @@ class WiFiPcmClient:
             return False
         try:
             token = getattr(gateway, "control_token", "")
+            if len(token) == 64:
+                # Paired host: attempt single-use ticket for session or fall back to paired master token
+                ticket = gateway.request_audio_ticket()
+                if ticket and isinstance(ticket, str) and len(ticket) == 64:
+                    token = ticket
+            elif not token:
+                # Unpaired host: attempt ticket request (rejected if host is not paired)
+                ticket = gateway.request_audio_ticket() or ""
+                if len(ticket) == 64:
+                    token = ticket
             if len(token) != 64:
-                token = gateway.request_audio_ticket() or ""
-            if len(token) != 64:
-                raise PermissionError("PCM authentication required: no valid token or audio ticket")
+                raise PermissionError("PCM authentication required: host must be paired with control_token or valid audio ticket")
             sock = socket.create_connection(
                 (gateway.board_sta_ip or gateway.board_ap_ip, 8889), timeout=3
             )

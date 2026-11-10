@@ -13,6 +13,7 @@
 #include "audio_priority.h"
 #include "game_audio_stream.h"
 #include "audio_sample_format.h"
+#include "afe_sample_stream.h"
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
 #include "esp_afe_sr_iface.h"
 #include "esp_afe_sr_models.h"
@@ -83,6 +84,7 @@ private:
     esp_timer_handle_t spk_power_timer_; // 扬声器自动休眠定时器
     SemaphoreHandle_t playback_mutex_;
     SemaphoreHandle_t settings_mutex_;
+    SemaphoreHandle_t mic_mutex_;
     AudioPriorityGate playback_priority_;
     int32_t tx_buffer_[480]; // Mono; protected by playback_mutex_, off the task stack. Holds resampled 24k frames.
     int32_t pending_game_buf_[240];
@@ -98,8 +100,8 @@ private:
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     const esp_afe_sr_iface_t* afe_iface_ = nullptr;
     esp_afe_sr_data_t* afe_data_ = nullptr;
-    std::vector<int16_t> afe_in_buf_;
-    std::vector<int16_t> afe_out_buf_;
+    audio_afe::AfeSampleStream afe_stream_;
+    std::vector<int16_t> afe_feed_scratch_;
     int afe_feed_chunk_ = 0;
     int afe_fetch_chunk_ = 0;
     std::atomic<uint32_t> afe_processed_samples_{0};

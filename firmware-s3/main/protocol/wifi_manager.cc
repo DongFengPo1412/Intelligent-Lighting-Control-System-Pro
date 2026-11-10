@@ -345,6 +345,30 @@ void WifiManager::UdpServerTaskLoop()
             else if (!identifier(client, 32) || !command[0] || strlen(command) > 2048) error = "invalid_envelope";
             cJSON* seq_item = item("seq");
             uint64_t seq = 0;
+            cJSON* validated = nullptr;
+            char cmd_name[32] = {0};
+            bool compact_frame = false;
+            if (!error) {
+                validated = cJSON_ParseWithOpts(command, nullptr, true);
+                if (validated && cJSON_IsObject(validated)) {
+                    cJSON* parsed_name = cJSON_GetObjectItem(validated, "cmd");
+                    if (cJSON_IsString(parsed_name) && parsed_name->valuestring) {
+                        strncpy(cmd_name, parsed_name->valuestring, sizeof(cmd_name) - 1);
+                    }
+                    cJSON* encoding = cJSON_GetObjectItemCaseSensitive(validated, "encoding");
+                    compact_frame = cJSON_IsString(encoding) && !strcmp(encoding->valuestring, "base64");
+                }
+                if (!token_ok) {
+                    if (!strcasecmp(cmd_name, "mic") ||
+                        !strcasecmp(cmd_name, "audio_abort") ||
+                        !strcasecmp(cmd_name, "request_audio_ticket") ||
+                        !strcasecmp(cmd_name, "reboot") ||
+                        !strcasecmp(cmd_name, "factory_reset") ||
+                        !strcasecmp(cmd_name, "pair")) {
+                        error = "pairing_required";
+                    }
+                }
+            }
             if (!error) {
                 if (!cJSON_IsNumber(seq_item) || !isfinite(seq_item->valuedouble) ||
                     seq_item->valuedouble < 1 || seq_item->valuedouble > 9007199254740991.0 ||
@@ -357,6 +381,7 @@ void WifiManager::UdpServerTaskLoop()
                 mbedtls_sha256((const unsigned char*)command, strlen(command), digest, 0);
                 auto decision = recent.Check(source_addr.sin_addr.s_addr, client, id, seq, digest, &cached);
                 if (decision == UdpRequestGuard::Replay) {
+                    if (validated) cJSON_Delete(validated);
                     sendto(sock, cached, strlen(cached), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
                     cJSON_Delete(envelope); continue;
                 }
@@ -365,6 +390,7 @@ void WifiManager::UdpServerTaskLoop()
                 else if (decision == UdpRequestGuard::Capacity) error = "client_capacity";
             }
             if (error) {
+                if (validated) cJSON_Delete(validated);
                 char rejected[256];
                 snprintf(rejected, sizeof(rejected), "{\"request_id\":\"%s\",\"status\":\"error\",\"error\":\"%s\",\"boot_id\":\"%s\"}", id, error, auth.BootId());
                 sendto(sock, rejected, strlen(rejected), 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
@@ -372,26 +398,17 @@ void WifiManager::UdpServerTaskLoop()
             }
             // JSON must be complete. Retain authenticated legacy text commands
             // (e.g. BANDS) used by the existing music pipeline.
-            cJSON* validated = cJSON_ParseWithOpts(command, nullptr, true);
             bool json_command = command[0] == '{' || command[0] == '[';
             bool ok = !strchr(command, '\n') && !strchr(command, '\r') &&
                 (!json_command || cJSON_IsObject(validated)) &&
                 CommandDispatcher::GetInstance().ProcessLine(command, false);
+            if (validated) {
+                cJSON_Delete(validated);
+                validated = nullptr;
+            }
             auto& dm = DisplayManager::GetInstance();
             auto& dispatcher = CommandDispatcher::GetInstance();
 
-            char cmd_name[32] = {0};
-            bool compact_frame=false;
-            cJSON* parsed_command = validated;
-            if (parsed_command) {
-                cJSON* parsed_name = cJSON_GetObjectItem(parsed_command, "cmd");
-                if (cJSON_IsString(parsed_name) && parsed_name->valuestring) {
-                    strncpy(cmd_name, parsed_name->valuestring, sizeof(cmd_name) - 1);
-                }
-                cJSON* encoding=cJSON_GetObjectItemCaseSensitive(parsed_command,"encoding");
-                compact_frame=cJSON_IsString(encoding) && !strcmp(encoding->valuestring,"base64");
-                cJSON_Delete(parsed_command);
-            }
             bool frame_query = (strcmp(cmd_name, "frame") == 0);
             bool arcade_cmd = (strcasecmp(cmd_name, "arcade") == 0);
             bool ticket_cmd = (strcasecmp(cmd_name, "request_audio_ticket") == 0);

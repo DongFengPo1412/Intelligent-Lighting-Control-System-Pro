@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
     private volatile String serverOrigin = "";
     private volatile String authenticatedOrigin = "";
     private volatile String candidateOrigin = "";
+    private volatile String cameraAuthorizedOrigin = "";
     private volatile boolean bridgeTrusted=false, backgrounded=false, destroyed=false;
     private final java.util.concurrent.atomic.AtomicInteger bridgeEpoch=new java.util.concurrent.atomic.AtomicInteger();
     private final DeviceUdpClient udpClient=new DeviceUdpClient();
@@ -193,6 +194,10 @@ public class MainActivity extends Activity {
         return !authenticatedOrigin.isEmpty() && authenticatedOrigin.equalsIgnoreCase(origin);
     }
 
+    public boolean isCameraAuthorized(String origin) {
+        return origin != null && !cameraAuthorizedOrigin.isEmpty() && cameraAuthorizedOrigin.equalsIgnoreCase(origin);
+    }
+
     private boolean trustedPage(WebView view) {
         String current = view.getUrl();
         if (current == null) return false;
@@ -314,6 +319,15 @@ public class MainActivity extends Activity {
                 if (!isPageAuthenticated(view)) {
                     purgeCookiesAndStorage();
                 }
+                if (url != null && !isOfflinePage(url)) {
+                    Uri u = Uri.parse(url);
+                    String curOrig = new Uri.Builder().scheme(u.getScheme()).encodedAuthority(u.getEncodedAuthority()).build().toString();
+                    if (!curOrig.equalsIgnoreCase(cameraAuthorizedOrigin)) {
+                        cameraAuthorizedOrigin = "";
+                    }
+                } else {
+                    cameraAuthorizedOrigin = "";
+                }
                 super.onPageStarted(view,url,favicon);
             }
             @Override public void onPageFinished(WebView view,String url) {
@@ -340,6 +354,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (frontCameraBridge != null) frontCameraBridge.stop();
+                cameraAuthorizedOrigin = "";
                 if (request.isForMainFrame() && !request.getUrl().toString().startsWith("file:")) {
                     serverOrigin = "";
                     authenticatedOrigin = "";
@@ -353,8 +368,37 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(() -> {
+                    if (isFinishing() || destroyed) {
+                        request.deny();
+                        return;
+                    }
                     try {
-                        request.grant(request.getResources());
+                        String reqOrigin = request.getOrigin() != null ? request.getOrigin().toString() : "";
+                        boolean wantsVideo = false;
+                        for (String res : request.getResources()) {
+                            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
+                                wantsVideo = true;
+                                break;
+                            }
+                        }
+                        if (!wantsVideo) {
+                            request.grant(request.getResources());
+                            return;
+                        }
+                        if (isCameraAuthorized(reqOrigin)) {
+                            request.grant(request.getResources());
+                            return;
+                        }
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("摄像头权限申请")
+                            .setMessage("网页 (" + reqOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
+                            .setPositiveButton("允许", (d, w) -> {
+                                cameraAuthorizedOrigin = reqOrigin;
+                                request.grant(request.getResources());
+                            })
+                            .setNegativeButton("拒绝", (d, w) -> request.deny())
+                            .setOnCancelListener(d -> request.deny())
+                            .show();
                     } catch (Exception e) {
                         request.deny();
                     }
@@ -519,14 +563,26 @@ public class MainActivity extends Activity {
                             long deadlineRead = System.nanoTime() + 800_000_000L;
                             byte[] buf = new byte[256];
                             int r;
-                            while (System.nanoTime() < deadlineRead && (r = in.read(buf)) != -1) {
+                            boolean rejected = false;
+                            while ((r = in.read(buf)) != -1) {
+                                if (System.nanoTime() >= deadlineRead) {
+                                    rejected = true;
+                                    break;
+                                }
                                 out.write(buf, 0, r);
-                                if (out.size() > 16384) break;
+                                if (out.size() > 16384) {
+                                    rejected = true;
+                                    break;
+                                }
                             }
-                            String body = out.toString("UTF-8");
-                            org.json.JSONObject obj = new org.json.JSONObject(body);
-                            if (!"ok".equals(obj.optString("status")) || !"KurisuPro".equals(obj.optString("service"))) {
+                            if (rejected) {
                                 foundServerUrl = null;
+                            } else {
+                                String body = out.toString("UTF-8");
+                                org.json.JSONObject obj = new org.json.JSONObject(body);
+                                if (!"ok".equals(obj.optString("status")) || !"KurisuPro".equals(obj.optString("service"))) {
+                                    foundServerUrl = null;
+                                }
                             }
                         } catch (Exception e) {
                             foundServerUrl = null;
@@ -556,7 +612,6 @@ public class MainActivity extends Activity {
                 }
                 if (sUrl != null) {
                     serverOrigin = sUrl;
-                    authenticatedOrigin = sUrl;
                     ed.putString("server_url", sUrl + "/").apply();
                     String curUrl = webView.getUrl();
                     if (curUrl == null || curUrl.equals(OFFLINE) || !curUrl.startsWith(sUrl)) {
@@ -597,7 +652,6 @@ public class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if (!isFinishing()) {
                                 serverOrigin = url;
-                                authenticatedOrigin = url;
                                 getSharedPreferences("config", MODE_PRIVATE).edit().putString("server_url", url + "/").apply();
                                 Toast.makeText(MainActivity.this, "已自动连接电脑服务 (" + url + ")", Toast.LENGTH_SHORT).show();
                                 webView.loadUrl(url + "/");
@@ -660,8 +714,25 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public boolean startFrontCamera(final String uploadUrl, final String mode) {
             if (backgrounded || destroyed) return false;
-            if (authenticatedOrigin == null || authenticatedOrigin.isEmpty() || !isPageExplicitlyAuthenticated(webView)) {
-                android.util.Log.w("MainActivity", "Camera upload rejected: page is not authenticated");
+            String curUrl = webView != null ? webView.getUrl() : null;
+            if (curUrl == null || isOfflinePage(curUrl)) return false;
+            Uri curUri = Uri.parse(curUrl);
+            final String curOrigin = new Uri.Builder().scheme(curUri.getScheme()).encodedAuthority(curUri.getEncodedAuthority()).build().toString();
+
+            if (!isCameraAuthorized(curOrigin)) {
+                android.util.Log.w("MainActivity", "Camera rejected: origin " + curOrigin + " is not authorized for camera");
+                runOnUiThread(() -> {
+                    if (isFinishing() || destroyed) return;
+                    new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("摄像头权限申请")
+                        .setMessage("网页 (" + curOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
+                        .setPositiveButton("允许", (d, w) -> {
+                            cameraAuthorizedOrigin = curOrigin;
+                            Toast.makeText(MainActivity.this, "已授权摄像头，请重新开启体感交互", Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton("拒绝", null)
+                        .show();
+                });
                 return false;
             }
             if (uploadUrl == null || uploadUrl.trim().isEmpty()) return false;
@@ -672,11 +743,11 @@ public class MainActivity extends Activity {
                 }
                 String host = parsed.getHost();
                 int port = parsed.getPort() != -1 ? parsed.getPort() : ("https".equalsIgnoreCase(parsed.getScheme()) ? 443 : 80);
-                Uri authUri = Uri.parse(authenticatedOrigin);
+                Uri authUri = Uri.parse(curOrigin);
                 String authHost = authUri.getHost();
                 int authPort = authUri.getPort() != -1 ? authUri.getPort() : ("https".equalsIgnoreCase(authUri.getScheme()) ? 443 : 80);
                 if (host == null || !host.equalsIgnoreCase(authHost) || port != authPort) {
-                    android.util.Log.w("MainActivity", "Camera upload rejected: target origin does not match authenticated server");
+                    android.util.Log.w("MainActivity", "Camera upload rejected: target origin does not match authorized server");
                     return false;
                 }
                 String path = parsed.getPath();
@@ -688,7 +759,7 @@ public class MainActivity extends Activity {
                 return false;
             }
             if (frontCameraBridge != null) {
-                return frontCameraBridge.start(uploadUrl, mode, authenticatedOrigin);
+                return frontCameraBridge.start(uploadUrl, mode, curOrigin);
             }
             return false;
         }

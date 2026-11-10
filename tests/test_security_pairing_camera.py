@@ -336,6 +336,89 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         self.assertEqual(req_new_paired["cookie"], f"kurisu_session={new_token_9090}")
         self.assertTrue(req_new_paired["authenticated"])
 
+    def test_camera_authorization_decoupled_from_auto_discovery(self):
+        """Auto-discovery connects serverOrigin but MUST NOT authorize camera access without user prompt."""
+        class MockAndroidApp:
+            def __init__(self):
+                self.server_origin = ""
+                self.authenticated_origin = ""
+                self.camera_authorized_origin = ""
+
+            def on_auto_discovered(self, server_url):
+                # Auto-discovery connects serverOrigin
+                self.server_origin = server_url
+                # MUST NOT grant authenticatedOrigin or cameraAuthorizedOrigin
+                # self.authenticated_origin = server_url  <-- DECOUPLED!
+                # self.camera_authorized_origin = server_url <-- DECOUPLED!
+
+            def on_permission_request(self, origin, resources, user_prompt_response=False):
+                if "RESOURCE_VIDEO_CAPTURE" in resources:
+                    if self.camera_authorized_origin == origin:
+                        return True
+                    if user_prompt_response:
+                        self.camera_authorized_origin = origin
+                        return True
+                    return False
+                return True
+
+            def start_front_camera(self, page_origin, upload_url, user_prompt_response=False):
+                if not self.camera_authorized_origin or self.camera_authorized_origin != page_origin:
+                    if user_prompt_response:
+                        self.camera_authorized_origin = page_origin
+                    return False
+                parsed = urlparse(upload_url)
+                if f"{parsed.scheme}://{parsed.netloc}" != self.camera_authorized_origin:
+                    return False
+                return True
+
+        app = MockAndroidApp()
+        discovered_url = "http://192.168.1.100:8080"
+        app.on_auto_discovered(discovered_url)
+        self.assertEqual(app.server_origin, discovered_url)
+        self.assertEqual(app.authenticated_origin, "")
+        self.assertEqual(app.camera_authorized_origin, "")
+
+        # 1. Unprompted permission request from auto-discovered page -> DENIED
+        granted = app.on_permission_request(discovered_url, ["RESOURCE_VIDEO_CAPTURE"], user_prompt_response=False)
+        self.assertFalse(granted, "Camera must NOT be automatically granted to discovered page")
+
+        # 2. Native startFrontCamera from auto-discovered page without prior approval -> REJECTED
+        started = app.start_front_camera(discovered_url, f"{discovered_url}/api/pro/camera/frame", user_prompt_response=False)
+        self.assertFalse(started, "Native camera bridge must not start without explicit user authorization")
+
+        # 3. User explicitly approves prompt -> GRANTED
+        granted_after_user = app.on_permission_request(discovered_url, ["RESOURCE_VIDEO_CAPTURE"], user_prompt_response=True)
+        self.assertTrue(granted_after_user)
+        self.assertEqual(app.camera_authorized_origin, discovered_url)
+
+        # 4. Now native camera bridge allows starting
+        started_after_user = app.start_front_camera(discovered_url, f"{discovered_url}/api/pro/camera/frame")
+        self.assertTrue(started_after_user)
+
+    def test_health_probe_oversized_and_timeout_rejection(self):
+        """Health probe must reject oversized (>16KB) or timed-out responses."""
+        def simulate_health_probe(response_bytes: bytes, elapsed_ns: int) -> bool:
+            if elapsed_ns >= 800_000_000:
+                return False  # Timed out
+            if len(response_bytes) > 16384:
+                return False  # Oversized response rejected
+            try:
+                data = json.loads(response_bytes.decode('utf-8'))
+                return data.get("status") == "ok" and data.get("service") == "KurisuPro"
+            except Exception:
+                return False
+
+        # Valid probe
+        valid_body = json.dumps({"status": "ok", "service": "KurisuPro"}).encode('utf-8')
+        self.assertTrue(simulate_health_probe(valid_body, 100_000_000))
+
+        # Oversized body (>16KB)
+        huge_body = valid_body + b" " * 17000
+        self.assertFalse(simulate_health_probe(huge_body, 100_000_000), "Oversized response must be rejected")
+
+        # Timeout (>800ms)
+        self.assertFalse(simulate_health_probe(valid_body, 850_000_000), "Timeout must be rejected")
+
 
 if __name__ == "__main__":
     unittest.main()

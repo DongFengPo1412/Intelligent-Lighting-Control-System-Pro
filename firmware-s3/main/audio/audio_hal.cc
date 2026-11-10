@@ -21,6 +21,7 @@ AudioHAL::AudioHAL()
       spk_power_timer_(nullptr),
       playback_mutex_(xSemaphoreCreateMutex()),
       settings_mutex_(xSemaphoreCreateMutex()),
+      mic_mutex_(xSemaphoreCreateMutex()),
       output_volume_(70),
       volume_factor_(32112),
       saved_volume_(-1),
@@ -43,6 +44,7 @@ AudioHAL::~AudioHAL() {
     }
     if (playback_mutex_) vSemaphoreDelete(playback_mutex_);
     if (settings_mutex_) vSemaphoreDelete(settings_mutex_);
+    if (mic_mutex_) vSemaphoreDelete(mic_mutex_);
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     if (afe_iface_ && afe_data_) {
         afe_iface_->destroy(afe_data_);
@@ -301,14 +303,15 @@ esp_err_t AudioHAL::Init(
 
 esp_err_t AudioHAL::EnableMic(bool enable) {
     if (enable && (!initialized_ || !rx_chan_)) return ESP_ERR_INVALID_STATE;
+    if (mic_mutex_) xSemaphoreTake(mic_mutex_, portMAX_DELAY);
     mic_enabled_ = enable;
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     if (!enable && afe_iface_ && afe_data_) {
         afe_iface_->reset_buffer(afe_data_);
-        afe_in_buf_.clear();
-        afe_out_buf_.clear();
+        afe_stream_.Reset();
     }
 #endif
+    if (mic_mutex_) xSemaphoreGive(mic_mutex_);
     return ESP_OK;
 }
 
@@ -493,30 +496,28 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
     }
 
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
+    if (mic_mutex_) xSemaphoreTake(mic_mutex_, portMAX_DELAY);
     if (afe_iface_ && afe_data_ && count > 0) {
-        afe_in_buf_.insert(afe_in_buf_.end(), shifted_buf, shifted_buf + count);
-        while (afe_feed_chunk_ > 0 && afe_in_buf_.size() >= (size_t)afe_feed_chunk_) {
-            afe_iface_->feed(afe_data_, afe_in_buf_.data());
-            afe_in_buf_.erase(afe_in_buf_.begin(), afe_in_buf_.begin() + afe_feed_chunk_);
+        afe_stream_.PushInput(shifted_buf, count);
+        while (afe_stream_.CanFeed(afe_feed_chunk_)) {
+            const int16_t* feed_data = afe_stream_.FeedChunk(afe_feed_chunk_, afe_feed_scratch_);
+            afe_iface_->feed(afe_data_, feed_data);
             afe_fetch_result_t* res = afe_iface_->fetch_with_delay(afe_data_, 0);
             while (res && res->ret_value == ESP_OK && res->data && res->data_size > 0) {
                 size_t out_samples = res->data_size / sizeof(int16_t);
-                afe_out_buf_.insert(afe_out_buf_.end(), (const int16_t*)res->data, (const int16_t*)res->data + out_samples);
+                afe_stream_.PushFetched((const int16_t*)res->data, out_samples);
                 res = afe_iface_->fetch_with_delay(afe_data_, 0);
             }
         }
-        if (afe_out_buf_.size() >= count) {
-            memcpy(dest_buf, afe_out_buf_.data(), count * sizeof(int16_t));
-            afe_out_buf_.erase(afe_out_buf_.begin(), afe_out_buf_.begin() + count);
+        if (afe_stream_.Emit(dest_buf, shifted_buf, count)) {
             afe_processed_samples_.fetch_add(count, std::memory_order_relaxed);
         } else {
-            // Cold start priming fallback (preserve throughput without blocking)
-            memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
             afe_fallback_samples_.fetch_add(count, std::memory_order_relaxed);
         }
     } else {
         memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
     }
+    if (mic_mutex_) xSemaphoreGive(mic_mutex_);
 #else
     memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
 #endif

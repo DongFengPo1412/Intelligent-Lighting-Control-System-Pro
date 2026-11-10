@@ -2845,6 +2845,91 @@ class ListenerLifecycleTests(unittest.TestCase):
         listener._process_utterance(bytes(3200))
         self.assertEqual(listener.last_awake_time, 100.0)
 
+    def test_8f_barge_abort_failure_recovery(self):
+        """When audio.abort() fails during barge-in, listener must resume and restore LED instead of hanging."""
+        listener = self._create_isolated_listener()
+        listener.is_listening = True
+        listener.is_paused = True
+        listener.duplex = True
+        led_mode_recorded = []
+        resumed = []
+        listener._update_board_led = lambda mode: led_mode_recorded.append(mode)
+        listener.resume = lambda: (setattr(listener, 'is_paused', False), resumed.append(True))
+        listener._probe_wake = lambda pcm, phase: "助手"
+        listener.whisper_model = types.SimpleNamespace(
+            transcribe=lambda *a, **k: ([types.SimpleNamespace(text='助手')], object())
+        )
+        mock_audio = types.SimpleNamespace(
+            abort=lambda: False,
+            last_error="simulated_abort_failure",
+            cancelled=threading.Event()
+        )
+        listener.controller._network_audio = mock_audio
+        listener.controller.playback_cancel = threading.Event()
+
+        listener._check_barge(bytes(3200))
+        self.assertFalse(listener._barge_woke)
+        self.assertEqual(listener._barge_keyword, None)
+        self.assertTrue(resumed, "Listener resume() must be called on abort failure")
+        self.assertIn("listening", led_mode_recorded, "LED mode must be restored to 'listening'")
+        self.assertFalse(listener.is_paused, "Listener must NOT be hung in paused state")
+
+    def test_8g_event_loop_closed_cleans_listener_turn(self):
+        """When server_loop is closed/unavailable, on_voice_detected must cleanly finish turn on listener."""
+        import web_server
+        finished_turns = []
+        mock_listener = types.SimpleNamespace(
+            _active_turn_id=42,
+            finish_turn=lambda turn_id=None, text="": finished_turns.append((turn_id, text)),
+            turn_cancelled=threading.Event()
+        )
+        orig_listener = web_server.listener
+        orig_loop = web_server.server_loop
+        try:
+            web_server.listener = mock_listener
+            web_server.server_loop = None  # Loop unavailable
+            web_server.on_voice_detected("测试不可用事件循环", turn_id=42)
+            self.assertEqual(len(finished_turns), 1)
+            self.assertEqual(finished_turns[0], (42, "测试不可用事件循环"))
+        finally:
+            web_server.listener = orig_listener
+            web_server.server_loop = orig_loop
+
+    def test_8h_stale_turn_and_cancellation_intercepted_before_run_chat(self):
+        """process_voice_interaction intercepts stale turn_id or pre-set cancel_event before calling run_chat."""
+        import web_server
+        finished_turns = []
+        mock_listener = types.SimpleNamespace(
+            _active_turn_id=99,  # Current active turn is 99
+            finish_turn=lambda turn_id=None, text="": finished_turns.append((turn_id, text)),
+            turn_cancelled=threading.Event()
+        )
+        orig_listener = web_server.listener
+        run_chat_called = []
+        async def fake_run_chat(text, cancelled=None):
+            run_chat_called.append(text)
+            return {"reply": "fake"}
+
+        orig_run_chat = web_server.run_chat
+        try:
+            web_server.listener = mock_listener
+            web_server.run_chat = fake_run_chat
+
+            # 1. Stale turn (turn 98 < 99)
+            asyncio.run(web_server.process_voice_interaction("过期轮次", turn_id=98))
+            self.assertEqual(len(run_chat_called), 0, "run_chat must NOT be called for stale turn")
+            self.assertEqual(finished_turns[-1], (98, "过期轮次"))
+
+            # 2. Pre-set cancel_event
+            cancel_ev = threading.Event()
+            cancel_ev.set()
+            asyncio.run(web_server.process_voice_interaction("已被取消", turn_id=99, cancel_event=cancel_ev))
+            self.assertEqual(len(run_chat_called), 0, "run_chat must NOT be called for cancelled turn")
+            self.assertEqual(finished_turns[-1], (99, "已被取消"))
+        finally:
+            web_server.listener = orig_listener
+            web_server.run_chat = orig_run_chat
+
 
 if __name__ == "__main__":
     unittest.main()

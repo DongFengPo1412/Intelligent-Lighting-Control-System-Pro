@@ -51,43 +51,20 @@ void NetworkAudio::SyncStatsLocked(){
 
 bool NetworkAudio::CreateAudioTicket(struct in_addr ip, char* out_ticket_64) {
     if (!out_ticket_64) return false;
-    unsigned char rand_bytes[32];
-    esp_fill_random(rand_bytes, sizeof(rand_bytes));
-    const char* hex = "0123456789abcdef";
-    for (size_t i = 0; i < 32; ++i) {
-        out_ticket_64[2 * i] = hex[rand_bytes[i] >> 4];
-        out_ticket_64[2 * i + 1] = hex[rand_bytes[i] & 15];
-    }
-    out_ticket_64[64] = '\0';
     if (!tx_) tx_ = xSemaphoreCreateMutex();
     if (tx_) xSemaphoreTake(tx_, portMAX_DELAY);
-    if (audio_ticket_[0] != '\0' && ticket_expire_ms_ > now_ms() && ticket_ip_.s_addr != ip.s_addr) {
-        if (tx_) xSemaphoreGive(tx_);
-        return false;
-    }
-    memcpy(audio_ticket_, out_ticket_64, 65);
-    ticket_ip_ = ip;
-    ticket_expire_ms_ = now_ms() + 30000;
+    bool ok = ticket_guard_.CreateTicket(ip, out_ticket_64, now_ms(), [](void* buf, size_t n) {
+        esp_fill_random(buf, n);
+    });
     if (tx_) xSemaphoreGive(tx_);
-    return true;
+    return ok;
 }
 
 bool NetworkAudio::CheckAudioTicket(const char* token, struct in_addr ip) {
     if (!token || strlen(token) != 64) return false;
     if (!tx_) return false;
     xSemaphoreTake(tx_, portMAX_DELAY);
-    bool match = false;
-    if (audio_ticket_[0] != '\0' && ticket_expire_ms_ > now_ms()) {
-        if (ticket_ip_.s_addr == ip.s_addr) {
-            unsigned char diff = 0;
-            for (size_t i = 0; i < 64; ++i) diff |= audio_ticket_[i] ^ token[i];
-            if (diff == 0) {
-                match = true;
-                audio_ticket_[0] = '\0';
-                ticket_expire_ms_ = 0;
-            }
-        }
-    }
+    bool match = ticket_guard_.CheckAndConsume(token, ip, now_ms());
     xSemaphoreGive(tx_);
     return match;
 }
@@ -165,13 +142,13 @@ void NetworkAudio::Run(){
         // Authenticate BEFORE assigning the mic/output connection. Unpaired peers
         // cannot capture audio or displace the active authenticated connection.
         if (!read_all(fd, header, sizeof(header))) { close(fd); continue; }
-        size_t first_size = ((size_t)header[5] << 8) | header[6];
+        size_t first_size = 0;
+        pcm_transport::ValidateFrameHeader(header, first_size);
         const size_t prefix = strlen(hello);
         bool valid_hello = false;
-        if (memcmp(header, "KAP1", 4) == 0 && header[4] == 4 && first_size < sizeof(handshake_payload) && read_all(fd, handshake_payload, first_size)) {
-            handshake_payload[first_size] = 0;
-            if (first_size == prefix + 1 + 64 && memcmp(handshake_payload, hello, prefix) == 0 && handshake_payload[prefix] == '|') {
-                const char* token = (const char*)handshake_payload + prefix + 1;
+        const char* token = nullptr;
+        if (header[4] == 4 && first_size < sizeof(handshake_payload) && read_all(fd, handshake_payload, first_size)) {
+            if (pcm_transport::ValidateHandshakePayload(header, handshake_payload, first_size, token)) {
                 if (NetworkAuth::GetInstance().Check(token) || CheckAudioTicket(token, client_addr.sin_addr)) {
                     valid_hello = true;
                 }
@@ -204,12 +181,15 @@ void NetworkAudio::Run(){
             if(selected<0)break;
             if(!selected){if(uint32_t(now_ms()-last_rx)>2000)break;continue;}
             if(!read_all(fd,header,sizeof(header)))break;
-            size_t bytes=((size_t)header[5]<<8)|header[6];
-            if(memcmp(header,"KAP1",4)||bytes>kMaxAudioRx||!bytes||!read_all(fd,rx_payload_,bytes))break;
+            size_t bytes = 0;
+            const auto frame_status = pcm_transport::ValidateFrameHeader(header, bytes);
+            if(frame_status != pcm_transport::ParseFrameStatus::OkAudio &&
+               frame_status != pcm_transport::ParseFrameStatus::OkControlEcho) break;
+            if(!read_all(fd,rx_payload_,bytes)) break;
             last_rx=now_ms();
-            if(header[4]==1 && ready_ && bytes%2==0){
+            if(frame_status == pcm_transport::ParseFrameStatus::OkAudio && ready_){
                 CommandDispatcher::GetInstance().EnqueuePcm(rx_payload_,bytes);
-            } else if(header[4]==5 && ready_){
+            } else if(frame_status == pcm_transport::ParseFrameStatus::OkControlEcho && ready_){
                 if(!Send(5,rx_payload_,bytes))break;
             } else break;
         }

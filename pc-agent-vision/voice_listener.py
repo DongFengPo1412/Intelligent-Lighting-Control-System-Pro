@@ -802,6 +802,10 @@ class VoiceListener:
                     print(f'[打断失败] {self.last_wake_error}')
                     self._barge_woke = False
                     self._barge_keyword = None
+                    self._barge_pending = None
+                    self.is_awake = False
+                    self.resume()
+                    self._update_board_led('listening')
                     return
             else:
                 self.controller.send_json({'cmd':'audio_abort'})

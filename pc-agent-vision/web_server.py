@@ -801,40 +801,89 @@ def on_voice_detected(speech_text: str, turn_id: Optional[int] = None):
     global server_loop, listener
     if globals().get('shutting_down', False):
         print("[WebServer] 关停中，丢弃新的免触语音输入。")
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
     if not speech_text or not speech_text.strip():
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
     if turn_id is None and listener is not None:
         turn_id = getattr(listener, '_active_turn_id', 0)
     print(f"\n[免触麦克风输入]: {speech_text} (turn={turn_id})")
-    if server_loop and not server_loop.is_closed():
+
+    cancel_event = getattr(listener, 'turn_cancelled', None) if listener else None
+    if cancel_event is None:
+        cancel_event = threading.Event()
+
+    if server_loop is None or server_loop.is_closed():
+        print("[WebServer] 事件循环不可用或已关闭，同步清理 listener 轮次状态。")
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        return
+
+    try:
         # The ASR worker stays responsive. Inference and playback are managed asynchronously.
         # This callback runs on the ASR thread, never block with future.result().
-        future = asyncio.run_coroutine_threadsafe(process_voice_interaction(speech_text, turn_id=turn_id), server_loop)
+        future = asyncio.run_coroutine_threadsafe(
+            process_voice_interaction(speech_text, turn_id=turn_id, cancel_event=cancel_event),
+            server_loop
+        )
         def _on_voice_done(fut):
             try:
                 exc = fut.exception()
                 if exc:
                     print(f"[免触语音交互异常]: {exc}")
+                    if listener and hasattr(listener, 'finish_turn'):
+                        listener.finish_turn(turn_id=turn_id, text=speech_text)
             except Exception:
                 pass
         future.add_done_callback(_on_voice_done)
+    except Exception as e:
+        print(f"[WebServer] 提交语音任务失败: {e}，同步清理 listener 轮次状态。")
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
 
 on_voice_detected.is_async_turn = True
 
-async def process_voice_interaction(speech_text: str, turn_id: Optional[int] = None):
+async def process_voice_interaction(speech_text: str, turn_id: Optional[int] = None, cancel_event: Optional[threading.Event] = None):
     """异步执行大模型思考并向全端广播"""
     global listener, agent
     if globals().get('shutting_down', False):
         if listener and hasattr(listener, 'finish_turn'):
             listener.finish_turn(turn_id=turn_id, text=speech_text)
         return
+
+    # Check for stale or cancelled turn BEFORE run_chat
+    if listener:
+        active_id = getattr(listener, '_active_turn_id', turn_id)
+        if turn_id is not None and active_id is not None and turn_id != active_id:
+            print(f"[语音状态] turn {turn_id} 已过期 (当前 active={active_id})，在 run_chat 前拦截并丢弃。")
+            if hasattr(listener, 'finish_turn'):
+                listener.finish_turn(turn_id=turn_id, text=speech_text)
+            return
+    if cancel_event is not None and cancel_event.is_set():
+        print(f"[语音状态] turn {turn_id} 专属取消事件已触发，在 run_chat 前拦截并丢弃。")
+        if listener and hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        return
+    if listener and getattr(listener, 'turn_cancelled', None) and listener.turn_cancelled.is_set():
+        print(f"[语音状态] listener 轮次已取消，在 run_chat 前拦截并丢弃。")
+        if hasattr(listener, 'finish_turn'):
+            listener.finish_turn(turn_id=turn_id, text=speech_text)
+        return
+
     try:
-        cancel = getattr(listener, 'turn_cancelled', None) if listener else None
+        cancel = cancel_event or (getattr(listener, 'turn_cancelled', None) if listener else None)
         result = await run_chat(speech_text, cancelled=cancel)
         if cancel is not None and cancel.is_set():
             print('[语音状态] cancelled: 不广播已取消的旧回复')
             return
+        if listener:
+            active_id = getattr(listener, '_active_turn_id', turn_id)
+            if turn_id is not None and active_id is not None and turn_id != active_id:
+                print(f'[语音状态] turn {turn_id} 在执行后发现已被新轮次 {active_id} 抢占，不广播旧回复')
+                return
         reply = result["reply"]
         print(f"[免触语音回复]: {reply}")
         print(f"[语音分段耗时]: {json.dumps(result.get('timings', {}), ensure_ascii=False)}")
