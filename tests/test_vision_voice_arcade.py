@@ -444,6 +444,7 @@ class TestLightControllerArcadeExecution(unittest.TestCase):
         ctrl = LightController()
         # Non-simulation port so camera/vision is allowed
         ctrl.port = "COM99"
+        ctrl.send_json = MagicMock(return_value=True)
         mock_agent = MagicMock()
         mock_agent.memory = {}
         mock_voice = MagicMock()
@@ -503,6 +504,7 @@ class TestLightControllerArcadeExecution(unittest.TestCase):
 
         ctrl = LightController()
         ctrl.port = "COM99"
+        ctrl.send_json = MagicMock(return_value=True)
         mock_agent = MagicMock()
         mock_agent.memory = {}
         mock_voice = MagicMock()
@@ -555,6 +557,7 @@ class TestLightControllerArcadeExecution(unittest.TestCase):
 
         ctrl = LightController()
         ctrl.port = "COM99"
+        ctrl.send_json = MagicMock(return_value=True)
         mock_agent = MagicMock()
         mock_agent.memory = {}
         mock_voice = MagicMock()

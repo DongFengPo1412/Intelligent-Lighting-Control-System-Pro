@@ -2007,11 +2007,22 @@
       if (img) img.style.display = "block";
       if (wrapper) wrapper.style.display = "block";
 
+      let hasUploadedFirstFrame = false;
+      let hasServerIdentified = false;
+
       window.onNativeCameraFrame = function (b64) {
         if (img) img.src = "data:image/jpeg;base64," + b64;
+        if (!hasUploadedFirstFrame) {
+          hasUploadedFirstFrame = true;
+          if (info) info.textContent = "📤 摄像头已打开 · 首帧已上传";
+        }
       };
 
       window.onNativeCameraObservation = function (res) {
+        if (!hasServerIdentified) {
+          hasServerIdentified = true;
+          if (info) info.textContent = "✨ 服务端已识别";
+        }
         const obs = res.observation || {};
         if (overlay && img) {
           overlay.width = img.clientWidth || 320;
@@ -2051,21 +2062,31 @@
       let serverBase = state.serverOrigin || window.location.origin;
       if (!serverBase || serverBase.startsWith("file:")) {
         const savedUrl = localStorage.getItem("server_url") || "";
-        serverBase = savedUrl || "http://192.168.186.90:8080";
+        serverBase = savedUrl;
+      }
+      if (!serverBase || serverBase.startsWith("file:")) {
+        await stopPhoneCamera(true);
+        throw Error("手机直连灯板模式下无法使用视觉交互，体感视觉需要连接电脑服务");
       }
       serverBase = serverBase.replace(/\/+$/, "");
       const uploadUrl = `${serverBase}/api/pro/camera/frame?mode=${encodeURIComponent(mode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
 
+      if (info) info.textContent = "⏳ 等待授权...";
       const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
       if (!started) {
         await stopPhoneCamera(true);
-        throw Error("硬件前置摄像头无法打开，请确认已授予相机权限");
+        throw Error("硬件前置摄像头无法打开或未授予相机权限");
       }
+      if (info) info.textContent = "📷 摄像头已打开";
       phoneStream = { isNative: true };
       return;
     }
 
     // 2. WebRTC getUserMedia for secure browser contexts
+    if (typeof window !== "undefined" && !window.isSecureContext && window.location.protocol !== "https:" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      await stopPhoneCamera(true);
+      throw Error("手机浏览器在非安全上下文 (HTTP) 下禁止访问摄像头，请使用正式 APK 或通过 HTTPS / 电脑摄像头 访问");
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       await stopPhoneCamera(true);
       throw Error("当前浏览器运行环境未开放 WebRTC 权限，请使用最新版 APK 或选择【电脑摄像头】");
@@ -2595,6 +2616,9 @@ async function poll() {
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
+    if (activeVisionSource === "remote" || currentVisionSessionId) {
+      stopPhoneCamera();
+    }
     if (state.arcadeActive) releaseArcadeControls();
     clearInterval(arcadeHeartbeatTimer);
     clearTimeout(pollTimer);
@@ -2607,6 +2631,9 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("blur", () => { if (state.arcadeActive) releaseArcadeControls(); });
 window.addEventListener("pagehide", () => {
+  if (activeVisionSource === "remote" || currentVisionSessionId) {
+    stopPhoneCamera();
+  }
   if (state.arcadeActive) releaseArcadeControls();
   clearInterval(arcadeHeartbeatTimer);
   clearTimeout(pollTimer);

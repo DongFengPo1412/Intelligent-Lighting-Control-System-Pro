@@ -291,6 +291,8 @@ class TestVisionStopStaleFrameIsolation(unittest.TestCase):
         self.assertTrue(self.hub.started)
         self.assertEqual(self.hub.source, "remote")
         self.assertEqual(self.hub.active_session_id, sess_id)
+        # Clear mock history from session startup so we strictly verify the in-flight frame
+        self.controller.send_json.reset_mock()
 
         jpeg_bytes = self._create_synthetic_jpeg()
 
@@ -362,6 +364,7 @@ class TestVisionStopStaleFrameIsolation(unittest.TestCase):
         """Interleaved execution: frame enters inference under session 1,
         new session 2 starts -> frame 1 finishes -> discarded, does not contaminate session 2."""
         sess_1 = self.hub.start_remote(mode="fingertip")
+        self.controller.send_json.reset_mock()
         jpeg_bytes = self._create_synthetic_jpeg()
 
         in_inference_event = threading.Event()
@@ -413,9 +416,9 @@ class TestVisionStopStaleFrameIsolation(unittest.TestCase):
     def test_performance_waiting_stop_drops_game_input(self):
         """Deterministic regression: frame passes epoch check, enters performance(),
         session is stopped during performance() wait -> ACK returns -> snake_move is NOT called!"""
+        self.controller.mode = 19  # Snake game mode
         sess_id = self.hub.start_remote(mode="gesture_game")
         self.hub.mode = "gesture_game"
-        self.controller.mode = 19  # Snake game mode
 
         # Mock controller.performance to stop the hub while inside the call
         def mock_performance(reaction, frustration, success):

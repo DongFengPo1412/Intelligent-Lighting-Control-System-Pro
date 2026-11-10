@@ -66,6 +66,50 @@ class MultimodalHub:
                 return self.latest_jpeg
         return None
 
+    def _prepare_mode_and_takeover(self, mode):
+        if mode not in self.MODES:
+            raise ValueError(f"不支持的视觉交互模式: {mode}")
+
+        if mode in ("gesture_game", "gaze_game"):
+            current_mode = getattr(self.controller, "mode", None)
+            if current_mode is None:
+                try:
+                    from wifi_gateway import get_wifi_gateway
+                    current_mode = get_wifi_gateway().last_mode
+                except Exception:
+                    current_mode = None
+
+            if isinstance(current_mode, int):
+                is_supported_game = False
+                if current_mode in (19, 21):
+                    is_supported_game = True
+                elif current_mode == 32:
+                    try:
+                        from arcade_runner import get_arcade_session
+                        gid = get_arcade_session(self.controller).status.get("game_id")
+                        if gid in (33, 41):
+                            is_supported_game = True
+                    except Exception:
+                        pass
+                if not is_supported_game:
+                    raise ValueError("手势/视线游戏需要先在街机菜单中选择支持体感控制的游戏卡带（#033 贪吃蛇 或 #041 俄罗斯方块）并启动游戏。")
+            elif current_mode is None:
+                raise ValueError("手势/视线游戏需要先在街机菜单中选择支持体感控制的游戏卡带（#033 贪吃蛇 或 #041 俄罗斯方块）并启动游戏。")
+
+            if mode == "gaze_game":
+                gaze = getattr(getattr(self, "features", None), "gaze", None)
+                if gaze is not None and gaze.coefficients is None:
+                    raise ValueError("视线游戏需要先完成视线校准，请先在视线校准区域完成校准。")
+
+        desired = {"pet": 17, "identity": 17, "fingertip": 26, "sandbox": 27}.get(mode)
+        if desired is not None:
+            if not self.controller.send_json({"cmd": "mode", "val": desired}):
+                raise ConnectionError(f"视觉显示模式切换失败 (mode {desired})，未收到板端回执")
+
+        self.automatic_enabled = True
+        self.arbiter.until = 0
+        self.session_epoch += 1
+
     def start(self, mode="pet", camera=0):
         if camera in ("remote", -1, "phone"):
             return self.start_remote(mode=mode)
@@ -73,12 +117,7 @@ class MultimodalHub:
             raise ValueError("Invalid vision mode/camera")
         if self.thread and self.thread.is_alive() and camera != self.camera:
             raise ValueError("Stop the camera before changing its index")
-        desired = {"pet": 17, "identity": 17, "fingertip": 26, "sandbox": 27}.get(mode)
-        if desired is not None and not self.controller.send_json({"cmd": "mode", "val": desired}):
-            raise ConnectionError("Vision display mode was not acknowledged")
-        self.automatic_enabled = True
-        self.arbiter.until = 0
-        self.session_epoch += 1
+        self._prepare_mode_and_takeover(mode)
         self.active_session_id = f"cam_{self.session_epoch}_{int(time.time())}"
         self.source = "camera"
         if self.thread and self.thread.is_alive():
@@ -100,7 +139,7 @@ class MultimodalHub:
         if self.thread and self.thread.is_alive():
             raise RuntimeError("Stop the local camera before starting remote session")
         self.stop_event.clear()
-        self.session_epoch += 1
+        self._prepare_mode_and_takeover(mode)
         self.active_session_id = f"remote_{self.session_epoch}_{int(time.time())}"
         self.source = "remote"
         self.mode = mode
@@ -117,7 +156,12 @@ class MultimodalHub:
             "gesture_game": {19, 21, 32},
             "gaze_game": {19, 21, 32},
         }
-        self.automatic_enabled = mode in compatible[self.mode]
+        was_enabled = self.automatic_enabled
+        self.automatic_enabled = mode in compatible.get(self.mode, set())
+        if was_enabled and not self.automatic_enabled:
+            # User manually switched to a mode incompatible with current vision interaction.
+            # Invalidate in-flight frames immediately so late frames don't override user choice.
+            self.session_epoch += 1
 
     def stop_remote(self, session_id=None):
         """Only stops an active remote vision session.
@@ -432,9 +476,26 @@ class MultimodalHub:
                 if valid
                 else None
             )
+            if not valid:
+                if self.pending_direction is not None:
+                    self.pending_direction = None
+                    if mode == 32:
+                        try:
+                            from arcade_runner import get_arcade_session
+                            get_arcade_session(self.controller).input_state(0, 0)
+                        except Exception:
+                            pass
+                return
+
             if direction != self.pending_direction:
                 self.pending_direction = direction
                 self.direction_since = now
+                if direction is None and mode == 32:
+                    try:
+                        from arcade_runner import get_arcade_session
+                        get_arcade_session(self.controller).input_state(0, 0)
+                    except Exception:
+                        pass
             if direction and now - self.direction_since > 0.2 and now - self.last_input > 0.3:
                 reaction = (
                     min(10000, max(0, (now - self.last_input) * 1000)) if self.last_input else 1000

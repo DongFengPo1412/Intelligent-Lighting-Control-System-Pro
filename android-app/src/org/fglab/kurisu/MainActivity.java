@@ -762,21 +762,55 @@ public class MainActivity extends Activity {
             Uri curUri = Uri.parse(curUrl);
             final String curOrigin = new Uri.Builder().scheme(curUri.getScheme()).encodedAuthority(curUri.getEncodedAuthority()).build().toString();
 
+            // Validate caller origin against authenticated serverOrigin
+            if (serverOrigin == null || serverOrigin.isEmpty() || !serverOrigin.equalsIgnoreCase(curOrigin)) {
+                android.util.Log.w("MainActivity", "Camera rejected: caller origin does not match authenticated serverOrigin");
+                return false;
+            }
+
+            // Verify Android OS camera permission
+            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                android.util.Log.w("MainActivity", "Camera rejected: OS Camera permission not granted");
+                return false;
+            }
+
             if (!isCameraAuthorized(curOrigin)) {
-                android.util.Log.w("MainActivity", "Camera rejected: origin " + curOrigin + " is not authorized for camera");
+                android.util.Log.i("MainActivity", "Requesting camera authorization for origin: " + curOrigin);
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                final boolean[] authorized = new boolean[]{false};
                 runOnUiThread(() -> {
-                    if (isFinishing() || destroyed) return;
+                    if (isFinishing() || destroyed) {
+                        latch.countDown();
+                        return;
+                    }
                     new AlertDialog.Builder(MainActivity.this)
                         .setTitle("摄像头权限申请")
                         .setMessage("网页 (" + curOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
                         .setPositiveButton("允许", (d, w) -> {
                             cameraAuthorizedOrigin = curOrigin;
-                            Toast.makeText(MainActivity.this, "已授权摄像头，请重新开启体感交互", Toast.LENGTH_SHORT).show();
+                            authorized[0] = true;
+                            latch.countDown();
                         })
-                        .setNegativeButton("拒绝", null)
+                        .setNegativeButton("拒绝", (d, w) -> {
+                            authorized[0] = false;
+                            latch.countDown();
+                        })
+                        .setOnCancelListener(d -> {
+                            authorized[0] = false;
+                            latch.countDown();
+                        })
                         .show();
                 });
-                return false;
+                try {
+                    boolean completed = latch.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                    if (!completed || !authorized[0]) {
+                        android.util.Log.w("MainActivity", "Camera permission denied or timed out by user");
+                        return false;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             }
             if (uploadUrl == null || uploadUrl.trim().isEmpty()) return false;
             try {
@@ -798,6 +832,11 @@ public class MainActivity extends Activity {
                     android.util.Log.w("MainActivity", "Camera upload rejected: endpoint not whitelisted");
                     return false;
                 }
+                String sessionId = parsed.getQueryParameter("session_id");
+                if (sessionId == null || sessionId.trim().isEmpty()) {
+                    android.util.Log.w("MainActivity", "Camera upload rejected: missing session_id");
+                    return false;
+                }
             } catch (Exception e) {
                 return false;
             }
@@ -809,6 +848,13 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public void stopFrontCamera() {
+            if (frontCameraBridge != null) {
+                frontCameraBridge.stop();
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public void stopFrontCamera(final String sessionId) {
             if (frontCameraBridge != null) {
                 frontCameraBridge.stop();
             }
