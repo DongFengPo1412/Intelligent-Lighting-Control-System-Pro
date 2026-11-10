@@ -145,7 +145,7 @@ esp_err_t CommandDispatcher::StartSerialTask(UBaseType_t priority, BaseType_t co
     ret = AudioHAL::GetInstance().IsInitialized() ? xTaskCreatePinnedToCore(
         MicTaskTrampoline,
         "mic_stream_task",
-        4096,
+        10240,
         this,
         priority > 1 ? priority - 1 : 1,
         &mic_task_handle_,

@@ -289,6 +289,7 @@ def exact_plan(text):
     """Fast path for an entire literal command; everything else uses semantic planning."""
     compact = re.sub(r'[，,。.!！\s]', '', text)
     compact = compact.replace('音乐流体','音乐光环')
+    compact = re.sub(r'(?:哗翅车|滩翅舌|滩吃蛇|贪吃车|探吃蛇|探池蛇|弹吃蛇|弹翅车)', '贪吃蛇', compact)
 
     # 1. Explicit color & lighting modes first (prevents lighting commands like "切换到红灯" from hitting arcade)
     color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|切到|切成|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成|调成|变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)

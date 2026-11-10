@@ -72,7 +72,7 @@ def _init_catalog():
         # #026 Space Invaders
         "space invaders": 26, "space_invaders": 26, "太空侵略者": 26, "小蜜蜂": 26, "侵略者": 26,
         # #033 Snake
-        "snake": 33, "贪吃蛇": 33, "吃蛇": 33,
+        "snake": 33, "贪吃蛇": 33, "吃蛇": 33, "滩翅舌": 33, "哗翅车": 33, "滩吃蛇": 33, "弹吃蛇": 33,
         # #034 Pac-Man
         "pacman": 34, "pac-man": 34, "吃豆人": 34, "吃豆": 34,
         # #038 Bomberman

@@ -16,7 +16,7 @@ def data_dir():
 def cache_dir():
     root = Path(
         os.environ.get("KURISU_CACHE_DIR")
-        or Path.home() / ".codex" / "cache" / "tasks" / f"kurisu-runtime-{os.getpid()}"
+        or (data_dir() / "cache")
     )
     root.mkdir(parents=True, exist_ok=True)
     return root

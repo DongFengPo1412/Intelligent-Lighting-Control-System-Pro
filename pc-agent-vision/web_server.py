@@ -958,7 +958,10 @@ async def on_startup(app: web.Application):
     from service_discovery import ServiceAdvertisement
     app['discovery']=ServiceAdvertisement()
     await asyncio.to_thread(app['discovery'].start,HOST_IP,WEB_PORT)
+    token = os.environ.get('KURISU_ACCESS_TOKEN', '')
     print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
+    if token:
+        print(f"[WebServer] 手机一键免配对链接：http://{HOST_IP}:{WEB_PORT}/?pair={token}")
 
     if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
         app['voice_startup_state'] = 'preparing_voice'
@@ -1431,7 +1434,7 @@ if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('--simulate',action='store_true',help='No serial/UDP/camera/microphone/model/speaker access')
     parser.add_argument('--no-audio',action='store_true')
-    parser.add_argument('--host',default='127.0.0.1',help='Explicitly use 0.0.0.0 for paired LAN clients')
+    parser.add_argument('--host',default='0.0.0.0',help='Explicitly use 0.0.0.0 for paired LAN clients')
     parser.add_argument('--port',type=int,default=8080)
     args=parser.parse_args();WEB_PORT=args.port
     if args.simulate:os.environ['KURISU_SIMULATE']='1'

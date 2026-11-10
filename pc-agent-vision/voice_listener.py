@@ -509,18 +509,18 @@ class VoiceListener:
                 self._is_processing = False
 
     def _asr_prompt(self):
-        # A catalogue of singers biases ordinary conversation toward music and
-        # can itself be emitted as recognised speech. Scope it to music sessions.
-        prompt = "以下是中文对话。助手，克里斯，克里斯蒂娜，红莉栖，牧濑红莉栖。"
+        # Biasing prompt for Whisper to guide Chinese recognition of common commands
+        prompt = (
+            "以下是普通话中文日常对话与控制指令：播放音乐、播放歌曲、暂停、上一首、下一首、"
+            "调大音量、调小音量、红灯、绿灯、蓝灯、彩虹、贪吃蛇、俄罗斯方块、超级马里奥、街机小游戏。"
+            "助手，克里斯，克里斯蒂娜，红莉栖，牧濑红莉栖。"
+        )
         controller = getattr(self, 'controller', None)
-        player = getattr(controller, '_music_player', None)
-        music_active = bool(getattr(player, 'running', False) or
-                            getattr(self, '_music_monitor', False))
         library = getattr(controller, '_music_library', None)
-        if music_active and library:
+        if library and getattr(library, 'tracks', None):
             hints = library.speech_hints()
             if hints:
-                prompt += "音乐相关专名：" + hints[:200] + "。"
+                prompt += "常见歌手与歌曲：" + hints[:120] + "。"
         return prompt
 
     def _process_utterance(self, pcm_bytes: bytes):
@@ -1294,6 +1294,7 @@ class VoiceListener:
                     raise RuntimeError('唤醒检测或语音识别未就绪，不能进入等待唤醒状态')
                 self._startup_pcm_event = threading.Event()
                 self._starting_capture = True
+                self._last_board_frame_time = time.time()
                 self.controller.on_mic_data = self._on_board_pcm
                 if not self.controller.connect_audio():
                     raise RuntimeError("Audio transport connection failed")

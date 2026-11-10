@@ -309,7 +309,7 @@ class WiFiGateway:
                     command=json.dumps(query,separators=(',',':'))
                 # Measured hotspot readbacks take up to 375 ms. One bounded
                 # disposable read, no retry storm; controls never take this lock.
-                frame_timeout = float(os.environ.get("KURISU_FRAME_TIMEOUT", "0.45"))
+                frame_timeout = float(os.environ.get("KURISU_FRAME_TIMEOUT", "1.2"))
                 frame_retries = int(os.environ.get("KURISU_FRAME_RETRIES", "0"))
                 channel.send_command(command, timeout=frame_timeout, retries=frame_retries)
                 if health:self._status_sequence=channel._sequence;self._status_boot=channel.boot_id

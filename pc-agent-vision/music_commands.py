@@ -10,6 +10,10 @@ def parse_music_request(text):
     text = text.strip().strip("。！!，, ")
     text = re.sub(r"^(?:助手|红莉栖|克里斯)[，,\s]*", "", text)
     text = re.sub(r"^(?:请你?|麻烦你?)?(?:帮我|给我)?", "", text).strip()
+    # ASR homophone repairs for music playback
+    text = re.sub(r"^(?:伯访|伯仿|拨放|播发|博访|泊放|百放|放播|波放|包放)", "播放", text)
+    text = re.sub(r"周杰[人仁]", "周杰伦", text)
+    text = re.sub(r"气[笔里][箱香祥]", "七里香", text)
     compact = normalized(text)
     controls = {
         "下一首": "next",

@@ -88,6 +88,8 @@ private:
     SemaphoreHandle_t mic_mutex_;
     AudioPriorityGate playback_priority_;
     int32_t tx_buffer_[480]; // Mono; protected by playback_mutex_, off the task stack. Holds resampled 24k frames.
+    int32_t rx_raw_buf_[256]; // Mono 32-bit I2S raw buffer; protected by mic_mutex_, off the task stack.
+    int16_t rx_shifted_buf_[256]; // Mono 16-bit shifted buffer; protected by mic_mutex_, off the task stack.
     int32_t pending_game_buf_[240];
     size_t pending_game_frames_ = 0;
     size_t pending_game_offset_ = 0;

@@ -456,13 +456,12 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
     uint32_t session_generation = mic_stream_generation_.load(std::memory_order_relaxed);
 
     const size_t raw_buffer_size = 256;
-    int32_t bit32_buffer[raw_buffer_size];
     size_t samples_to_read = std::min(max_samples, raw_buffer_size);
     size_t bytes_read = 0;
 
     esp_err_t ret = i2s_channel_read(
         rx_chan_,
-        bit32_buffer,
+        rx_raw_buf_,
         samples_to_read * sizeof(int32_t),
         &bytes_read,
         pdMS_TO_TICKS(timeout_ms)
@@ -481,14 +480,13 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
 #endif
     static uint32_t s_total_samples = 0;
     static uint32_t s_clipped_samples = 0;
-    int16_t shifted_buf[256];
     for (size_t i = 0; i < count; ++i) {
-        int32_t value = bit32_buffer[i] >> kMicShift;
+        int32_t value = rx_raw_buf_[i] >> kMicShift;
         if (value > INT16_MAX || value < -INT16_MAX) {
             s_clipped_samples++;
         }
         s_total_samples++;
-        shifted_buf[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
+        rx_shifted_buf_[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
     }
     if (s_total_samples >= 160000) {
         ESP_LOGD(TAG, "MIC (shift=%d) clipping rate: %.2f%% (%u/%u)",
@@ -508,7 +506,7 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
         return ESP_ERR_INVALID_STATE;
     }
     if (afe_iface_ && afe_data_ && count > 0) {
-        afe_stream_.PushInput(shifted_buf, count);
+        afe_stream_.PushInput(rx_shifted_buf_, count);
         while (afe_stream_.CanFeed(afe_feed_chunk_)) {
             const int16_t* feed_data = afe_stream_.FeedChunk(afe_feed_chunk_, afe_feed_scratch_);
             afe_iface_->feed(afe_data_, feed_data);
@@ -519,13 +517,13 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
                 res = afe_iface_->fetch_with_delay(afe_data_, 0);
             }
         }
-        if (afe_stream_.Emit(dest_buf, shifted_buf, count)) {
+        if (afe_stream_.Emit(dest_buf, rx_shifted_buf_, count)) {
             afe_processed_samples_.fetch_add(count, std::memory_order_relaxed);
         } else {
             afe_fallback_samples_.fetch_add(count, std::memory_order_relaxed);
         }
     } else {
-        memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
+        memcpy(dest_buf, rx_shifted_buf_, count * sizeof(int16_t));
     }
     if (mic_mutex_) xSemaphoreGive(mic_mutex_);
 #else
@@ -535,7 +533,7 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
         if (samples_read) *samples_read = 0;
         return ESP_ERR_INVALID_STATE;
     }
-    memcpy(dest_buf, shifted_buf, count * sizeof(int16_t));
+    memcpy(dest_buf, rx_shifted_buf_, count * sizeof(int16_t));
     if (mic_mutex_) xSemaphoreGive(mic_mutex_);
 #endif
 
