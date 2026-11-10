@@ -69,6 +69,9 @@ class TestSpeechGameNegation(unittest.TestCase):
             "不要启动 41",
             "别启动41",
             "不要玩第四十一款游戏",
+            "不要启动第101款游戏",
+            "千万别玩微光纪元",
+            "先别启动#101",
         ]
         for utterance in test_inputs:
             plan = exact_plan(utterance)
@@ -103,6 +106,12 @@ class TestSpeechGameNegation(unittest.TestCase):
 
         p3 = exact_plan("打开俄罗斯方块")
         self.assertEqual(p3, {"kind": "control", "actions": [{"tool": "start_game", "value": 41}]})
+
+        p101 = exact_plan("启动微光纪元")
+        self.assertEqual(p101, {"kind": "control", "actions": [{"tool": "start_game", "value": 101}]})
+
+        p101_id = exact_plan("启动#101")
+        self.assertEqual(p101_id, {"kind": "control", "actions": [{"tool": "start_game", "value": 101}]})
 
         # Other modules
         green = exact_plan("纯绿灯")

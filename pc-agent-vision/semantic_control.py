@@ -220,7 +220,7 @@ def validate_plan(plan, user_text=None):
                  (tool == 'start_countdown' and 1 <= value <= 86400) or
                  (tool == 'set_brightness' and 1 <= value <= 60) or
                  (tool == 'set_volume' and 0 <= value <= 100) or
-                 (tool == 'start_game' and 1 <= value <= 100) or
+                 (tool == 'start_game' and 1 <= value <= 101) or
                  (tool in ('stop_countdown', 'get_device_status', 'trigger_steins_gate_worldline') and value == 0))
         if not valid:
             raise ValueError(f'Unsupported control: {tool}={value}')

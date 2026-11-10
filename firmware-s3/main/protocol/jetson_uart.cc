@@ -117,8 +117,6 @@ void JetsonUart::UartTaskTrampoline(void* arg) {
 
 void JetsonUart::UartTaskLoop() {
     uint8_t chunk[256];
-    char line_buf[kMaxLineLength + 1];
-    size_t line_len = 0;
     char reply_buf[1024];
 
     ESP_LOGI(TAG, "Jetson UART listening loop entered.");
@@ -130,38 +128,26 @@ void JetsonUart::UartTaskLoop() {
             continue;
         }
 
-        for (int i = 0; i < bytes_read; ++i) {
-            char c = static_cast<char>(chunk[i]);
-
-            if (c == '\n' || c == '\r') {
-                if (line_len > 0) {
-                    line_buf[line_len] = '\0';
-                    rx_frames_++;
-
-                    // Process complete frame
-                    reply_buf[0] = '\0';
-                    ProcessCommand(line_buf, reply_buf, sizeof(reply_buf));
-
-                    if (reply_buf[0] != '\0') {
-                        SendLine(reply_buf);
-                    }
-                    line_len = 0;
-                }
-            } else {
-                if (line_len < kMaxLineLength) {
-                    line_buf[line_len++] = c;
-                } else {
-                    // Line length exceeded limit -> drop frame and send overflow error
-                    rx_errors_++;
-                    ESP_LOGW(TAG, "Jetson frame exceeded max length %zu, dropping frame", kMaxLineLength);
-                    snprintf(reply_buf, sizeof(reply_buf),
-                             "{\"status\":\"error\",\"error\":\"frame_overflow\",\"max_bytes\":%zu}",
-                             kMaxLineLength);
+        receiver_.FeedBytes(
+            chunk,
+            bytes_read,
+            [this, &reply_buf](const char* frame) {
+                rx_frames_++;
+                reply_buf[0] = '\0';
+                ProcessCommand(frame, reply_buf, sizeof(reply_buf));
+                if (reply_buf[0] != '\0') {
                     SendLine(reply_buf);
-                    line_len = 0;
                 }
+            },
+            [this, &reply_buf](size_t max_bytes) {
+                rx_errors_++;
+                ESP_LOGW(TAG, "Jetson frame exceeded max length %zu, discarding tail until newline", max_bytes);
+                snprintf(reply_buf, sizeof(reply_buf),
+                         "{\"status\":\"error\",\"error\":\"frame_overflow\",\"max_bytes\":%zu}",
+                         max_bytes);
+                SendLine(reply_buf);
             }
-        }
+        );
     }
 
     vTaskDelete(nullptr);
@@ -273,12 +259,32 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
             }
             cJSON_Delete(resp);
         } else {
-            // Business commands forwarded directly to CommandDispatcher (UART is authenticated physical line)
-            bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
+            // Business commands whitelist check:
+            // Only forward agreed commands to CommandDispatcher:
+            // mode, brightness, b, board_led, led, arcade, pet, kurisu, countdown, stop_countdown, stop_cd, beep, key
+            bool allowed = false;
+            const char* const kAllowedCmds[] = {
+                "mode", "brightness", "b", "board_led", "led", "arcade",
+                "pet", "kurisu", "countdown", "stop_countdown", "stop_cd", "beep", "key"
+            };
+            for (const auto& a : kAllowedCmds) {
+                if (!strcasecmp(cmd, a)) {
+                    allowed = true;
+                    break;
+                }
+            }
+
+            bool ok = false;
+            if (allowed) {
+                ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
+            }
+
             cJSON* resp = cJSON_CreateObject();
             cJSON_AddStringToObject(resp, "status", ok ? "ok" : "error");
             cJSON_AddBoolToObject(resp, "executed", ok);
-            if (!ok) {
+            if (!allowed) {
+                cJSON_AddStringToObject(resp, "error", "unauthorized_command");
+            } else if (!ok) {
                 cJSON_AddStringToObject(resp, "error", "command_rejected");
             }
             append_req_id(resp);
@@ -305,11 +311,42 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
     } else if (!strcasecmp(line, "version")) {
         snprintf(out_reply, out_reply_size, "{\"status\":\"ok\",\"version\":\"%s\"}", kProtocolVersion);
     } else {
-        bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
-        if (ok) {
-            snprintf(out_reply, out_reply_size, "{\"status\":\"ok\",\"executed\":true,\"cmd\":\"%s\"}", line);
+        bool allowed = false;
+        if (!strncmp(line, "f,", 2)) {
+            allowed = true; // Spectrum
         } else {
-            snprintf(out_reply, out_reply_size, "{\"status\":\"error\",\"error\":\"command_rejected\",\"cmd\":\"%s\"}", line);
+            const char* const kAllowedPrefixes[] = {
+                "mode ", "brightness ", "b ", "board_led ", "led ", "countdown ", "arcade "
+            };
+            for (const auto& p : kAllowedPrefixes) {
+                if (!strncasecmp(line, p, strlen(p))) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (!allowed) {
+                const char* const kAllowedExact[] = {
+                    "pet", "kurisu", "stop_countdown", "stop_cd", "beep",
+                    "snake", "tetris", "fire", "matrix", "spectrum"
+                };
+                for (const auto& e : kAllowedExact) {
+                    if (!strcasecmp(line, e)) {
+                        allowed = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (allowed) {
+            bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
+            if (ok) {
+                snprintf(out_reply, out_reply_size, "{\"status\":\"ok\",\"executed\":true,\"cmd\":\"%s\"}", line);
+            } else {
+                snprintf(out_reply, out_reply_size, "{\"status\":\"error\",\"error\":\"command_rejected\",\"cmd\":\"%s\"}", line);
+            }
+        } else {
+            snprintf(out_reply, out_reply_size, "{\"status\":\"error\",\"error\":\"unauthorized_command\",\"cmd\":\"%s\"}", line);
         }
     }
 }

@@ -8,6 +8,7 @@ class JetsonUartParser:
         self.max_line_len = max_line_len
         self.version = version
         self.rx_buffer = bytearray()
+        self.discarding_oversized = False
         self.dispatched_commands = []
         self.system_state = {
             "mode": 14,
@@ -22,7 +23,10 @@ class JetsonUartParser:
         for b in chunk:
             c = chr(b)
             if c in ('\n', '\r'):
-                if len(self.rx_buffer) > 0:
+                if self.discarding_oversized:
+                    self.discarding_oversized = False
+                    self.rx_buffer.clear()
+                elif len(self.rx_buffer) > 0:
                     line = self.rx_buffer.decode('utf-8', errors='replace').strip()
                     self.rx_buffer.clear()
                     if line:
@@ -30,9 +34,12 @@ class JetsonUartParser:
                         if reply:
                             replies.append(reply)
             else:
+                if self.discarding_oversized:
+                    continue
                 if len(self.rx_buffer) < self.max_line_len:
                     self.rx_buffer.append(b)
                 else:
+                    self.discarding_oversized = True
                     self.rx_buffer.clear()
                     replies.append({
                         "status": "error",
@@ -77,8 +84,15 @@ class JetsonUartParser:
             elif cmd_lower == "version":
                 return with_req_id({"status": "ok", "version": self.version})
             else:
-                self.dispatched_commands.append(line)
-                return with_req_id({"status": "ok", "executed": True})
+                allowed_json = {
+                    "mode", "brightness", "b", "board_led", "led", "arcade",
+                    "pet", "kurisu", "countdown", "stop_countdown", "stop_cd", "beep", "key"
+                }
+                if cmd_lower in allowed_json:
+                    self.dispatched_commands.append(line)
+                    return with_req_id({"status": "ok", "executed": True})
+                else:
+                    return with_req_id({"status": "error", "error": "unauthorized_command", "executed": False})
 
         # Plain text commands
         text_lower = line.strip().lower()
@@ -94,8 +108,26 @@ class JetsonUartParser:
         elif text_lower == "version":
             return {"status": "ok", "version": self.version}
         else:
-            self.dispatched_commands.append(line)
-            return {"status": "ok", "executed": True, "cmd": line}
+            allowed = False
+            if text_lower.startswith("f,"):
+                allowed = True
+            for prefix in ("mode ", "brightness ", "b ", "board_led ", "led ", "countdown ", "arcade "):
+                if text_lower.startswith(prefix):
+                    allowed = True
+                    break
+            if not allowed:
+                allowed_exact = {
+                    "pet", "kurisu", "stop_countdown", "stop_cd", "beep",
+                    "snake", "tetris", "fire", "matrix", "spectrum"
+                }
+                if text_lower in allowed_exact:
+                    allowed = True
+
+            if allowed:
+                self.dispatched_commands.append(line)
+                return {"status": "ok", "executed": True, "cmd": line}
+            else:
+                return {"status": "error", "error": "unauthorized_command", "cmd": line}
 
 
 class TestJetsonUartProtocol(unittest.TestCase):
@@ -175,14 +207,16 @@ class TestJetsonUartProtocol(unittest.TestCase):
         self.assertEqual(replies[1]["version"], "2.2.0")
 
     def test_09_frame_overflow_drop(self):
-        # Send > 1024 bytes without newline
-        big_chunk = b'X' * 1025
-        replies = self.parser.feed_bytes(big_chunk)
+        # Send 1025 padding bytes followed by 'mode 1\n' in the same line
+        # Must report overflow error ONCE, discard 'mode 1', and NOT execute mode 1!
+        poisoned_chunk = b'X' * 1025 + b'mode 1\n'
+        replies = self.parser.feed_bytes(poisoned_chunk)
         self.assertEqual(len(replies), 1)
         self.assertEqual(replies[0]["status"], "error")
         self.assertEqual(replies[0]["error"], "frame_overflow")
+        self.assertEqual(len(self.parser.dispatched_commands), 0, "Tail of oversized frame MUST NOT be executed!")
 
-        # Next normal frame must be parsed cleanly
+        # Next normal frame must be parsed cleanly and receive normal pong
         replies = self.parser.feed_bytes(b'{"cmd":"ping","req_id":"recovered"}\n')
         self.assertEqual(len(replies), 1)
         self.assertEqual(replies[0]["req_id"], "recovered")
@@ -195,6 +229,15 @@ class TestJetsonUartProtocol(unittest.TestCase):
         self.assertEqual(replies[0]["status"], "ok")
         self.assertTrue(replies[0]["pong"])
 
+    def test_11_unauthorized_commands_rejected(self):
+        # Sensitive or non-agreed commands must be rejected over Jetson UART
+        for bad_cmd in [b'{"cmd":"pair"}\n', b'{"cmd":"reboot"}\n', b'{"cmd":"factory_reset"}\n', b'reboot\n']:
+            replies = self.parser.feed_bytes(bad_cmd)
+            self.assertEqual(len(replies), 1)
+            self.assertEqual(replies[0]["status"], "error")
+            self.assertEqual(replies[0]["error"], "unauthorized_command")
+
 
 if __name__ == "__main__":
     unittest.main()
+

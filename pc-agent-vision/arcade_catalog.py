@@ -39,6 +39,16 @@ def _init_catalog():
         except Exception:
             pass
 
+    # Ensure formal cartridge #101 MicroLight is always in catalog
+    if 101 not in _CATALOG_CACHE:
+        _CATALOG_CACHE[101] = {
+            "id": 101,
+            "name": "微光纪元",
+            "full_name": "微光纪元：横版世界 (MicroLight)",
+            "en_name": "MicroLight",
+            "category": "survival",
+        }
+
     # Aliases & common synonyms for popular cartridges
     aliases = {
         # #001 Super Mario Bros.
@@ -81,6 +91,9 @@ def _init_catalog():
         "fruit ninja": 92, "fruit_ninja": 92, "水果忍者": 92, "切水果": 92,
         # #097 Frogger
         "frogger": 97, "青蛙过河": 97, "过河青蛙": 97,
+        # #101 MicroLight
+        "microlight": 101, "micro light": 101, "micro_light": 101,
+        "微光纪元": 101, "微光纪元：横版世界": 101, "横版世界": 101,
     }
     for k, v in aliases.items():
         _NAME_TO_ID[k.lower()] = v
@@ -91,19 +104,21 @@ RESERVED_LIGHTING_WORDS = {
     "红灯", "绿灯", "蓝灯", "纯红", "纯蓝", "纯绿", "红色", "绿色", "蓝色",
     "极光", "呼吸极光", "霓虹", "幻彩霓虹", "流星", "流星划过", "星空", "繁星点点",
     "雨滴", "乱序雨滴", "波纹", "中心波纹", "笑脸", "哭脸", "垂头丧气", "表情",
-    "桌宠", "红莉栖", "立绘", "倒计时", "沙漏", "世界线", "仪表", "画布", "微光",
+    "桌宠", "红莉栖", "立绘", "倒计时", "沙漏", "世界线", "仪表", "画布",
     "音乐", "随动", "光环", "流体", "关灯", "开灯"
 }
 
 
 def parse_chinese_number_1_to_100(s: str) -> Optional[int]:
-    """Parse integer or Chinese numeral up to 100."""
+    """Parse integer or Chinese numeral up to 101."""
     if not s:
         return None
     s = str(s).strip()
     if s.isdigit():
         val = int(s)
-        return val if 1 <= val <= 100 else None
+        return val if 1 <= val <= 101 else None
+    if s in ('一百零一', '一百一', '一百零1'):
+        return 101
     digits = dict(zip('零一二三四五六七八九', range(10)))
     if s == '一百':
         return 100
@@ -117,7 +132,7 @@ def parse_chinese_number_1_to_100(s: str) -> Optional[int]:
             tens = digits[left] if left else 1
             units = digits[right] if right else 0
             val = tens * 10 + units
-            return val if 1 <= val <= 100 else None
+            return val if 1 <= val <= 101 else None
     return None
 
 
@@ -130,24 +145,24 @@ def find_arcade_games(text: str) -> set:
         if len(name) >= 2 and name not in RESERVED_LIGHTING_WORDS and name in norm:
             found.add(gid)
 
-    # Recognize #041, #41
+    # Recognize #041, #41, #101
     for m in re.finditer(r'[#＃](\d{1,3})', norm):
         val = int(m.group(1))
-        if 1 <= val <= 100 and val in _CATALOG_CACHE:
+        if 1 <= val <= 101 and val in _CATALOG_CACHE:
             found.add(val)
 
-    # Recognize 第41款 / 第41个 / 41号 / 第四十一款游戏 / 41款
+    # Recognize 第41款 / 第41个 / 41号 / 第四十一款游戏 / 41款 / 第101款
     for m in re.finditer(r'(?:第\s*([0-9]{1,3}|[零一二三四五六七八九十百两]+)\s*[款个号关]?|([0-9]{1,3}|[零一二三四五六七八九十百两]+)\s*[号款关])\s*(?:小?游戏|街机|卡带)?', norm):
         num_str = m.group(1) or m.group(2)
         val = parse_chinese_number_1_to_100(num_str)
-        if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
+        if val and 1 <= val <= 101 and val in _CATALOG_CACHE:
             found.add(val)
 
     # Recognize bare numbers in arcade commands: (启动/打开/开启/玩/运行/切换到/选/进/去玩) + digits or Chinese numbers
     for m in re.finditer(r'(?:启动|打开|开启|玩|运行|切换到|选|进|去玩)\s*(?:([0-9]{1,3})(?!\d)|([零一二三四五六七八九十百两]+)(?=[号款关个]|卡带|游戏|街机|$|\s|[，,。；;！!]))|([0-9]{1,3}|[零一二三四五六七八九十百两]+)\s*(?:小?游戏|街机|卡带|[号款关个])', norm):
         num_str = m.group(1) or m.group(2) or m.group(3)
         val = parse_chinese_number_1_to_100(num_str)
-        if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
+        if val and 1 <= val <= 101 and val in _CATALOG_CACHE:
             found.add(val)
 
     return found
@@ -160,7 +175,7 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         return None
     # Integer direct lookup
     if isinstance(query, int):
-        if 1 <= query <= 100 and query in _CATALOG_CACHE:
+        if 1 <= query <= 101 and query in _CATALOG_CACHE:
             return query, _CATALOG_CACHE[query]["name"]
         return None
 
@@ -171,7 +186,7 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
     # Digits direct lookup
     if raw.isdigit():
         val = int(raw)
-        if 1 <= val <= 100 and val in _CATALOG_CACHE:
+        if 1 <= val <= 101 and val in _CATALOG_CACHE:
             return val, _CATALOG_CACHE[val]["name"]
         return None
 
@@ -184,8 +199,13 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
     norm_clean = re.sub(r'^(?:启动|打开|开启|玩|运行|切换到|选|进|去玩)\s*', '', norm_clean)
     norm_clean = re.sub(r'[号款关个]+$', '', norm_clean)
     val = parse_chinese_number_1_to_100(norm_clean)
-    if val and 1 <= val <= 100 and val in _CATALOG_CACHE:
+    if val and 1 <= val <= 101 and val in _CATALOG_CACHE:
         return val, _CATALOG_CACHE[val]["name"]
+
+    # Clean stripped alias match (e.g., "启动微光纪元", "玩超级马里奥")
+    if norm_clean and norm_clean in _NAME_TO_ID:
+        gid = _NAME_TO_ID[norm_clean]
+        return gid, _CATALOG_CACHE.get(gid, {}).get("name", norm_clean)
 
     # Exact alias match
     if norm in _NAME_TO_ID:

@@ -497,6 +497,12 @@ esp_err_t AudioHAL::ReadMic(int16_t* dest_buf, size_t max_samples, size_t* sampl
 
 #if defined(CONFIG_AUDIO_ENABLE_AFE)
     if (mic_mutex_) xSemaphoreTake(mic_mutex_, portMAX_DELAY);
+    if (!mic_enabled_) {
+        // Stream teardown / stop occurred while I2S read was in flight: discard in-flight samples
+        if (mic_mutex_) xSemaphoreGive(mic_mutex_);
+        if (samples_read) *samples_read = 0;
+        return ESP_ERR_INVALID_STATE;
+    }
     if (afe_iface_ && afe_data_ && count > 0) {
         afe_stream_.PushInput(shifted_buf, count);
         while (afe_stream_.CanFeed(afe_feed_chunk_)) {

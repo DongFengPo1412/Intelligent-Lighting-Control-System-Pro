@@ -518,9 +518,10 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
         cJSON_Delete(root);
         return true;
     }
-    // {"cmd":"mode", "val":4}
+    // {"cmd":"mode", "val":4} / {"cmd":"mode", "mode":4}
     else if (strcasecmp(cmd, "mode") == 0) {
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
+        if (!val_item) val_item = cJSON_GetObjectItem(root, "mode");
         if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && IsDirectDisplayMode(val_item->valueint)) {
             dm.SetMode(val_item->valueint);
             cJSON_Delete(root);
