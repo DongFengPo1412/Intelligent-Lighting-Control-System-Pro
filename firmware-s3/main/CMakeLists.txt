@@ -132,6 +132,7 @@ idf_component_register(
         "protocol/command_dispatcher.cc"
         "protocol/interaction_commands.cc"
         "protocol/jetson_uart.cc"
+        "protocol/canvas_protocol.cc"
         "protocol/network_audio.cc"
         "protocol/network_auth.cc"
         "protocol/wifi_manager.cc"

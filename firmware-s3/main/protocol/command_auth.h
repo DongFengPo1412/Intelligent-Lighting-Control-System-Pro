@@ -109,7 +109,25 @@ inline bool IsPermittedUnauthenticated(const char* raw_cmd, const cJSON* validat
                 !strcasecmp(name, "volume") ||
                 !strcasecmp(name, "v") ||
                 !strcasecmp(name, "beep") ||
-                !strcasecmp(name, "key")) {
+                !strcasecmp(name, "key") ||
+                !strcasecmp(name, "track") ||
+                !strcasecmp(name, "track_cal") ||
+                !strcasecmp(name, "hand") ||
+                !strcasecmp(name, "pet_context") ||
+                !strcasecmp(name, "celebrate") ||
+                !strcasecmp(name, "pixel") ||
+                !strcasecmp(name, "canvas") ||
+                !strcasecmp(name, "canvas_chunk") ||
+                !strcasecmp(name, "clear_canvas") ||
+                !strcasecmp(name, "canvas_clear") ||
+                !strcasecmp(name, "difficulty") ||
+                !strcasecmp(name, "performance") ||
+                !strcasecmp(name, "mir") ||
+                !strcasecmp(name, "gamma") ||
+                !strcasecmp(name, "get_capabilities") ||
+                !strcasecmp(name, "capabilities") ||
+                !strcasecmp(name, "release_input") ||
+                !strcasecmp(name, "session")) {
                 return true;
             }
         }

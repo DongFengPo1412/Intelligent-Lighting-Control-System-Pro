@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
+#include <utility>
+#include "canvas_protocol.h"
 
 #if !defined(ESP_PLATFORM) && defined(_WIN32)
 typedef int uart_port_t;
@@ -30,58 +33,153 @@ static constexpr gpio_num_t  kDefaultRxPin    = GPIO_NUM_8; // ESP32 RX <- Jetso
 static constexpr gpio_num_t  kDefaultTxPin    = GPIO_NUM_9; // ESP32 TX -> Jetson RX (Pin 10)
 static constexpr int         kDefaultBaudRate = 115200;
 static constexpr size_t      kMaxLineLength   = 1024;
-static constexpr const char* kProtocolVersion = "2.2.0";
+static constexpr const char* kProtocolVersion = "2.3.0";
 
 /**
- * Robust stream frame receiver with strict delimiter boundary and overflow discarding.
- * If incoming frame exceeds kMaxLineLength, triggers on_error ONCE and discards
- * all trailing bytes until the next delimiter (\n or \r). Subsequent frames start fresh.
+ * Multi-format stream receiver supporting both:
+ * 1. Delimited JSON Lines (\n or \r).
+ * 2. High-speed binary canvas frames (magic 0x55 0xAA 0x43 0x46).
+ *
+ * If incoming text line exceeds kMaxLineLength, triggers on_error ONCE and discards
+ * all trailing bytes until the next delimiter. Subsequent frames start fresh.
  */
 class FrameReceiver {
 public:
-    template <typename ProcessFn, typename ErrorFn>
-    void FeedBytes(const uint8_t* data, size_t len, ProcessFn&& on_frame, ErrorFn&& on_error) {
+    enum class State {
+        TEXT,
+        BINARY_HEADER,
+        BINARY_PAYLOAD
+    };
+
+    template <typename TextFn, typename BinaryFn, typename ErrorFn>
+    void FeedBytes(const uint8_t* data, size_t len, TextFn&& on_text, BinaryFn&& on_binary, ErrorFn&& on_error) {
         if (!data || len == 0) return;
         for (size_t i = 0; i < len; ++i) {
-            char c = static_cast<char>(data[i]);
-            if (c == '\n' || c == '\r') {
-                if (discarding_oversized_) {
-                    discarding_oversized_ = false;
-                    line_len_ = 0;
-                } else if (line_len_ > 0) {
-                    line_buf_[line_len_] = '\0';
-                    on_frame(line_buf_);
-                    line_len_ = 0;
+            uint8_t b = data[i];
+
+            switch (state_) {
+                case State::TEXT: {
+                    // Check for binary magic sync sequence when starting a new line
+                    if (line_len_ == 0 && b == canvas::kMagic0) {
+                        header_buf_[0] = b;
+                        header_pos_ = 1;
+                        state_ = State::BINARY_HEADER;
+                        break;
+                    }
+
+                    if (b == '\n' || b == '\r') {
+                        if (discarding_oversized_) {
+                            discarding_oversized_ = false;
+                            line_len_ = 0;
+                        } else if (line_len_ > 0) {
+                            line_buf_[line_len_] = '\0';
+                            on_text(line_buf_);
+                            line_len_ = 0;
+                        }
+                    } else {
+                        if (discarding_oversized_) {
+                            continue;
+                        }
+                        if (line_len_ < kMaxLineLength) {
+                            line_buf_[line_len_++] = static_cast<char>(b);
+                        } else {
+                            discarding_oversized_ = true;
+                            line_len_ = 0;
+                            on_error(kMaxLineLength);
+                        }
+                    }
+                    break;
                 }
-            } else {
-                if (discarding_oversized_) {
-                    // Silently drop all bytes of oversized frame tail until next delimiter
-                    continue;
+
+                case State::BINARY_HEADER: {
+                    header_buf_[header_pos_++] = b;
+
+                    // Validate magic bytes in positions 1, 2, 3
+                    if (header_pos_ == 2 && b != canvas::kMagic1) {
+                        // Roll back to text mode: header_buf_[0..1] are normal text chars
+                        state_ = State::TEXT;
+                        line_buf_[0] = static_cast<char>(header_buf_[0]);
+                        line_buf_[1] = static_cast<char>(header_buf_[1]);
+                        line_len_ = 2;
+                        break;
+                    }
+                    if (header_pos_ == 3 && b != canvas::kMagic2) {
+                        state_ = State::TEXT;
+                        for (size_t k = 0; k < 3; ++k) line_buf_[k] = static_cast<char>(header_buf_[k]);
+                        line_len_ = 3;
+                        break;
+                    }
+                    if (header_pos_ == 4 && b != canvas::kMagic3) {
+                        state_ = State::TEXT;
+                        for (size_t k = 0; k < 4; ++k) line_buf_[k] = static_cast<char>(header_buf_[k]);
+                        line_len_ = 4;
+                        break;
+                    }
+
+                    // Once all 16 bytes of BinaryHeader are received
+                    if (header_pos_ >= sizeof(canvas::BinaryHeader)) {
+                        memcpy(&current_header_, header_buf_, sizeof(canvas::BinaryHeader));
+                        if (current_header_.payload_len > canvas::kFrameSizeBytes) {
+                            // Oversized binary payload, reject and reset
+                            state_ = State::TEXT;
+                            line_len_ = 0;
+                            on_error(canvas::kFrameSizeBytes);
+                        } else if (current_header_.payload_len == 0) {
+                            on_binary(current_header_, nullptr);
+                            state_ = State::TEXT;
+                            line_len_ = 0;
+                        } else {
+                            state_ = State::BINARY_PAYLOAD;
+                            payload_pos_ = 0;
+                        }
+                    }
+                    break;
                 }
-                if (line_len_ < kMaxLineLength) {
-                    line_buf_[line_len_++] = c;
-                } else {
-                    // Max length exceeded: trigger overflow error ONCE and enter discarding state
-                    discarding_oversized_ = true;
-                    line_len_ = 0;
-                    on_error(kMaxLineLength);
+
+                case State::BINARY_PAYLOAD: {
+                    binary_payload_[payload_pos_++] = b;
+                    if (payload_pos_ >= current_header_.payload_len) {
+                        on_binary(current_header_, binary_payload_);
+                        state_ = State::TEXT;
+                        line_len_ = 0;
+                    }
+                    break;
                 }
             }
         }
     }
 
+    // 2-callback backward compatibility overload
+    template <typename TextFn, typename ErrorFn>
+    void FeedBytes(const uint8_t* data, size_t len, TextFn&& on_text, ErrorFn&& on_error) {
+        FeedBytes(data, len, std::forward<TextFn>(on_text),
+                  [](const canvas::BinaryHeader&, const uint8_t*){},
+                  std::forward<ErrorFn>(on_error));
+    }
+
     void Reset() {
         line_len_ = 0;
         discarding_oversized_ = false;
+        state_ = State::TEXT;
+        header_pos_ = 0;
+        payload_pos_ = 0;
     }
 
     bool IsDiscardingOversized() const { return discarding_oversized_; }
     size_t GetCurrentLineLength() const { return line_len_; }
+    State GetState() const { return state_; }
 
 private:
     char line_buf_[kMaxLineLength + 1];
     size_t line_len_ = 0;
     bool discarding_oversized_ = false;
+
+    State state_ = State::TEXT;
+    uint8_t header_buf_[sizeof(canvas::BinaryHeader)];
+    size_t header_pos_ = 0;
+    canvas::BinaryHeader current_header_{};
+    uint8_t binary_payload_[canvas::kFrameSizeBytes];
+    size_t payload_pos_ = 0;
 };
 
 class JetsonUart {
@@ -104,11 +202,23 @@ public:
     esp_err_t SendRaw(const void* data, size_t len);
 
     // 解析与调度单行命令 (供内部任务及主机自动化单测直接调用)
-    // 返回生成的响应 JSON 字符串；若无需回包则返回空字符串
     static void ProcessCommand(const char* line, char* out_reply, size_t out_reply_size);
+
+    // 处理二进制画布帧
+    static void ProcessBinaryFrame(const canvas::BinaryHeader& header, const uint8_t* payload,
+                                   char* out_reply, size_t out_reply_size);
 
     bool IsInitialized() const { return initialized_; }
     bool IsRunning() const { return is_running_; }
+
+    // 会话与冲突仲裁
+    void SetSession(const char* session_id);
+    void ClearSession();
+    const char* GetSessionId() const { return session_id_; }
+
+    // 释放所有当前处于按住状态的按键
+    void ReleaseHeldKeys();
+    uint16_t GetHeldKeys() const { return held_keys_; }
 
     // 诊断统计
     uint32_t GetRxFramesCount() const { return rx_frames_; }
@@ -119,27 +229,29 @@ private:
     JetsonUart();
     ~JetsonUart();
 
-    JetsonUart(const JetsonUart&) = delete;
-    JetsonUart& operator=(const JetsonUart&) = delete;
-
     static void UartTaskTrampoline(void* arg);
     void UartTaskLoop();
 
     uart_port_t port_ = kDefaultUartPort;
-    gpio_num_t rx_pin_ = kDefaultRxPin;
-    gpio_num_t tx_pin_ = kDefaultTxPin;
-    int baud_rate_ = kDefaultBaudRate;
+    gpio_num_t  rx_pin_ = kDefaultRxPin;
+    gpio_num_t  tx_pin_ = kDefaultTxPin;
+    int         baud_rate_ = kDefaultBaudRate;
 
-    bool initialized_ = false;
-    volatile bool is_running_ = false;
+    bool        initialized_ = false;
+    bool        is_running_ = false;
     TaskHandle_t task_handle_ = nullptr;
     SemaphoreHandle_t tx_mutex_ = nullptr;
+
+    FrameReceiver receiver_;
 
     uint32_t rx_frames_ = 0;
     uint32_t tx_frames_ = 0;
     uint32_t rx_errors_ = 0;
-    FrameReceiver receiver_;
+
+    // 会话与超时看门狗
+    char     session_id_[36] = {0};
+    uint16_t held_keys_ = 0;
+    uint32_t last_input_time_ms_ = 0;
 };
 
 } // namespace jetson
-

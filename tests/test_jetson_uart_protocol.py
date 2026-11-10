@@ -1,57 +1,291 @@
-"""Unit and framing tests for ESP32-S3 Jetson Nano UART1 communication protocol."""
+"""Unit, framing, binary, and security tests for ESP32-S3 Jetson Nano UART1 protocol v2.3.0."""
+import binascii
 import json
+import struct
 import unittest
 
+MAGIC = b"\x55\xaa\x43\x46"  # 0x55, 0xAA, 'C', 'F'
+BIN_FULL_FRAME = 0x01
+BIN_CHUNK_FRAME = 0x02
+BIN_SINGLE_PIXEL = 0x03
+BIN_CLEAR = 0x04
+
+FLAG_COMMIT_NOW = 1 << 0
+FLAG_AUTO_MODE = 1 << 1
+
+
+def crc16_ccitt(data: bytes) -> int:
+    return binascii.crc_hqx(data, 0xFFFF)
+
+
 class JetsonUartParser:
-    """Python reference parser reflecting firmware-s3/main/protocol/jetson_uart.cc."""
-    def __init__(self, max_line_len=1024, version="2.2.0"):
+    """Python reference parser reflecting firmware-s3/main/protocol/jetson_uart.cc & canvas_protocol.cc."""
+
+    def __init__(self, max_line_len=1024, version="2.3.0"):
         self.max_line_len = max_line_len
         self.version = version
         self.rx_buffer = bytearray()
         self.discarding_oversized = False
         self.dispatched_commands = []
+        self.state = "TEXT"
+        self.header_buf = bytearray()
+        self.binary_payload = bytearray()
+        self.current_header = None
+
+        # System & Arcade mock state
         self.system_state = {
-            "mode": 14,
+            "mode": 17,
             "brightness": 20,
             "mic_streaming": False,
             "arcade_active": 0,
-            "arcade_game_id": 0
+            "arcade_game_id": 0,
+            "canvas_active": False,
+            "held_keys": 0,
+            "canvas_frames": 0,
+            "session_id": "",
         }
+
+        # Canvas Assembler mock state
+        self.canvas_buffer = bytearray(768)
+        self.canvas_received = bytearray(768)
+        self.canvas_frame_id = 0
+        self.canvas_in_progress = False
 
     def feed_bytes(self, chunk: bytes) -> list[dict]:
         replies = []
         for b in chunk:
-            c = chr(b)
-            if c in ('\n', '\r'):
-                if self.discarding_oversized:
-                    self.discarding_oversized = False
-                    self.rx_buffer.clear()
-                elif len(self.rx_buffer) > 0:
-                    line = self.rx_buffer.decode('utf-8', errors='replace').strip()
-                    self.rx_buffer.clear()
-                    if line:
-                        reply = self.process_line(line)
+            if self.state == "TEXT":
+                if len(self.rx_buffer) == 0 and b == 0x55:
+                    self.header_buf = bytearray([b])
+                    self.state = "BINARY_HEADER"
+                    continue
+
+                c = chr(b)
+                if c in ("\n", "\r"):
+                    if self.discarding_oversized:
+                        self.discarding_oversized = False
+                        self.rx_buffer.clear()
+                    elif len(self.rx_buffer) > 0:
+                        line = self.rx_buffer.decode("utf-8", errors="replace").strip()
+                        self.rx_buffer.clear()
+                        if line:
+                            reply = self.process_line(line)
+                            if reply:
+                                replies.append(reply)
+                else:
+                    if self.discarding_oversized:
+                        continue
+                    if len(self.rx_buffer) < self.max_line_len:
+                        self.rx_buffer.append(b)
+                    else:
+                        self.discarding_oversized = True
+                        self.rx_buffer.clear()
+                        replies.append({
+                            "status": "error",
+                            "error": "frame_overflow",
+                            "max_bytes": self.max_line_len,
+                        })
+
+            elif self.state == "BINARY_HEADER":
+                self.header_buf.append(b)
+                h_len = len(self.header_buf)
+
+                if h_len == 2 and b != 0xAA:
+                    self.state = "TEXT"
+                    self.rx_buffer.extend(self.header_buf)
+                    self.header_buf.clear()
+                    continue
+                if h_len == 3 and b != 0x43:
+                    self.state = "TEXT"
+                    self.rx_buffer.extend(self.header_buf)
+                    self.header_buf.clear()
+                    continue
+                if h_len == 4 and b != 0x46:
+                    self.state = "TEXT"
+                    self.rx_buffer.extend(self.header_buf)
+                    self.header_buf.clear()
+                    continue
+
+                if h_len >= 16:
+                    # Unpack header: magic(4), type(1), version(1), frame_seq(2), payload_len(2), offset(2), flags(2), crc16(2)
+                    magic, b_type, ver, seq, plen, offset, flags, crc = struct.unpack(
+                        "<4sBBHHHHH", self.header_buf
+                    )
+                    self.current_header = {
+                        "magic": magic,
+                        "type": b_type,
+                        "version": ver,
+                        "frame_seq": seq,
+                        "payload_len": plen,
+                        "offset": offset,
+                        "flags": flags,
+                        "crc16": crc,
+                    }
+                    if plen > 768:
+                        self.state = "TEXT"
+                        self.header_buf.clear()
+                        replies.append({
+                            "status": "error",
+                            "error": "frame_overflow",
+                            "max_bytes": 768,
+                        })
+                    elif plen == 0:
+                        reply = self.process_binary_frame(self.current_header, b"")
                         if reply:
                             replies.append(reply)
-            else:
-                if self.discarding_oversized:
-                    continue
-                if len(self.rx_buffer) < self.max_line_len:
-                    self.rx_buffer.append(b)
-                else:
-                    self.discarding_oversized = True
-                    self.rx_buffer.clear()
-                    replies.append({
-                        "status": "error",
-                        "error": "frame_overflow",
-                        "max_bytes": self.max_line_len
-                    })
+                        self.state = "TEXT"
+                        self.header_buf.clear()
+                    else:
+                        self.binary_payload = bytearray()
+                        self.state = "BINARY_PAYLOAD"
+
+            elif self.state == "BINARY_PAYLOAD":
+                self.binary_payload.append(b)
+                if len(self.binary_payload) >= self.current_header["payload_len"]:
+                    reply = self.process_binary_frame(
+                        self.current_header, bytes(self.binary_payload)
+                    )
+                    if reply:
+                        replies.append(reply)
+                    self.state = "TEXT"
+                    self.header_buf.clear()
+                    self.binary_payload.clear()
+
         return replies
+
+    def process_binary_frame(self, header: dict, payload: bytes) -> dict:
+        b_type = header["type"]
+        seq = header["frame_seq"]
+        offset = header["offset"]
+        flags = header["flags"]
+        expected_crc = header["crc16"]
+        auto_mode = bool(flags & FLAG_AUTO_MODE)
+        commit_now = bool(flags & FLAG_COMMIT_NOW)
+
+        if expected_crc != 0:
+            actual_crc = crc16_ccitt(payload)
+            if actual_crc != expected_crc:
+                return {
+                    "status": "error",
+                    "type": "bin_frame",
+                    "frame_id": seq,
+                    "error": "crc_mismatch",
+                }
+
+        if b_type == BIN_FULL_FRAME:
+            if len(payload) != 768:
+                return {
+                    "status": "error",
+                    "type": "bin_frame",
+                    "frame_id": seq,
+                    "error": "invalid_full_frame_length",
+                }
+            self.canvas_buffer[:] = payload
+            self.system_state["canvas_frames"] += 1
+            if auto_mode:
+                self.system_state["mode"] = 29
+                self.system_state["canvas_active"] = True
+            return {
+                "status": "ok",
+                "type": "bin_frame",
+                "frame_id": seq,
+                "committed": True,
+                "received_bytes": 768,
+            }
+
+        elif b_type == BIN_CHUNK_FRAME:
+            if offset + len(payload) > 768:
+                return {
+                    "status": "error",
+                    "type": "bin_frame",
+                    "frame_id": seq,
+                    "error": "bounds_exceeded",
+                }
+            self.canvas_buffer[offset : offset + len(payload)] = payload
+            for i in range(offset, offset + len(payload)):
+                self.canvas_received[i] = 1
+
+            complete = all(self.canvas_received)
+            should_commit = commit_now or complete
+            if should_commit:
+                self.system_state["canvas_frames"] += 1
+                if auto_mode:
+                    self.system_state["mode"] = 29
+                    self.system_state["canvas_active"] = True
+                self.canvas_received = bytearray(768)
+                return {
+                    "status": "ok",
+                    "type": "bin_frame",
+                    "frame_id": seq,
+                    "committed": True,
+                    "received_bytes": 768,
+                }
+            return {
+                "status": "ok",
+                "type": "bin_frame",
+                "frame_id": seq,
+                "committed": False,
+                "received_bytes": sum(self.canvas_received),
+            }
+
+        elif b_type == BIN_SINGLE_PIXEL:
+            if len(payload) < 5:
+                return {
+                    "status": "error",
+                    "type": "bin_frame",
+                    "frame_id": seq,
+                    "error": "pixel_payload_too_short",
+                }
+            x, y, r, g, b = payload[0], payload[1], payload[2], payload[3], payload[4]
+            if x >= 16 or y >= 16:
+                return {
+                    "status": "error",
+                    "type": "bin_frame",
+                    "frame_id": seq,
+                    "error": "pixel_out_of_bounds",
+                }
+            idx = (y * 16 + x) * 3
+            self.canvas_buffer[idx : idx + 3] = bytes([r, g, b])
+            if auto_mode:
+                self.system_state["mode"] = 29
+                self.system_state["canvas_active"] = True
+            return {
+                "status": "ok",
+                "type": "bin_frame",
+                "frame_id": seq,
+                "committed": True,
+                "received_bytes": 3,
+            }
+
+        elif b_type == BIN_CLEAR:
+            r = payload[0] if len(payload) >= 3 else 0
+            g = payload[1] if len(payload) >= 3 else 0
+            b = payload[2] if len(payload) >= 3 else 0
+            for i in range(256):
+                self.canvas_buffer[i * 3 : i * 3 + 3] = bytes([r, g, b])
+            if auto_mode:
+                self.system_state["mode"] = 29
+                self.system_state["canvas_active"] = True
+            return {
+                "status": "ok",
+                "type": "bin_frame",
+                "frame_id": seq,
+                "committed": True,
+                "received_bytes": 0,
+            }
+
+        return {
+            "status": "error",
+            "type": "bin_frame",
+            "frame_id": seq,
+            "error": "unknown_binary_type",
+        }
 
     def process_line(self, line: str) -> dict:
         req_id = None
         cmd = ""
         is_json = False
+        parsed = None
 
         try:
             parsed = json.loads(line)
@@ -78,17 +312,191 @@ class JetsonUartParser:
                     "status": "ok",
                     "version": self.version,
                     "board": "esp32s3_pro",
-                    **self.system_state
+                    **self.system_state,
                 }
                 return with_req_id(resp)
             elif cmd_lower == "version":
                 return with_req_id({"status": "ok", "version": self.version})
+            elif cmd_lower in ("get_capabilities", "capabilities"):
+                feats = [
+                    "mode_switch", "brightness", "board_led", "fingertip_tracker", "light_sandbox",
+                    "desk_pet", "celebrate", "pet_context", "arcade_100", "pixel_canvas",
+                    "canvas_chunk", "canvas_binary", "difficulty", "performance", "mir", "gamma",
+                    "session_control", "key_release"
+                ]
+                return with_req_id({
+                    "status": "ok",
+                    "version": self.version,
+                    "features": feats,
+                    "display": {
+                        "width": 16,
+                        "height": 16,
+                        "color_format": "rgb888",
+                        "canvas_mode": 29,
+                        "fingertip_mode": 26,
+                        "sandbox_mode": 27,
+                        "pet_mode": 17,
+                    },
+                    "uart": {
+                        "baud": 115200,
+                        "rx_pin": 8,
+                        "tx_pin": 9,
+                        "max_json_line": self.max_line_len,
+                        "binary_magic": "0x55AA4346",
+                    },
+                })
+            elif cmd_lower == "release_input":
+                self.system_state["held_keys"] = 0
+                return with_req_id({"status": "ok", "released": True})
+            elif cmd_lower == "session":
+                action = (parsed.get("action") or "").lower()
+                sid = parsed.get("session_id") or parsed.get("id") or ""
+                if action == "start":
+                    self.system_state["session_id"] = sid
+                    m = parsed.get("mode")
+                    if m == "fingertip" or m == 26:
+                        self.system_state["mode"] = 26
+                    elif m == "sandbox" or m == 27:
+                        self.system_state["mode"] = 27
+                    elif m == "canvas" or m == 29:
+                        self.system_state["mode"] = 29
+                        self.system_state["canvas_active"] = True
+                    elif m == "pet" or m == 17:
+                        self.system_state["mode"] = 17
+                    return with_req_id({"status": "ok", "active": True, "session_id": sid})
+                elif action == "stop":
+                    self.system_state["session_id"] = ""
+                    self.system_state["held_keys"] = 0
+                    return with_req_id({"status": "ok", "active": False})
+                elif action == "heartbeat":
+                    return with_req_id({"status": "ok", "heartbeat": True})
+                return with_req_id({"status": "error", "error": "unknown_session_action"})
+
+            elif cmd_lower == "canvas_chunk":
+                frame_id = parsed.get("frame_id", parsed.get("frame", 0))
+                chunk_idx = parsed.get("chunk_idx", parsed.get("chunk", 0))
+                offset = parsed.get("offset", 0)
+                hex_str = parsed.get("hex", "")
+                commit_now = bool(parsed.get("commit", False))
+                auto_mode = bool(parsed.get("auto_mode", True))
+                crc_val = parsed.get("crc", 0)
+
+                if not hex_str or len(hex_str) % 2 != 0:
+                    return with_req_id({"status": "error", "error": "invalid_hex_length"})
+
+                try:
+                    raw = bytes.fromhex(hex_str)
+                except ValueError:
+                    return with_req_id({"status": "error", "error": "invalid_hex_chars"})
+
+                if offset + len(raw) > 768:
+                    return with_req_id({"status": "error", "error": "bounds_exceeded"})
+
+                if crc_val != 0:
+                    act_crc = crc16_ccitt(raw)
+                    if act_crc != crc_val:
+                        return with_req_id({"status": "error", "error": "crc_mismatch"})
+
+                self.canvas_buffer[offset : offset + len(raw)] = raw
+                for i in range(offset, offset + len(raw)):
+                    self.canvas_received[i] = 1
+
+                complete = all(self.canvas_received)
+                if commit_now or complete:
+                    self.system_state["canvas_frames"] += 1
+                    if auto_mode:
+                        self.system_state["mode"] = 29
+                        self.system_state["canvas_active"] = True
+                    self.canvas_received = bytearray(768)
+                    return with_req_id({
+                        "status": "ok",
+                        "frame_id": frame_id,
+                        "chunk_idx": chunk_idx,
+                        "committed": True,
+                        "received_bytes": 768,
+                    })
+
+                return with_req_id({
+                    "status": "ok",
+                    "frame_id": frame_id,
+                    "chunk_idx": chunk_idx,
+                    "committed": False,
+                    "received_bytes": sum(self.canvas_received),
+                })
+
+            elif cmd_lower in ("clear_canvas", "canvas_clear"):
+                r = int(parsed.get("r", 0))
+                g = int(parsed.get("g", 0))
+                b = int(parsed.get("b", 0))
+                for i in range(256):
+                    self.canvas_buffer[i * 3 : i * 3 + 3] = bytes([r, g, b])
+                if parsed.get("auto_mode"):
+                    self.system_state["mode"] = 29
+                    self.system_state["canvas_active"] = True
+                return with_req_id({"status": "ok", "cleared": True})
+
+            elif cmd_lower == "arcade":
+                action = (parsed.get("action") or "").lower()
+                if action == "status":
+                    return with_req_id({
+                        "status": "ok",
+                        "active": bool(self.system_state["arcade_active"]),
+                        "game_id": self.system_state["arcade_game_id"],
+                        "score": 120,
+                        "high_score": 500,
+                        "lives": 3,
+                        "state": 1,
+                    })
+                elif action == "select":
+                    gid = parsed.get("game_id", 0)
+                    if 1 <= gid <= 101:
+                        self.system_state["arcade_active"] = 1
+                        self.system_state["arcade_game_id"] = gid
+                        self.system_state["mode"] = 32
+                        self.dispatched_commands.append(line)
+                        return with_req_id({"status": "ok", "executed": True})
+                    return with_req_id({"status": "error", "error": "command_rejected"})
+                elif action == "input":
+                    down = parsed.get("down", 0)
+                    self.system_state["held_keys"] = down
+                    self.dispatched_commands.append(line)
+                    return with_req_id({"status": "ok", "executed": True})
+                elif action in ("start", "pause", "resume", "reset", "exit", "config"):
+                    if action == "exit":
+                        self.system_state["arcade_active"] = 0
+                        self.system_state["held_keys"] = 0
+                    self.dispatched_commands.append(line)
+                    return with_req_id({"status": "ok", "executed": True})
+                return with_req_id({"status": "error", "error": "command_rejected"})
+
             else:
+                disallowed = {
+                    "pair", "control_token", "token", "reboot", "restart",
+                    "factory_reset", "reset_nvs", "erase_flash", "write_flash",
+                    "mic_export", "audio_capture", "ota"
+                }
+                if cmd_lower in disallowed:
+                    return with_req_id({"status": "error", "error": "unauthorized_command", "executed": False})
+
                 allowed_json = {
                     "mode", "brightness", "b", "board_led", "led", "arcade",
-                    "pet", "kurisu", "countdown", "stop_countdown", "stop_cd", "beep", "key"
+                    "pet", "kurisu", "countdown", "stop_countdown", "stop_cd", "beep", "key",
+                    "track_cal", "track", "hand", "pet_context", "celebrate",
+                    "difficulty", "performance", "mir", "pixel", "canvas", "gamma"
                 }
                 if cmd_lower in allowed_json:
+                    if cmd_lower == "mode":
+                        val = parsed.get("val", parsed.get("mode"))
+                        if val is not None:
+                            self.system_state["mode"] = int(val)
+                            self.system_state["canvas_active"] = (int(val) == 29)
+                    elif cmd_lower in ("brightness", "b"):
+                        val = parsed.get("val", parsed.get("brightness"))
+                        if val is not None:
+                            self.system_state["brightness"] = int(val)
+                    elif cmd_lower in ("pixel", "canvas") and parsed.get("auto_mode"):
+                        self.system_state["mode"] = 29
+                        self.system_state["canvas_active"] = True
                     self.dispatched_commands.append(line)
                     return with_req_id({"status": "ok", "executed": True})
                 else:
@@ -103,10 +511,15 @@ class JetsonUartParser:
                 "status": "ok",
                 "version": self.version,
                 "board": "esp32s3_pro",
-                **self.system_state
+                **self.system_state,
             }
         elif text_lower == "version":
             return {"status": "ok", "version": self.version}
+        elif text_lower == "release_input":
+            self.system_state["held_keys"] = 0
+            return {"status": "ok", "released": True}
+        elif text_lower in ("reboot", "restart", "factory_reset", "pair"):
+            return {"status": "error", "error": "unauthorized_command", "cmd": line}
         else:
             allowed = False
             if text_lower.startswith("f,"):
@@ -134,110 +547,256 @@ class TestJetsonUartProtocol(unittest.TestCase):
     def setUp(self):
         self.parser = JetsonUartParser()
 
-    def test_01_ping_with_string_req_id(self):
-        replies = self.parser.feed_bytes(b'{"cmd":"ping","req_id":"req_001"}\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertTrue(replies[0]["pong"])
-        self.assertEqual(replies[0]["req_id"], "req_001")
-        self.assertEqual(replies[0]["version"], "2.2.0")
+    def test_01_ping_with_string_and_numeric_req_id(self):
+        r1 = self.parser.feed_bytes(b'{"cmd":"ping","req_id":"req_001"}\n')[0]
+        self.assertEqual(r1["status"], "ok")
+        self.assertTrue(r1["pong"])
+        self.assertEqual(r1["req_id"], "req_001")
+        self.assertEqual(r1["version"], "2.3.0")
 
-    def test_02_ping_with_numeric_req_id(self):
-        replies = self.parser.feed_bytes(b'{"cmd":"ping","req_id":42}\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertTrue(replies[0]["pong"])
-        self.assertEqual(replies[0]["req_id"], 42)
+        r2 = self.parser.feed_bytes(b'{"cmd":"ping","req_id":42}\n')[0]
+        self.assertEqual(r2["req_id"], 42)
 
-    def test_03_get_status_response(self):
-        replies = self.parser.feed_bytes(b'{"cmd":"get_status","req_id":"st_99"}\n')
+    def test_02_get_status_and_capabilities(self):
+        status = self.parser.feed_bytes(b'{"cmd":"get_status","req_id":"st_01"}\n')[0]
+        self.assertEqual(status["status"], "ok")
+        self.assertEqual(status["board"], "esp32s3_pro")
+        self.assertEqual(status["mode"], 17)
+        self.assertIn("canvas_active", status)
+        self.assertIn("held_keys", status)
+
+        caps = self.parser.feed_bytes(b'{"cmd":"get_capabilities","req_id":"cap_01"}\n')[0]
+        self.assertEqual(caps["status"], "ok")
+        self.assertIn("pixel_canvas", caps["features"])
+        self.assertIn("canvas_binary", caps["features"])
+        self.assertIn("fingertip_tracker", caps["features"])
+        self.assertEqual(caps["display"]["width"], 16)
+        self.assertEqual(caps["display"]["height"], 16)
+        self.assertEqual(caps["uart"]["baud"], 115200)
+
+    def test_03_visual_tracking_commands(self):
+        # track_cal calibration
+        r1 = self.parser.feed_bytes(b'{"cmd":"track_cal","x0":0.1,"y0":0.1,"x1":0.9,"y1":0.9,"invert_x":true,"req_id":"tc"}\n')[0]
+        self.assertEqual(r1["status"], "ok")
+        self.assertTrue(r1["executed"])
+
+        # track coordinates stream
+        r2 = self.parser.feed_bytes(b'{"cmd":"track","x":0.45,"y":0.65,"visible":true,"conf":0.98,"req_id":"tr"}\n')[0]
+        self.assertEqual(r2["status"], "ok")
+        self.assertTrue(r2["executed"])
+
+    def test_04_hand_pinch_and_depth(self):
+        r = self.parser.feed_bytes(b'{"cmd":"hand","x":0.5,"y":0.5,"z":-0.2,"pinch":true,"visible":true,"req_id":"h1"}\n')[0]
+        self.assertEqual(r["status"], "ok")
+        self.assertTrue(r["executed"])
+
+    def test_05_desk_pet_context_and_celebrate(self):
+        r1 = self.parser.feed_bytes(b'{"cmd":"pet_context","hour":14,"gaze":0.2,"present":true,"tired":false,"req_id":"pc"}\n')[0]
+        self.assertEqual(r1["status"], "ok")
+        self.assertTrue(r1["executed"])
+
+        r2 = self.parser.feed_bytes(b'{"cmd":"celebrate","req_id":"cel"}\n')[0]
+        self.assertEqual(r2["status"], "ok")
+        self.assertTrue(r2["executed"])
+
+    def test_06_arcade_game_select_input_and_key_release(self):
+        # Select Snake (#033)
+        r_sel = self.parser.feed_bytes(b'{"cmd":"arcade","action":"select","game_id":33,"req_id":"a_sel"}\n')[0]
+        self.assertEqual(r_sel["status"], "ok")
+        self.assertTrue(r_sel["executed"])
+        self.assertEqual(self.parser.system_state["arcade_game_id"], 33)
+
+        # Input Direction: KEY_RIGHT (2)
+        r_in = self.parser.feed_bytes(b'{"cmd":"arcade","action":"input","down":2,"pressed":2,"req_id":"a_in"}\n')[0]
+        self.assertEqual(r_in["status"], "ok")
+        self.assertEqual(self.parser.system_state["held_keys"], 2)
+
+        # Query Arcade Status
+        r_stat = self.parser.feed_bytes(b'{"cmd":"arcade","action":"status","req_id":"a_st"}\n')[0]
+        self.assertEqual(r_stat["status"], "ok")
+        self.assertTrue(r_stat["active"])
+        self.assertEqual(r_stat["game_id"], 33)
+
+        # Hand lost safety release
+        r_rel = self.parser.feed_bytes(b'{"cmd":"release_input","req_id":"rel"}\n')[0]
+        self.assertEqual(r_rel["status"], "ok")
+        self.assertTrue(r_rel["released"])
+        self.assertEqual(self.parser.system_state["held_keys"], 0)
+
+    def test_07_session_arbitration(self):
+        # Start vision session with fingertip tracker
+        r_start = self.parser.feed_bytes(b'{"cmd":"session","action":"start","session_id":"sess_123","mode":"fingertip","req_id":"s_st"}\n')[0]
+        self.assertEqual(r_start["status"], "ok")
+        self.assertTrue(r_start["active"])
+        self.assertEqual(self.parser.system_state["mode"], 26)
+        self.assertEqual(self.parser.system_state["session_id"], "sess_123")
+
+        # Stop session releases keys and clears session
+        self.parser.system_state["held_keys"] = 4
+        r_stop = self.parser.feed_bytes(b'{"cmd":"session","action":"stop","req_id":"s_sp"}\n')[0]
+        self.assertEqual(r_stop["status"], "ok")
+        self.assertFalse(r_stop["active"])
+        self.assertEqual(self.parser.system_state["session_id"], "")
+        self.assertEqual(self.parser.system_state["held_keys"], 0)
+
+    def test_08_canvas_single_pixel(self):
+        # Single pixel with auto_mode switch
+        r = self.parser.feed_bytes(b'{"cmd":"pixel","x":7,"y":8,"r":255,"g":128,"b":0,"auto_mode":true,"req_id":"px"}\n')[0]
+        self.assertEqual(r["status"], "ok")
+        self.assertTrue(r["executed"])
+        self.assertEqual(self.parser.system_state["mode"], 29)
+        self.assertTrue(self.parser.system_state["canvas_active"])
+
+    def test_09_canvas_chunked_json_with_crc(self):
+        # Prepare 768 bytes test pattern: Chunk 0 (384 bytes), Chunk 1 (384 bytes)
+        payload0 = bytes([i % 256 for i in range(384)])
+        payload1 = bytes([(i + 128) % 256 for i in range(384)])
+        crc0 = crc16_ccitt(payload0)
+        crc1 = crc16_ccitt(payload1)
+
+        chunk0_json = json.dumps({
+            "cmd": "canvas_chunk",
+            "frame_id": 10,
+            "chunk_idx": 0,
+            "total_chunks": 2,
+            "offset": 0,
+            "hex": payload0.hex(),
+            "crc": crc0,
+            "commit": False,
+            "auto_mode": True,
+            "req_id": "c0",
+        }).encode("utf-8") + b"\n"
+
+        r0 = self.parser.feed_bytes(chunk0_json)[0]
+        self.assertEqual(r0["status"], "ok")
+        self.assertEqual(r0["frame_id"], 10)
+        self.assertFalse(r0["committed"])
+
+        chunk1_json = json.dumps({
+            "cmd": "canvas_chunk",
+            "frame_id": 10,
+            "chunk_idx": 1,
+            "total_chunks": 2,
+            "offset": 384,
+            "hex": payload1.hex(),
+            "crc": crc1,
+            "commit": True,
+            "auto_mode": True,
+            "req_id": "c1",
+        }).encode("utf-8") + b"\n"
+
+        r1 = self.parser.feed_bytes(chunk1_json)[0]
+        self.assertEqual(r1["status"], "ok")
+        self.assertEqual(r1["frame_id"], 10)
+        self.assertTrue(r1["committed"])
+        self.assertEqual(r1["received_bytes"], 768)
+        self.assertEqual(self.parser.canvas_buffer[0:384], payload0)
+        self.assertEqual(self.parser.canvas_buffer[384:768], payload1)
+
+    def test_10_canvas_chunked_json_crc_mismatch_rejected(self):
+        payload = b"\x11\x22\x33\x44" * 10
+        bad_crc = 0x1234
+        chunk_json = json.dumps({
+            "cmd": "canvas_chunk",
+            "frame_id": 12,
+            "offset": 0,
+            "hex": payload.hex(),
+            "crc": bad_crc,
+            "req_id": "bad_crc",
+        }).encode("utf-8") + b"\n"
+
+        r = self.parser.feed_bytes(chunk_json)[0]
+        self.assertEqual(r["status"], "error")
+        self.assertEqual(r["error"], "crc_mismatch")
+
+    def test_11_canvas_clear(self):
+        r = self.parser.feed_bytes(b'{"cmd":"clear_canvas","r":0,"g":0,"b":0,"req_id":"clr"}\n')[0]
+        self.assertEqual(r["status"], "ok")
+        self.assertTrue(r["cleared"])
+
+    def test_12_binary_canvas_full_frame(self):
+        # 768 bytes RGB pattern (contains 0x0A and 0x0D bytes inside payload!)
+        payload = bytes([i % 256 for i in range(768)])
+        crc = crc16_ccitt(payload)
+        # Header: magic(4), type(1), ver(1), seq(2), len(2), offset(2), flags(2), crc(2)
+        header = struct.pack(
+            "<4sBBHHHHH",
+            MAGIC,
+            BIN_FULL_FRAME,
+            1,
+            105,
+            768,
+            0,
+            FLAG_AUTO_MODE | FLAG_COMMIT_NOW,
+            crc,
+        )
+        packet = header + payload
+
+        replies = self.parser.feed_bytes(packet)
         self.assertEqual(len(replies), 1)
         r = replies[0]
         self.assertEqual(r["status"], "ok")
-        self.assertEqual(r["req_id"], "st_99")
-        self.assertEqual(r["board"], "esp32s3_pro")
-        self.assertEqual(r["mode"], 14)
-        self.assertEqual(r["brightness"], 20)
-        self.assertFalse(r["mic_streaming"])
+        self.assertEqual(r["type"], "bin_frame")
+        self.assertEqual(r["frame_id"], 105)
+        self.assertTrue(r["committed"])
+        self.assertEqual(self.parser.canvas_buffer, payload)
+        self.assertEqual(self.parser.system_state["mode"], 29)
 
-    def test_04_action_alias(self):
-        replies = self.parser.feed_bytes(b'{"action":"ping"}\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertTrue(replies[0]["pong"])
-
-    def test_05_business_command_dispatch(self):
-        replies = self.parser.feed_bytes(b'{"cmd":"countdown","seconds":30,"req_id":"c1"}\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertTrue(replies[0]["executed"])
-        self.assertEqual(replies[0]["req_id"], "c1")
-        self.assertEqual(len(self.parser.dispatched_commands), 1)
-
-    def test_06_plain_text_ping_and_status(self):
-        replies = self.parser.feed_bytes(b'ping\r\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertTrue(replies[0]["pong"])
-
-        replies = self.parser.feed_bytes(b'status\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertEqual(replies[0]["board"], "esp32s3_pro")
-
-    def test_07_packet_fragmentation(self):
-        # Frame split across multiple chunks
-        replies = self.parser.feed_bytes(b'{"cmd"')
-        self.assertEqual(len(replies), 0)
-        replies = self.parser.feed_bytes(b':"ping",')
-        self.assertEqual(len(replies), 0)
-        replies = self.parser.feed_bytes(b'"req_id":"frag_1"}\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["req_id"], "frag_1")
-        self.assertTrue(replies[0]["pong"])
-
-    def test_08_sticky_packets_concatenation(self):
-        # Two frames packed into a single chunk
-        chunk = b'{"cmd":"ping","req_id":"p1"}\n{"cmd":"version","req_id":"v1"}\n'
-        replies = self.parser.feed_bytes(chunk)
-        self.assertEqual(len(replies), 2)
-        self.assertEqual(replies[0]["req_id"], "p1")
-        self.assertTrue(replies[0]["pong"])
-        self.assertEqual(replies[1]["req_id"], "v1")
-        self.assertEqual(replies[1]["version"], "2.2.0")
-
-    def test_09_frame_overflow_drop(self):
-        # Send 1025 padding bytes followed by 'mode 1\n' in the same line
-        # Must report overflow error ONCE, discard 'mode 1', and NOT execute mode 1!
-        poisoned_chunk = b'X' * 1025 + b'mode 1\n'
-        replies = self.parser.feed_bytes(poisoned_chunk)
+    def test_13_binary_canvas_crc_mismatch(self):
+        payload = b"\xAA" * 768
+        bad_crc = 0x9999
+        header = struct.pack(
+            "<4sBBHHHHH", MAGIC, BIN_FULL_FRAME, 1, 106, 768, 0, FLAG_COMMIT_NOW, bad_crc
+        )
+        replies = self.parser.feed_bytes(header + payload)
         self.assertEqual(len(replies), 1)
         self.assertEqual(replies[0]["status"], "error")
+        self.assertEqual(replies[0]["error"], "crc_mismatch")
+
+    def test_14_binary_interleaved_with_json_lines(self):
+        # Send JSON line -> Binary Full Frame -> JSON line
+        r1 = self.parser.feed_bytes(b'{"cmd":"ping","req_id":"p1"}\n')
+        self.assertEqual(len(r1), 1)
+        self.assertTrue(r1[0]["pong"])
+
+        payload = bytes([0x55] * 768)
+        crc = crc16_ccitt(payload)
+        header = struct.pack("<4sBBHHHHH", MAGIC, BIN_FULL_FRAME, 1, 107, 768, 0, FLAG_COMMIT_NOW, crc)
+        r2 = self.parser.feed_bytes(header + payload)
+        self.assertEqual(len(r2), 1)
+        self.assertTrue(r2[0]["committed"])
+
+        r3 = self.parser.feed_bytes(b'{"cmd":"version","req_id":"v2"}\n')
+        self.assertEqual(len(r3), 1)
+        self.assertEqual(r3[0]["version"], "2.3.0")
+
+    def test_15_strict_security_rejections(self):
+        bad_commands = [
+            b'{"cmd":"pair"}\n',
+            b'{"cmd":"control_token"}\n',
+            b'{"cmd":"reboot"}\n',
+            b'{"cmd":"factory_reset"}\n',
+            b'{"cmd":"reset_nvs"}\n',
+            b'{"cmd":"erase_flash"}\n',
+            b'{"cmd":"mic_export"}\n',
+            b'reboot\n',
+            b'pair\n',
+        ]
+        for cmd in bad_commands:
+            r = self.parser.feed_bytes(cmd)
+            self.assertEqual(len(r), 1, f"Failed on {cmd}")
+            self.assertEqual(r[0]["status"], "error")
+            self.assertEqual(r[0]["error"], "unauthorized_command")
+
+    def test_16_frame_overflow_drop_and_recovery(self):
+        oversized = b"X" * 1025 + b'mode 1\n{"cmd":"ping","req_id":"rec"}\n'
+        replies = self.parser.feed_bytes(oversized)
+        self.assertEqual(len(replies), 2)
+        self.assertEqual(replies[0]["status"], "error")
         self.assertEqual(replies[0]["error"], "frame_overflow")
-        self.assertEqual(len(self.parser.dispatched_commands), 0, "Tail of oversized frame MUST NOT be executed!")
-
-        # Next normal frame must be parsed cleanly and receive normal pong
-        replies = self.parser.feed_bytes(b'{"cmd":"ping","req_id":"recovered"}\n')
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["req_id"], "recovered")
-        self.assertTrue(replies[0]["pong"])
-
-    def test_10_empty_lines_and_whitespace_ignored(self):
-        chunk = b'   \r\n\n\t\n{"cmd":"ping"}\n   \n'
-        replies = self.parser.feed_bytes(chunk)
-        self.assertEqual(len(replies), 1)
-        self.assertEqual(replies[0]["status"], "ok")
-        self.assertTrue(replies[0]["pong"])
-
-    def test_11_unauthorized_commands_rejected(self):
-        # Sensitive or non-agreed commands must be rejected over Jetson UART
-        for bad_cmd in [b'{"cmd":"pair"}\n', b'{"cmd":"reboot"}\n', b'{"cmd":"factory_reset"}\n', b'reboot\n']:
-            replies = self.parser.feed_bytes(bad_cmd)
-            self.assertEqual(len(replies), 1)
-            self.assertEqual(replies[0]["status"], "error")
-            self.assertEqual(replies[0]["error"], "unauthorized_command")
+        self.assertEqual(replies[1]["status"], "ok")
+        self.assertEqual(replies[1]["req_id"], "rec")
 
 
 if __name__ == "__main__":
     unittest.main()
-

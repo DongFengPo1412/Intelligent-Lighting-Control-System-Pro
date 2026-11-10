@@ -1,0 +1,227 @@
+#include "canvas_protocol.h"
+#include "display_manager.h"
+#include <string.h>
+
+#if defined(ESP_PLATFORM)
+#include <esp_log.h>
+#include <esp_timer.h>
+static inline uint32_t get_current_millis() {
+    return (uint32_t)(esp_timer_get_time() / 1000ULL);
+}
+#else
+#include <stdio.h>
+static inline uint32_t get_current_millis() {
+    return 0;
+}
+#endif
+
+namespace canvas {
+
+uint16_t CalculateCrc16(const uint8_t* data, size_t len) {
+    if (!data || len == 0) return 0;
+    uint16_t crc = 0xFFFF;
+    for (size_t i = 0; i < len; ++i) {
+        crc ^= (uint16_t)data[i] << 8;
+        for (int b = 0; b < 8; ++b) {
+            if (crc & 0x8000) {
+                crc = (crc << 1) ^ 0x1021;
+            } else {
+                crc = crc << 1;
+            }
+        }
+    }
+    return crc;
+}
+
+CanvasAssembler& CanvasAssembler::GetInstance() {
+    static CanvasAssembler instance;
+    return instance;
+}
+
+CanvasAssembler::CanvasAssembler() {
+    Reset();
+}
+
+void CanvasAssembler::Reset() {
+    memset(frame_buffer_, 0, sizeof(frame_buffer_));
+    memset(byte_bitmap_, 0, sizeof(byte_bitmap_));
+    current_frame_id_ = 0;
+    bytes_received_ = 0;
+    frame_start_time_ms_ = 0;
+    frame_in_progress_ = false;
+}
+
+void CanvasAssembler::MarkBytes(uint16_t offset, size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        uint16_t idx = offset + (uint16_t)i;
+        if (idx < kFrameSizeBytes) {
+            uint16_t byte_idx = idx / 8;
+            uint8_t bit_mask = 1 << (idx % 8);
+            if (!(byte_bitmap_[byte_idx] & bit_mask)) {
+                byte_bitmap_[byte_idx] |= bit_mask;
+                bytes_received_++;
+            }
+        }
+    }
+}
+
+bool CanvasAssembler::IsFrameComplete() const {
+    return bytes_received_ >= kFrameSizeBytes;
+}
+
+void CanvasAssembler::CommitFrame(bool auto_mode) {
+    DisplayManager& dm = DisplayManager::GetInstance();
+    if (auto_mode && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
+    }
+
+    ColorRGB colors[kPixelCount];
+    for (size_t i = 0; i < kPixelCount; ++i) {
+        size_t b_idx = i * 3;
+        colors[i] = ColorRGB(frame_buffer_[b_idx], frame_buffer_[b_idx + 1], frame_buffer_[b_idx + 2]);
+    }
+
+    dm.SetCanvasFrame(colors);
+    committed_frames_++;
+    last_committed_frame_id_ = current_frame_id_;
+    Reset();
+}
+
+FeedResult CanvasAssembler::FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uint16_t total_chunks,
+                                      uint16_t offset, const uint8_t* data, size_t len,
+                                      uint16_t expected_crc, bool commit_now, bool auto_mode) {
+    if (!data || len == 0) {
+        return {false, false, frame_id, bytes_received_, "empty_chunk"};
+    }
+
+    if (offset + len > kFrameSizeBytes) {
+        bounds_errors_++;
+        return {false, false, frame_id, bytes_received_, "bounds_exceeded"};
+    }
+
+    if (expected_crc != 0) {
+        uint16_t actual_crc = CalculateCrc16(data, len);
+        if (actual_crc != expected_crc) {
+            crc_errors_++;
+            return {false, false, frame_id, bytes_received_, "crc_mismatch"};
+        }
+    }
+
+    uint32_t now = get_current_millis();
+
+    if (!frame_in_progress_ || frame_id != current_frame_id_) {
+        if (frame_in_progress_ && frame_id != current_frame_id_) {
+            dropped_frames_++;
+        }
+        Reset();
+        current_frame_id_ = frame_id;
+        frame_start_time_ms_ = now;
+        frame_in_progress_ = true;
+    }
+
+    memcpy(frame_buffer_ + offset, data, len);
+    MarkBytes(offset, len);
+
+    bool should_commit = commit_now || IsFrameComplete();
+    if (should_commit) {
+        CommitFrame(auto_mode);
+        return {true, true, frame_id, kFrameSizeBytes, nullptr};
+    }
+
+    return {true, false, frame_id, bytes_received_, nullptr};
+}
+
+FeedResult CanvasAssembler::ProcessBinaryFrame(const BinaryHeader& header, const uint8_t* payload) {
+    if (header.magic[0] != kMagic0 || header.magic[1] != kMagic1 ||
+        header.magic[2] != kMagic2 || header.magic[3] != kMagic3) {
+        return {false, false, header.frame_seq, 0, "invalid_magic"};
+    }
+
+    bool auto_mode = (header.flags & FLAG_AUTO_MODE) != 0;
+    bool commit_now = (header.flags & FLAG_COMMIT_NOW) != 0;
+
+    switch (header.type) {
+        case BIN_FULL_FRAME: {
+            if (header.payload_len != kFrameSizeBytes) {
+                bounds_errors_++;
+                return {false, false, header.frame_seq, 0, "invalid_full_frame_length"};
+            }
+            if (header.crc16 != 0) {
+                uint16_t actual_crc = CalculateCrc16(payload, header.payload_len);
+                if (actual_crc != header.crc16) {
+                    crc_errors_++;
+                    return {false, false, header.frame_seq, 0, "crc_mismatch"};
+                }
+            }
+            return FeedChunk(header.frame_seq, 0, 1, 0, payload, header.payload_len, 0, true, auto_mode);
+        }
+
+        case BIN_CHUNK_FRAME: {
+            return FeedChunk(header.frame_seq, 0, 0, header.offset, payload, header.payload_len, header.crc16, commit_now, auto_mode);
+        }
+
+        case BIN_SINGLE_PIXEL: {
+            if (header.payload_len < 5) {
+                return {false, false, header.frame_seq, 0, "pixel_payload_too_short"};
+            }
+            uint8_t x = payload[0];
+            uint8_t y = payload[1];
+            uint8_t r = payload[2];
+            uint8_t g = payload[3];
+            uint8_t b = payload[4];
+            return FeedPixel(x, y, r, g, b, auto_mode);
+        }
+
+        case BIN_CLEAR: {
+            uint8_t r = (header.payload_len >= 3) ? payload[0] : 0;
+            uint8_t g = (header.payload_len >= 3) ? payload[1] : 0;
+            uint8_t b = (header.payload_len >= 3) ? payload[2] : 0;
+            return Clear(r, g, b, auto_mode);
+        }
+
+        default:
+            return {false, false, header.frame_seq, 0, "unknown_binary_type"};
+    }
+}
+
+FeedResult CanvasAssembler::FeedPixel(uint8_t x, uint8_t y, uint8_t r, uint8_t g, uint8_t b, bool auto_mode) {
+    if (x >= kMatrixWidth || y >= kMatrixHeight) {
+        bounds_errors_++;
+        return {false, false, 0, 0, "pixel_out_of_bounds"};
+    }
+
+    DisplayManager& dm = DisplayManager::GetInstance();
+    if (auto_mode && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
+    }
+
+    dm.SetCanvasPixel(x, y, ColorRGB(r, g, b));
+    return {true, true, 0, 3, nullptr};
+}
+
+FeedResult CanvasAssembler::Clear(uint8_t r, uint8_t g, uint8_t b, bool auto_mode) {
+    DisplayManager& dm = DisplayManager::GetInstance();
+    if (auto_mode && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
+    }
+
+    if (r == 0 && g == 0 && b == 0) {
+        dm.ClearCanvas();
+    } else {
+        ColorRGB colors[kPixelCount];
+        ColorRGB c(r, g, b);
+        for (size_t i = 0; i < kPixelCount; ++i) colors[i] = c;
+        dm.SetCanvasFrame(colors);
+    }
+    Reset();
+    return {true, true, 0, 0, nullptr};
+}
+
+void CanvasAssembler::CheckTimeout(uint32_t now_ms, uint32_t timeout_ms) {
+    if (frame_in_progress_ && (now_ms - frame_start_time_ms_ > timeout_ms)) {
+        dropped_frames_++;
+        Reset();
+    }
+}
+
+} // namespace canvas

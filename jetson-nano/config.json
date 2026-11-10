@@ -1,0 +1,30 @@
+{
+  "port": "/dev/ttyTHS1",
+  "baudrate": 115200,
+  "timeout": 1.0,
+  "camera": {
+    "source": "usb",
+    "device_index": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 30
+  },
+  "default_mode": 17,
+  "gesture_mappings": {
+    "0": {"action": "arcade_key", "key": "down"},
+    "1": {"action": "mode", "value": 1},
+    "2": {"action": "mode", "value": 2},
+    "3": {"action": "mode", "value": 3},
+    "4": {"action": "mode", "value": 4},
+    "5": {"action": "mode", "value": 17},
+    "fist": {"action": "arcade_key", "key": "a"},
+    "pinch": {"action": "hand_pinch"},
+    "pointing": {"action": "track_fingertip"}
+  },
+  "face_mappings": {
+    "smile_threshold": 0.6,
+    "smile_action": "celebrate",
+    "tired_hour_start": 23,
+    "tired_hour_end": 6
+  }
+}

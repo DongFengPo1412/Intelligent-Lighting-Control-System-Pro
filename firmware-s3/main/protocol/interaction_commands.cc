@@ -1,5 +1,6 @@
 #include "interaction_commands.h"
 #include "display_manager.h"
+#include "canvas_protocol.h"
 #include <math.h>
 #include <string.h>
 
@@ -60,7 +61,12 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
     if(!strcmp(cmd,"pixel")) {
         if(!number(root,"x",0,15,x,true)||!number(root,"y",0,15,y,true)||!number(root,"r",0,255,a,true)||
            !number(root,"g",0,255,b,true)||!number(root,"b",0,255,c,true))return 0;
-        dm.SetCanvasPixel(x,y,ColorRGB(a,b,c));return 1;
+        auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
+        if (auto_item && cJSON_IsTrue(auto_item) && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+            dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
+        }
+        dm.SetCanvasPixel((int)x,(int)y,ColorRGB((uint8_t)a,(uint8_t)b,(uint8_t)c));
+        return 1;
     }
     if(!strcmp(cmd,"canvas")) {
         auto* hex=cJSON_GetObjectItemCaseSensitive(root,"hex");
@@ -71,7 +77,67 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
             auto* s=hex->valuestring+i*6;
             colors[i]=ColorRGB(digit(s[0])*16+digit(s[1]),digit(s[2])*16+digit(s[3]),digit(s[4])*16+digit(s[5]));
         }
+        auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
+        if (auto_item && cJSON_IsTrue(auto_item) && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+            dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
+        }
         dm.SetCanvasFrame(colors);
+        return 1;
+    }
+    if (!strcmp(cmd, "canvas_chunk")) {
+        auto* frame_item = cJSON_GetObjectItemCaseSensitive(root, "frame_id");
+        if (!frame_item) frame_item = cJSON_GetObjectItemCaseSensitive(root, "frame");
+        auto* chunk_item = cJSON_GetObjectItemCaseSensitive(root, "chunk_idx");
+        if (!chunk_item) chunk_item = cJSON_GetObjectItemCaseSensitive(root, "chunk");
+        auto* total_item = cJSON_GetObjectItemCaseSensitive(root, "total_chunks");
+        if (!total_item) total_item = cJSON_GetObjectItemCaseSensitive(root, "total");
+        auto* offset_item = cJSON_GetObjectItemCaseSensitive(root, "offset");
+        auto* hex_item = cJSON_GetObjectItemCaseSensitive(root, "hex");
+        auto* crc_item = cJSON_GetObjectItemCaseSensitive(root, "crc");
+        auto* commit_item = cJSON_GetObjectItemCaseSensitive(root, "commit");
+        auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
+
+        if (!frame_item || !cJSON_IsNumber(frame_item) ||
+            !offset_item || !cJSON_IsNumber(offset_item) ||
+            !hex_item || !cJSON_IsString(hex_item)) {
+            return 0;
+        }
+
+        uint16_t frame_id = (uint16_t)frame_item->valueint;
+        uint16_t chunk_idx = chunk_item ? (uint16_t)chunk_item->valueint : 0;
+        uint16_t total_chunks = total_item ? (uint16_t)total_item->valueint : 1;
+        uint16_t offset = (uint16_t)offset_item->valueint;
+        const char* hex_str = hex_item->valuestring;
+        size_t hex_len = strlen(hex_str);
+        if (hex_len == 0 || (hex_len % 2) != 0 || (hex_len / 2 + offset > 768)) {
+            return 0;
+        }
+
+        size_t byte_len = hex_len / 2;
+        uint8_t chunk_bytes[384];
+        if (byte_len > sizeof(chunk_bytes)) return 0;
+
+        for (size_t i = 0; i < byte_len; ++i) {
+            int h1 = digit(hex_str[i * 2]);
+            int h2 = digit(hex_str[i * 2 + 1]);
+            if (h1 < 0 || h2 < 0) return 0;
+            chunk_bytes[i] = (uint8_t)(h1 * 16 + h2);
+        }
+
+        uint16_t expected_crc = (crc_item && cJSON_IsNumber(crc_item)) ? (uint16_t)crc_item->valueint : 0;
+        bool commit_now = commit_item ? cJSON_IsTrue(commit_item) : false;
+        bool auto_mode = auto_item ? cJSON_IsTrue(auto_item) : true;
+
+        auto res = canvas::CanvasAssembler::GetInstance().FeedChunk(
+            frame_id, chunk_idx, total_chunks, offset, chunk_bytes, byte_len,
+            expected_crc, commit_now, auto_mode
+        );
+        return res.success ? 1 : 0;
+    }
+    if (!strcmp(cmd, "clear_canvas") || !strcmp(cmd, "canvas_clear")) {
+        auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
+        bool auto_mode = auto_item ? cJSON_IsTrue(auto_item) : false;
+        canvas::CanvasAssembler::GetInstance().Clear(0, 0, 0, auto_mode);
         return 1;
     }
     if(!strcmp(cmd,"gamma")) { if(!boolean(root,"enable",first))return 0;dm.SetGamma(first);return 1; }
