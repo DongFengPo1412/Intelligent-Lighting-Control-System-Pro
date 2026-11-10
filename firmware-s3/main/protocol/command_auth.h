@@ -93,6 +93,8 @@ inline bool IsPermittedUnauthenticated(const char* raw_cmd, const cJSON* validat
                 !strcasecmp(name, "off") ||
                 !strcasecmp(name, "stop") ||
                 !strcasecmp(name, "countdown") ||
+                !strcasecmp(name, "stop_countdown") ||
+                !strcasecmp(name, "stop_cd") ||
                 !strcasecmp(name, "spectrum") ||
                 !strcasecmp(name, "bands") ||
                 !strcasecmp(name, "frame") ||
@@ -101,6 +103,7 @@ inline bool IsPermittedUnauthenticated(const char* raw_cmd, const cJSON* validat
                 !strcasecmp(name, "emoji") ||
                 !strcasecmp(name, "arcade") ||
                 !strcasecmp(name, "pet") ||
+                !strcasecmp(name, "kurisu") ||
                 !strcasecmp(name, "board_led") ||
                 !strcasecmp(name, "led") ||
                 !strcasecmp(name, "volume") ||
@@ -137,7 +140,10 @@ inline bool IsPermittedUnauthenticated(const char* raw_cmd, const cJSON* validat
     }
 
     // Plain text: Off / Stop
-    if (!strcasecmp(raw_cmd, "off") || !strcasecmp(raw_cmd, "stop")) return true;
+    if (!strcasecmp(raw_cmd, "off") || !strcasecmp(raw_cmd, "stop") ||
+        !strcasecmp(raw_cmd, "stop_countdown") || !strcasecmp(raw_cmd, "stop_cd")) {
+        return true;
+    }
 
     // Plain text commands with parameters (safe prefixes)
     auto match_prefix = [](const char* s, const char* prefix, size_t len) {

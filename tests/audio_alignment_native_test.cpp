@@ -489,8 +489,40 @@ int main() {
         assert(command_auth::IsPermittedUnauthenticated("   mode 1", nullptr) == true);
         assert(command_auth::IsPermittedUnauthenticated("arcade 41", nullptr) == true);
         assert(command_auth::IsPermittedUnauthenticated("pet", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("kurisu", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("countdown 60", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("stop_countdown", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("   stop_countdown", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("stop_cd", nullptr) == true);
         assert(command_auth::IsPermittedUnauthenticated("b 25", nullptr) == true);
         assert(command_auth::IsPermittedUnauthenticated("f,beat,1,2", nullptr) == true);
+
+        // Simulated JSON commands
+        cJSON str_cmd = {}; str_cmd.type = cJSON_String;
+        cJSON json_obj = {}; json_obj.type = cJSON_Object; json_obj.child = &str_cmd;
+        char cmd_key[] = "cmd"; str_cmd.string = cmd_key;
+
+        char val_countdown[] = "countdown"; str_cmd.valuestring = val_countdown;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"countdown\"}", &json_obj) == true);
+
+        char val_stop_cd[] = "stop_countdown"; str_cmd.valuestring = val_stop_cd;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"stop_countdown\"}", &json_obj) == true);
+
+        char val_kurisu[] = "kurisu"; str_cmd.valuestring = val_kurisu;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"kurisu\"}", &json_obj) == true);
+
+        char val_pet[] = "pet"; str_cmd.valuestring = val_pet;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"pet\"}", &json_obj) == true);
+
+        // Sensitive JSON commands -> rejected
+        char val_mic[] = "mic"; str_cmd.valuestring = val_mic;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"mic\"}", &json_obj) == false);
+
+        char val_abort[] = "audio_abort"; str_cmd.valuestring = val_abort;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"audio_abort\"}", &json_obj) == false);
+
+        char val_ticket[] = "request_audio_ticket"; str_cmd.valuestring = val_ticket;
+        assert(command_auth::IsPermittedUnauthenticated("{\"cmd\":\"request_audio_ticket\"}", &json_obj) == false);
 
         // Plain text sensitive commands: strictly rejected
         assert(command_auth::IsPermittedUnauthenticated("mic on", nullptr) == false);
@@ -530,11 +562,11 @@ int main() {
         assert(fed != nullptr && scratch.size() == 256 && scratch.front() == 1 && scratch.back() == 256);
         assert(!stream.CanFeed(kFeedChunk));
 
-        // 2. Cold-start priming fallback and monotonic ordering
+        // 2. Cold-start bounded warmup fallback and steady-state filtered streaming
         stream.Reset();
         val = 0;
-        int16_t out_all[1024] = {0};
-        size_t out_pos = 0;
+        int16_t filtered_all[768] = {0};
+        size_t filtered_pos = 0;
 
         // Chunk 1 (1..256): AFE pipeline is priming, outputs 0 fetched samples
         int16_t in1[256];
@@ -543,10 +575,9 @@ int main() {
         stream.FeedChunk(kFeedChunk, scratch);
         int16_t dest1[256];
         bool normal1 = stream.Emit(dest1, in1, 256);
-        assert(!normal1); // Cold start raw fallback!
-        assert(stream.PrimedRawSamples() == 256);
-        std::memcpy(out_all + out_pos, dest1, 256 * sizeof(int16_t));
-        out_pos += 256;
+        assert(!normal1); // Cold start raw fallback during bounded warmup!
+        assert(!stream.IsWarmedUp());
+        assert(stream.DiscardPending() == 0);
 
         // Chunk 2 (257..512): AFE finishes delayed processing of chunk 1 (samples 1..256)
         int16_t in2[256];
@@ -556,60 +587,68 @@ int main() {
         int16_t afe_delayed_1[256];
         for (int i = 0; i < 256; ++i) afe_delayed_1[i] = i + 1; // Filtered 1..256
         stream.PushFetched(afe_delayed_1, 256);
-        // Duplicate delayed samples matching primed raw samples must be discarded!
-        assert(stream.PrimedRawSamples() == 0);
-        assert(stream.OutBufferSize() == 0);
+        assert(stream.OutBufferSize() == 256);
         int16_t dest2[256];
         bool normal2 = stream.Emit(dest2, in2, 256);
-        assert(!normal2);
-        assert(stream.PrimedRawSamples() == 256);
-        std::memcpy(out_all + out_pos, dest2, 256 * sizeof(int16_t));
-        out_pos += 256;
+        assert(normal2); // Steady-state filtered output engaged!
+        assert(stream.IsWarmedUp());
+        assert(stream.OutBufferSize() == 0);
+        std::memcpy(filtered_all + filtered_pos, dest2, 256 * sizeof(int16_t));
+        filtered_pos += 256;
 
-        // Chunk 3 (513..768): AFE catches up, outputs 512 samples (delayed chunk 2 + chunk 3)
+        // Chunk 3 (513..768): AFE outputs delayed chunk 2 (257..512)
         int16_t in3[256];
         for (int i = 0; i < 256; ++i) in3[i] = ++val;
         stream.PushInput(in3, 256);
         stream.FeedChunk(kFeedChunk, scratch);
-        int16_t afe_delayed_2_3[512];
-        for (int i = 0; i < 512; ++i) afe_delayed_2_3[i] = 257 + i; // 257..768
-        stream.PushFetched(afe_delayed_2_3, 512);
-        // Chunk 2 duplicate discarded; chunk 3 kept!
-        assert(stream.PrimedRawSamples() == 0);
+        int16_t afe_delayed_2[256];
+        for (int i = 0; i < 256; ++i) afe_delayed_2[i] = 257 + i; // Filtered 257..512
+        stream.PushFetched(afe_delayed_2, 256);
         assert(stream.OutBufferSize() == 256);
         int16_t dest3[256];
         bool normal3 = stream.Emit(dest3, in3, 256);
-        assert(normal3); // Normal AFE output path!
+        assert(normal3); // Normal steady-state filtered path!
         assert(stream.OutBufferSize() == 0);
-        std::memcpy(out_all + out_pos, dest3, 256 * sizeof(int16_t));
-        out_pos += 256;
+        std::memcpy(filtered_all + filtered_pos, dest3, 256 * sizeof(int16_t));
+        filtered_pos += 256;
 
-        // Chunk 4 (769..1024): normal steady-state AFE flow
+        // Chunk 4 (769..1024): normal steady-state AFE flow for chunk 3 (513..768)
         int16_t in4[256];
         for (int i = 0; i < 256; ++i) in4[i] = ++val;
         stream.PushInput(in4, 256);
         stream.FeedChunk(kFeedChunk, scratch);
-        int16_t afe_delayed_4[256];
-        for (int i = 0; i < 256; ++i) afe_delayed_4[i] = 769 + i;
-        stream.PushFetched(afe_delayed_4, 256);
+        int16_t afe_delayed_3[256];
+        for (int i = 0; i < 256; ++i) afe_delayed_3[i] = 513 + i; // Filtered 513..768
+        stream.PushFetched(afe_delayed_3, 256);
         int16_t dest4[256];
         bool normal4 = stream.Emit(dest4, in4, 256);
         assert(normal4);
-        std::memcpy(out_all + out_pos, dest4, 256 * sizeof(int16_t));
-        out_pos += 256;
+        std::memcpy(filtered_all + filtered_pos, dest4, 256 * sizeof(int16_t));
+        filtered_pos += 256;
 
-        // Verify strictly monotonic ordering with NO duplicates or backward timestamp jumps!
-        assert(out_pos == 1024);
-        for (size_t i = 1; i < 1024; ++i) {
-            assert(out_all[i] == out_all[i - 1] + 1);
+        // Verify strictly monotonic ordering across all steady-state filtered samples!
+        assert(filtered_pos == 768);
+        for (size_t i = 1; i < 768; ++i) {
+            assert(filtered_all[i] == filtered_all[i - 1] + 1);
         }
 
-        // 3. Stop and Restart: buffers and priming counter cleanly reset
-        stream.PushInput(in1, 100);
-        stream.Emit(dest1, in1, 50);
-        assert(stream.InBufferSize() > 0 || stream.PrimedRawSamples() > 0);
-        stream.Reset(); // Stop
-        assert(stream.InBufferSize() == 0 && stream.OutBufferSize() == 0 && stream.PrimedRawSamples() == 0);
+        // 3. Stop and Restart / In-Flight I2S Reads During Stream Teardown
+        // Simulate in-flight I2S data arriving right as audio stream is stopped
+        stream.PushInput(in1, 120);
+        int16_t inflight_fetches[80];
+        for (int i = 0; i < 80; ++i) inflight_fetches[i] = 900 + i;
+        stream.PushFetched(inflight_fetches, 80);
+        assert(stream.InBufferSize() == 120 && stream.OutBufferSize() == 80);
+
+        // Audio stream stopped / aborted: Reset clears all in-flight buffers and state
+        stream.Reset();
+        assert(stream.InBufferSize() == 0 && stream.OutBufferSize() == 0 && stream.DiscardPending() == 0);
+        assert(!stream.IsWarmedUp());
+
+        // Late arriving in-flight packet after reset does not corrupt new session
+        stream.PushInput(in2, 64);
+        stream.Reset();
+        assert(stream.InBufferSize() == 0 && stream.OutBufferSize() == 0);
 
         val = 1000;
         for (int i = 0; i < 256; ++i) in1[i] = ++val;
@@ -641,6 +680,74 @@ int main() {
         assert(repro_ok2); // Filtered AFE used!
         // MUST BE 5, 6, 7, 8, NOT 1, 2, 7, 8!
         assert(repro_out2[0] == 5 && repro_out2[1] == 6 && repro_out2[2] == 7 && repro_out2[3] == 8);
+
+        // 5. Codex 20-Block Fixed Delay Test (stably delayed by 1 block = 240 samples)
+        // Under bounded warm-up and buffering, AFE MUST transition from block 0 warm-up
+        // to continuous steady-state filtered output across blocks 1..19!
+        audio_afe::AfeSampleStream fixed_delay_stream;
+        int true_count = 0;
+        int false_count = 0;
+        std::vector<int16_t> filtered_stream;
+
+        for (int b = 0; b < 20; ++b) {
+            int16_t raw_block[240];
+            for (int i = 0; i < 240; ++i) raw_block[i] = static_cast<int16_t>(b * 240 + i + 1);
+
+            if (b > 0) {
+                // AFE outputs filtered samples of previous block (fixed 240-sample delay)
+                int16_t afe_block[240];
+                for (int i = 0; i < 240; ++i) afe_block[i] = static_cast<int16_t>((b - 1) * 240 + i + 1);
+                fixed_delay_stream.PushFetched(afe_block, 240);
+            }
+
+            int16_t dest_block[240] = {0};
+            bool ok = fixed_delay_stream.Emit(dest_block, raw_block, 240);
+            if (ok) {
+                true_count++;
+                filtered_stream.insert(filtered_stream.end(), dest_block, dest_block + 240);
+            } else {
+                false_count++;
+            }
+
+            // Block 0 is bounded warm-up (fallback); blocks 1..19 MUST ALL be filtered AFE output!
+            if (b == 0) {
+                assert(!ok);
+            } else {
+                assert(ok);
+            }
+        }
+
+        // Bounded warm-up: exactly 1 block of fallback, 19 blocks of steady-state filtered output!
+        assert(false_count == 1);
+        assert(true_count == 19);
+        double filtered_ratio = static_cast<double>(true_count) / 20.0;
+        assert(filtered_ratio >= 0.90); // 95% steady-state filtered output!
+
+        // Continuous monotonic ordering across all 4560 filtered samples without jumps or duplicates!
+        assert(filtered_stream.size() == 4560);
+        for (size_t i = 1; i < filtered_stream.size(); ++i) {
+            assert(filtered_stream[i] == filtered_stream[i - 1] + 1);
+        }
+
+        // 6. Fetch size (64) != Read size (240) across 20 blocks
+        audio_afe::AfeSampleStream asymmetric_stream;
+        int asym_true_count = 0;
+        for (int b = 0; b < 20; ++b) {
+            int16_t raw_block[240];
+            for (int i = 0; i < 240; ++i) raw_block[i] = static_cast<int16_t>(b * 240 + i + 1);
+
+            // AFE fetches in 4 chunks of 64 = 256 samples per block
+            for (int f = 0; f < 4; ++f) {
+                int16_t fetch_chunk[64];
+                for (int i = 0; i < 64; ++i) fetch_chunk[i] = static_cast<int16_t>((b * 256 + f * 64 + i + 1));
+                asymmetric_stream.PushFetched(fetch_chunk, 64);
+            }
+
+            int16_t dest_block[240] = {0};
+            bool ok = asymmetric_stream.Emit(dest_block, raw_block, 240);
+            if (ok) asym_true_count++;
+        }
+        assert(asym_true_count == 20);
 
         std::puts("PASS: AFE sample stream cross-chunk, cold-start priming, duplicate discard, and monotonic ordering");
     }

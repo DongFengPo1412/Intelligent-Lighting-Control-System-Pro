@@ -450,8 +450,9 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             if parsed_json and isinstance(parsed_json, dict):
                 c = parsed_json.get("cmd", "").lower()
                 whitelist_json = {"mode", "color", "brightness", "b", "off", "stop", "countdown",
-                                  "spectrum", "bands", "frame", "status", "face", "emoji", "arcade",
-                                  "pet", "board_led", "led", "volume", "v", "beep", "key"}
+                                  "stop_countdown", "stop_cd", "spectrum", "bands", "frame", "status",
+                                  "face", "emoji", "arcade", "pet", "kurisu", "board_led", "led", "volume",
+                                  "v", "beep", "key"}
                 return c in whitelist_json
 
             # Plain text commands
@@ -460,7 +461,8 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             low = cmd.lower()
             whitelist_text = {"status", "happy", "angry", "sad", "thinking", "breathe", "cry",
                               "neutral", "dynamic", "face", "emoji", "kurisu", "pet", "snake",
-                              "tetris", "fire", "matrix", "spectrum", "beep", "off", "stop"}
+                              "tetris", "fire", "matrix", "spectrum", "beep", "off", "stop",
+                              "stop_countdown", "stop_cd"}
             if low in whitelist_text:
                 return True
             for prefix in ("mode ", "color ", "brightness ", "b ", "countdown ", "volume ", "v ",
@@ -476,6 +478,14 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         self.assertTrue(is_permitted_unauthenticated('   {"cmd":"mode", "mode":1}', {"cmd": "mode"}))
         self.assertTrue(is_permitted_unauthenticated("arcade 41"))
         self.assertTrue(is_permitted_unauthenticated("pet"))
+        self.assertTrue(is_permitted_unauthenticated("kurisu"))
+        self.assertTrue(is_permitted_unauthenticated('{"cmd":"kurisu"}', {"cmd": "kurisu"}))
+        self.assertTrue(is_permitted_unauthenticated("countdown 60"))
+        self.assertTrue(is_permitted_unauthenticated("stop_countdown"))
+        self.assertTrue(is_permitted_unauthenticated("   stop_countdown"))
+        self.assertTrue(is_permitted_unauthenticated("stop_cd"))
+        self.assertTrue(is_permitted_unauthenticated('{"cmd":"stop_countdown"}', {"cmd": "stop_countdown"}))
+        self.assertTrue(is_permitted_unauthenticated('{"cmd":"stop_cd"}', {"cmd": "stop_cd"}))
         self.assertTrue(is_permitted_unauthenticated("b 30"))
         self.assertTrue(is_permitted_unauthenticated("f,beat,1,2,3"))
 
