@@ -36,7 +36,14 @@ static constexpr gpio_num_t  kDefaultRxPin    = GPIO_NUM_8; // ESP32 RX <- Jetso
 static constexpr gpio_num_t  kDefaultTxPin    = GPIO_NUM_9; // ESP32 TX -> Jetson RX (Pin 10)
 static constexpr int         kDefaultBaudRate = 115200;
 static constexpr size_t      kMaxLineLength   = 1024;
-static constexpr const char* kProtocolVersion = "2.3.0";
+static constexpr const char* kProtocolVersion = "2.3.1";
+
+enum class SessionState : uint8_t {
+    IDLE = 0,       // No session established yet
+    ACTIVE = 1,     // Session actively running
+    STOPPED = 2,    // Session explicitly stopped
+    EXPIRED = 3,    // Session timed out (no heartbeat for > 15s)
+};
 
 /**
  * Multi-format stream receiver supporting both:
@@ -259,15 +266,21 @@ public:
     void SetSession(const char* session_id);
     void ClearSession();
     const char* GetSessionId() const { return session_id_; }
-    bool IsSessionActive() const {
-        if (!session_active_) return false;
-        uint32_t now = get_current_millis();
-        if (now - last_session_ping_ms_ > 15000) return false;
-        return true;
+    SessionState GetSessionState() const {
+        if (session_state_ == SessionState::ACTIVE) {
+            uint32_t now = get_current_millis();
+            if (now - last_session_ping_ms_ > 15000) {
+                const_cast<JetsonUart*>(this)->session_state_ = SessionState::EXPIRED;
+            }
+        }
+        return session_state_;
     }
-    void StartSession();
+    bool IsSessionActive() const {
+        return GetSessionState() == SessionState::ACTIVE;
+    }
+    void StartSession(const char* session_id = nullptr, uint16_t initial_seq = 0);
     void StopSession();
-    void PingSession();
+    bool PingSession();
     bool IsManualOverrideActive() const;
     void SetManualOverride(bool active);
 
@@ -304,10 +317,10 @@ private:
     uint32_t rx_errors_ = 0;
 
     // 会话与超时看门狗
-    char     session_id_[36] = {0};
-    bool     session_active_ = false;
-    uint32_t session_start_ms_ = 0;
-    uint32_t last_session_ping_ms_ = 0;
+    char         session_id_[36] = {0};
+    SessionState session_state_ = SessionState::IDLE;
+    uint32_t     session_start_ms_ = 0;
+    uint32_t     last_session_ping_ms_ = 0;
     uint16_t held_keys_ = 0;
     uint32_t last_input_time_ms_ = 0;
 };

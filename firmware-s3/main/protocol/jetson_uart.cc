@@ -161,8 +161,8 @@ void JetsonUart::UartTaskLoop() {
         });
 
         // 4. Session timeout check (>15s)
-        if (session_active_ && (now - last_session_ping_ms_ > 15000)) {
-            session_active_ = false;
+        if (session_state_ == SessionState::ACTIVE && (now - last_session_ping_ms_ > 15000)) {
+            session_state_ = SessionState::EXPIRED;
             ESP_LOGW(TAG, "Jetson vision session expired (>15s inactivity)");
         }
 
@@ -239,7 +239,7 @@ esp_err_t JetsonUart::SendLine(const char* line) {
 }
 
 void JetsonUart::SetSession(const char* session_id) {
-    if (session_id) {
+    if (session_id && session_id[0] != '\0') {
         snprintf(session_id_, sizeof(session_id_), "%s", session_id);
     } else {
         session_id_[0] = '\0';
@@ -248,24 +248,38 @@ void JetsonUart::SetSession(const char* session_id) {
 
 void JetsonUart::ClearSession() {
     session_id_[0] = '\0';
-    session_active_ = false;
+    session_state_ = SessionState::IDLE;
     ReleaseHeldKeys();
 }
 
-void JetsonUart::StartSession() {
-    session_active_ = true;
+void JetsonUart::StartSession(const char* session_id, uint16_t initial_seq) {
+    if (session_id && session_id[0] != '\0') {
+        SetSession(session_id);
+    }
+    session_state_ = SessionState::ACTIVE;
     session_start_ms_ = get_current_millis();
     last_session_ping_ms_ = session_start_ms_;
+    last_input_time_ms_ = session_start_ms_;
+    canvas::CanvasAssembler::GetInstance().ResetSequence(initial_seq);
+    ReleaseHeldKeys();
 }
 
 void JetsonUart::StopSession() {
-    session_active_ = false;
+    session_state_ = SessionState::STOPPED;
     ReleaseHeldKeys();
     canvas::CanvasAssembler::GetInstance().Reset();
+    DisplayManager& dm = DisplayManager::GetInstance();
+    if (dm.GetMode() == DisplayMode::PIXEL_CANVAS) {
+        dm.SetMode(DisplayMode::RAINBOW_WAVE);
+    }
 }
 
-void JetsonUart::PingSession() {
-    last_session_ping_ms_ = get_current_millis();
+bool JetsonUart::PingSession() {
+    if (GetSessionState() == SessionState::ACTIVE) {
+        last_session_ping_ms_ = get_current_millis();
+        return true;
+    }
+    return false;
 }
 
 bool JetsonUart::IsManualOverrideActive() const {
@@ -289,8 +303,8 @@ void JetsonUart::ProcessBinaryFrame(const canvas::BinaryHeader& header, const ui
     out_reply[0] = '\0';
 
     JetsonUart& ju = GetInstance();
-    // Inactive or expired session defense: if an explicit session was configured and is no longer active
-    if (ju.session_id_[0] != '\0' && !ju.IsSessionActive()) {
+    SessionState state = ju.GetSessionState();
+    if (state == SessionState::STOPPED || state == SessionState::EXPIRED) {
         cJSON* resp = cJSON_CreateObject();
         cJSON_AddStringToObject(resp, "status", "error");
         cJSON_AddStringToObject(resp, "type", "bin_frame");
@@ -299,7 +313,7 @@ void JetsonUart::ProcessBinaryFrame(const canvas::BinaryHeader& header, const ui
         cJSON_AddBoolToObject(resp, "displayed", false);
         cJSON_AddNumberToObject(resp, "received_bytes", 0);
         cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
-        cJSON_AddStringToObject(resp, "error", "session_expired");
+        cJSON_AddStringToObject(resp, "error", (state == SessionState::STOPPED) ? "session_stopped" : "session_expired");
         char* rendered = cJSON_PrintUnformatted(resp);
         if (rendered) {
             snprintf(out_reply, out_reply_size, "%s", rendered);
@@ -486,47 +500,69 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
 
             cJSON* resp = cJSON_CreateObject();
             if (!strcasecmp(act, "start") || !strcasecmp(act, "resume")) {
-                GetInstance().SetSession(sid);
-                GetInstance().StartSession();
+                uint16_t initial_seq = 0;
+                cJSON* seq_item = cJSON_GetObjectItemCaseSensitive(root, "initial_seq");
+                if (!seq_item) seq_item = cJSON_GetObjectItemCaseSensitive(root, "seq");
+                if (seq_item && cJSON_IsNumber(seq_item)) {
+                    initial_seq = (uint16_t)seq_item->valueint;
+                }
+                GetInstance().StartSession(sid, initial_seq);
+
+                DisplayManager& dm = DisplayManager::GetInstance();
+                bool manual_active = dm.IsManualOverrideActive();
                 cJSON* take_ctrl = cJSON_GetObjectItemCaseSensitive(root, "take_control");
                 if (take_ctrl && cJSON_IsTrue(take_ctrl)) {
-                    DisplayManager::GetInstance().SetManualOverride(false);
+                    dm.SetManualOverride(false);
+                    manual_active = false;
                 }
                 cJSON* mode_item = cJSON_GetObjectItemCaseSensitive(root, "mode");
+                bool mode_executed = false;
                 if (mode_item) {
-                    DisplayManager::GetInstance().SetManualOverride(false);
-                    if (cJSON_IsNumber(mode_item)) {
-                        DisplayManager::GetInstance().SetMode((uint8_t)mode_item->valueint);
-                    } else if (cJSON_IsString(mode_item)) {
-                        const char* m = mode_item->valuestring;
-                        if (!strcasecmp(m, "fingertip") || !strcasecmp(m, "track")) {
-                            DisplayManager::GetInstance().SetMode(26);
-                        } else if (!strcasecmp(m, "sandbox") || !strcasecmp(m, "hand")) {
-                            DisplayManager::GetInstance().SetMode(27);
-                        } else if (!strcasecmp(m, "canvas") || !strcasecmp(m, "pixel")) {
-                            DisplayManager::GetInstance().SetMode(29);
-                        } else if (!strcasecmp(m, "pet") || !strcasecmp(m, "kurisu")) {
-                            DisplayManager::GetInstance().SetMode(17);
+                    if (manual_active) {
+                        mode_executed = false;
+                    } else {
+                        mode_executed = true;
+                        if (cJSON_IsNumber(mode_item)) {
+                            dm.SetMode((uint8_t)mode_item->valueint);
+                        } else if (cJSON_IsString(mode_item)) {
+                            const char* m = mode_item->valuestring;
+                            if (!strcasecmp(m, "fingertip") || !strcasecmp(m, "track")) {
+                                dm.SetMode(26);
+                            } else if (!strcasecmp(m, "sandbox") || !strcasecmp(m, "hand")) {
+                                dm.SetMode(27);
+                            } else if (!strcasecmp(m, "canvas") || !strcasecmp(m, "pixel")) {
+                                dm.SetMode(29);
+                            } else if (!strcasecmp(m, "pet") || !strcasecmp(m, "kurisu")) {
+                                dm.SetMode(17);
+                            }
                         }
                     }
                 }
                 cJSON_AddStringToObject(resp, "status", "ok");
                 cJSON_AddBoolToObject(resp, "active", true);
                 cJSON_AddStringToObject(resp, "session_id", GetInstance().session_id_);
-                cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
+                cJSON_AddBoolToObject(resp, "mode_overridden", dm.IsManualOverrideActive());
+                if (mode_item) {
+                    cJSON_AddBoolToObject(resp, "mode_executed", mode_executed);
+                }
             } else if (!strcasecmp(act, "stop")) {
                 GetInstance().StopSession();
-                GetInstance().ClearSession();
-                DisplayManager::GetInstance().SetManualOverride(true);
                 cJSON_AddStringToObject(resp, "status", "ok");
                 cJSON_AddBoolToObject(resp, "active", false);
+                cJSON_AddStringToObject(resp, "session_state", "stopped");
             } else if (!strcasecmp(act, "heartbeat") || !strcasecmp(act, "ping")) {
-                GetInstance().PingSession();
-                GetInstance().last_input_time_ms_ = get_current_millis();
-                cJSON_AddStringToObject(resp, "status", "ok");
-                cJSON_AddBoolToObject(resp, "heartbeat", true);
-                cJSON_AddBoolToObject(resp, "active", GetInstance().IsSessionActive());
-                cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
+                bool ok = GetInstance().PingSession();
+                if (ok) {
+                    GetInstance().last_input_time_ms_ = get_current_millis();
+                    cJSON_AddStringToObject(resp, "status", "ok");
+                    cJSON_AddBoolToObject(resp, "heartbeat", true);
+                    cJSON_AddBoolToObject(resp, "active", true);
+                    cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
+                } else {
+                    cJSON_AddStringToObject(resp, "status", "error");
+                    cJSON_AddStringToObject(resp, "error", (GetInstance().GetSessionState() == SessionState::STOPPED) ? "session_stopped" : "session_expired");
+                    cJSON_AddBoolToObject(resp, "active", false);
+                }
             } else {
                 cJSON_AddStringToObject(resp, "status", "error");
                 cJSON_AddStringToObject(resp, "error", "unknown_session_action");
@@ -574,10 +610,11 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
             cJSON_Delete(resp);
         } else if (!strcasecmp(cmd, "canvas_chunk")) {
             JetsonUart& ju = GetInstance();
-            if (ju.session_id_[0] != '\0' && !ju.IsSessionActive()) {
+            SessionState state = ju.GetSessionState();
+            if (state == SessionState::STOPPED || state == SessionState::EXPIRED) {
                 cJSON* resp = cJSON_CreateObject();
                 cJSON_AddStringToObject(resp, "status", "error");
-                cJSON_AddStringToObject(resp, "error", "session_expired");
+                cJSON_AddStringToObject(resp, "error", (state == SessionState::STOPPED) ? "session_stopped" : "session_expired");
                 cJSON_AddBoolToObject(resp, "committed", false);
                 cJSON_AddBoolToObject(resp, "displayed", false);
                 append_req_id(resp);
@@ -803,15 +840,18 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                     }
                 }
 
-                // If explicit session is configured and expired, reject visual tracking commands
+                // If session is stopped or expired, reject visual and canvas commands
                 JetsonUart& ju = GetInstance();
-                if (ju.session_id_[0] != '\0' && !ju.IsSessionActive()) {
+                SessionState state = ju.GetSessionState();
+                if (state == SessionState::STOPPED || state == SessionState::EXPIRED) {
                     if (!strcasecmp(cmd, "track") || !strcasecmp(cmd, "hand") ||
                         !strcasecmp(cmd, "pet_context") || !strcasecmp(cmd, "face") ||
-                        !strcasecmp(cmd, "track_cal")) {
+                        !strcasecmp(cmd, "track_cal") || !strcasecmp(cmd, "pixel") ||
+                        !strcasecmp(cmd, "canvas") || !strcasecmp(cmd, "clear_canvas") ||
+                        !strcasecmp(cmd, "arcade")) {
                         cJSON* resp = cJSON_CreateObject();
                         cJSON_AddStringToObject(resp, "status", "error");
-                        cJSON_AddStringToObject(resp, "error", "session_expired");
+                        cJSON_AddStringToObject(resp, "error", (state == SessionState::STOPPED) ? "session_stopped" : "session_expired");
                         cJSON_AddBoolToObject(resp, "executed", false);
                         append_req_id(resp);
                         char* rendered = cJSON_PrintUnformatted(resp);

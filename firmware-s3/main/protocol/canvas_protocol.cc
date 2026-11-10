@@ -69,6 +69,12 @@ bool CanvasAssembler::IsFrameComplete() const {
     return (bytes_received_ >= kFrameSizeBytes) && IsBitmapFullyCovered();
 }
 
+void CanvasAssembler::ResetSequence(uint16_t initial_seq) {
+    Reset();
+    last_committed_frame_id_ = initial_seq;
+    has_committed_any_frame_ = false;
+}
+
 void CanvasAssembler::CommitFrame(bool auto_mode) {
     DisplayManager& dm = DisplayManager::GetInstance();
     if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
@@ -84,6 +90,7 @@ void CanvasAssembler::CommitFrame(bool auto_mode) {
     dm.SetCanvasFrame(colors);
     committed_frames_++;
     last_committed_frame_id_ = current_frame_id_;
+    has_committed_any_frame_ = true;
     Reset();
 }
 
@@ -117,13 +124,13 @@ FeedResult CanvasAssembler::FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uin
         }
     }
 
-    // 3. Stale & duplicate frame rejection
-    if (last_committed_frame_id_ != 0) {
-        if (frame_id == last_committed_frame_id_) {
+    // 3. Stale & duplicate frame rejection with initial session allowance
+    if (has_committed_any_frame_) {
+        uint16_t delta_fwd = (uint16_t)(frame_id - last_committed_frame_id_);
+        if (delta_fwd == 0) {
             return {false, false, frame_id, bytes_received_, "duplicate_frame_id"};
         }
-        uint16_t age = last_committed_frame_id_ - frame_id;
-        if (age > 0 && age < 32768) {
+        if (delta_fwd >= 32768) {
             return {false, false, frame_id, bytes_received_, "stale_frame_id"};
         }
     }
@@ -171,13 +178,13 @@ FeedResult CanvasAssembler::FeedFullFrame(uint16_t frame_id, const uint8_t* data
         }
     }
 
-    // Stale & duplicate frame rejection
-    if (last_committed_frame_id_ != 0) {
-        if (frame_id == last_committed_frame_id_) {
+    // Stale & duplicate frame rejection with initial session allowance
+    if (has_committed_any_frame_) {
+        uint16_t delta_fwd = (uint16_t)(frame_id - last_committed_frame_id_);
+        if (delta_fwd == 0) {
             return {false, false, frame_id, bytes_received_, "duplicate_frame_id"};
         }
-        uint16_t age = last_committed_frame_id_ - frame_id;
-        if (age > 0 && age < 32768) {
+        if (delta_fwd >= 32768) {
             return {false, false, frame_id, bytes_received_, "stale_frame_id"};
         }
     }
@@ -201,32 +208,43 @@ FeedResult CanvasAssembler::ProcessBinaryFrame(const BinaryHeader& header, const
         return {false, false, header.frame_seq, 0, "invalid_magic"};
     }
 
+    if (header.version != 1) {
+        return {false, false, header.frame_seq, 0, "unsupported_binary_version"};
+    }
+
     bool auto_mode = (header.flags & FLAG_AUTO_MODE) != 0;
     bool commit_now = (header.flags & FLAG_COMMIT_NOW) != 0;
+    bool check_crc = !(header.flags & FLAG_SKIP_CRC);
+
+    // Strict CRC validation across all frames with payload unless explicitly skipped via FLAG_SKIP_CRC
+    if (check_crc && payload && header.payload_len > 0) {
+        uint16_t actual_crc = CalculateCrc16(payload, header.payload_len);
+        if (actual_crc != header.crc16) {
+            crc_errors_++;
+            return {false, false, header.frame_seq, 0, "crc_mismatch"};
+        }
+    }
 
     switch (header.type) {
         case BIN_FULL_FRAME: {
-            if (header.payload_len != kFrameSizeBytes) {
+            if (header.payload_len != kFrameSizeBytes || header.offset != 0) {
                 bounds_errors_++;
                 return {false, false, header.frame_seq, 0, "invalid_full_frame_length"};
-            }
-            if (header.crc16 != 0) {
-                uint16_t actual_crc = CalculateCrc16(payload, header.payload_len);
-                if (actual_crc != header.crc16) {
-                    crc_errors_++;
-                    return {false, false, header.frame_seq, 0, "crc_mismatch"};
-                }
             }
             return FeedFullFrame(header.frame_seq, payload, header.payload_len, 0, auto_mode);
         }
 
         case BIN_CHUNK_FRAME: {
-            return FeedChunk(header.frame_seq, 0, 0, header.offset, payload, header.payload_len, header.crc16, commit_now, auto_mode);
+            if (header.payload_len > 384 || header.offset + header.payload_len > kFrameSizeBytes) {
+                bounds_errors_++;
+                return {false, false, header.frame_seq, 0, "chunk_bounds_overflow"};
+            }
+            return FeedChunk(header.frame_seq, 0, 0, header.offset, payload, header.payload_len, 0, commit_now, auto_mode);
         }
 
         case BIN_SINGLE_PIXEL: {
-            if (header.payload_len < 5) {
-                return {false, false, header.frame_seq, 0, "pixel_payload_too_short"};
+            if (header.payload_len != 5) {
+                return {false, false, header.frame_seq, 0, "invalid_pixel_payload_length"};
             }
             uint8_t x = payload[0];
             uint8_t y = payload[1];
@@ -237,6 +255,9 @@ FeedResult CanvasAssembler::ProcessBinaryFrame(const BinaryHeader& header, const
         }
 
         case BIN_CLEAR: {
+            if (header.payload_len != 0 && header.payload_len != 3) {
+                return {false, false, header.frame_seq, 0, "invalid_clear_payload_length"};
+            }
             uint8_t r = (header.payload_len >= 3) ? payload[0] : 0;
             uint8_t g = (header.payload_len >= 3) ? payload[1] : 0;
             uint8_t b = (header.payload_len >= 3) ? payload[2] : 0;
@@ -244,7 +265,7 @@ FeedResult CanvasAssembler::ProcessBinaryFrame(const BinaryHeader& header, const
         }
 
         default:
-            return {false, false, header.frame_seq, 0, "unknown_binary_type"};
+            return {false, false, header.frame_seq, 0, "unsupported_binary_type"};
     }
 }
 

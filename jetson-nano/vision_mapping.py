@@ -4,6 +4,7 @@ Features automatic key release on hand loss to prevent runaway inputs in arcade 
 """
 from datetime import datetime
 import logging
+import time
 from typing import Any, Dict, Optional
 from protocol import CommandBuilder
 
@@ -21,6 +22,8 @@ class VisionMapper:
 
         self.last_hand_visible = False
         self.last_arcade_keys = 0
+        self.last_celebrate_time = 0.0
+        self.celebrate_cooldown = 4.0  # seconds between celebration triggers
 
     def handle_gesture(self, gesture_name: str, x: float = 0.5, y: float = 0.5, z: float = 0.0):
         """Dispatches an explicit gesture (e.g. '1', '2', 'fist', 'pinch', 'pointing')."""
@@ -45,8 +48,9 @@ class VisionMapper:
             key_name = rule.get("key", "down")
             from protocol import KEY_MAP
             mask = KEY_MAP.get(key_name, 0)
+            pressed = mask & ~self.last_arcade_keys
             self.last_arcade_keys = mask
-            self.transport.send_line(CommandBuilder.arcade_input(mask, mask))
+            self.transport.send_line(CommandBuilder.arcade_input(mask, pressed))
 
     def handle_hand_frame(
         self,
@@ -82,8 +86,9 @@ class VisionMapper:
                     from protocol import KEY_A
                     down |= KEY_A
 
+                pressed = down & ~self.last_arcade_keys
                 self.last_arcade_keys = down
-                self.transport.send_line(CommandBuilder.arcade_input(down, down))
+                self.transport.send_line(CommandBuilder.arcade_input(down, pressed))
         else:
             # Hand disappeared!
             if self.last_hand_visible:
@@ -111,8 +116,11 @@ class VisionMapper:
             CommandBuilder.pet_context(hour=hour, gaze=gaze_x, present=present, tired=tired)
         )
 
-        # If user smiles, trigger celebration fireworks!
+        # If user smiles, trigger celebration fireworks with cooldown!
         if smile_prob >= smile_thresh:
-            logger.info(f"[VisionMapper] Smile detected ({smile_prob:.2f})! Triggering celebration.")
-            self.transport.send_line(CommandBuilder.celebrate())
+            now = time.time()
+            if now - self.last_celebrate_time >= self.celebrate_cooldown:
+                self.last_celebrate_time = now
+                logger.info(f"[VisionMapper] Smile detected ({smile_prob:.2f})! Triggering celebration.")
+                self.transport.send_line(CommandBuilder.celebrate())
 

@@ -36,6 +36,10 @@ class CanvasStreamer:
         """Returns True if user manual control suppressed the canvas frame from becoming active on display."""
         return self.last_overridden
 
+    def reset_sequence(self, initial_seq: int = 0):
+        """Resets the client-side frame sequence number."""
+        self.frame_seq = int(initial_seq)
+
     def send_pixel(self, x: int, y: int, r: int, g: int, b: int, auto_mode: bool = True) -> bool:
         cmd = CommandBuilder.pixel(x, y, r, g, b, auto_mode=auto_mode)
         reply = self.transport.send_line(cmd, wait_reply=True)

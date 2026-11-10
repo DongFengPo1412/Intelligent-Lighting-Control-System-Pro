@@ -400,6 +400,82 @@ void Test_BinaryHeader_OversizedDefense() {
     assert(receiver.GetState() == jetson::FrameReceiver::State::TEXT);
 }
 
+// 12. Frame Sequence Reset and Reconnection Support
+void Test_FrameSequence_ResetAndReconnection() {
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    assembler.ResetSequence(0);
+
+    uint8_t full[768] = {0xAA};
+    // First run from sequence 100 to 102
+    auto r1 = assembler.FeedFullFrame(100, full, 768, 0, false);
+    assert(r1.success && r1.committed);
+    auto r2 = assembler.FeedFullFrame(101, full, 768, 0, false);
+    assert(r2.success && r2.committed);
+
+    // If client does NOT reset sequence, sending frame 1 would be rejected as stale
+    auto r_bad = assembler.FeedFullFrame(1, full, 768, 0, false);
+    assert(!r_bad.success && std::strcmp(r_bad.error_msg, "stale_frame_id") == 0);
+
+    // Client restarts: calls ResetSequence(0) on new session start
+    assembler.ResetSequence(0);
+
+    // Now client sending frame 1 MUST be accepted!
+    auto r_reconnect = assembler.FeedFullFrame(1, full, 768, 0, false);
+    assert(r_reconnect.success && r_reconnect.committed);
+    assert(assembler.GetLastCommittedFrameId() == 1);
+
+    // Next frame 2 is accepted
+    auto r_next = assembler.FeedFullFrame(2, full, 768, 0, false);
+    assert(r_next.success && r_next.committed);
+    assert(assembler.GetLastCommittedFrameId() == 2);
+}
+
+// 13. Binary Frame Strict CRC, Opt-Out Flag, and Version Validation
+void Test_BinaryFrame_StrictCrcAndVersionCheck() {
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    assembler.ResetSequence(0);
+
+    uint8_t payload[768];
+    std::memset(payload, 0x55, sizeof(payload));
+    uint16_t real_crc = canvas::CalculateCrc16(payload, sizeof(payload));
+
+    canvas::BinaryHeader hdr{};
+    hdr.magic[0] = canvas::kMagic0;
+    hdr.magic[1] = canvas::kMagic1;
+    hdr.magic[2] = canvas::kMagic2;
+    hdr.magic[3] = canvas::kMagic3;
+    hdr.type = canvas::BIN_FULL_FRAME;
+    hdr.version = 1;
+    hdr.frame_seq = 10;
+    hdr.payload_len = 768;
+    hdr.offset = 0;
+    hdr.flags = canvas::FLAG_COMMIT_NOW;
+    hdr.crc16 = real_crc;
+
+    // Case A: Valid version and valid CRC -> Accepted
+    auto r_ok = assembler.ProcessBinaryFrame(hdr, payload);
+    assert(r_ok.success && r_ok.committed);
+
+    // Case B: Unsupported version (e.g. version 2) -> Rejected
+    hdr.frame_seq = 11;
+    hdr.version = 2;
+    auto r_ver = assembler.ProcessBinaryFrame(hdr, payload);
+    assert(!r_ver.success && std::strcmp(r_ver.error_msg, "unsupported_binary_version") == 0);
+    hdr.version = 1;
+
+    // Case C: Invalid CRC without FLAG_SKIP_CRC -> Rejected
+    hdr.frame_seq = 12;
+    hdr.crc16 = 0x1234; // Incorrect CRC
+    auto r_crc = assembler.ProcessBinaryFrame(hdr, payload);
+    assert(!r_crc.success && std::strcmp(r_crc.error_msg, "crc_mismatch") == 0);
+
+    // Case D: Incorrect CRC with FLAG_SKIP_CRC -> Accepted because opted out
+    hdr.frame_seq = 13;
+    hdr.flags |= canvas::FLAG_SKIP_CRC;
+    auto r_skip = assembler.ProcessBinaryFrame(hdr, payload);
+    assert(r_skip.success && r_skip.committed);
+}
+
 int main() {
     std::cout << "====================================================\n";
     std::cout << "Starting Native C++ Canvas Protocol & UART Tests\n";
@@ -416,9 +492,11 @@ int main() {
     RunTest("Test_Session_Stop_And_Expiry", Test_Session_Stop_And_Expiry);
     RunTest("Test_FrameReceiver_TimeoutAndResync", Test_FrameReceiver_TimeoutAndResync);
     RunTest("Test_BinaryHeader_OversizedDefense", Test_BinaryHeader_OversizedDefense);
+    RunTest("Test_FrameSequence_ResetAndReconnection", Test_FrameSequence_ResetAndReconnection);
+    RunTest("Test_BinaryFrame_StrictCrcAndVersionCheck", Test_BinaryFrame_StrictCrcAndVersionCheck);
 
     std::cout << "====================================================\n";
-    std::cout << "ALL 11 NATIVE C++ TESTS PASSED!\n";
+    std::cout << "ALL 13 NATIVE C++ TESTS PASSED!\n";
     std::cout << "====================================================\n";
     return 0;
 }

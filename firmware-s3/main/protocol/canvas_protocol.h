@@ -47,6 +47,7 @@ enum Flags : uint16_t {
     FLAG_NONE        = 0,
     FLAG_COMMIT_NOW  = 1u << 0, // Force commit frame immediately
     FLAG_AUTO_MODE   = 1u << 1, // Automatically switch to DisplayMode::PIXEL_CANVAS (29)
+    FLAG_SKIP_CRC    = 1u << 2, // Explicit opt-out flag for CRC validation (default requires CRC match)
 };
 
 #pragma pack(push, 1)
@@ -83,6 +84,7 @@ public:
 
     CanvasAssembler();
     void Reset();
+    void ResetSequence(uint16_t initial_seq = 0);
 
     // Chunked payload feed (from JSON chunk or binary chunk)
     FeedResult FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uint16_t total_chunks,
@@ -130,6 +132,7 @@ private:
     uint32_t crc_errors_ = 0;
     uint32_t bounds_errors_ = 0;
     uint16_t last_committed_frame_id_ = 0;
+    bool has_committed_any_frame_ = false;
 
     void MarkBytes(uint16_t offset, size_t len);
     void CommitFrame(bool auto_mode);

@@ -168,7 +168,7 @@ def run_interactive(transport: JetsonUartTransport):
 
 
 def run_canvas_demo(transport: JetsonUartTransport, pattern: str = "wave", protocol: str = "binary", fps: int = 12):
-    """Streams procedural animations to Mode 29 on the ESP32 matrix."""
+    """Streams procedural animations to Mode 29 on the ESP32 matrix with full session lifecycle and heartbeats."""
     streamer = CanvasStreamer(transport)
     logger.info(f"Starting Canvas Demo: pattern='{pattern}', protocol='{protocol}', fps={fps}")
     logger.info("Press Ctrl+C to stop.")
@@ -176,16 +176,26 @@ def run_canvas_demo(transport: JetsonUartTransport, pattern: str = "wave", proto
     matrix_sim = MatrixRainAnimation() if pattern == "matrix" else None
     fire_sim = FireSimulation() if pattern == "fire" else None
 
-    # Switch to canvas mode
-    transport.send_line(CommandBuilder.mode(29), wait_reply=True)
+    # Explicit session start with initial_seq=0
+    sess_reply = transport.send_line(
+        CommandBuilder.session(action="start", session_id="jetson_canvas", mode_name="canvas", initial_seq=0),
+        wait_reply=True
+    )
+    logger.info(f"Session started: {sess_reply}")
 
     start_time = time.time()
+    last_heartbeat_time = time.time()
     frame_interval = 1.0 / max(1, fps)
     frames_sent = 0
 
     try:
         while True:
-            t_now = time.time() - start_time
+            now = time.time()
+            if now - last_heartbeat_time >= 3.0:
+                transport.send_line(CommandBuilder.session(action="heartbeat", session_id="jetson_canvas"))
+                last_heartbeat_time = now
+
+            t_now = now - start_time
             loop_start = time.time()
 
             if pattern == "matrix":
@@ -212,7 +222,7 @@ def run_canvas_demo(transport: JetsonUartTransport, pattern: str = "wave", proto
             else:
                 logger.warning("Frame delivery/commit failed")
                 elapsed = time.time() - start_time
-                actual_fps = frames_sent / elapsed
+                actual_fps = frames_sent / max(0.001, elapsed)
                 logger.info(f"Canvas stream active: {frames_sent} frames sent ({actual_fps:.1f} FPS)")
 
             spent = time.time() - loop_start
@@ -221,11 +231,14 @@ def run_canvas_demo(transport: JetsonUartTransport, pattern: str = "wave", proto
 
     except KeyboardInterrupt:
         logger.info("\nCanvas demo stopped by user.")
+    finally:
+        logger.info("Stopping canvas session...")
+        transport.send_line(CommandBuilder.session(action="stop", session_id="jetson_canvas"), wait_reply=True)
         streamer.clear()
 
 
 def run_vision_demo(transport: JetsonUartTransport, config: dict, simulate: bool = False):
-    """Runs vision processing and maps gestures to ESP32."""
+    """Runs vision processing and maps gestures to ESP32 with full session lifecycle and heartbeats."""
     camera = CameraAdapter(config.get("camera", {}), simulate=simulate)
     if not camera.open():
         logger.error("Failed to initialize camera adapter!")
@@ -235,20 +248,27 @@ def run_vision_demo(transport: JetsonUartTransport, config: dict, simulate: bool
     logger.info("Starting Vision Demo. Press Ctrl+C to stop.")
 
     # Start vision session
-    transport.send_line(
-        CommandBuilder.session(action="start", session_id="jetson_cam", mode_name="fingertip"),
+    sess_reply = transport.send_line(
+        CommandBuilder.session(action="start", session_id="jetson_cam", mode_name="fingertip", initial_seq=0),
         wait_reply=True,
     )
+    logger.info(f"Vision session started: {sess_reply}")
 
     t0 = time.time()
+    last_heartbeat_time = time.time()
     try:
         while True:
+            now_wall = time.time()
+            if now_wall - last_heartbeat_time >= 3.0:
+                transport.send_line(CommandBuilder.session(action="heartbeat", session_id="jetson_cam"))
+                last_heartbeat_time = now_wall
+
             ret, frame = camera.read_frame()
             if not ret:
                 time.sleep(0.03)
                 continue
 
-            now = time.time() - t0
+            now = now_wall - t0
 
             if camera.simulate:
                 # Generate smooth synthetic orbit movement
@@ -267,9 +287,11 @@ def run_vision_demo(transport: JetsonUartTransport, config: dict, simulate: bool
 
     except KeyboardInterrupt:
         logger.info("\nVision demo stopped by user.")
-        mapper.handle_hand_frame(visible=False)
-        transport.send_line(CommandBuilder.session(action="stop"), wait_reply=True)
     finally:
+        logger.info("Cleaning up vision session: releasing inputs and stopping session...")
+        mapper.handle_hand_frame(visible=False)
+        transport.send_line(CommandBuilder.release_input())
+        transport.send_line(CommandBuilder.session(action="stop", session_id="jetson_cam"), wait_reply=True)
         camera.release()
 
 

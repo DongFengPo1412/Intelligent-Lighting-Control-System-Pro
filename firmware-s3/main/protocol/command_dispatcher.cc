@@ -529,7 +529,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
             }
             dm.SetMode(val_item->valueint);
             if (is_manual_user) {
-                dm.SetManualOverride(val_item->valueint != static_cast<int>(DisplayMode::PIXEL_CANVAS));
+                dm.SetManualOverride(true);
             }
             cJSON_Delete(root);
             return true;

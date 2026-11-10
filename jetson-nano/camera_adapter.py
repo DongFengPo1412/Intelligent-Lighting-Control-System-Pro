@@ -51,15 +51,13 @@ class CameraAdapter:
 
     def open(self) -> bool:
         if self.simulate:
-            logger.info("[Camera] Running in SIMULATION mode.")
+            logger.info("[Camera] Running in explicit SIMULATION mode.")
             self.is_opened = True
             return True
 
         if cv2 is None:
-            logger.warning("[Camera] OpenCV (cv2) not available, falling back to SIMULATION.")
-            self.simulate = True
-            self.is_opened = True
-            return True
+            logger.error("[Camera] OpenCV (cv2) not available! To run in simulation mode without OpenCV, pass --simulate.")
+            return False
 
         try:
             if self.source == "csi":
@@ -80,15 +78,11 @@ class CameraAdapter:
                 logger.info("[Camera] Hardware camera successfully opened.")
                 return True
             else:
-                logger.warning("[Camera] Failed to open hardware camera. Falling back to SIMULATION.")
-                self.simulate = True
-                self.is_opened = True
-                return True
+                logger.error("[Camera] Failed to open hardware camera! If no camera is connected, pass --simulate.")
+                return False
         except Exception as e:
-            logger.warning(f"[Camera] Exception during open: {e}. Falling back to SIMULATION.")
-            self.simulate = True
-            self.is_opened = True
-            return True
+            logger.error(f"[Camera] Exception during camera open: {e}. Pass --simulate to run synthetic tests.")
+            return False
 
     def read_frame(self) -> Tuple[bool, Any]:
         """Reads a frame. In simulation mode, returns synthetic frame placeholder."""

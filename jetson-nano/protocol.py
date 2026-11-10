@@ -1,5 +1,5 @@
 """Jetson Nano - ESP32-S3 UART Protocol Definitions & Serialization.
-Supports Protocol v2.3.0 with JSON Lines and High-Efficiency Binary Canvas Frames.
+Supports Protocol v2.3.1 with JSON Lines and High-Efficiency Binary Canvas Frames.
 """
 import binascii
 import json
@@ -7,7 +7,7 @@ import struct
 from typing import Any, Dict, List, Optional, Tuple
 
 MAGIC = b"\x55\xaa\x43\x46"  # 0x55, 0xAA, 'C', 'F' (Canvas Frame)
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 
 # Binary Frame Types
 BIN_FULL_FRAME = 0x01   # Full 768-byte frame payload
@@ -19,6 +19,7 @@ BIN_CLEAR = 0x04        # Clear canvas [r, g, b]
 FLAG_NONE = 0
 FLAG_COMMIT_NOW = 1 << 0
 FLAG_AUTO_MODE = 1 << 1
+FLAG_SKIP_CRC = 1 << 2
 
 # Arcade Keys bitmask
 KEY_LEFT = 1 << 0
@@ -131,11 +132,17 @@ class CommandBuilder:
         action: str = "start",
         session_id: str = "jetson_sess",
         mode_name: Optional[str] = None,
+        initial_seq: int = 0,
+        take_control: bool = False,
         req_id: Optional[str] = None,
     ) -> str:
         cmd = {"cmd": "session", "action": action, "session_id": session_id}
-        if mode_name is not None:
-            cmd["mode"] = mode_name
+        if action in ("start", "resume"):
+            cmd["initial_seq"] = int(initial_seq)
+            if take_control:
+                cmd["take_control"] = True
+            if mode_name is not None:
+                cmd["mode"] = mode_name
         if req_id is not None:
             cmd["req_id"] = req_id
         return json.dumps(cmd)

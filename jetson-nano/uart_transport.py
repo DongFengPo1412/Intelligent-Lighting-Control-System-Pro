@@ -88,6 +88,11 @@ class JetsonUartTransport:
             except Exception:
                 pass
         self.is_connected = False
+        with self._lock:
+            for ev in self._request_events.values():
+                ev.set()
+            self._request_events.clear()
+            self._pending_requests.clear()
         logger.info("[UART] Connection closed.")
 
     def _next_req_id(self) -> str:
@@ -231,6 +236,8 @@ class JetsonUartTransport:
                                 self._dispatch_line(line_str)
                     else:
                         buffer.append(b)
+                        if len(buffer) > 4096:
+                            buffer.clear()
             except Exception as e:
                 if self._running:
                     logger.warning(f"[UART] RX exception: {e}")

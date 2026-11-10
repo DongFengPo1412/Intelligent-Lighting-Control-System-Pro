@@ -166,6 +166,19 @@ class JetsonUartParser:
         auto_mode = bool(flags & FLAG_AUTO_MODE)
         commit_now = bool(flags & FLAG_COMMIT_NOW)
 
+        if self.system_state.get("session_state") in ("stopped", "expired"):
+            err = "session_stopped" if self.system_state.get("session_state") == "stopped" else "session_expired"
+            return {
+                "status": "error",
+                "type": "bin_frame",
+                "frame_id": seq,
+                "committed": False,
+                "displayed": False,
+                "received_bytes": 0,
+                "mode_overridden": self.system_state.get("manual_override", False),
+                "error": err,
+            }
+
         if expected_crc != 0:
             actual_crc = crc16_ccitt(payload)
             if actual_crc != expected_crc:
@@ -365,8 +378,10 @@ class JetsonUartParser:
             elif cmd_lower == "session":
                 action = (parsed.get("action") or "").lower()
                 sid = parsed.get("session_id") or parsed.get("id") or ""
-                if action == "start":
+                if action in ("start", "resume"):
                     self.system_state["session_id"] = sid
+                    self.system_state["session_active"] = True
+                    self.system_state["session_state"] = "active"
                     m = parsed.get("mode")
                     if m == "fingertip" or m == 26:
                         self.system_state["mode"] = 26
@@ -380,15 +395,23 @@ class JetsonUartParser:
                     return with_req_id({"status": "ok", "active": True, "session_id": sid})
                 elif action == "stop":
                     self.system_state["session_id"] = ""
+                    self.system_state["session_active"] = False
+                    self.system_state["session_state"] = "stopped"
                     self.system_state["held_keys"] = 0
-                    return with_req_id({"status": "ok", "active": False})
-                elif action == "heartbeat":
-                    return with_req_id({"status": "ok", "heartbeat": True})
+                    if self.system_state.get("mode") == 29:
+                        self.system_state["mode"] = 1
+                    return with_req_id({"status": "ok", "active": False, "session_state": "stopped"})
+                elif action in ("heartbeat", "ping"):
+                    if self.system_state.get("session_state") == "active":
+                        return with_req_id({"status": "ok", "heartbeat": True, "active": True})
+                    err = "session_stopped" if self.system_state.get("session_state") == "stopped" else "session_expired"
+                    return with_req_id({"status": "error", "error": err, "active": False})
                 return with_req_id({"status": "error", "error": "unknown_session_action"})
 
             elif cmd_lower == "canvas_chunk":
-                if self.system_state.get("session_id") and not self.system_state.get("session_active", True):
-                    return with_req_id({"status": "error", "error": "session_expired", "committed": False, "displayed": False})
+                if self.system_state.get("session_state") in ("stopped", "expired") or (self.system_state.get("session_id") and not self.system_state.get("session_active", True)):
+                    err = "session_stopped" if self.system_state.get("session_state") == "stopped" else "session_expired"
+                    return with_req_id({"status": "error", "error": err, "committed": False, "displayed": False})
                 frame_id = parsed.get("frame_id", parsed.get("frame", 0))
                 chunk_idx = parsed.get("chunk_idx", parsed.get("chunk", 0))
                 total_chunks = parsed.get("total_chunks", parsed.get("total", 1))
@@ -514,9 +537,10 @@ class JetsonUartParser:
                     "difficulty", "performance", "mir", "pixel", "canvas", "gamma"
                 }
                 if cmd_lower in allowed_json:
-                    if self.system_state.get("session_id") and not self.system_state.get("session_active", True):
-                        if cmd_lower in ("track", "hand", "pet_context", "face", "track_cal"):
-                            return with_req_id({"status": "error", "error": "session_expired", "executed": False})
+                    if self.system_state.get("session_state") in ("stopped", "expired") or (self.system_state.get("session_id") and not self.system_state.get("session_active", True)):
+                        if cmd_lower in ("track", "hand", "pet_context", "face", "track_cal", "pixel", "canvas", "clear_canvas", "arcade"):
+                            err = "session_stopped" if self.system_state.get("session_state") == "stopped" else "session_expired"
+                            return with_req_id({"status": "error", "error": err, "executed": False})
 
                     if cmd_lower == "mode":
                         val = parsed.get("val", parsed.get("mode"))
@@ -1020,6 +1044,48 @@ class TestJetsonUartProtocol(unittest.TestCase):
         self.assertTrue(ok2)
         self.assertTrue(streamer.is_displayed)
         self.assertFalse(streamer.is_overridden)
+
+    def test_25_session_stop_and_late_data_rejection(self):
+        # 1. Start session
+        cmd_start = json.dumps({"cmd": "session", "action": "start", "session_id": "sess_1", "mode": 29}) + "\n"
+        r1 = self.parser.feed_bytes(cmd_start.encode())
+        self.assertEqual(len(r1), 1)
+        self.assertTrue(r1[0]["active"])
+        self.assertEqual(self.parser.system_state["mode"], 29)
+
+        # 2. Stop session
+        cmd_stop = json.dumps({"cmd": "session", "action": "stop"}) + "\n"
+        r2 = self.parser.feed_bytes(cmd_stop.encode())
+        self.assertEqual(len(r2), 1)
+        self.assertFalse(r2[0]["active"])
+        self.assertEqual(r2[0]["session_state"], "stopped")
+        # Mode 29 must revert cleanly to fallback mode 1
+        self.assertEqual(self.parser.system_state["mode"], 1)
+
+        # 3. Late tracking command after stop is rejected with session_stopped
+        cmd_late_track = json.dumps({"cmd": "track", "x": 0.5, "y": 0.5}) + "\n"
+        r3 = self.parser.feed_bytes(cmd_late_track.encode())
+        self.assertEqual(len(r3), 1)
+        self.assertEqual(r3[0]["status"], "error")
+        self.assertEqual(r3[0]["error"], "session_stopped")
+
+        # 4. Late binary frame after stop is rejected with session_stopped
+        from protocol import pack_binary_frame, BIN_FULL_FRAME
+        payload = bytes([128] * 768)
+        pkt = pack_binary_frame(BIN_FULL_FRAME, frame_seq=999, payload=payload)
+        r4 = self.parser.feed_bytes(pkt)
+        self.assertEqual(len(r4), 1)
+        self.assertEqual(r4[0]["status"], "error")
+        self.assertEqual(r4[0]["error"], "session_stopped")
+        self.assertFalse(r4[0]["committed"])
+        self.assertFalse(r4[0]["displayed"])
+
+        # 5. Late heartbeat cannot revive stopped session
+        cmd_hb = json.dumps({"cmd": "session", "action": "heartbeat"}) + "\n"
+        r5 = self.parser.feed_bytes(cmd_hb.encode())
+        self.assertEqual(len(r5), 1)
+        self.assertEqual(r5[0]["status"], "error")
+        self.assertEqual(r5[0]["error"], "session_stopped")
 
 
 if __name__ == "__main__":

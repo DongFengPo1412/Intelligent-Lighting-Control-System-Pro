@@ -62,7 +62,7 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         if(!number(root,"x",0,15,x,true)||!number(root,"y",0,15,y,true)||!number(root,"r",0,255,a,true)||
            !number(root,"g",0,255,b,true)||!number(root,"b",0,255,c,true))return 0;
         auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
-        if (auto_item && cJSON_IsTrue(auto_item) && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
         dm.SetCanvasPixel((int)x,(int)y,ColorRGB((uint8_t)a,(uint8_t)b,(uint8_t)c));
@@ -78,7 +78,7 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
             colors[i]=ColorRGB(digit(s[0])*16+digit(s[1]),digit(s[2])*16+digit(s[3]),digit(s[4])*16+digit(s[5]));
         }
         auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
-        if (auto_item && cJSON_IsTrue(auto_item) && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
         dm.SetCanvasFrame(colors);
