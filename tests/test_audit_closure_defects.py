@@ -658,5 +658,158 @@ class TestClosureDefectsRound4(unittest.TestCase):
         self.assertFalse(handle_ticket_request(is_sta_peer=False, token_ok=False, cmd="request_audio_ticket"))
 
 
+class TestAfeTimelineAndBoundedWarmup(unittest.TestCase):
+    """AFE recovery timeline alignment and bounded warmup degradation verification."""
+
+    class AfeSampleStreamModel:
+        def __init__(self, max_warmup_blocks=5):
+            self.max_warmup_blocks = max_warmup_blocks
+            self.raw_history = []
+            self.afe_fetched = []
+            self.total_raw_pushed = 0
+            self.total_afe_fetched = 0
+            self.emitted_source_samples = 0
+            self.silence_warmup_samples = 0
+            self.warmed_up = False
+            self.warmup_blocks_emitted = 0
+            self.warmup_timed_out = False
+            self.degraded_to_raw = False
+            self.history_offset = 0
+
+        def push_input(self, samples):
+            self.raw_history.extend(samples)
+            self.total_raw_pushed += len(samples)
+
+        def push_fetched(self, samples):
+            start_idx = self.total_afe_fetched
+            self.total_afe_fetched += len(samples)
+            needed_start = self.emitted_source_samples
+            if start_idx < needed_start:
+                discard = min(len(samples), needed_start - start_idx)
+                samples = samples[discard:]
+            if len(samples) > 0:
+                self.afe_fetched.extend(samples)
+
+        def emit(self, count, fallback_raw=None):
+            if len(self.afe_fetched) >= count:
+                dest = self.afe_fetched[:count]
+                self.afe_fetched = self.afe_fetched[count:]
+                self.emitted_source_samples += count
+                self.warmed_up = True
+                self.degraded_to_raw = False
+                self._prune()
+                return True, dest
+
+            if not self.warmed_up and not self.warmup_timed_out:
+                if self.warmup_blocks_emitted < self.max_warmup_blocks:
+                    dest = [0] * count
+                    self.warmup_blocks_emitted += 1
+                    self.silence_warmup_samples += count
+                    return False, dest
+                else:
+                    self.warmup_timed_out = True
+                    self.degraded_to_raw = True
+
+            dest = self._get_raw_samples(self.emitted_source_samples, count, fallback_raw)
+            self.emitted_source_samples += count
+            self.afe_fetched.clear()
+            self._prune()
+            return False, dest
+
+        def _get_raw_samples(self, start_idx, count, fallback_raw):
+            local_idx = start_idx - self.history_offset
+            if 0 <= local_idx and local_idx + count <= len(self.raw_history):
+                return self.raw_history[local_idx : local_idx + count]
+            elif fallback_raw:
+                return list(fallback_raw)
+            return [0] * count
+
+        def _prune(self):
+            max_keep = 2400
+            if len(self.raw_history) > max_keep:
+                drop = len(self.raw_history) - max_keep
+                self.raw_history = self.raw_history[drop:]
+                self.history_offset += drop
+
+    def test_steady_state_under_retrieval_and_recovery_timeline(self):
+        """Under-retrieval in steady state emits delayed raw block without skipping or stutter."""
+        stream = self.AfeSampleStreamModel(max_warmup_blocks=5)
+        outputs = []
+
+        # Block 0: Warmup silence
+        b0 = list(range(1, 241))
+        stream.push_input(b0)
+        ok0, out0 = stream.emit(240, b0)
+        outputs.append((ok0, out0))
+
+        # Block 1: AFE delivers Block 0 (1..240)
+        b1 = list(range(241, 481))
+        stream.push_input(b1)
+        stream.push_fetched(list(range(1, 241)))
+        ok1, out1 = stream.emit(240, b1)
+        outputs.append((ok1, out1))
+
+        # Block 2: AFE under-retrieval (0 samples) -> fallback raw 241..480 along same timeline
+        b2 = list(range(481, 721))
+        stream.push_input(b2)
+        ok2, out2 = stream.emit(240, b2)
+        outputs.append((ok2, out2))
+
+        # Block 3: AFE catches up with delayed 241..480 + 481..720 -> 241..480 dropped, 481..720 emitted
+        b3 = list(range(721, 961))
+        stream.push_input(b3)
+        stream.push_fetched(list(range(241, 481)) + list(range(481, 721)))
+        ok3, out3 = stream.emit(240, b3)
+        outputs.append((ok3, out3))
+
+        # Block 4: Steady state resumes
+        b4 = list(range(961, 1201))
+        stream.push_input(b4)
+        stream.push_fetched(list(range(721, 961)))
+        ok4, out4 = stream.emit(240, b4)
+        outputs.append((ok4, out4))
+
+        self.assertFalse(outputs[0][0])  # Warmup
+        self.assertTrue(outputs[1][0])   # AFE
+        self.assertFalse(outputs[2][0])  # Fallback raw
+        self.assertTrue(outputs[3][0])   # Recovered AFE
+        self.assertTrue(outputs[4][0])   # Steady AFE
+
+        # Verification of full concatenated audio: Block 0 silence, Blocks 1..4 monotonic 1..960
+        all_samples = []
+        for _, out in outputs:
+            all_samples.extend(out)
+        self.assertEqual(len(all_samples), 5 * 240)
+        self.assertEqual(all_samples[:240], [0] * 240)
+        self.assertEqual(all_samples[240:], list(range(1, 961)))
+
+    def test_bounded_warmup_timeout_and_degradation_to_raw(self):
+        """AFE zero output for 40 blocks times out at max_warmup_blocks and degrades to continuous raw PCM."""
+        stream = self.AfeSampleStreamModel(max_warmup_blocks=5)
+        outputs = []
+        for b in range(40):
+            raw = list(range(b * 240 + 1, (b + 1) * 240 + 1))
+            stream.push_input(raw)
+            ok, out = stream.emit(240, raw)
+            outputs.append((ok, out))
+
+        self.assertTrue(stream.warmup_timed_out)
+        self.assertTrue(stream.degraded_to_raw)
+
+        # Warmup blocks 0..4 are silence
+        for b in range(5):
+            self.assertFalse(outputs[b][0])
+            self.assertEqual(outputs[b][1], [0] * 240)
+
+        # Blocks 5..39 are continuous raw PCM from source timeline
+        raw_concat = []
+        for b in range(5, 40):
+            self.assertFalse(outputs[b][0])
+            raw_concat.extend(outputs[b][1])
+
+        self.assertEqual(len(raw_concat), 35 * 240)
+        self.assertEqual(raw_concat, list(range(1, 35 * 240 + 1)))
+
+
 if __name__ == "__main__":
     unittest.main()

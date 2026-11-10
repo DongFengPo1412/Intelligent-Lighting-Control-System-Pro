@@ -779,47 +779,93 @@ int main() {
         // (4560 emitted + 240 pipeline latency = 4800 total raw samples processed, NO samples dropped or lost!)
         assert(fixed_delay_stream.InBufferSize() == 4800); // 20 blocks accumulated in input buffer
 
-        // 5b. Mid-stream Transient Insufficiency & Recovery Test:
-        // Stream was already warmed up. AFE temporarily produces partial 80 samples -> Emit falls back to raw
-        // -> discard_pending_ becomes 160 -> next round AFE catches up, drops the 160 duplicate samples,
-        // and cleanly outputs fresh filtered samples!
-        int16_t partial_glitch[80];
-        for (int i = 0; i < 80; ++i) partial_glitch[i] = static_cast<int16_t>(5000 + i);
-        fixed_delay_stream.PushFetched(partial_glitch, 80);
-        assert(fixed_delay_stream.OutBufferSize() == 80);
+        // 5b. Mid-stream Transient Insufficiency & Recovery Test (Same Timeline Alignment):
+        // Stream was already in steady state (blocks 0..19: emitted 1..4560, block 19 [4561..4800] in pipeline).
+        // Block 20: raw 4801..5040 arrives. AFE temporarily suffers under-retrieval (produces 0 samples).
+        // Under timeline alignment, Emit() must NOT skip block 19 (4561..4800); it emits 4561..4800 from raw history!
+        int16_t raw_block_20[240];
+        for (int i = 0; i < 240; ++i) raw_block_20[i] = static_cast<int16_t>(4801 + i);
+        fixed_delay_stream.PushInput(raw_block_20, 240);
+        // AFE produces 0 samples this round
+        int16_t dest_block_20[240] = {0};
+        bool glitch_ok = fixed_delay_stream.Emit(dest_block_20, raw_block_20, 240);
+        assert(!glitch_ok); // Fallback engaged
+        // Must emit continuous source block 19 (4561..4800), NOT skip to 4801!
+        assert(dest_block_20[0] == 4561 && dest_block_20[239] == 4800);
+        assert(fixed_delay_stream.DiscardPending() == 240); // 4561..4800 in-flight will be discarded upon catch-up
 
-        int16_t anomaly_raw[240];
-        for (int i = 0; i < 240; ++i) anomaly_raw[i] = static_cast<int16_t>(5000 + i);
-        int16_t anomaly_dest[240] = {0};
-        bool glitch_ok = fixed_delay_stream.Emit(anomaly_dest, anomaly_raw, 240);
-        assert(!glitch_ok); // Fallback used because 80 < 240
-        assert(anomaly_dest[0] == 5000 && anomaly_dest[239] == 5239);
-        assert(fixed_delay_stream.DiscardPending() == 160);
-        assert(fixed_delay_stream.OutBufferSize() == 0);
+        // Block 21: raw 5041..5280 arrives.
+        // AFE catches up: delivers delayed block 19 (4561..4800) + fresh block 20 (4801..5040).
+        int16_t raw_block_21[240];
+        for (int i = 0; i < 240; ++i) raw_block_21[i] = static_cast<int16_t>(5041 + i);
+        fixed_delay_stream.PushInput(raw_block_21, 240);
 
-        // AFE resumes: delivers delayed 160 samples (5080..5239) + fresh 240 samples (5240..5479)
-        int16_t recovered_afe[400];
-        for (int i = 0; i < 160; ++i) recovered_afe[i] = static_cast<int16_t>(5080 + i);
-        for (int i = 0; i < 240; ++i) recovered_afe[160 + i] = static_cast<int16_t>(5240 + i);
-        fixed_delay_stream.PushFetched(recovered_afe, 400);
+        int16_t recovered_afe[480];
+        for (int i = 0; i < 240; ++i) recovered_afe[i] = static_cast<int16_t>(4561 + i);
+        for (int i = 0; i < 240; ++i) recovered_afe[240 + i] = static_cast<int16_t>(4801 + i);
+        fixed_delay_stream.PushFetched(recovered_afe, 480);
+        // Delayed 4561..4800 was discarded (already emitted as raw fallback); fresh 4801..5040 queued
         assert(fixed_delay_stream.DiscardPending() == 0);
         assert(fixed_delay_stream.OutBufferSize() == 240);
 
-        int16_t recovered_dest[240] = {0};
-        int16_t next_raw[240];
-        for (int i = 0; i < 240; ++i) next_raw[i] = static_cast<int16_t>(5240 + i);
-        bool rec_ok = fixed_delay_stream.Emit(recovered_dest, next_raw, 240);
-        assert(rec_ok); // Cleanly recovered to steady-state filtered output!
-        assert(recovered_dest[0] == 5240 && recovered_dest[239] == 5479);
+        int16_t dest_block_21[240] = {0};
+        bool rec_ok = fixed_delay_stream.Emit(dest_block_21, raw_block_21, 240);
+        assert(rec_ok); // Resumed filtered output!
+        assert(dest_block_21[0] == 4801 && dest_block_21[239] == 5040);
 
-        // Concatenate anomaly + recovery outputs to verify no duplicate or inverted samples:
-        std::vector<int16_t> glitch_recovery_stream;
-        glitch_recovery_stream.insert(glitch_recovery_stream.end(), anomaly_dest, anomaly_dest + 240);
-        glitch_recovery_stream.insert(glitch_recovery_stream.end(), recovered_dest, recovered_dest + 240);
-        assert(glitch_recovery_stream.size() == 480);
-        assert(glitch_recovery_stream[0] == 5000 && glitch_recovery_stream[479] == 5479);
-        for (size_t i = 1; i < glitch_recovery_stream.size(); ++i) {
-            assert(glitch_recovery_stream[i] == glitch_recovery_stream[i - 1] + 1);
+        // Block 22: raw 5281..5520 arrives. AFE delivers block 21 (5041..5280).
+        int16_t raw_block_22[240];
+        for (int i = 0; i < 240; ++i) raw_block_22[i] = static_cast<int16_t>(5281 + i);
+        fixed_delay_stream.PushInput(raw_block_22, 240);
+        int16_t afe_block_21[240];
+        for (int i = 0; i < 240; ++i) afe_block_21[i] = static_cast<int16_t>(5041 + i);
+        fixed_delay_stream.PushFetched(afe_block_21, 240);
+        int16_t dest_block_22[240] = {0};
+        bool ok_22 = fixed_delay_stream.Emit(dest_block_22, raw_block_22, 240);
+        assert(ok_22);
+        assert(dest_block_22[0] == 5041 && dest_block_22[239] == 5280);
+
+        // Concatenate anomaly + recovery outputs and verify strict monotonic ordering:
+        all_emitted_samples.insert(all_emitted_samples.end(), dest_block_20, dest_block_20 + 240);
+        all_emitted_samples.insert(all_emitted_samples.end(), dest_block_21, dest_block_21 + 240);
+        all_emitted_samples.insert(all_emitted_samples.end(), dest_block_22, dest_block_22 + 240);
+        assert(all_emitted_samples.size() == 23 * 240);
+        // Verify from sample 240 (block 1) to end: strictly monotonic continuous 1..5280
+        for (size_t i = 241; i < all_emitted_samples.size(); ++i) {
+            assert(all_emitted_samples[i] == all_emitted_samples[i - 1] + 1);
+        }
+
+        // 5c. Long-term Zero Output & Bounded Warmup Degradation Test:
+        // AFE initializes successfully but produces NO output across 40 consecutive blocks.
+        // Warmup MUST NOT loop in silence forever; after max_warmup_blocks (5), it degrades to raw PCM!
+        {
+            audio_afe::AfeSampleStream broken_afe_stream;
+            broken_afe_stream.SetMaxWarmupBlocks(5); // Bound: 5 blocks (~75ms)
+            std::vector<int16_t> broken_output;
+
+            for (int b = 0; b < 40; ++b) {
+                int16_t raw[240];
+                for (int i = 0; i < 240; ++i) raw[i] = static_cast<int16_t>(b * 240 + i + 1);
+                broken_afe_stream.PushInput(raw, 240);
+                int16_t dest[240] = {0};
+                bool ok = broken_afe_stream.Emit(dest, raw, 240);
+                assert(!ok); // Never filtered because AFE produces 0 samples
+                broken_output.insert(broken_output.end(), dest, dest + 240);
+            }
+
+            assert(broken_afe_stream.IsWarmupTimedOut());
+            assert(broken_afe_stream.IsDegradedToRaw());
+
+            // First 5 blocks (1200 samples) emitted silence placeholders
+            for (size_t i = 0; i < 1200; ++i) {
+                assert(broken_output[i] == 0);
+            }
+            // Blocks 5..39 (35 blocks = 8400 samples) emitted raw PCM capturing audio
+            assert(broken_output[1200] == 1);
+            assert(broken_output.back() == 8400);
+            for (size_t i = 1201; i < broken_output.size(); ++i) {
+                assert(broken_output[i] == broken_output[i - 1] + 1);
+            }
         }
 
         // 6. Fetch size (64) != Read size (240) across 20 blocks
