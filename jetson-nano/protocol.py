@@ -333,3 +333,4 @@ class CommandBuilder:
         if req_id is not None:
             cmd["req_id"] = req_id
         return json.dumps(cmd)
+

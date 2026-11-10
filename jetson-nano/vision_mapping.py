@@ -115,3 +115,4 @@ class VisionMapper:
         if smile_prob >= smile_thresh:
             logger.info(f"[VisionMapper] Smile detected ({smile_prob:.2f})! Triggering celebration.")
             self.transport.send_line(CommandBuilder.celebrate())
+

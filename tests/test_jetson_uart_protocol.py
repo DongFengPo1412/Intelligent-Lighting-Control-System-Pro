@@ -1,8 +1,12 @@
 """Unit, framing, binary, and security tests for ESP32-S3 Jetson Nano UART1 protocol v2.3.0."""
 import binascii
 import json
+import os
 import struct
+import sys
 import unittest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "jetson-nano")))
 
 MAGIC = b"\x55\xaa\x43\x46"  # 0x55, 0xAA, 'C', 'F'
 BIN_FULL_FRAME = 0x01
@@ -375,6 +379,7 @@ class JetsonUartParser:
             elif cmd_lower == "canvas_chunk":
                 frame_id = parsed.get("frame_id", parsed.get("frame", 0))
                 chunk_idx = parsed.get("chunk_idx", parsed.get("chunk", 0))
+                total_chunks = parsed.get("total_chunks", parsed.get("total", 1))
                 offset = parsed.get("offset", 0)
                 hex_str = parsed.get("hex", "")
                 commit_now = bool(parsed.get("commit", False))
@@ -384,13 +389,16 @@ class JetsonUartParser:
                 if not hex_str or len(hex_str) % 2 != 0:
                     return with_req_id({"status": "error", "error": "invalid_hex_length"})
 
+                if len(hex_str) // 2 > 384 or (len(hex_str) // 2 + offset > 768):
+                    return with_req_id({"status": "error", "error": "chunk_bounds_overflow"})
+
+                if total_chunks == 0 or total_chunks > 16 or chunk_idx >= total_chunks:
+                    return with_req_id({"status": "error", "error": "invalid_chunk_indices"})
+
                 try:
                     raw = bytes.fromhex(hex_str)
                 except ValueError:
                     return with_req_id({"status": "error", "error": "invalid_hex_chars"})
-
-                if offset + len(raw) > 768:
-                    return with_req_id({"status": "error", "error": "bounds_exceeded"})
 
                 if crc_val != 0:
                     act_crc = crc16_ccitt(raw)
@@ -402,9 +410,12 @@ class JetsonUartParser:
                     self.canvas_received[i] = 1
 
                 complete = all(self.canvas_received)
-                if commit_now or complete:
+                if commit_now and not complete:
+                    return with_req_id({"status": "error", "error": "incomplete_frame_premature_commit"})
+
+                if complete:
                     self.system_state["canvas_frames"] += 1
-                    if auto_mode:
+                    if auto_mode and not self.system_state.get("manual_override", False):
                         self.system_state["mode"] = 29
                         self.system_state["canvas_active"] = True
                     self.canvas_received = bytearray(768)
@@ -414,6 +425,7 @@ class JetsonUartParser:
                         "chunk_idx": chunk_idx,
                         "committed": True,
                         "received_bytes": 768,
+                        "mode_overridden": self.system_state.get("manual_override", False),
                     })
 
                 return with_req_id({
@@ -422,6 +434,7 @@ class JetsonUartParser:
                     "chunk_idx": chunk_idx,
                     "committed": False,
                     "received_bytes": sum(self.canvas_received),
+                    "mode_overridden": self.system_state.get("manual_override", False),
                 })
 
             elif cmd_lower in ("clear_canvas", "canvas_clear"):
@@ -796,6 +809,80 @@ class TestJetsonUartProtocol(unittest.TestCase):
         self.assertEqual(replies[0]["error"], "frame_overflow")
         self.assertEqual(replies[1]["status"], "ok")
         self.assertEqual(replies[1]["req_id"], "rec")
+
+    def test_17_canvas_chunk_buffer_overflow_defense(self):
+        # 400 bytes hex (exceeds 384 chunk limit)
+        oversized_hex = "aa" * 400
+        cmd = json.dumps({
+            "cmd": "canvas_chunk",
+            "frame_id": 1,
+            "chunk_idx": 0,
+            "total_chunks": 2,
+            "offset": 0,
+            "hex": oversized_hex,
+        }) + "\n"
+        replies = self.parser.feed_bytes(cmd.encode("utf-8"))
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(replies[0]["status"], "error")
+        self.assertEqual(replies[0]["error"], "chunk_bounds_overflow")
+
+    def test_18_canvas_chunk_incomplete_premature_commit_rejection(self):
+        # 192 bytes with commit: true (incomplete frame)
+        partial_hex = "55" * 192
+        cmd = json.dumps({
+            "cmd": "canvas_chunk",
+            "frame_id": 2,
+            "chunk_idx": 0,
+            "total_chunks": 4,
+            "offset": 0,
+            "hex": partial_hex,
+            "commit": True,
+        }) + "\n"
+        replies = self.parser.feed_bytes(cmd.encode("utf-8"))
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(replies[0]["status"], "error")
+        self.assertEqual(replies[0]["error"], "incomplete_frame_premature_commit")
+
+    def test_19_cross_source_manual_override_arbitration(self):
+        # Simulate mobile/PC user setting Mode 3 (manual override)
+        self.parser.system_state["mode"] = 3
+        self.parser.system_state["manual_override"] = True
+
+        # Jetson sends full 768-byte frame in 2 chunks with auto_mode: true
+        chunk1 = "11" * 384
+        chunk2 = "22" * 384
+        c1 = json.dumps({
+            "cmd": "canvas_chunk", "frame_id": 10, "chunk_idx": 0, "total_chunks": 2,
+            "offset": 0, "hex": chunk1, "commit": False, "auto_mode": True
+        }) + "\n"
+        c2 = json.dumps({
+            "cmd": "canvas_chunk", "frame_id": 10, "chunk_idx": 1, "total_chunks": 2,
+            "offset": 384, "hex": chunk2, "commit": True, "auto_mode": True
+        }) + "\n"
+        self.parser.feed_bytes(c1.encode())
+        r2 = self.parser.feed_bytes(c2.encode())
+        self.assertEqual(len(r2), 1)
+        self.assertTrue(r2[0]["committed"])
+        self.assertTrue(r2[0]["mode_overridden"])
+        # Mode remains 3, not stolen to 29!
+        self.assertEqual(self.parser.system_state["mode"], 3)
+
+        # Clear override (user selects Jetson mode or Jetson session starts)
+        self.parser.system_state["manual_override"] = False
+        self.parser.feed_bytes(c1.encode())
+        r4 = self.parser.feed_bytes(c2.encode())
+        self.assertEqual(self.parser.system_state["mode"], 29)
+
+    def test_20_binary_frame_ack_commit_verification(self):
+        from protocol import pack_binary_frame, BIN_FULL_FRAME
+        payload = bytes([100] * 768)
+        pkt = pack_binary_frame(BIN_FULL_FRAME, frame_seq=99, payload=payload, offset=0, commit_now=True, auto_mode=True)
+        replies = self.parser.feed_bytes(pkt)
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(replies[0]["status"], "ok")
+        self.assertEqual(replies[0]["type"], "bin_frame")
+        self.assertEqual(replies[0]["frame_id"], 99)
+        self.assertTrue(replies[0]["committed"])
 
 
 if __name__ == "__main__":

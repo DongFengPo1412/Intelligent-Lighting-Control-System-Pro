@@ -131,3 +131,4 @@ colors = [(255, 0, 0)] * 256  # 全红
 streamer.send_binary_frame(colors, auto_mode=True)
 ```
 无论是文字跑马灯、天气图表、雷达扫描还是音频频谱，全部在 Python 侧计算完成并直接在 ESP32 上显示，**彻底摆脱嵌入式 C++ 重新编译与烧录**！
+

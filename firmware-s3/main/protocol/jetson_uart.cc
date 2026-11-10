@@ -10,14 +10,6 @@
 
 #if defined(ESP_PLATFORM)
 #include <esp_log.h>
-#include <esp_timer.h>
-static inline uint32_t get_current_millis() {
-    return (uint32_t)(esp_timer_get_time() / 1000ULL);
-}
-#else
-static inline uint32_t get_current_millis() {
-    return 0;
-}
 #endif
 
 namespace jetson {
@@ -160,6 +152,20 @@ void JetsonUart::UartTaskLoop() {
         // 2. Canvas incomplete frame timeout
         canvas::CanvasAssembler::GetInstance().CheckTimeout(now, 500);
 
+        // 3. Binary frame parser timeout check (>200ms)
+        receiver_.CheckTimeout(now, [this, &reply_buf](size_t err_code) {
+            rx_errors_++;
+            snprintf(reply_buf, sizeof(reply_buf),
+                     "{\"status\":\"error\",\"type\":\"bin_frame\",\"error\":\"binary_timeout\"}");
+            SendLine(reply_buf);
+        });
+
+        // 4. Session timeout check (>15s)
+        if (session_active_ && (now - last_session_ping_ms_ > 15000)) {
+            session_active_ = false;
+            ESP_LOGW(TAG, "Jetson vision session expired (>15s inactivity)");
+        }
+
         if (bytes_read <= 0) {
             continue;
         }
@@ -242,7 +248,31 @@ void JetsonUart::SetSession(const char* session_id) {
 
 void JetsonUart::ClearSession() {
     session_id_[0] = '\0';
+    session_active_ = false;
     ReleaseHeldKeys();
+}
+
+void JetsonUart::StartSession() {
+    session_active_ = true;
+    session_start_ms_ = get_current_millis();
+    last_session_ping_ms_ = session_start_ms_;
+}
+
+void JetsonUart::StopSession() {
+    session_active_ = false;
+    ReleaseHeldKeys();
+}
+
+void JetsonUart::PingSession() {
+    last_session_ping_ms_ = get_current_millis();
+}
+
+bool JetsonUart::IsManualOverrideActive() const {
+    return DisplayManager::GetInstance().IsManualOverrideActive();
+}
+
+void JetsonUart::SetManualOverride(bool active) {
+    DisplayManager::GetInstance().SetManualOverride(active);
 }
 
 void JetsonUart::ReleaseHeldKeys() {
@@ -265,6 +295,7 @@ void JetsonUart::ProcessBinaryFrame(const canvas::BinaryHeader& header, const ui
     cJSON_AddNumberToObject(resp, "frame_id", res.frame_id);
     cJSON_AddBoolToObject(resp, "committed", res.committed);
     cJSON_AddNumberToObject(resp, "received_bytes", res.received_bytes);
+    cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
     if (!res.success && res.error_msg) {
         cJSON_AddStringToObject(resp, "error", res.error_msg);
     }
@@ -427,10 +458,16 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
             const char* sid = (sid_item && cJSON_IsString(sid_item)) ? sid_item->valuestring : "";
 
             cJSON* resp = cJSON_CreateObject();
-            if (!strcasecmp(act, "start")) {
+            if (!strcasecmp(act, "start") || !strcasecmp(act, "resume")) {
                 GetInstance().SetSession(sid);
+                GetInstance().StartSession();
+                cJSON* take_ctrl = cJSON_GetObjectItemCaseSensitive(root, "take_control");
+                if (take_ctrl && cJSON_IsTrue(take_ctrl)) {
+                    DisplayManager::GetInstance().SetManualOverride(false);
+                }
                 cJSON* mode_item = cJSON_GetObjectItemCaseSensitive(root, "mode");
                 if (mode_item) {
+                    DisplayManager::GetInstance().SetManualOverride(false);
                     if (cJSON_IsNumber(mode_item)) {
                         DisplayManager::GetInstance().SetMode((uint8_t)mode_item->valueint);
                     } else if (cJSON_IsString(mode_item)) {
@@ -449,14 +486,20 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                 cJSON_AddStringToObject(resp, "status", "ok");
                 cJSON_AddBoolToObject(resp, "active", true);
                 cJSON_AddStringToObject(resp, "session_id", GetInstance().session_id_);
+                cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
             } else if (!strcasecmp(act, "stop")) {
+                GetInstance().StopSession();
                 GetInstance().ClearSession();
+                DisplayManager::GetInstance().SetManualOverride(true);
                 cJSON_AddStringToObject(resp, "status", "ok");
                 cJSON_AddBoolToObject(resp, "active", false);
-            } else if (!strcasecmp(act, "heartbeat")) {
+            } else if (!strcasecmp(act, "heartbeat") || !strcasecmp(act, "ping")) {
+                GetInstance().PingSession();
                 GetInstance().last_input_time_ms_ = get_current_millis();
                 cJSON_AddStringToObject(resp, "status", "ok");
                 cJSON_AddBoolToObject(resp, "heartbeat", true);
+                cJSON_AddBoolToObject(resp, "active", GetInstance().IsSessionActive());
+                cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
             } else {
                 cJSON_AddStringToObject(resp, "status", "error");
                 cJSON_AddStringToObject(resp, "error", "unknown_session_action");
@@ -495,9 +538,15 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                 const char* hex_str = hex_item->valuestring;
                 size_t hex_len = strlen(hex_str);
 
-                if (hex_len == 0 || (hex_len % 2) != 0 || (hex_len / 2 + offset > 768)) {
+                if (hex_len == 0 || (hex_len % 2) != 0) {
                     cJSON_AddStringToObject(resp, "status", "error");
                     cJSON_AddStringToObject(resp, "error", "invalid_hex_length");
+                } else if (hex_len / 2 > 384 || (hex_len / 2 + offset > 768)) {
+                    cJSON_AddStringToObject(resp, "status", "error");
+                    cJSON_AddStringToObject(resp, "error", "chunk_bounds_overflow");
+                } else if (total_chunks == 0 || total_chunks > 16 || chunk_idx >= total_chunks) {
+                    cJSON_AddStringToObject(resp, "status", "error");
+                    cJSON_AddStringToObject(resp, "error", "invalid_chunk_indices");
                 } else {
                     size_t byte_len = hex_len / 2;
                     uint8_t chunk_bytes[384];
@@ -525,6 +574,10 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                         uint16_t expected_crc = (crc_item && cJSON_IsNumber(crc_item)) ? (uint16_t)crc_item->valueint : 0;
                         bool commit_now = commit_item ? cJSON_IsTrue(commit_item) : false;
                         bool auto_mode = auto_item ? cJSON_IsTrue(auto_item) : true;
+                        bool manual_overridden = DisplayManager::GetInstance().IsManualOverrideActive();
+                        if (manual_overridden) {
+                            auto_mode = false;
+                        }
 
                         auto res = canvas::CanvasAssembler::GetInstance().FeedChunk(
                             frame_id, chunk_idx, total_chunks, offset, chunk_bytes, byte_len,
@@ -536,6 +589,7 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                         cJSON_AddNumberToObject(resp, "chunk_idx", chunk_idx);
                         cJSON_AddBoolToObject(resp, "committed", res.committed);
                         cJSON_AddNumberToObject(resp, "received_bytes", res.received_bytes);
+                        cJSON_AddBoolToObject(resp, "mode_overridden", manual_overridden);
                         if (!res.success && res.error_msg) {
                             cJSON_AddStringToObject(resp, "error", res.error_msg);
                         }

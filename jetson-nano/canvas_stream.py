@@ -22,8 +22,10 @@ class CanvasStreamer:
         reply = self.transport.send_line(cmd, wait_reply=True)
         return reply is not None and reply.get("status") == "ok"
 
-    def send_binary_frame(self, colors: List[ColorRGB], auto_mode: bool = True) -> bool:
-        """Sends full 16x16 frame (768 bytes) in a single high-speed binary packet."""
+    def send_binary_frame(
+        self, colors: List[ColorRGB], auto_mode: bool = True, timeout: float = 1.0
+    ) -> bool:
+        """Sends full 16x16 frame (768 bytes) in a single high-speed binary packet and verifies ESP32 commit ACK."""
         if len(colors) != 256:
             raise ValueError(f"Expected exactly 256 pixels, got {len(colors)}")
 
@@ -43,7 +45,12 @@ class CanvasStreamer:
             commit_now=True,
             auto_mode=auto_mode,
         )
-        return self.transport.send_raw(packet)
+        reply = self.transport.send_raw_with_ack(
+            packet, expected_frame_seq=self.frame_seq, timeout=timeout
+        )
+        if not reply:
+            return False
+        return reply.get("status") == "ok" and reply.get("committed", False) is True
 
     def send_chunked_frame(
         self, colors: List[ColorRGB], chunk_count: int = 2, auto_mode: bool = True
@@ -79,6 +86,8 @@ class CanvasStreamer:
             )
             reply = self.transport.send_line(cmd, wait_reply=True)
             if not reply or reply.get("status") != "ok":
+                all_ok = False
+            if commit and (not reply or not reply.get("committed")):
                 all_ok = False
 
         return all_ok
@@ -181,3 +190,4 @@ class FireSimulation:
                 b = int(((val - 0.7) / 0.3) * 255)
                 pixels.append((255, 220, b))
         return pixels
+

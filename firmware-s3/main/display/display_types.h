@@ -3,8 +3,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#if defined(ESP_PLATFORM)
 #include <esp_random.h>
 #include <esp_timer.h>
+#else
+#include <random>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+static inline uint32_t esp_random() { return (uint32_t)rand(); }
+static inline int64_t esp_timer_get_time() { return 0; }
+#endif
 #include "matrix_layout.h"
 
 #define MATRIX_WIDTH   MatrixLayout::kWidth

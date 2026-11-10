@@ -109,3 +109,4 @@ class CameraAdapter:
             except Exception:
                 pass
         self.is_opened = False
+

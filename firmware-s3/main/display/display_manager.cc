@@ -246,6 +246,18 @@ void DisplayManager::SetMode(int mode_number)
     SetMode(static_cast<DisplayMode>(mode_number));
 }
 
+void DisplayManager::SetManualOverride(bool active)
+{
+    DisplayLock lock(mutex_);
+    manual_override_active_ = active;
+}
+
+bool DisplayManager::IsManualOverrideActive() const
+{
+    DisplayLock lock(mutex_);
+    return manual_override_active_;
+}
+
 void DisplayManager::SnakeMove(int dx, int dy)
 {
     DisplayLock lock(mutex_);

@@ -7,12 +7,15 @@
 #include "canvas_protocol.h"
 
 #if !defined(ESP_PLATFORM) && defined(_WIN32)
+typedef int esp_err_t;
 typedef int uart_port_t;
 typedef int gpio_num_t;
 typedef uint32_t UBaseType_t;
 typedef long BaseType_t;
 typedef void* TaskHandle_t;
 typedef void* SemaphoreHandle_t;
+#define ESP_OK 0
+#define ESP_FAIL -1
 #define UART_NUM_1 1
 #define GPIO_NUM_8 8
 #define GPIO_NUM_9 9
@@ -54,6 +57,18 @@ public:
     template <typename TextFn, typename BinaryFn, typename ErrorFn>
     void FeedBytes(const uint8_t* data, size_t len, TextFn&& on_text, BinaryFn&& on_binary, ErrorFn&& on_error) {
         if (!data || len == 0) return;
+        uint32_t now = get_current_millis();
+        if (state_ != State::TEXT && last_rx_ms_ != 0 && (now - last_rx_ms_) > kBinaryTimeoutMs) {
+            // Half-frame / binary reception timeout (>200ms without new bytes)
+            // Abort binary reception and resynchronize to text mode
+            state_ = State::TEXT;
+            header_pos_ = 0;
+            payload_pos_ = 0;
+            line_len_ = 0;
+            on_error(kBinaryTimeoutMs);
+        }
+        last_rx_ms_ = now;
+
         for (size_t i = 0; i < len; ++i) {
             uint8_t b = data[i];
 
@@ -119,15 +134,27 @@ public:
                     // Once all 16 bytes of BinaryHeader are received
                     if (header_pos_ >= sizeof(canvas::BinaryHeader)) {
                         memcpy(&current_header_, header_buf_, sizeof(canvas::BinaryHeader));
-                        if (current_header_.payload_len > canvas::kFrameSizeBytes) {
-                            // Oversized binary payload, reject and reset
+                        bool header_valid = true;
+                        if (current_header_.payload_len > canvas::kFrameSizeBytes ||
+                            current_header_.offset + current_header_.payload_len > canvas::kFrameSizeBytes) {
+                            header_valid = false;
+                        }
+                        if (current_header_.type == canvas::BIN_FULL_FRAME &&
+                            current_header_.payload_len != canvas::kFrameSizeBytes) {
+                            header_valid = false;
+                        }
+
+                        if (!header_valid) {
+                            // Abnormal header, reject and reset to text mode
                             state_ = State::TEXT;
                             line_len_ = 0;
-                            on_error(canvas::kFrameSizeBytes);
+                            header_pos_ = 0;
+                            on_error(current_header_.payload_len);
                         } else if (current_header_.payload_len == 0) {
                             on_binary(current_header_, nullptr);
                             state_ = State::TEXT;
                             line_len_ = 0;
+                            header_pos_ = 0;
                         } else {
                             state_ = State::BINARY_PAYLOAD;
                             payload_pos_ = 0;
@@ -142,6 +169,8 @@ public:
                         on_binary(current_header_, binary_payload_);
                         state_ = State::TEXT;
                         line_len_ = 0;
+                        header_pos_ = 0;
+                        payload_pos_ = 0;
                     }
                     break;
                 }
@@ -163,6 +192,18 @@ public:
         state_ = State::TEXT;
         header_pos_ = 0;
         payload_pos_ = 0;
+        last_rx_ms_ = 0;
+    }
+
+    template <typename ErrorFn>
+    void CheckTimeout(uint32_t now, ErrorFn&& on_error) {
+        if (state_ != State::TEXT && last_rx_ms_ != 0 && (now - last_rx_ms_) > kBinaryTimeoutMs) {
+            state_ = State::TEXT;
+            header_pos_ = 0;
+            payload_pos_ = 0;
+            line_len_ = 0;
+            on_error(kBinaryTimeoutMs);
+        }
     }
 
     bool IsDiscardingOversized() const { return discarding_oversized_; }
@@ -180,6 +221,9 @@ private:
     canvas::BinaryHeader current_header_{};
     uint8_t binary_payload_[canvas::kFrameSizeBytes];
     size_t payload_pos_ = 0;
+
+    uint32_t last_rx_ms_ = 0;
+    static constexpr uint32_t kBinaryTimeoutMs = 200;
 };
 
 class JetsonUart {
@@ -215,6 +259,12 @@ public:
     void SetSession(const char* session_id);
     void ClearSession();
     const char* GetSessionId() const { return session_id_; }
+    bool IsSessionActive() const { return session_active_; }
+    void StartSession();
+    void StopSession();
+    void PingSession();
+    bool IsManualOverrideActive() const;
+    void SetManualOverride(bool active);
 
     // 释放所有当前处于按住状态的按键
     void ReleaseHeldKeys();
@@ -250,6 +300,9 @@ private:
 
     // 会话与超时看门狗
     char     session_id_[36] = {0};
+    bool     session_active_ = false;
+    uint32_t session_start_ms_ = 0;
+    uint32_t last_session_ping_ms_ = 0;
     uint16_t held_keys_ = 0;
     uint32_t last_input_time_ms_ = 0;
 };

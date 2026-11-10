@@ -524,6 +524,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
         if (!val_item) val_item = cJSON_GetObjectItem(root, "mode");
         if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && IsDirectDisplayMode(val_item->valueint)) {
             dm.SetMode(val_item->valueint);
+            dm.SetManualOverride(val_item->valueint != static_cast<int>(DisplayMode::PIXEL_CANVAS));
             cJSON_Delete(root);
             return true;
         }
@@ -669,28 +670,34 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     if (sscanf(text_str, "mode %d", &mode_num) == 1) {
         if (!IsDirectDisplayMode(mode_num)) return false;
         dm.SetMode(mode_num);
+        dm.SetManualOverride(mode_num != static_cast<int>(DisplayMode::PIXEL_CANVAS));
         return true;
     }
 
     // 3. 模式快捷英文别名
-    if (strcasecmp(text_str, "off") == 0)           { dm.SetMode(DisplayMode::OFF); return true; }
-    if (strcasecmp(text_str, "rainbow") == 0)       { dm.SetMode(DisplayMode::RAINBOW_WAVE); return true; }
-    if (strcasecmp(text_str, "aurora") == 0)        { dm.SetMode(DisplayMode::AURORA_BREATHE); return true; }
-    if (strcasecmp(text_str, "meteor") == 0)        { dm.SetMode(DisplayMode::METEOR_TRAIL); return true; }
-    if (strcasecmp(text_str, "stars") == 0)         { dm.SetMode(DisplayMode::TWINKLE_STARS); return true; }
-    if (strcasecmp(text_str, "cycle") == 0)         { dm.SetMode(DisplayMode::COLOR_CYCLE); return true; }
-    if (strcasecmp(text_str, "rain") == 0)          { dm.SetMode(DisplayMode::MATRIX_RAIN); return true; }
-    if (strcasecmp(text_str, "ripple") == 0)        { dm.SetMode(DisplayMode::CENTER_RIPPLE); return true; }
-    if (strcasecmp(text_str, "smile") == 0)         { dm.SetMode(DisplayMode::FACE_SMILE); return true; }
-    if (strcasecmp(text_str, "cry") == 0)           { dm.SetMode(DisplayMode::FACE_CRY); return true; }
-    if (strcasecmp(text_str, "neutral") == 0)       { dm.SetMode(DisplayMode::FACE_NEUTRAL); return true; }
-    if (strcasecmp(text_str, "dynamic") == 0 || strcasecmp(text_str, "face") == 0 || strcasecmp(text_str, "emoji") == 0) { dm.SetMode(DisplayMode::FACE_DYNAMIC); return true; }
-    if (strcasecmp(text_str, "kurisu") == 0 || strcasecmp(text_str, "pet") == 0) { dm.SetMode(DisplayMode::KURISU_DESK_PET); return true; }
-    if (strcasecmp(text_str, "spectrum") == 0)      { dm.SetMode(DisplayMode::AUDIO_SPECTRUM); return true; }
-    if (strcasecmp(text_str, "snake") == 0)         { dm.SetMode(DisplayMode::SNAKE_GAME); return true; }
-    if (strcasecmp(text_str, "tetris") == 0)        { dm.SetMode(DisplayMode::TETRIS_GAME); return true; }
-    if (strcasecmp(text_str, "fire") == 0)          { dm.SetMode(DisplayMode::CYBER_FIRE); return true; }
-    if (strcasecmp(text_str, "matrix") == 0)        { dm.SetMode(DisplayMode::MATRIX_RAIN_PRO); return true; }
+    auto set_manual_mode = [&](DisplayMode m) {
+        dm.SetMode(m);
+        dm.SetManualOverride(m != DisplayMode::PIXEL_CANVAS);
+        return true;
+    };
+    if (strcasecmp(text_str, "off") == 0)           { return set_manual_mode(DisplayMode::OFF); }
+    if (strcasecmp(text_str, "rainbow") == 0)       { return set_manual_mode(DisplayMode::RAINBOW_WAVE); }
+    if (strcasecmp(text_str, "aurora") == 0)        { return set_manual_mode(DisplayMode::AURORA_BREATHE); }
+    if (strcasecmp(text_str, "meteor") == 0)        { return set_manual_mode(DisplayMode::METEOR_TRAIL); }
+    if (strcasecmp(text_str, "stars") == 0)         { return set_manual_mode(DisplayMode::TWINKLE_STARS); }
+    if (strcasecmp(text_str, "cycle") == 0)         { return set_manual_mode(DisplayMode::COLOR_CYCLE); }
+    if (strcasecmp(text_str, "rain") == 0)          { return set_manual_mode(DisplayMode::MATRIX_RAIN); }
+    if (strcasecmp(text_str, "ripple") == 0)        { return set_manual_mode(DisplayMode::CENTER_RIPPLE); }
+    if (strcasecmp(text_str, "smile") == 0)         { return set_manual_mode(DisplayMode::FACE_SMILE); }
+    if (strcasecmp(text_str, "cry") == 0)           { return set_manual_mode(DisplayMode::FACE_CRY); }
+    if (strcasecmp(text_str, "neutral") == 0)       { return set_manual_mode(DisplayMode::FACE_NEUTRAL); }
+    if (strcasecmp(text_str, "dynamic") == 0 || strcasecmp(text_str, "face") == 0 || strcasecmp(text_str, "emoji") == 0) { return set_manual_mode(DisplayMode::FACE_DYNAMIC); }
+    if (strcasecmp(text_str, "kurisu") == 0 || strcasecmp(text_str, "pet") == 0) { return set_manual_mode(DisplayMode::KURISU_DESK_PET); }
+    if (strcasecmp(text_str, "spectrum") == 0)      { return set_manual_mode(DisplayMode::AUDIO_SPECTRUM); }
+    if (strcasecmp(text_str, "snake") == 0)         { return set_manual_mode(DisplayMode::SNAKE_GAME); }
+    if (strcasecmp(text_str, "tetris") == 0)        { return set_manual_mode(DisplayMode::TETRIS_GAME); }
+    if (strcasecmp(text_str, "fire") == 0)          { return set_manual_mode(DisplayMode::CYBER_FIRE); }
+    if (strcasecmp(text_str, "matrix") == 0)        { return set_manual_mode(DisplayMode::MATRIX_RAIN_PRO); }
     if (strcasecmp(text_str, "beep") == 0)          { return AudioHAL::GetInstance().PlayBeep(1000, 200) == ESP_OK; }
     if (strcasecmp(text_str, "mic on") == 0) {
         if (!reply_serial && !is_authenticated) return false;

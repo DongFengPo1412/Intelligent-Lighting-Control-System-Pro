@@ -109,7 +109,10 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         uint16_t offset = (uint16_t)offset_item->valueint;
         const char* hex_str = hex_item->valuestring;
         size_t hex_len = strlen(hex_str);
-        if (hex_len == 0 || (hex_len % 2) != 0 || (hex_len / 2 + offset > 768)) {
+        if (hex_len == 0 || (hex_len % 2) != 0 || (hex_len / 2 > 384) || (hex_len / 2 + offset > 768)) {
+            return 0;
+        }
+        if (total_chunks == 0 || total_chunks > 16 || chunk_idx >= total_chunks) {
             return 0;
         }
 

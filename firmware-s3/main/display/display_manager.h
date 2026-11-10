@@ -1,4 +1,5 @@
 #pragma once
+#ifndef HOST_TEST
 #include "arcade_clock.h"
 
 #include "display_types.h"
@@ -27,6 +28,10 @@ public:
     void SetMode(DisplayMode mode);
     void SetMode(int mode_number);
     DisplayMode GetMode() const;
+
+    // 跨来源手动操作仲裁 (PC Web / 手机 APK 手动控制优先，防止 Jetson 旧视觉数据或自动模式抢占)
+    void SetManualOverride(bool active);
+    bool IsManualOverrideActive() const;
 
     // 游戏交互输入
     void SnakeMove(int dx, int dy);
@@ -113,6 +118,7 @@ private:
     TaskHandle_t task_handle_;
     bool is_running_;
     arcade::FixedStepClock arcade_clock_;
+    bool manual_override_active_ = false;
 
     // 智能倒计时状态机
     uint32_t countdown_start_ms_;
@@ -121,3 +127,4 @@ private:
     bool countdown_finished_anim_;
     uint32_t countdown_finish_start_ms_;
 };
+#endif // HOST_TEST

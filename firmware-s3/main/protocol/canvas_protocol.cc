@@ -2,17 +2,8 @@
 #include "display_manager.h"
 #include <string.h>
 
-#if defined(ESP_PLATFORM)
-#include <esp_log.h>
-#include <esp_timer.h>
-static inline uint32_t get_current_millis() {
-    return (uint32_t)(esp_timer_get_time() / 1000ULL);
-}
-#else
+#if !defined(ESP_PLATFORM)
 #include <stdio.h>
-static inline uint32_t get_current_millis() {
-    return 0;
-}
 #endif
 
 namespace canvas {
@@ -65,13 +56,20 @@ void CanvasAssembler::MarkBytes(uint16_t offset, size_t len) {
     }
 }
 
+bool CanvasAssembler::IsBitmapFullyCovered() const {
+    for (size_t i = 0; i < sizeof(byte_bitmap_); ++i) {
+        if (byte_bitmap_[i] != 0xFF) return false;
+    }
+    return true;
+}
+
 bool CanvasAssembler::IsFrameComplete() const {
-    return bytes_received_ >= kFrameSizeBytes;
+    return (bytes_received_ >= kFrameSizeBytes) && IsBitmapFullyCovered();
 }
 
 void CanvasAssembler::CommitFrame(bool auto_mode) {
     DisplayManager& dm = DisplayManager::GetInstance();
-    if (auto_mode && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+    if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
         dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
     }
 
@@ -94,16 +92,34 @@ FeedResult CanvasAssembler::FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uin
         return {false, false, frame_id, bytes_received_, "empty_chunk"};
     }
 
-    if (offset + len > kFrameSizeBytes) {
+    // 1. Chunk boundary and parameters validation (max chunk size 384, full frame 768)
+    if (len > 384 || offset + len > kFrameSizeBytes) {
         bounds_errors_++;
-        return {false, false, frame_id, bytes_received_, "bounds_exceeded"};
+        return {false, false, frame_id, bytes_received_, "chunk_bounds_overflow"};
     }
 
+    if (total_chunks > 0 && chunk_idx >= total_chunks) {
+        bounds_errors_++;
+        return {false, false, frame_id, bytes_received_, "invalid_chunk_idx"};
+    }
+
+    // 2. Strict CRC16-CCITT check if provided
     if (expected_crc != 0) {
         uint16_t actual_crc = CalculateCrc16(data, len);
         if (actual_crc != expected_crc) {
             crc_errors_++;
             return {false, false, frame_id, bytes_received_, "crc_mismatch"};
+        }
+    }
+
+    // 3. Stale & duplicate frame rejection
+    if (last_committed_frame_id_ != 0) {
+        if (frame_id == last_committed_frame_id_) {
+            return {false, false, frame_id, bytes_received_, "duplicate_frame_id"};
+        }
+        uint16_t age = last_committed_frame_id_ - frame_id;
+        if (age > 0 && age < 32768) {
+            return {false, false, frame_id, bytes_received_, "stale_frame_id"};
         }
     }
 
@@ -122,8 +138,12 @@ FeedResult CanvasAssembler::FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uin
     memcpy(frame_buffer_ + offset, data, len);
     MarkBytes(offset, len);
 
-    bool should_commit = commit_now || IsFrameComplete();
-    if (should_commit) {
+    // 4. Strict completion requirement: never commit an incomplete frame to display
+    if (commit_now && !IsFrameComplete()) {
+        return {false, false, frame_id, bytes_received_, "incomplete_frame_premature_commit"};
+    }
+
+    if (IsFrameComplete()) {
         CommitFrame(auto_mode);
         return {true, true, frame_id, kFrameSizeBytes, nullptr};
     }
@@ -191,7 +211,7 @@ FeedResult CanvasAssembler::FeedPixel(uint8_t x, uint8_t y, uint8_t r, uint8_t g
     }
 
     DisplayManager& dm = DisplayManager::GetInstance();
-    if (auto_mode && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+    if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
         dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
     }
 
@@ -201,7 +221,7 @@ FeedResult CanvasAssembler::FeedPixel(uint8_t x, uint8_t y, uint8_t r, uint8_t g
 
 FeedResult CanvasAssembler::Clear(uint8_t r, uint8_t g, uint8_t b, bool auto_mode) {
     DisplayManager& dm = DisplayManager::GetInstance();
-    if (auto_mode && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+    if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
         dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
     }
 

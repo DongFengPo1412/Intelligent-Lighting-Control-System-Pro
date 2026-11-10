@@ -165,6 +165,55 @@ class JetsonUartTransport:
             self.is_connected = False
             return False
 
+    def send_raw_with_ack(
+        self, raw_bytes: bytes, expected_frame_seq: int, timeout: float = 1.0
+    ) -> Optional[Dict[str, Any]]:
+        """Sends raw binary frame and blocks until ESP32 acknowledges matching frame_id and commit status."""
+        if not self.is_connected or not raw_bytes:
+            return None
+
+        key = f"bin_{expected_frame_seq}"
+        ev = threading.Event()
+        with self._lock:
+            self._request_events[key] = ev
+
+        if self.simulate:
+            logger.debug(f"[SIM RAW TX+ACK] {len(raw_bytes)} bytes, seq={expected_frame_seq}")
+            with self._lock:
+                self._request_events.pop(key, None)
+            return {
+                "status": "ok",
+                "type": "bin_frame",
+                "frame_id": expected_frame_seq,
+                "committed": True,
+                "received_bytes": max(0, len(raw_bytes) - 16),
+                "simulated": True,
+            }
+
+        try:
+            with self._lock:
+                self.ser.write(raw_bytes)
+                self.ser.flush()
+        except Exception as e:
+            logger.error(f"[UART] Raw TX error: {e}")
+            with self._lock:
+                self._request_events.pop(key, None)
+            self.is_connected = False
+            return None
+
+        signaled = ev.wait(timeout)
+        with self._lock:
+            self._request_events.pop(key, None)
+            reply = self._pending_requests.pop(key, None)
+
+        if not signaled or reply is None:
+            logger.warning(
+                f"[UART] Binary frame {expected_frame_seq} timed out waiting for ACK after {timeout}s"
+            )
+            return None
+
+        return reply
+
     def _reader_loop(self):
         """Background thread reading lines from ESP32."""
         buffer = bytearray()
@@ -199,7 +248,19 @@ class JetsonUartTransport:
                         ev = self._request_events.get(req_id)
                         if ev:
                             ev.set()
+
+                # Match binary frame ACKs: type == "bin_frame" and "frame_id"
+                if parsed.get("type") == "bin_frame" and "frame_id" in parsed:
+                    bin_key = f"bin_{parsed.get('frame_id')}"
+                    if bin_key in self._request_events:
+                        with self._lock:
+                            self._pending_requests[bin_key] = parsed
+                            ev = self._request_events.get(bin_key)
+                            if ev:
+                                ev.set()
+
                 if self.on_frame_received:
                     self.on_frame_received(parsed)
         except Exception:
             pass
+

@@ -6,9 +6,20 @@
 
 #if !defined(ESP_PLATFORM) && defined(_WIN32)
 #include <string.h>
+#include <chrono>
+static inline uint32_t get_current_millis() {
+    using namespace std::chrono;
+    static auto start_time = steady_clock::now();
+    uint32_t ms = (uint32_t)duration_cast<milliseconds>(steady_clock::now() - start_time).count();
+    return ms == 0 ? 1 : ms;
+}
 #else
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_timer.h>
+static inline uint32_t get_current_millis() {
+    return (uint32_t)(esp_timer_get_time() / 1000ULL);
+}
 #endif
 
 namespace canvas {
@@ -87,6 +98,10 @@ public:
     // Clear canvas
     FeedResult Clear(uint8_t r = 0, uint8_t g = 0, uint8_t b = 0, bool auto_mode = false);
 
+    // Frame completeness validation
+    bool IsFrameComplete() const;
+    bool IsBitmapFullyCovered() const;
+
     // Timeout check (discards incomplete frame after inactivity)
     void CheckTimeout(uint32_t now_ms, uint32_t timeout_ms = 500);
 
@@ -113,8 +128,8 @@ private:
     uint16_t last_committed_frame_id_ = 0;
 
     void MarkBytes(uint16_t offset, size_t len);
-    bool IsFrameComplete() const;
     void CommitFrame(bool auto_mode);
 };
 
 } // namespace canvas
+
