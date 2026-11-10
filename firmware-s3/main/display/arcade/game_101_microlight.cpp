@@ -120,7 +120,7 @@ void Game101MicroLight::Tick(float dt, uint16_t down, uint16_t pressed) {
     if (!(biomes_visited_ & (1 << cur_biome))) {
         biomes_visited_ |= (1 << cur_biome);
         Award(100);
-        SoundEvent(Sound::Item);
+        SoundEvent(Sound::Score);
     }
 
     // Environmental Hazards (Volcano Lava at biome 6)
