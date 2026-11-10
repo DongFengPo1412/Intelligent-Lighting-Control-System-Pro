@@ -66,7 +66,7 @@ python3 -m unittest discover -s tests -v
 
 ### 2. 交互式命令行控制台
 ```bash
-python3 main.py --mode interactive --port /dev/ttyTHS1
+python3 main.py interactive --port /dev/ttyTHS1
 ```
 进入控制台后可直接输入指令：
 - `ping`：验证双向串口连通性（返回 `{"status":"ok","pong":true}`）。
@@ -77,13 +77,13 @@ python3 main.py --mode interactive --port /dev/ttyTHS1
 ### 3. 运行 16×16 全彩自由画布推流演示
 ```bash
 # 运行极速二进制色彩波纹动画 (12 FPS)
-python3 main.py --mode canvas --pattern wave --protocol binary --fps 12 --port /dev/ttyTHS1
+python3 main.py canvas --pattern wave --protocol binary --fps 12 --port /dev/ttyTHS1
 
 # 运行黑客帝国数字雨动画
-python3 main.py --mode canvas --pattern matrix --protocol binary --fps 12 --port /dev/ttyTHS1
+python3 main.py canvas --pattern matrix --protocol binary --fps 12 --port /dev/ttyTHS1
 
 # 运行壁炉火焰模拟
-python3 main.py --mode canvas --pattern fire --protocol binary --fps 12 --port /dev/ttyTHS1
+python3 main.py canvas --pattern fire --protocol binary --fps 12 --port /dev/ttyTHS1
 ```
 
 ---
@@ -121,3 +121,4 @@ while True:
 | 发送指令后超时无响应 (`timeout`) | 1. 杜邦线未接对；<br>2. 双方未共地；<br>3. 端口占用。 | 检查 Pin 8 (TX) 接 ESP32 GPIO 8 (RX)，Pin 10 (RX) 接 ESP32 GPIO 9 (TX)，并确保 GND 紧密相连。 |
 | 动画正常推送但屏幕显示用户模式 (`displayed: false`) | 手机 App 或 PC 端正在手动操作控制灯板 | 手机 App 释放控制或切回普通灯效后，Jetson 画面将自动恢复呈现。 |
 | 运行程序报错 `Failed to open hardware camera` | 未插入摄像头或相机索引错误 | 若无实体摄像头需体验功能，请在命令行追加 `--simulate` 参数。 |
+

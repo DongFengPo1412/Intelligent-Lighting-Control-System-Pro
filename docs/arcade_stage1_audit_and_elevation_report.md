@@ -38,22 +38,22 @@ $$\text{目标清单总数} = 35\ (\text{KEEP}) + 10\ (\text{REWORK}) + 55\ (\te
 ### 2.1 俄罗斯方块（Target 041）代码溯源修正
 - **问题核查**：此前映射脚本将 Target `041` 误关联至 Game `#102` Columns（宝石方块）。Columns 属于三联下落消除，与七种四联俄罗斯方块（Tetrominoes）规则完全不同。
 - **真实代码入口**：
-  - **C++ 固件原生引擎**：存在于 [`firmware-s3/main/display/game_engine.cc`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/game_engine.cc#L210-L289) 及 [`game_engine.h`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/game_engine.h)，具备完整的 `InitTetris()`, `TetrisMove()`, `TetrisRotate()`, `TetrisDrop()`, `RunTetris()` 逻辑与七类方块四向旋转矩阵。
+  - **C++ 固件原生引擎**：存在于 [`firmware-s3/main/display/game_engine.cc`](../firmware-s3/main/display/game_engine.cc#L210-L289) 及 [`game_engine.h`](../firmware-s3/main/display/game_engine.h)，具备完整的 `InitTetris()`, `TetrisMove()`, `TetrisRotate()`, `TetrisDrop()`, `RunTetris()` 逻辑与七类方块四向旋转矩阵。
   - **Python 模拟器现状**：旧卡带库中此前未封装独立的 `BaseCartridge` 模拟器卡带（原系统通过 `/api/mode` 切换固件模式 21）。
 - **修正结果**：在 `legacy_to_target.csv` 与 `games_100_manifest.json` 中，将源码位置精准更正为 `firmware-s3/main/display/game_engine.cc`，在第二阶段完成统一接口封装与 Python 模拟器卡带补写。
 
 ### 2.2 其他关键游戏映射纠偏
 除俄罗斯方块外，同步核查并修正了以下错误匹配项：
-- **Target 027 小行星 (Asteroids)**：此前误匹配 `#053` (The Main Event 摔跤霸王)，现更正为真实的 [`game_113_asteroids.cpp`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/game_113_asteroids.cpp)。
-- **Target 032 防卫者 (Defender)**：此前误匹配 `#081` (Rampage 狂暴巨兽)，现更正为真实的 [`game_112_defender.cpp`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/game_112_defender.cpp)。
-- **Target 098 月球着陆器 (Lunar Lander)**：此前误匹配 `#051` (Shinobi 影子忍者)，现更正为真实的 [`game_116_lunarlander.cpp`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/game_116_lunarlander.cpp)。
-- **Target 078 棒球 (Champion Baseball)**：确认主复用 [`game_186_championbaseball.cpp`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/game_186_championbaseball.cpp)，剔除街机清版格斗 `#091` 的错误合并关系。
+- **Target 027 小行星 (Asteroids)**：此前误匹配 `#053` (The Main Event 摔跤霸王)，现更正为真实的 [`game_113_asteroids.cpp`](../firmware-s3/main/display/arcade/game_113_asteroids.cpp)。
+- **Target 032 防卫者 (Defender)**：此前误匹配 `#081` (Rampage 狂暴巨兽)，现更正为真实的 [`game_112_defender.cpp`](../firmware-s3/main/display/arcade/game_112_defender.cpp)。
+- **Target 098 月球着陆器 (Lunar Lander)**：此前误匹配 `#051` (Shinobi 影子忍者)，现更正为真实的 [`game_116_lunarlander.cpp`](../firmware-s3/main/display/arcade/game_116_lunarlander.cpp)。
+- **Target 078 棒球 (Champion Baseball)**：确认主复用 [`game_186_championbaseball.cpp`](../firmware-s3/main/display/arcade/game_186_championbaseball.cpp)，剔除街机清版格斗 `#091` 的错误合并关系。
 
 ---
 
 ## 三、真实 6 级验收状态体系落实
 
-在 [`game_acceptance.csv`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/game_acceptance.csv) 中，废除一切未经测试的泛化“PASS”，严格执行 6 级工程验收状态：
+在 [`game_acceptance.csv`](../game_acceptance.csv) 中，废除一切未经测试的泛化“PASS”，严格执行 6 级工程验收状态：
 
 ```mermaid
 flowchart TD
@@ -139,8 +139,8 @@ flowchart TD
 
 ## 七、修正后交付文件索引
 
-- 全量旧游戏审计表：[`audit_191.csv`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/audit_191.csv)
-- 目标与旧代码映射表：[`legacy_to_target.csv`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/legacy_to_target.csv)
-- 正式 100 款游戏元数据表：[`games_100_manifest.json`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/games_100_manifest.json)
-- 严格分级验收跟踪表：[`game_acceptance.csv`](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/game_acceptance.csv)
+- 全量旧游戏审计表：[`audit_191.csv`](../audit_191.csv)
+- 目标与旧代码映射表：[`legacy_to_target.csv`](../legacy_to_target.csv)
+- 正式 100 款游戏元数据表：[`games_100_manifest.json`](../games_100_manifest.json)
+- 严格分级验收跟踪表：[`game_acceptance.csv`](../game_acceptance.csv)
 - 当前工作分支：`arcade-100-audit-and-elevation`

@@ -238,6 +238,9 @@ void DisplayManager::SetMode(DisplayMode mode)
     if(mode!=DisplayMode::COUNTDOWN_TIMER) {
         countdown_active_=false;countdown_finished_anim_=false;
     }
+    if(mode!=DisplayMode::PIXEL_CANVAS) {
+        canvas_source_=CanvasSource::NONE;
+    }
     current_mode_=mode;
 }
 
@@ -256,6 +259,18 @@ bool DisplayManager::IsManualOverrideActive() const
 {
     DisplayLock lock(mutex_);
     return manual_override_active_;
+}
+
+void DisplayManager::SetCanvasSource(CanvasSource source)
+{
+    DisplayLock lock(mutex_);
+    canvas_source_ = source;
+}
+
+DisplayManager::CanvasSource DisplayManager::GetCanvasSource() const
+{
+    DisplayLock lock(mutex_);
+    return canvas_source_;
 }
 
 void DisplayManager::SnakeMove(int dx, int dy)

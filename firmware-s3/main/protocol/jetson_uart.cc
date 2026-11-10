@@ -269,8 +269,12 @@ void JetsonUart::StopSession() {
     ReleaseHeldKeys();
     canvas::CanvasAssembler::GetInstance().Reset();
     DisplayManager& dm = DisplayManager::GetInstance();
-    if (dm.GetMode() == DisplayMode::PIXEL_CANVAS) {
+    // 跨来源画布所有权保护：仅当画布模式确实属于 Jetson 且无人工手动覆盖时才安全回退至彩虹波
+    if (!dm.IsManualOverrideActive() &&
+        dm.GetMode() == DisplayMode::PIXEL_CANVAS &&
+        dm.GetCanvasSource() == DisplayManager::CanvasSource::JETSON) {
         dm.SetMode(DisplayMode::RAINBOW_WAVE);
+        dm.SetCanvasSource(DisplayManager::CanvasSource::NONE);
     }
 }
 

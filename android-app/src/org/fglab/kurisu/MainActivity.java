@@ -856,7 +856,7 @@ public class MainActivity extends Activity {
         @android.webkit.JavascriptInterface
         public void stopFrontCamera(final String sessionId) {
             if (frontCameraBridge != null) {
-                frontCameraBridge.stop();
+                frontCameraBridge.stop(sessionId);
             }
         }
 

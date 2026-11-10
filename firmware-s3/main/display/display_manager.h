@@ -30,8 +30,15 @@ public:
     DisplayMode GetMode() const;
 
     // 跨来源手动操作仲裁 (PC Web / 手机 APK 手动控制优先，防止 Jetson 旧视觉数据或自动模式抢占)
+    enum class CanvasSource : uint8_t {
+        NONE = 0,
+        MANUAL_USER = 1,
+        JETSON = 2
+    };
     void SetManualOverride(bool active);
     bool IsManualOverrideActive() const;
+    void SetCanvasSource(CanvasSource source);
+    CanvasSource GetCanvasSource() const;
 
     // 游戏交互输入
     void SnakeMove(int dx, int dy);
@@ -119,6 +126,7 @@ private:
     bool is_running_;
     arcade::FixedStepClock arcade_clock_;
     bool manual_override_active_ = false;
+    CanvasSource canvas_source_ = CanvasSource::NONE;
 
     // 智能倒计时状态机
     uint32_t countdown_start_ms_;

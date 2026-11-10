@@ -80,6 +80,9 @@ void CanvasAssembler::CommitFrame(bool auto_mode) {
     if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
         dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
     }
+    if (!dm.IsManualOverrideActive()) {
+        dm.SetCanvasSource(DisplayManager::CanvasSource::JETSON);
+    }
 
     ColorRGB colors[kPixelCount];
     for (size_t i = 0; i < kPixelCount; ++i) {
@@ -279,6 +282,9 @@ FeedResult CanvasAssembler::FeedPixel(uint8_t x, uint8_t y, uint8_t r, uint8_t g
     if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
         dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
     }
+    if (!dm.IsManualOverrideActive()) {
+        dm.SetCanvasSource(DisplayManager::CanvasSource::JETSON);
+    }
 
     dm.SetCanvasPixel(x, y, ColorRGB(r, g, b));
     return {true, true, 0, 3, nullptr};
@@ -288,6 +294,9 @@ FeedResult CanvasAssembler::Clear(uint8_t r, uint8_t g, uint8_t b, bool auto_mod
     DisplayManager& dm = DisplayManager::GetInstance();
     if (auto_mode && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
         dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
+    }
+    if (!dm.IsManualOverrideActive()) {
+        dm.SetCanvasSource(DisplayManager::CanvasSource::JETSON);
     }
 
     if (r == 0 && g == 0 && b == 0) {

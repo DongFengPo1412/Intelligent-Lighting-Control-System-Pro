@@ -678,7 +678,10 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
         if (!is_manual_user && dm.IsManualOverrideActive()) return false;
         dm.SetMode(mode_num);
         if (is_manual_user) {
-            dm.SetManualOverride(mode_num != static_cast<int>(DisplayMode::PIXEL_CANVAS));
+            dm.SetManualOverride(true);
+            if (mode_num == static_cast<int>(DisplayMode::PIXEL_CANVAS)) {
+                dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+            }
         }
         return true;
     }
@@ -688,7 +691,10 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
         if (!is_manual_user && dm.IsManualOverrideActive()) return false;
         dm.SetMode(m);
         if (is_manual_user) {
-            dm.SetManualOverride(m != DisplayMode::PIXEL_CANVAS);
+            dm.SetManualOverride(true);
+            if (m == DisplayMode::PIXEL_CANVAS) {
+                dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+            }
         }
         return true;
     };

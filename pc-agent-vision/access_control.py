@@ -18,6 +18,21 @@ REVOKED_TOKENS = frozenset({
 })
 
 
+# Sensitive endpoints strictly requiring token/cookie pairing or localhost loopback,
+# even if client IP belongs to trusted private network.
+SENSITIVE_ENDPOINTS = (
+    "/api/pro/documents",
+    "/api/pro/memories",
+    "/api/pro/memory",
+    "/api/pro/face",
+    "/api/pro/music-upload",
+    "/api/config",
+    "/api/restart",
+    "/api/pro/settings",
+    "/mcp",
+)
+
+
 def load_access_token():
     token = os.environ.get("KURISU_ACCESS_TOKEN", "").strip()
     if token:
@@ -101,13 +116,30 @@ class AccessPolicy:
         cookie = request.cookies.get("kurisu_session", "")
         if token_candidate in REVOKED_TOKENS or cookie in REVOKED_TOKENS:
             return False
-        if self.trust_private and self.is_trusted_peer(request.remote or ""):
+
+        # 1. Explicit token / session cookie authentication or localhost loopback has full authorization
+        is_token_valid = (
+            (token_candidate and hmac.compare_digest(token_candidate.encode('utf-8'), self.token.encode('utf-8'))) or
+            (cookie and hmac.compare_digest(cookie.encode('utf-8'), self.token.encode('utf-8'))) or
+            self.local(request)
+        )
+        if is_token_valid:
             return True
+
         if request.path == '/xiaozhi/v1/' and len(self.xiaozhi_token) >= 32 and hmac.compare_digest(
-                bearer.encode('utf-8'),self.xiaozhi_token.encode('utf-8')):
+                bearer.encode('utf-8'), self.xiaozhi_token.encode('utf-8')):
             return True # Scoped compatibility with the existing optional native adapter.
-        return (hmac.compare_digest(token_candidate.encode('utf-8'), self.token.encode('utf-8')) or
-                hmac.compare_digest(cookie.encode('utf-8'), self.token.encode('utf-8')) or self.local(request))
+
+        # 2. Graded security policy:
+        # Trusted private network peers can perform everyday non-sensitive control (lighting, status, chat)
+        # without pairing, but sensitive operations (privacy documents, memories, face database, arbitrary file upload, MCP tool execution)
+        # strictly require explicit token/cookie pairing or localhost loopback.
+        if self.trust_private and self.is_trusted_peer(request.remote or ""):
+            is_sensitive = any(request.path.startswith(prefix) for prefix in SENSITIVE_ENDPOINTS)
+            if not is_sensitive:
+                return True
+
+        return False
 
     def allow_rate(self, peer):
         now = time.monotonic()

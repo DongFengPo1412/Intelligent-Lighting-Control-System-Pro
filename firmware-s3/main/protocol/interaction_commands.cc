@@ -65,6 +65,7 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
+        dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
         dm.SetCanvasPixel((int)x,(int)y,ColorRGB((uint8_t)a,(uint8_t)b,(uint8_t)c));
         return 1;
     }
@@ -81,6 +82,7 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
+        dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
         dm.SetCanvasFrame(colors);
         return 1;
     }

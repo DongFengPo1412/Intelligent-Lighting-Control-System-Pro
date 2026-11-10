@@ -614,6 +614,76 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             ok, reason = evaluate_udp_packet(pkt, has_auth_token=True)
             self.assertTrue(ok, f"Sensitive packet '{pkt}' with valid token must be dispatched, got {reason}")
 
+    def test_access_policy_graded_private_network_security(self):
+        """Graded security: trusted LAN peers get non-sensitive control, but sensitive APIs strictly require pairing."""
+        from access_control import SENSITIVE_ENDPOINTS
+        token = "c" * 32
+        policy = AccessPolicy(token=token, trust_private=True)
+
+        class MockRequest:
+            def __init__(self, path, remote="192.168.186.50", token_header=""):
+                self.path = path
+                self.remote = remote
+                self.headers = {"Authorization": f"Bearer {token_header}"} if token_header else {}
+                self.query = {}
+                self.cookies = {}
+                self.scheme = "http"
+                self.host = "192.168.186.90:8080"
+
+        # A. Trusted LAN peer without token:
+        # Non-sensitive endpoints -> ALLOWED
+        for safe_path in ["/api/status", "/api/command", "/api/mode", "/api/pro/chat", "/api/preview"]:
+            req = MockRequest(safe_path)
+            self.assertTrue(policy.authorized(req), f"Safe path {safe_path} should be allowed on trusted private network")
+
+        # Sensitive endpoints -> REJECTED without token
+        for sens_path in SENSITIVE_ENDPOINTS:
+            req = MockRequest(sens_path)
+            self.assertFalse(policy.authorized(req), f"Sensitive path {sens_path} MUST be rejected without token even on trusted network")
+
+        # B. Trusted LAN peer WITH token -> ALLOWED everywhere
+        for sens_path in SENSITIVE_ENDPOINTS:
+            req = MockRequest(sens_path, token_header=token)
+            self.assertTrue(policy.authorized(req), f"Sensitive path {sens_path} with token must be allowed")
+
+    def test_android_camera_session_isolation_prevents_stale_stop(self):
+        """Stale camera session stop requests must not interrupt an active newer session."""
+        class MockFrontCameraBridge:
+            def __init__(self):
+                self.running = False
+                self.current_session_id = None
+
+            def start(self, session_id):
+                self.running = True
+                self.current_session_id = session_id
+
+            def stop(self, session_id=None):
+                if session_id and self.current_session_id and session_id != self.current_session_id:
+                    # Ignore stale session stop
+                    return
+                self.running = False
+                self.current_session_id = None
+
+        bridge = MockFrontCameraBridge()
+        # Session 1 starts
+        bridge.start("sess_001")
+        self.assertTrue(bridge.running)
+
+        # Session 2 starts (supersedes Session 1)
+        bridge.start("sess_002")
+        self.assertTrue(bridge.running)
+        self.assertEqual(bridge.current_session_id, "sess_002")
+
+        # Delayed stop request from Session 1 arrives -> IGNORED
+        bridge.stop("sess_001")
+        self.assertTrue(bridge.running, "Stale stop request for sess_001 must not stop sess_002")
+        self.assertEqual(bridge.current_session_id, "sess_002")
+
+        # Valid stop request for Session 2 arrives -> STOPS
+        bridge.stop("sess_002")
+        self.assertFalse(bridge.running, "Matching stop request for sess_002 must stop camera")
+        self.assertIsNone(bridge.current_session_id)
+
 
 if __name__ == "__main__":
     unittest.main()

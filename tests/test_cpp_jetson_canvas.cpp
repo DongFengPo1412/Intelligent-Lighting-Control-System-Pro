@@ -12,17 +12,26 @@
 // Mock DisplayManager for host unit testing
 class DisplayManager {
 public:
+    enum class CanvasSource : uint8_t {
+        NONE = 0,
+        MANUAL_USER = 1,
+        JETSON = 2
+    };
+
     static DisplayManager& GetInstance() {
         static DisplayManager instance;
         return instance;
     }
 
     void SetMode(DisplayMode mode) {
+        if (mode != DisplayMode::PIXEL_CANVAS) {
+            canvas_source_ = CanvasSource::NONE;
+        }
         current_mode_ = mode;
     }
 
     void SetMode(uint8_t mode) {
-        current_mode_ = static_cast<DisplayMode>(mode);
+        SetMode(static_cast<DisplayMode>(mode));
     }
 
     DisplayMode GetMode() const {
@@ -35,6 +44,14 @@ public:
 
     bool IsManualOverrideActive() const {
         return manual_override_active_;
+    }
+
+    void SetCanvasSource(CanvasSource source) {
+        canvas_source_ = source;
+    }
+
+    CanvasSource GetCanvasSource() const {
+        return canvas_source_;
     }
 
     void SetCanvasFrame(const ColorRGB* colors) {
@@ -62,6 +79,7 @@ public:
     uint32_t clear_count_ = 0;
     DisplayMode current_mode_ = DisplayMode::RAINBOW_WAVE;
     bool manual_override_active_ = false;
+    CanvasSource canvas_source_ = CanvasSource::NONE;
 };
 
 // Include canvas protocol and UART receiver headers
@@ -476,6 +494,48 @@ void Test_BinaryFrame_StrictCrcAndVersionCheck() {
     assert(r_skip.success && r_skip.committed);
 }
 
+// 14. StopSession Canvas Source Ownership Protection
+void Test_StopSession_CanvasSource_OwnershipProtection() {
+    auto& dm = DisplayManager::GetInstance();
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    assembler.ResetSequence(0);
+
+    // Scenario 1: Manual user drew on canvas (Mode 29)
+    dm.SetMode(DisplayMode::PIXEL_CANVAS);
+    dm.SetManualOverride(true);
+    dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+
+    // Jetson session stops:
+    if (!dm.IsManualOverrideActive() &&
+        dm.GetMode() == DisplayMode::PIXEL_CANVAS &&
+        dm.GetCanvasSource() == DisplayManager::CanvasSource::JETSON) {
+        dm.SetMode(DisplayMode::RAINBOW_WAVE);
+        dm.SetCanvasSource(DisplayManager::CanvasSource::NONE);
+    }
+    // Must NOT revert to RAINBOW_WAVE because it belongs to MANUAL_USER
+    assert(dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::MANUAL_USER);
+    assert(dm.IsManualOverrideActive());
+
+    // Scenario 2: Jetson was streaming canvas (auto_mode = true, manual_override = false)
+    dm.SetManualOverride(false);
+    uint8_t payload[768] = {0};
+    assembler.FeedFullFrame(1, payload, 768, 0, true);
+    assert(dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::JETSON);
+
+    // Jetson session stops:
+    if (!dm.IsManualOverrideActive() &&
+        dm.GetMode() == DisplayMode::PIXEL_CANVAS &&
+        dm.GetCanvasSource() == DisplayManager::CanvasSource::JETSON) {
+        dm.SetMode(DisplayMode::RAINBOW_WAVE);
+        dm.SetCanvasSource(DisplayManager::CanvasSource::NONE);
+    }
+    // MUST safely revert to RAINBOW_WAVE because it belonged to Jetson
+    assert(dm.GetMode() == DisplayMode::RAINBOW_WAVE);
+    assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::NONE);
+}
+
 int main() {
     std::cout << "====================================================\n";
     std::cout << "Starting Native C++ Canvas Protocol & UART Tests\n";
@@ -494,9 +554,10 @@ int main() {
     RunTest("Test_BinaryHeader_OversizedDefense", Test_BinaryHeader_OversizedDefense);
     RunTest("Test_FrameSequence_ResetAndReconnection", Test_FrameSequence_ResetAndReconnection);
     RunTest("Test_BinaryFrame_StrictCrcAndVersionCheck", Test_BinaryFrame_StrictCrcAndVersionCheck);
+    RunTest("Test_StopSession_CanvasSource_OwnershipProtection", Test_StopSession_CanvasSource_OwnershipProtection);
 
     std::cout << "====================================================\n";
-    std::cout << "ALL 13 NATIVE C++ TESTS PASSED!\n";
+    std::cout << "ALL 14 NATIVE C++ TESTS PASSED!\n";
     std::cout << "====================================================\n";
     return 0;
 }

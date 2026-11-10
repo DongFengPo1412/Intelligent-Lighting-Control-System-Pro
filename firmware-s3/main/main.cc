@@ -46,7 +46,7 @@ extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "===============================================================");
     ESP_LOGI(TAG, ">>> [智光魔方 Pro]: ESP32-S3 单板高阶多模态中枢正式启动");
-    ESP_LOGI(TAG, ">>> [双核架构]: Core 1 (60FPS 光影物理渲染) | Core 0 (实时指令与通信中枢)");
+    ESP_LOGI(TAG, ">>> [双核架构]: Core 1 (30FPS 自适应光场物理渲染, WS2812B 8ms RMT DMA) | Core 0 (实时指令与通信中枢)");
     ESP_LOGI(TAG, ">>> [声学外设]: I2S INMP441 麦克风 (GPIO 4,5,6) + MAX98357A 扬声器 (GPIO 7,15,16)");
     ESP_LOGI(TAG, ">>> [光场外设]: GPIO 17 硬件 RMT 直驱 16x16 矩阵屏 (FastLED 线性色阶)");
     ESP_LOGI(TAG, ">>> [板载指示]: GPIO 48 / Mid灯态 (启动蓝快闪 / 待机熄灭 / 收音红 / 播报绿)");

@@ -61,15 +61,15 @@ graph TD
 ```
 
 - **消除双重运行器冲突**：
-  - 在 [arcade_runner.py](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/pc-agent-vision/arcade_runner.py) 中，当检测到硬件在线（`is_hardware_available() == True` 且非 `SIMULATION`）时，**完全停用 Python 本地游戏循环**。所有按键与生命周期均透明转发给 ESP32，状态与计分 100% 提取自 ESP32 的回包；
+  - 在 [arcade_runner.py](../pc-agent-vision/arcade_runner.py) 中，当检测到硬件在线（`is_hardware_available() == True` 且非 `SIMULATION`）时，**完全停用 Python 本地游戏循环**。所有按键与生命周期均透明转发给 ESP32，状态与计分 100% 提取自 ESP32 的回包；
   - 仅当用户或自动化脚本显式指定 `force_simulation=True`（或处于离线仿真环境）时，才启动 Python 本地卡带，并强制在返回 JSON 中标注 `"source": "simulator"`, `"simulated": true`；
   - 硬件离线且未指定仿真模式时，接口返回 HTTP 503 明确报错，绝不偷梁换柱。
 
 ### 2.2 手机端 Web 控制器全链路重构
 
 - **界面统一与卡带映射**：
-  - [index.html](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/pc-agent-vision/web_app/index.html)：将原本专属于马里奥的容器升级为通用点阵街机容器，并配置专用卡带选择组：`data-arcade-id="001"`、`033`、`041`；
-  - [app.js](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/pc-agent-vision/web_app/app.js)：实现全局 `launchArcadeGame(gameId)` 函数，旧版 `data-game` 按钮与快捷入口全部透明收敛至新街机管道。
+  - [index.html](../pc-agent-vision/web_app/index.html)：将原本专属于马里奥的容器升级为通用点阵街机容器，并配置专用卡带选择组：`data-arcade-id="001"`、`033`、`041`；
+  - [app.js](../pc-agent-vision/web_app/app.js)：实现全局 `launchArcadeGame(gameId)` 函数，旧版 `data-game` 按钮与快捷入口全部透明收敛至新街机管道。
 - **手柄布局与 HUD 动态响应**：
   - 检测到卡带 `control_type == 2`（`CTRL_DPAD_4WAY`，贪吃蛇）时，自动隐藏右侧 A/B 键区域，呈现纯粹的 4 向十字键；
   - 检测到卡带 `control_type == 3`（`CTRL_ARCADE_AB`，马里奥/俄罗斯方块）时，显示 A/B 键，并动态切换按键角标（马里奥显示“跳跃/加速”，俄罗斯方块显示“旋转/软降”）；
@@ -77,18 +77,18 @@ graph TD
 
 ### 2.3 统一结算屏与大数字滚动无截断
 
-- **字模与多阶段轮播 ([arcade_result_screen.cpp](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/arcade_result_screen.cpp))**：
+- **字模与多阶段轮播 ([arcade_result_screen.cpp](../firmware-s3/main/display/arcade/arcade_result_screen.cpp))**：
   - 扩充 3×5 点阵字模库，新增大写英文字母 `H`（`0b101, 0b101, 0b111, 0b101, 0b101`）与 `E`；
   - 引入动画时钟 `anim_time`，以 2.2 秒为周期实现双阶段交替：
     - **Phase 0 (当前战绩)**：顶部大红 `G O` 或金黄 `WIN`，中部琥珀色渲染本局得分；
     - **Phase 1 (历史纪录)**：顶部天青色 `HI`（打破纪录时闪烁金辉），中部纯金色渲染最高纪录；
   - **跑马灯平滑滚动算法**：当分数长度 $\le 4$ 位时严格居中；当分数 $> 4$ 位（如 12500）时，自动计算 `scroll_range = total_w - 15`，在前 0.6 秒停留在最高有效位，随后 1.3 秒平滑平移至末位，并在末尾停留 0.6 秒。全周期无任何像素被粗暴裁剪。
 - **超级马里奥接入**：
-  - [game_001_mario.cpp](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/game_001_mario.cpp)：在 `Render()` 中检测到状态为 `ST_GAMEOVER`、`ST_DEAD` 或 `ST_WIN` 时，统一调度 `ArcadeResultScreen::RenderResult`，终结死图与无结算现象。
+  - [game_001_mario.cpp](../firmware-s3/main/display/arcade/game_001_mario.cpp)：在 `Render()` 中检测到状态为 `ST_GAMEOVER`、`ST_DEAD` 或 `ST_WIN` 时，统一调度 `ArcadeResultScreen::RenderResult`，终结死图与无结算现象。
 
 ### 2.4 NVS 最高分持久化机制
 
-- **独立存储模块 ([arcade_score_store.cpp](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/main/display/arcade/arcade_score_store.cpp))**：
+- **独立存储模块 ([arcade_score_store.cpp](../firmware-s3/main/display/arcade/arcade_score_store.cpp))**：
   - 封装静态接口 `LoadHighScore(uint8_t game_id)` 与 `SaveHighScore(uint8_t game_id, uint32_t high_score)`；
   - 在 NVS 空间 `"arcade_hs"` 中以键名 `hs_%03u` 存储无符号 32 位整数；
   - 写入保护：仅当 `high_score > existing` 时执行 `nvs_set_u32` 并 `nvs_commit`，运行期间绝不产生冗余写入，既保护 Flash 寿命，又确保即便硬件断电或系统复位，玩家最高纪录永不丢失。
@@ -97,7 +97,7 @@ graph TD
 ### 2.5 16MB 双 6MB OTA 分区与迁移安全性
 
 - **生效配置与构建结果**：
-  - [partitions_16mb.csv](file:///C:/workspace/Intelligent-Lighting-Control-System-Pro/firmware-s3/partitions_16mb.csv)：
+  - [partitions_16mb.csv](../firmware-s3/partitions_16mb.csv)：
     - `ota_0`：起始 0x20000，大小 0x600000 (6MB)
     - `ota_1`：起始 0x620000，大小 0x600000 (6MB)
     - `storage`：起始 0xC20000，大小 0x3D0000 (3.8MB SPIFFS)

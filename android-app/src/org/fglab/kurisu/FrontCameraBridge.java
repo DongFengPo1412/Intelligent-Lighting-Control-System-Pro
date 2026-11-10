@@ -30,6 +30,7 @@ public class FrontCameraBridge {
     private volatile boolean mUploading = false;
     private volatile int mRotation = 90; // Default: 90 degrees clockwise as requested
     private volatile String mAuthorizedOrigin = null;
+    private volatile String mCurrentSessionId = null;
     private long lastFrameTime = 0;
     private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
 
@@ -63,6 +64,8 @@ public class FrontCameraBridge {
             if (!expectedOrigin.equalsIgnoreCase(targetOrigin)) {
                 return false;
             }
+            String sess = targetUri.getQueryParameter("session_id");
+            this.mCurrentSessionId = (sess != null && !sess.trim().isEmpty()) ? sess.trim() : null;
         } catch (Exception e) {
             return false;
         }
@@ -205,8 +208,19 @@ public class FrontCameraBridge {
         }
     }
 
+    public synchronized void stop(final String sessionId) {
+        if (sessionId != null && !sessionId.trim().isEmpty()) {
+            if (mCurrentSessionId != null && !mCurrentSessionId.equals(sessionId.trim())) {
+                // Ignore stale stop request belonging to an older session
+                return;
+            }
+        }
+        stop();
+    }
+
     public synchronized void stop() {
         mRunning = false;
+        mCurrentSessionId = null;
         if (mCamera != null) {
             try {
                 mCamera.setPreviewCallback(null);
