@@ -204,8 +204,13 @@ def run_canvas_demo(transport: JetsonUartTransport, pattern: str = "wave", proto
 
             if ok:
                 frames_sent += 1
-
-            if frames_sent % 30 == 0 and frames_sent > 0:
+                if streamer.is_overridden or not streamer.is_displayed:
+                    if frames_sent % 30 == 1:
+                        logger.warning(
+                            "Frame committed to canvas buffer, but NOT displayed on matrix (user manual control active on ESP32)"
+                        )
+            else:
+                logger.warning("Frame delivery/commit failed")
                 elapsed = time.time() - start_time
                 actual_fps = frames_sent / elapsed
                 logger.info(f"Canvas stream active: {frames_sent} frames sent ({actual_fps:.1f} FPS)")

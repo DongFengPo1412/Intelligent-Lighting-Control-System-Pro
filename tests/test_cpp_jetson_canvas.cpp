@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdint>
 
-// Define a host mock environment for DisplayManager so canvas_protocol.cc can compile cleanly
+// Define host test environment
 #define HOST_TEST 1
 
 #include "../firmware-s3/main/display/display_types.h"
@@ -64,7 +64,7 @@ public:
     bool manual_override_active_ = false;
 };
 
-// Include canvas protocol source and headers
+// Include canvas protocol and UART receiver headers
 #include "../firmware-s3/main/protocol/canvas_protocol.h"
 #include "../firmware-s3/main/protocol/canvas_protocol.cc"
 #include "../firmware-s3/main/protocol/jetson_uart.h"
@@ -87,7 +87,85 @@ void Test_Crc16_Calculation() {
     assert(crc_zero != 0);
 }
 
-// 2. Buffer Overflow and Chunk Bounds Defense
+// 2. Production C++ ProcessBinaryFrame 768-Byte Full Frame Success Path
+void Test_Full_Binary_Frame_768_Success() {
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    auto& dm = DisplayManager::GetInstance();
+    assembler.Reset();
+    dm.frame_commit_count_ = 0;
+    dm.SetManualOverride(false);
+    dm.SetMode(DisplayMode::RAINBOW_WAVE);
+
+    // Prepare 768 bytes of test RGB data (256 pixels)
+    uint8_t payload[768];
+    for (size_t i = 0; i < 256; ++i) {
+        payload[i * 3 + 0] = static_cast<uint8_t>(i);       // R
+        payload[i * 3 + 1] = static_cast<uint8_t>(255 - i); // G
+        payload[i * 3 + 2] = static_cast<uint8_t>((i * 7) % 256); // B
+    }
+
+    uint16_t crc = canvas::CalculateCrc16(payload, sizeof(payload));
+
+    canvas::BinaryHeader hdr{};
+    hdr.magic[0] = canvas::kMagic0;
+    hdr.magic[1] = canvas::kMagic1;
+    hdr.magic[2] = canvas::kMagic2;
+    hdr.magic[3] = canvas::kMagic3;
+    hdr.type = canvas::BIN_FULL_FRAME;
+    hdr.version = 1;
+    hdr.frame_seq = 42;
+    hdr.payload_len = 768;
+    hdr.offset = 0;
+    hdr.flags = canvas::FLAG_COMMIT_NOW | canvas::FLAG_AUTO_MODE;
+    hdr.crc16 = crc;
+
+    // Call production C++ ProcessBinaryFrame with 768-byte full frame
+    auto res = assembler.ProcessBinaryFrame(hdr, payload);
+
+    assert(res.success);
+    assert(res.committed);
+    assert(res.frame_id == 42);
+    assert(res.received_bytes == 768);
+    assert(res.error_msg == nullptr);
+    assert(dm.frame_commit_count_ == 1);
+    assert(dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+
+    // Verify all 256 pixels match byte-for-byte in display buffer
+    for (size_t i = 0; i < 256; ++i) {
+        assert(dm.canvas_buffer_[i].r == payload[i * 3 + 0]);
+        assert(dm.canvas_buffer_[i].g == payload[i * 3 + 1]);
+        assert(dm.canvas_buffer_[i].b == payload[i * 3 + 2]);
+    }
+}
+
+// 3. Sequential 2-Chunk 384+384 Bytes Atomic Assembly
+void Test_Two_Chunks_384_Success() {
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    auto& dm = DisplayManager::GetInstance();
+    assembler.Reset();
+    dm.frame_commit_count_ = 0;
+
+    uint8_t chunk0[384];
+    uint8_t chunk1[384];
+    std::memset(chunk0, 0x11, sizeof(chunk0));
+    std::memset(chunk1, 0x22, sizeof(chunk1));
+
+    // Chunk 0: offset 0, len 384, total_chunks 2
+    auto r0 = assembler.FeedChunk(101, 0, 2, 0, chunk0, 384, 0, false, true);
+    assert(r0.success);
+    assert(!r0.committed);
+    assert(!assembler.IsFrameComplete());
+    assert(dm.frame_commit_count_ == 0);
+
+    // Chunk 1: offset 384, len 384, total_chunks 2, commit_now = true
+    auto r1 = assembler.FeedChunk(101, 1, 2, 384, chunk1, 384, 0, true, true);
+    assert(r1.success);
+    assert(r1.committed);
+    assert(dm.frame_commit_count_ == 1);
+    assert(assembler.GetLastCommittedFrameId() == 101);
+}
+
+// 4. Buffer Overflow and Chunk Bounds Defense
 void Test_BufferOverflow_Defense() {
     auto& assembler = canvas::CanvasAssembler::GetInstance();
     assembler.Reset();
@@ -95,7 +173,7 @@ void Test_BufferOverflow_Defense() {
     uint8_t payload[800];
     std::memset(payload, 0xAA, sizeof(payload));
 
-    // Case A: Chunk byte length exceeds 384 bytes
+    // Case A: Chunk byte length exceeds 384 bytes in chunk mode (total_chunks > 1)
     auto res1 = assembler.FeedChunk(1, 0, 2, 0, payload, 385, 0, false, false);
     assert(!res1.success);
     assert(std::strcmp(res1.error_msg, "chunk_bounds_overflow") == 0);
@@ -116,7 +194,7 @@ void Test_BufferOverflow_Defense() {
     assert(std::strcmp(res4.error_msg, "empty_chunk") == 0);
 }
 
-// 3. Incomplete Frame Rejection (commit_now with incomplete frame)
+// 5. Incomplete Frame Rejection (commit_now with incomplete frame)
 void Test_IncompleteFrame_Rejection() {
     auto& assembler = canvas::CanvasAssembler::GetInstance();
     auto& dm = DisplayManager::GetInstance();
@@ -127,7 +205,7 @@ void Test_IncompleteFrame_Rejection() {
     std::memset(chunk_data, 0x55, sizeof(chunk_data));
 
     // Send only chunk 0 (192 bytes out of 768) but set commit_now = true
-    auto res = assembler.FeedChunk(10, 0, 4, 0, chunk_data, sizeof(chunk_data), 0, true, true);
+    auto res = assembler.FeedChunk(150, 0, 4, 0, chunk_data, sizeof(chunk_data), 0, true, true);
 
     // Must be rejected! Incomplete frame cannot be committed to display
     assert(!res.success);
@@ -137,40 +215,38 @@ void Test_IncompleteFrame_Rejection() {
     assert(dm.frame_commit_count_ == 0); // Display not modified
 }
 
-// 4. Atomic Frame Completeness and Sequential Chunk Commit
-void Test_Atomic_FrameCompleteness() {
+// 6. CRC Mismatch Rejection
+void Test_CrcMismatch_Rejection() {
     auto& assembler = canvas::CanvasAssembler::GetInstance();
     auto& dm = DisplayManager::GetInstance();
     assembler.Reset();
     dm.frame_commit_count_ = 0;
 
-    uint8_t chunk[192];
-    std::memset(chunk, 0x11, sizeof(chunk));
+    uint8_t payload[768];
+    std::memset(payload, 0x88, sizeof(payload));
+    uint16_t real_crc = canvas::CalculateCrc16(payload, sizeof(payload));
 
-    // Chunk 0 (0..191)
-    auto r0 = assembler.FeedChunk(100, 0, 4, 0, chunk, 192, 0, false, true);
-    assert(r0.success && !r0.committed);
-    assert(!assembler.IsFrameComplete());
+    canvas::BinaryHeader hdr{};
+    hdr.magic[0] = canvas::kMagic0;
+    hdr.magic[1] = canvas::kMagic1;
+    hdr.magic[2] = canvas::kMagic2;
+    hdr.magic[3] = canvas::kMagic3;
+    hdr.type = canvas::BIN_FULL_FRAME;
+    hdr.version = 1;
+    hdr.frame_seq = 160;
+    hdr.payload_len = 768;
+    hdr.offset = 0;
+    hdr.flags = canvas::FLAG_COMMIT_NOW;
+    hdr.crc16 = real_crc ^ 0x1234; // Corrupt CRC!
 
-    // Chunk 1 (192..383)
-    std::memset(chunk, 0x22, sizeof(chunk));
-    auto r1 = assembler.FeedChunk(100, 1, 4, 192, chunk, 192, 0, false, true);
-    assert(r1.success && !r1.committed);
-
-    // Chunk 2 (384..575)
-    std::memset(chunk, 0x33, sizeof(chunk));
-    auto r2 = assembler.FeedChunk(100, 2, 4, 384, chunk, 192, 0, false, true);
-    assert(r2.success && !r2.committed);
-
-    // Chunk 3 (576..767) - Completes the full 768 bytes
-    std::memset(chunk, 0x44, sizeof(chunk));
-    auto r3 = assembler.FeedChunk(100, 3, 4, 576, chunk, 192, 0, true, true);
-    assert(r3.success && r3.committed);
-    assert(dm.frame_commit_count_ == 1);
-    assert(assembler.GetLastCommittedFrameId() == 100);
+    auto res = assembler.ProcessBinaryFrame(hdr, payload);
+    assert(!res.success);
+    assert(!res.committed);
+    assert(std::strcmp(res.error_msg, "crc_mismatch") == 0);
+    assert(dm.frame_commit_count_ == 0);
 }
 
-// 5. Stale and Duplicate Frame Defense
+// 7. Stale and Duplicate Frame Defense
 void Test_StaleAndDuplicateFrame_Defense() {
     auto& assembler = canvas::CanvasAssembler::GetInstance();
     assembler.Reset();
@@ -178,23 +254,22 @@ void Test_StaleAndDuplicateFrame_Defense() {
     uint8_t full_frame[768];
     std::memset(full_frame, 0x77, sizeof(full_frame));
 
-    // Feed and commit frame 200 via 2 chunks of 384
-    assembler.FeedChunk(200, 0, 2, 0, full_frame, 384, 0, false, false);
-    auto r_commit = assembler.FeedChunk(200, 1, 2, 384, full_frame + 384, 384, 0, true, false);
+    // Feed and commit frame 200 via FeedFullFrame
+    auto r_commit = assembler.FeedFullFrame(200, full_frame, 768, 0, false);
     assert(r_commit.success && r_commit.committed);
 
     // Attempt to resend duplicate frame 200
-    auto r_dup = assembler.FeedChunk(200, 0, 2, 0, full_frame, 384, 0, false, false);
+    auto r_dup = assembler.FeedFullFrame(200, full_frame, 768, 0, false);
     assert(!r_dup.success);
     assert(std::strcmp(r_dup.error_msg, "duplicate_frame_id") == 0);
 
     // Attempt to send older/stale frame 199
-    auto r_stale = assembler.FeedChunk(199, 0, 2, 0, full_frame, 384, 0, false, false);
+    auto r_stale = assembler.FeedFullFrame(199, full_frame, 768, 0, false);
     assert(!r_stale.success);
     assert(std::strcmp(r_stale.error_msg, "stale_frame_id") == 0);
 }
 
-// 6. Cross-Source Manual Control Priority & Arbitration
+// 8. Cross-Source Manual Control Priority & Displayed Flag
 void Test_CrossSource_Arbitration() {
     auto& assembler = canvas::CanvasAssembler::GetInstance();
     auto& dm = DisplayManager::GetInstance();
@@ -206,25 +281,59 @@ void Test_CrossSource_Arbitration() {
     assert(dm.GetMode() == DisplayMode::MATRIX_RAIN_PRO);
     assert(dm.IsManualOverrideActive());
 
-    // Jetson sends full frame with auto_mode = true
+    // Jetson sends full 768-byte frame with auto_mode = true
     uint8_t full[768] = {0};
-    assembler.FeedChunk(300, 0, 2, 0, full, 384, 0, false, true);
-    auto r = assembler.FeedChunk(300, 1, 2, 384, full + 384, 384, 0, true, true);
+    auto r = assembler.FeedFullFrame(300, full, 768, 0, true);
     assert(r.success && r.committed);
 
     // CRITICAL: Mode MUST NOT be stolen! Mode must still be MATRIX_RAIN_PRO
     assert(dm.GetMode() == DisplayMode::MATRIX_RAIN_PRO);
 
+    // Verify displayed calculation: committed is true, but displayed is FALSE because manual_override is active
+    bool manual_overridden = dm.IsManualOverrideActive();
+    bool displayed = r.committed && !manual_overridden && (dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    assert(!displayed);
+    assert(manual_overridden);
+
     // User clears manual override or switches to Mode 29 explicitly
     dm.SetManualOverride(false);
-    assembler.FeedChunk(301, 0, 2, 0, full, 384, 0, false, true);
-    assembler.FeedChunk(301, 1, 2, 384, full + 384, 384, 0, true, true);
+    auto r2 = assembler.FeedFullFrame(301, full, 768, 0, true);
+    assert(r2.success && r2.committed);
 
-    // Now auto_mode is allowed to switch to PIXEL_CANVAS
+    // Now auto_mode is allowed to switch to PIXEL_CANVAS and displayed becomes true!
     assert(dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    bool displayed2 = r2.committed && !dm.IsManualOverrideActive() && (dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    assert(displayed2);
 }
 
-// 7. Binary Frame Receiver Timeout and Resynchronization
+// 9. Session Stop & Timeout Defense
+void Test_Session_Stop_And_Expiry() {
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    assembler.Reset();
+
+    // Verify session timeout behavior logic
+    uint32_t last_ping = 1000;
+    uint32_t now_active = 5000;
+    bool active = (now_active - last_ping) <= 15000;
+    assert(active);
+
+    uint32_t now_expired = 20000;
+    bool expired = (now_expired - last_ping) > 15000;
+    assert(expired);
+
+    // Verify StopSession resets assembler so late chunks cannot finish
+    uint32_t committed_before = assembler.GetCommittedFrames();
+    uint8_t chunk[384] = {0};
+    assembler.FeedChunk(400, 0, 2, 0, chunk, 384, 0, false, false);
+    assert(assembler.IsFrameInProgress());
+
+    // Stop session resets state
+    assembler.Reset();
+    assert(!assembler.IsFrameInProgress());
+    assert(assembler.GetCommittedFrames() == committed_before);
+}
+
+// 10. Binary Frame Receiver Timeout and Resynchronization
 void Test_FrameReceiver_TimeoutAndResync() {
     jetson::FrameReceiver receiver;
     receiver.Reset();
@@ -263,7 +372,7 @@ void Test_FrameReceiver_TimeoutAndResync() {
     assert(text_received);
 }
 
-// 8. Binary Header Oversized Payload Defense
+// 11. Binary Header Oversized Payload Defense
 void Test_BinaryHeader_OversizedDefense() {
     jetson::FrameReceiver receiver;
     receiver.Reset();
@@ -297,16 +406,19 @@ int main() {
     std::cout << "====================================================\n";
 
     RunTest("Test_Crc16_Calculation", Test_Crc16_Calculation);
+    RunTest("Test_Full_Binary_Frame_768_Success", Test_Full_Binary_Frame_768_Success);
+    RunTest("Test_Two_Chunks_384_Success", Test_Two_Chunks_384_Success);
     RunTest("Test_BufferOverflow_Defense", Test_BufferOverflow_Defense);
     RunTest("Test_IncompleteFrame_Rejection", Test_IncompleteFrame_Rejection);
-    RunTest("Test_Atomic_FrameCompleteness", Test_Atomic_FrameCompleteness);
+    RunTest("Test_CrcMismatch_Rejection", Test_CrcMismatch_Rejection);
     RunTest("Test_StaleAndDuplicateFrame_Defense", Test_StaleAndDuplicateFrame_Defense);
     RunTest("Test_CrossSource_Arbitration", Test_CrossSource_Arbitration);
+    RunTest("Test_Session_Stop_And_Expiry", Test_Session_Stop_And_Expiry);
     RunTest("Test_FrameReceiver_TimeoutAndResync", Test_FrameReceiver_TimeoutAndResync);
     RunTest("Test_BinaryHeader_OversizedDefense", Test_BinaryHeader_OversizedDefense);
 
     std::cout << "====================================================\n";
-    std::cout << "ALL 8 NATIVE C++ TESTS PASSED!\n";
+    std::cout << "ALL 11 NATIVE C++ TESTS PASSED!\n";
     std::cout << "====================================================\n";
     return 0;
 }

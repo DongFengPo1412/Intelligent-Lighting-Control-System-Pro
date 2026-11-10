@@ -186,15 +186,19 @@ class JetsonUartParser:
                 }
             self.canvas_buffer[:] = payload
             self.system_state["canvas_frames"] += 1
-            if auto_mode:
+            if auto_mode and not self.system_state.get("manual_override", False):
                 self.system_state["mode"] = 29
                 self.system_state["canvas_active"] = True
+            manual_overridden = self.system_state.get("manual_override", False)
+            displayed = not manual_overridden and (self.system_state.get("mode") == 29)
             return {
                 "status": "ok",
                 "type": "bin_frame",
                 "frame_id": seq,
                 "committed": True,
+                "displayed": displayed,
                 "received_bytes": 768,
+                "mode_overridden": manual_overridden,
             }
 
         elif b_type == BIN_CHUNK_FRAME:
@@ -211,25 +215,31 @@ class JetsonUartParser:
 
             complete = all(self.canvas_received)
             should_commit = commit_now or complete
+            manual_overridden = self.system_state.get("manual_override", False)
             if should_commit:
                 self.system_state["canvas_frames"] += 1
-                if auto_mode:
+                if auto_mode and not manual_overridden:
                     self.system_state["mode"] = 29
                     self.system_state["canvas_active"] = True
                 self.canvas_received = bytearray(768)
+                displayed = not manual_overridden and (self.system_state.get("mode") == 29)
                 return {
                     "status": "ok",
                     "type": "bin_frame",
                     "frame_id": seq,
                     "committed": True,
+                    "displayed": displayed,
                     "received_bytes": 768,
+                    "mode_overridden": manual_overridden,
                 }
             return {
                 "status": "ok",
                 "type": "bin_frame",
                 "frame_id": seq,
                 "committed": False,
+                "displayed": False,
                 "received_bytes": sum(self.canvas_received),
+                "mode_overridden": manual_overridden,
             }
 
         elif b_type == BIN_SINGLE_PIXEL:
@@ -377,6 +387,8 @@ class JetsonUartParser:
                 return with_req_id({"status": "error", "error": "unknown_session_action"})
 
             elif cmd_lower == "canvas_chunk":
+                if self.system_state.get("session_id") and not self.system_state.get("session_active", True):
+                    return with_req_id({"status": "error", "error": "session_expired", "committed": False, "displayed": False})
                 frame_id = parsed.get("frame_id", parsed.get("frame", 0))
                 chunk_idx = parsed.get("chunk_idx", parsed.get("chunk", 0))
                 total_chunks = parsed.get("total_chunks", parsed.get("total", 1))
@@ -413,19 +425,22 @@ class JetsonUartParser:
                 if commit_now and not complete:
                     return with_req_id({"status": "error", "error": "incomplete_frame_premature_commit"})
 
+                manual_overridden = self.system_state.get("manual_override", False)
                 if complete:
                     self.system_state["canvas_frames"] += 1
-                    if auto_mode and not self.system_state.get("manual_override", False):
+                    if auto_mode and not manual_overridden:
                         self.system_state["mode"] = 29
                         self.system_state["canvas_active"] = True
                     self.canvas_received = bytearray(768)
+                    displayed = not manual_overridden and (self.system_state.get("mode") == 29)
                     return with_req_id({
                         "status": "ok",
                         "frame_id": frame_id,
                         "chunk_idx": chunk_idx,
                         "committed": True,
+                        "displayed": displayed,
                         "received_bytes": 768,
-                        "mode_overridden": self.system_state.get("manual_override", False),
+                        "mode_overridden": manual_overridden,
                     })
 
                 return with_req_id({
@@ -433,8 +448,9 @@ class JetsonUartParser:
                     "frame_id": frame_id,
                     "chunk_idx": chunk_idx,
                     "committed": False,
+                    "displayed": False,
                     "received_bytes": sum(self.canvas_received),
-                    "mode_overridden": self.system_state.get("manual_override", False),
+                    "mode_overridden": manual_overridden,
                 })
 
             elif cmd_lower in ("clear_canvas", "canvas_clear"):
@@ -498,18 +514,37 @@ class JetsonUartParser:
                     "difficulty", "performance", "mir", "pixel", "canvas", "gamma"
                 }
                 if cmd_lower in allowed_json:
+                    if self.system_state.get("session_id") and not self.system_state.get("session_active", True):
+                        if cmd_lower in ("track", "hand", "pet_context", "face", "track_cal"):
+                            return with_req_id({"status": "error", "error": "session_expired", "executed": False})
+
                     if cmd_lower == "mode":
                         val = parsed.get("val", parsed.get("mode"))
                         if val is not None:
-                            self.system_state["mode"] = int(val)
-                            self.system_state["canvas_active"] = (int(val) == 29)
+                            val_int = int(val)
+                            if self.system_state.get("manual_override", False):
+                                return with_req_id({
+                                    "status": "ok",
+                                    "executed": False,
+                                    "mode_overridden": True,
+                                    "current_mode": self.system_state.get("mode", 17),
+                                })
+                            self.system_state["mode"] = val_int
+                            self.system_state["canvas_active"] = (val_int == 29)
+                            return with_req_id({
+                                "status": "ok",
+                                "executed": True,
+                                "mode_overridden": False,
+                                "mode": val_int,
+                            })
                     elif cmd_lower in ("brightness", "b"):
                         val = parsed.get("val", parsed.get("brightness"))
                         if val is not None:
                             self.system_state["brightness"] = int(val)
                     elif cmd_lower in ("pixel", "canvas") and parsed.get("auto_mode"):
-                        self.system_state["mode"] = 29
-                        self.system_state["canvas_active"] = True
+                        if not self.system_state.get("manual_override", False):
+                            self.system_state["mode"] = 29
+                            self.system_state["canvas_active"] = True
                     self.dispatched_commands.append(line)
                     return with_req_id({"status": "ok", "executed": True})
                 else:
@@ -883,6 +918,108 @@ class TestJetsonUartProtocol(unittest.TestCase):
         self.assertEqual(replies[0]["type"], "bin_frame")
         self.assertEqual(replies[0]["frame_id"], 99)
         self.assertTrue(replies[0]["committed"])
+        self.assertTrue(replies[0]["displayed"])
+
+    def test_21_binary_frame_displayed_flag_and_overridden(self):
+        from protocol import pack_binary_frame, BIN_FULL_FRAME
+        payload = bytes([120] * 768)
+        pkt = pack_binary_frame(BIN_FULL_FRAME, frame_seq=100, payload=payload, offset=0, commit_now=True, auto_mode=True)
+
+        # 1. Under manual override: committed is True, but displayed is False
+        self.parser.system_state["manual_override"] = True
+        self.parser.system_state["mode"] = 5
+        replies = self.parser.feed_bytes(pkt)
+        self.assertEqual(len(replies), 1)
+        self.assertTrue(replies[0]["committed"])
+        self.assertFalse(replies[0]["displayed"])
+        self.assertTrue(replies[0]["mode_overridden"])
+        self.assertEqual(self.parser.system_state["mode"], 5)
+
+        # 2. When override released: committed is True AND displayed is True
+        self.parser.system_state["manual_override"] = False
+        pkt2 = pack_binary_frame(BIN_FULL_FRAME, frame_seq=101, payload=payload, offset=0, commit_now=True, auto_mode=True)
+        replies2 = self.parser.feed_bytes(pkt2)
+        self.assertEqual(len(replies2), 1)
+        self.assertTrue(replies2[0]["committed"])
+        self.assertTrue(replies2[0]["displayed"])
+        self.assertFalse(replies2[0]["mode_overridden"])
+        self.assertEqual(self.parser.system_state["mode"], 29)
+
+    def test_22_jetson_mode_command_does_not_set_manual_override(self):
+        # Jetson sets mode 26 (fingertip)
+        cmd = json.dumps({"cmd": "mode", "mode": 26}) + "\n"
+        replies = self.parser.feed_bytes(cmd.encode())
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(replies[0]["status"], "ok")
+        self.assertTrue(replies[0]["executed"])
+        self.assertFalse(replies[0]["mode_overridden"])
+        self.assertEqual(self.parser.system_state["mode"], 26)
+        # Verify manual_override remains False!
+        self.assertFalse(self.parser.system_state.get("manual_override", False))
+
+        # Now simulate user manual override (Mode 1 - Rainbow Wave)
+        self.parser.system_state["manual_override"] = True
+        self.parser.system_state["mode"] = 1
+
+        # Jetson tries to change mode to 27 (sandbox)
+        cmd2 = json.dumps({"cmd": "mode", "mode": 27}) + "\n"
+        replies2 = self.parser.feed_bytes(cmd2.encode())
+        self.assertEqual(len(replies2), 1)
+        self.assertFalse(replies2[0]["executed"])
+        self.assertTrue(replies2[0]["mode_overridden"])
+        # Mode remains 1! Jetson cannot steal display from user
+        self.assertEqual(self.parser.system_state["mode"], 1)
+
+    def test_23_session_expired_rejects_visual_data(self):
+        # Configure session then mark inactive
+        self.parser.system_state["session_id"] = "session_xyz"
+        self.parser.system_state["session_active"] = False
+
+        # Visual tracking command rejected
+        cmd = json.dumps({"cmd": "track", "x": 0.5, "y": 0.5}) + "\n"
+        replies = self.parser.feed_bytes(cmd.encode())
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(replies[0]["status"], "error")
+        self.assertEqual(replies[0]["error"], "session_expired")
+
+        # Canvas chunk rejected
+        cmd2 = json.dumps({"cmd": "canvas_chunk", "frame_id": 1, "offset": 0, "hex": "11" * 100}) + "\n"
+        replies2 = self.parser.feed_bytes(cmd2.encode())
+        self.assertEqual(len(replies2), 1)
+        self.assertEqual(replies2[0]["status"], "error")
+        self.assertEqual(replies2[0]["error"], "session_expired")
+
+    def test_24_streamer_is_displayed_and_is_overridden_properties(self):
+        from canvas_stream import CanvasStreamer
+
+        class MockTransport:
+            def __init__(self):
+                self.mock_reply = None
+            def send_raw_with_ack(self, pkt, expected_frame_seq, timeout=1.0):
+                return self.mock_reply
+
+        mock_tr = MockTransport()
+        streamer = CanvasStreamer(mock_tr)
+
+        # Case A: Board replies committed=True, displayed=False, mode_overridden=True
+        mock_tr.mock_reply = {"status": "ok", "committed": True, "displayed": False, "mode_overridden": True}
+        colors = [(255, 0, 0)] * 256
+        ok = streamer.send_binary_frame(colors, auto_mode=True, require_displayed=False)
+        self.assertTrue(ok)
+        self.assertTrue(streamer.is_committed)
+        self.assertFalse(streamer.is_displayed)
+        self.assertTrue(streamer.is_overridden)
+
+        # With require_displayed=True, must return False!
+        ok_disp = streamer.send_binary_frame(colors, auto_mode=True, require_displayed=True)
+        self.assertFalse(ok_disp)
+
+        # Case B: Board replies committed=True, displayed=True, mode_overridden=False
+        mock_tr.mock_reply = {"status": "ok", "committed": True, "displayed": True, "mode_overridden": False}
+        ok2 = streamer.send_binary_frame(colors, auto_mode=True, require_displayed=True)
+        self.assertTrue(ok2)
+        self.assertTrue(streamer.is_displayed)
+        self.assertFalse(streamer.is_overridden)
 
 
 if __name__ == "__main__":

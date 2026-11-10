@@ -261,6 +261,7 @@ void JetsonUart::StartSession() {
 void JetsonUart::StopSession() {
     session_active_ = false;
     ReleaseHeldKeys();
+    canvas::CanvasAssembler::GetInstance().Reset();
 }
 
 void JetsonUart::PingSession() {
@@ -287,15 +288,41 @@ void JetsonUart::ProcessBinaryFrame(const canvas::BinaryHeader& header, const ui
     if (!out_reply || out_reply_size == 0) return;
     out_reply[0] = '\0';
 
+    JetsonUart& ju = GetInstance();
+    // Inactive or expired session defense: if an explicit session was configured and is no longer active
+    if (ju.session_id_[0] != '\0' && !ju.IsSessionActive()) {
+        cJSON* resp = cJSON_CreateObject();
+        cJSON_AddStringToObject(resp, "status", "error");
+        cJSON_AddStringToObject(resp, "type", "bin_frame");
+        cJSON_AddNumberToObject(resp, "frame_id", header.frame_seq);
+        cJSON_AddBoolToObject(resp, "committed", false);
+        cJSON_AddBoolToObject(resp, "displayed", false);
+        cJSON_AddNumberToObject(resp, "received_bytes", 0);
+        cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
+        cJSON_AddStringToObject(resp, "error", "session_expired");
+        char* rendered = cJSON_PrintUnformatted(resp);
+        if (rendered) {
+            snprintf(out_reply, out_reply_size, "%s", rendered);
+            cJSON_free(rendered);
+        }
+        cJSON_Delete(resp);
+        return;
+    }
+
     auto res = canvas::CanvasAssembler::GetInstance().ProcessBinaryFrame(header, payload);
+
+    DisplayManager& dm = DisplayManager::GetInstance();
+    bool manual_overridden = dm.IsManualOverrideActive();
+    bool displayed = res.committed && !manual_overridden && (dm.GetMode() == DisplayMode::PIXEL_CANVAS);
 
     cJSON* resp = cJSON_CreateObject();
     cJSON_AddStringToObject(resp, "status", res.success ? "ok" : "error");
     cJSON_AddStringToObject(resp, "type", "bin_frame");
     cJSON_AddNumberToObject(resp, "frame_id", res.frame_id);
     cJSON_AddBoolToObject(resp, "committed", res.committed);
+    cJSON_AddBoolToObject(resp, "displayed", displayed);
     cJSON_AddNumberToObject(resp, "received_bytes", res.received_bytes);
-    cJSON_AddBoolToObject(resp, "mode_overridden", DisplayManager::GetInstance().IsManualOverrideActive());
+    cJSON_AddBoolToObject(resp, "mode_overridden", manual_overridden);
     if (!res.success && res.error_msg) {
         cJSON_AddStringToObject(resp, "error", res.error_msg);
     }
@@ -511,7 +538,58 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                 cJSON_free(rendered);
             }
             cJSON_Delete(resp);
+        } else if (!strcasecmp(cmd, "mode")) {
+            cJSON* val_item = cJSON_GetObjectItemCaseSensitive(root, "val");
+            if (!val_item) val_item = cJSON_GetObjectItemCaseSensitive(root, "mode");
+            cJSON* resp = cJSON_CreateObject();
+            if (!val_item || !cJSON_IsNumber(val_item)) {
+                cJSON_AddStringToObject(resp, "status", "error");
+                cJSON_AddStringToObject(resp, "error", "missing_mode");
+                cJSON_AddBoolToObject(resp, "executed", false);
+            } else {
+                int m = val_item->valueint;
+                DisplayManager& dm = DisplayManager::GetInstance();
+                bool overridden = dm.IsManualOverrideActive();
+                if (overridden) {
+                    // Suppressed by active manual control from PC/mobile user
+                    cJSON_AddStringToObject(resp, "status", "ok");
+                    cJSON_AddBoolToObject(resp, "executed", false);
+                    cJSON_AddBoolToObject(resp, "mode_overridden", true);
+                    cJSON_AddNumberToObject(resp, "current_mode", static_cast<int>(dm.GetMode()));
+                } else {
+                    dm.SetMode(m);
+                    // Crucial: Jetson autonomous mode change does NOT trigger manual override
+                    cJSON_AddStringToObject(resp, "status", "ok");
+                    cJSON_AddBoolToObject(resp, "executed", true);
+                    cJSON_AddBoolToObject(resp, "mode_overridden", false);
+                    cJSON_AddNumberToObject(resp, "mode", m);
+                }
+            }
+            append_req_id(resp);
+            char* rendered = cJSON_PrintUnformatted(resp);
+            if (rendered) {
+                snprintf(out_reply, out_reply_size, "%s", rendered);
+                cJSON_free(rendered);
+            }
+            cJSON_Delete(resp);
         } else if (!strcasecmp(cmd, "canvas_chunk")) {
+            JetsonUart& ju = GetInstance();
+            if (ju.session_id_[0] != '\0' && !ju.IsSessionActive()) {
+                cJSON* resp = cJSON_CreateObject();
+                cJSON_AddStringToObject(resp, "status", "error");
+                cJSON_AddStringToObject(resp, "error", "session_expired");
+                cJSON_AddBoolToObject(resp, "committed", false);
+                cJSON_AddBoolToObject(resp, "displayed", false);
+                append_req_id(resp);
+                char* rendered = cJSON_PrintUnformatted(resp);
+                if (rendered) {
+                    snprintf(out_reply, out_reply_size, "%s", rendered);
+                    cJSON_free(rendered);
+                }
+                cJSON_Delete(resp);
+                cJSON_Delete(root);
+                return;
+            }
             auto* frame_item = cJSON_GetObjectItemCaseSensitive(root, "frame_id");
             if (!frame_item) frame_item = cJSON_GetObjectItemCaseSensitive(root, "frame");
             auto* chunk_item = cJSON_GetObjectItemCaseSensitive(root, "chunk_idx");
@@ -584,10 +662,14 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                             expected_crc, commit_now, auto_mode
                         );
 
+                        DisplayManager& dm = DisplayManager::GetInstance();
+                        bool displayed = res.committed && !manual_overridden && (dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+
                         cJSON_AddStringToObject(resp, "status", res.success ? "ok" : "error");
                         cJSON_AddNumberToObject(resp, "frame_id", res.frame_id);
                         cJSON_AddNumberToObject(resp, "chunk_idx", chunk_idx);
                         cJSON_AddBoolToObject(resp, "committed", res.committed);
+                        cJSON_AddBoolToObject(resp, "displayed", displayed);
                         cJSON_AddNumberToObject(resp, "received_bytes", res.received_bytes);
                         cJSON_AddBoolToObject(resp, "mode_overridden", manual_overridden);
                         if (!res.success && res.error_msg) {
@@ -662,7 +744,7 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                     }
                 }
 
-                bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
+                bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true, false);
                 cJSON* resp = cJSON_CreateObject();
                 cJSON_AddStringToObject(resp, "status", ok ? "ok" : "error");
                 cJSON_AddBoolToObject(resp, "executed", ok);
@@ -721,9 +803,31 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
                     }
                 }
 
+                // If explicit session is configured and expired, reject visual tracking commands
+                JetsonUart& ju = GetInstance();
+                if (ju.session_id_[0] != '\0' && !ju.IsSessionActive()) {
+                    if (!strcasecmp(cmd, "track") || !strcasecmp(cmd, "hand") ||
+                        !strcasecmp(cmd, "pet_context") || !strcasecmp(cmd, "face") ||
+                        !strcasecmp(cmd, "track_cal")) {
+                        cJSON* resp = cJSON_CreateObject();
+                        cJSON_AddStringToObject(resp, "status", "error");
+                        cJSON_AddStringToObject(resp, "error", "session_expired");
+                        cJSON_AddBoolToObject(resp, "executed", false);
+                        append_req_id(resp);
+                        char* rendered = cJSON_PrintUnformatted(resp);
+                        if (rendered) {
+                            snprintf(out_reply, out_reply_size, "%s", rendered);
+                            cJSON_free(rendered);
+                        }
+                        cJSON_Delete(resp);
+                        cJSON_Delete(root);
+                        return;
+                    }
+                }
+
                 bool ok = false;
                 if (allowed) {
-                    ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
+                    ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true, false);
                 }
 
                 cJSON* resp = cJSON_CreateObject();
@@ -797,7 +901,7 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
         }
 
         if (allowed) {
-            bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true);
+            bool ok = CommandDispatcher::GetInstance().ProcessLine(line, false, true, false);
             if (ok) {
                 snprintf(out_reply, out_reply_size, "{\"status\":\"ok\",\"executed\":true,\"cmd\":\"%s\"}", line);
             } else {

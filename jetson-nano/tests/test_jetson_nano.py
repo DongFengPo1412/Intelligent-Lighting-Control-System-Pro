@@ -112,5 +112,36 @@ class TestVisionMapper(unittest.TestCase):
         self.assertEqual(self.mapper.last_arcade_keys, 0)
 
 
+class TestCanvasStreamerAck(unittest.TestCase):
+    def test_streamer_ack_distinction(self):
+        from canvas_stream import CanvasStreamer
+
+        class FakeTransport:
+            def __init__(self, reply):
+                self.reply = reply
+            def send_raw_with_ack(self, pkt, expected_frame_seq, timeout=1.0):
+                return self.reply
+            def send_line(self, line, wait_reply=True):
+                return self.reply
+
+        # When overridden by user manual control
+        tr_overridden = FakeTransport({"status": "ok", "committed": True, "displayed": False, "mode_overridden": True})
+        st1 = CanvasStreamer(tr_overridden)
+        dummy_colors = [(0, 0, 0)] * 256
+        ok1 = st1.send_binary_frame(dummy_colors, auto_mode=True, require_displayed=False)
+        self.assertTrue(ok1)
+        self.assertTrue(st1.is_committed)
+        self.assertFalse(st1.is_displayed)
+        self.assertTrue(st1.is_overridden)
+
+        # When actively rendered to matrix
+        tr_displayed = FakeTransport({"status": "ok", "committed": True, "displayed": True, "mode_overridden": False})
+        st2 = CanvasStreamer(tr_displayed)
+        ok2 = st2.send_binary_frame(dummy_colors, auto_mode=True, require_displayed=True)
+        self.assertTrue(ok2)
+        self.assertTrue(st2.is_displayed)
+        self.assertFalse(st2.is_overridden)
+
+
 if __name__ == "__main__":
     unittest.main()

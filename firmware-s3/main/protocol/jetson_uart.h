@@ -259,7 +259,12 @@ public:
     void SetSession(const char* session_id);
     void ClearSession();
     const char* GetSessionId() const { return session_id_; }
-    bool IsSessionActive() const { return session_active_; }
+    bool IsSessionActive() const {
+        if (!session_active_) return false;
+        uint32_t now = get_current_millis();
+        if (now - last_session_ping_ms_ > 15000) return false;
+        return true;
+    }
     void StartSession();
     void StopSession();
     void PingSession();

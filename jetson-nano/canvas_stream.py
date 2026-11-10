@@ -16,6 +16,25 @@ class CanvasStreamer:
     def __init__(self, transport):
         self.transport = transport
         self.frame_seq = 0
+        self.last_reply = None
+        self.last_committed = False
+        self.last_displayed = False
+        self.last_overridden = False
+
+    @property
+    def is_displayed(self) -> bool:
+        """Returns True if the last frame was actually displayed on the LED matrix (not overridden)."""
+        return self.last_displayed
+
+    @property
+    def is_committed(self) -> bool:
+        """Returns True if the last frame was received and assembled into canvas memory."""
+        return self.last_committed
+
+    @property
+    def is_overridden(self) -> bool:
+        """Returns True if user manual control suppressed the canvas frame from becoming active on display."""
+        return self.last_overridden
 
     def send_pixel(self, x: int, y: int, r: int, g: int, b: int, auto_mode: bool = True) -> bool:
         cmd = CommandBuilder.pixel(x, y, r, g, b, auto_mode=auto_mode)
@@ -23,9 +42,16 @@ class CanvasStreamer:
         return reply is not None and reply.get("status") == "ok"
 
     def send_binary_frame(
-        self, colors: List[ColorRGB], auto_mode: bool = True, timeout: float = 1.0
+        self, colors: List[ColorRGB], auto_mode: bool = True, timeout: float = 1.0, require_displayed: bool = False
     ) -> bool:
-        """Sends full 16x16 frame (768 bytes) in a single high-speed binary packet and verifies ESP32 commit ACK."""
+        """Sends full 16x16 frame (768 bytes) in a single high-speed binary packet and verifies ESP32 commit ACK.
+        
+        Args:
+            colors: 256 RGB tuples
+            auto_mode: whether to switch display to Mode 29 if not overridden
+            timeout: response timeout in seconds
+            require_displayed: if True, returns True only if the frame was actually rendered to the display
+        """
         if len(colors) != 256:
             raise ValueError(f"Expected exactly 256 pixels, got {len(colors)}")
 
@@ -49,11 +75,23 @@ class CanvasStreamer:
             packet, expected_frame_seq=self.frame_seq, timeout=timeout
         )
         if not reply:
+            self.last_reply = None
+            self.last_committed = False
+            self.last_displayed = False
+            self.last_overridden = False
             return False
-        return reply.get("status") == "ok" and reply.get("committed", False) is True
+
+        self.last_reply = reply
+        self.last_committed = (reply.get("status") == "ok" and reply.get("committed", False) is True)
+        self.last_overridden = bool(reply.get("mode_overridden", False))
+        self.last_displayed = bool(reply.get("displayed", self.last_committed and not self.last_overridden))
+
+        if require_displayed:
+            return self.last_displayed
+        return self.last_committed
 
     def send_chunked_frame(
-        self, colors: List[ColorRGB], chunk_count: int = 2, auto_mode: bool = True
+        self, colors: List[ColorRGB], chunk_count: int = 2, auto_mode: bool = True, require_displayed: bool = False
     ) -> bool:
         """Sends full 16x16 frame as chunked JSON lines (portable text protocol)."""
         if len(colors) != 256:
@@ -69,6 +107,7 @@ class CanvasStreamer:
 
         chunk_size = 768 // chunk_count
         all_ok = True
+        last_reply = None
 
         for chunk_idx in range(chunk_count):
             offset = chunk_idx * chunk_size
@@ -85,12 +124,25 @@ class CanvasStreamer:
                 auto_mode=auto_mode,
             )
             reply = self.transport.send_line(cmd, wait_reply=True)
+            last_reply = reply
             if not reply or reply.get("status") != "ok":
                 all_ok = False
             if commit and (not reply or not reply.get("committed")):
                 all_ok = False
 
-        return all_ok
+        self.last_reply = last_reply
+        if last_reply:
+            self.last_committed = (all_ok and last_reply.get("committed", False) is True)
+            self.last_overridden = bool(last_reply.get("mode_overridden", False))
+            self.last_displayed = bool(last_reply.get("displayed", self.last_committed and not self.last_overridden))
+        else:
+            self.last_committed = False
+            self.last_overridden = False
+            self.last_displayed = False
+
+        if require_displayed:
+            return all_ok and self.last_displayed
+        return all_ok and self.last_committed
 
     def clear(self, r: int = 0, g: int = 0, b: int = 0, auto_mode: bool = False) -> bool:
         cmd = CommandBuilder.clear_canvas(r, g, b, auto_mode=auto_mode)

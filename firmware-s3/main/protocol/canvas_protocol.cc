@@ -1,5 +1,7 @@
 #include "canvas_protocol.h"
+#if !defined(HOST_TEST)
 #include "display_manager.h"
+#endif
 #include <string.h>
 
 #if !defined(ESP_PLATFORM)
@@ -92,8 +94,11 @@ FeedResult CanvasAssembler::FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uin
         return {false, false, frame_id, bytes_received_, "empty_chunk"};
     }
 
-    // 1. Chunk boundary and parameters validation (max chunk size 384, full frame 768)
-    if (len > 384 || offset + len > kFrameSizeBytes) {
+    // 1. Chunk boundary and parameters validation:
+    // Chunks must be <= 384 bytes. As a compatibility fallback, an atomic 768-byte full frame
+    // (total_chunks == 1, chunk_idx == 0, offset == 0, len == kFrameSizeBytes) is also permitted.
+    bool is_atomic_full_frame = (total_chunks == 1 && chunk_idx == 0 && offset == 0 && len == kFrameSizeBytes);
+    if (!is_atomic_full_frame && (len > 384 || offset + len > kFrameSizeBytes)) {
         bounds_errors_++;
         return {false, false, frame_id, bytes_received_, "chunk_bounds_overflow"};
     }
@@ -151,6 +156,45 @@ FeedResult CanvasAssembler::FeedChunk(uint16_t frame_id, uint16_t chunk_idx, uin
     return {true, false, frame_id, bytes_received_, nullptr};
 }
 
+FeedResult CanvasAssembler::FeedFullFrame(uint16_t frame_id, const uint8_t* data, size_t len,
+                                          uint16_t expected_crc, bool auto_mode) {
+    if (!data || len != kFrameSizeBytes) {
+        bounds_errors_++;
+        return {false, false, frame_id, 0, "invalid_full_frame_length"};
+    }
+
+    if (expected_crc != 0) {
+        uint16_t actual_crc = CalculateCrc16(data, len);
+        if (actual_crc != expected_crc) {
+            crc_errors_++;
+            return {false, false, frame_id, 0, "crc_mismatch"};
+        }
+    }
+
+    // Stale & duplicate frame rejection
+    if (last_committed_frame_id_ != 0) {
+        if (frame_id == last_committed_frame_id_) {
+            return {false, false, frame_id, bytes_received_, "duplicate_frame_id"};
+        }
+        uint16_t age = last_committed_frame_id_ - frame_id;
+        if (age > 0 && age < 32768) {
+            return {false, false, frame_id, bytes_received_, "stale_frame_id"};
+        }
+    }
+
+    Reset();
+    current_frame_id_ = frame_id;
+    frame_start_time_ms_ = get_current_millis();
+    frame_in_progress_ = true;
+
+    memcpy(frame_buffer_, data, kFrameSizeBytes);
+    memset(byte_bitmap_, 0xFF, sizeof(byte_bitmap_));
+    bytes_received_ = kFrameSizeBytes;
+
+    CommitFrame(auto_mode);
+    return {true, true, frame_id, kFrameSizeBytes, nullptr};
+}
+
 FeedResult CanvasAssembler::ProcessBinaryFrame(const BinaryHeader& header, const uint8_t* payload) {
     if (header.magic[0] != kMagic0 || header.magic[1] != kMagic1 ||
         header.magic[2] != kMagic2 || header.magic[3] != kMagic3) {
@@ -173,7 +217,7 @@ FeedResult CanvasAssembler::ProcessBinaryFrame(const BinaryHeader& header, const
                     return {false, false, header.frame_seq, 0, "crc_mismatch"};
                 }
             }
-            return FeedChunk(header.frame_seq, 0, 1, 0, payload, header.payload_len, 0, true, auto_mode);
+            return FeedFullFrame(header.frame_seq, payload, header.payload_len, 0, auto_mode);
         }
 
         case BIN_CHUNK_FRAME: {

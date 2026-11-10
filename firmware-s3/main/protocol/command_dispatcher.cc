@@ -367,7 +367,7 @@ void CommandDispatcher::SendStatus()
     SendReply(status_buf);
 }
 
-bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial, bool is_authenticated)
+bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial, bool is_authenticated, bool is_manual_user)
 {
     if (!line || strlen(line) == 0) return false;
 
@@ -390,7 +390,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial, bool is
             const bool pair=cJSON_IsString(name) && !strcasecmp(name->valuestring,"pair");
             const bool status=cJSON_IsString(name) && !strcasecmp(name->valuestring,"status");
             const char* key=pair ? NetworkAuth::GetInstance().TokenForUsbPairing() : "";
-            const bool ok=usb_json_reply::ValidId(request) && (pair ? key[0]!=0 : request && ProcessJsonCommand(line,false,is_authenticated));
+            const bool ok=usb_json_reply::ValidId(request) && (pair ? key[0]!=0 : request && ProcessJsonCommand(line,false,is_authenticated,is_manual_user));
             cJSON* response=cJSON_CreateObject();
             cJSON_AddStringToObject(response,"status",ok?"ok":"error");
             if(pair && ok)cJSON_AddStringToObject(response,"control_token",key);
@@ -406,14 +406,14 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial, bool is
             cJSON_Delete(response);cJSON_Delete(request);
             return ok;
         }
-        if (ProcessJsonCommand(line, reply_serial, is_authenticated)) {
+        if (ProcessJsonCommand(line, reply_serial, is_authenticated, is_manual_user)) {
             if (reply_serial) SendReply("{\"status\":\"ok\"}\r\n");
             return true;
         }
     }
 
     // 3. 极速纯文本短语指令
-    if (*line != '{' && ProcessTextCommand(line, false, is_authenticated)) {
+    if (*line != '{' && ProcessTextCommand(line, false, is_authenticated, is_manual_user)) {
         if (reply_serial) {
             if(!strcasecmp(line,"status"))SendStatus();
             else SendReply("{\"status\":\"ok\"}\r\n");
@@ -426,7 +426,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial, bool is
     return false;
 }
 
-bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_serial, bool is_authenticated)
+bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_serial, bool is_authenticated, bool is_manual_user)
 {
     cJSON* root = cJSON_Parse(json_str);
     if (!root) {
@@ -523,8 +523,14 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
         cJSON* val_item = cJSON_GetObjectItem(root, "val");
         if (!val_item) val_item = cJSON_GetObjectItem(root, "mode");
         if (cJSON_IsNumber(val_item) && val_item->valuedouble == val_item->valueint && IsDirectDisplayMode(val_item->valueint)) {
+            if (!is_manual_user && dm.IsManualOverrideActive()) {
+                cJSON_Delete(root);
+                return false;
+            }
             dm.SetMode(val_item->valueint);
-            dm.SetManualOverride(val_item->valueint != static_cast<int>(DisplayMode::PIXEL_CANVAS));
+            if (is_manual_user) {
+                dm.SetManualOverride(val_item->valueint != static_cast<int>(DisplayMode::PIXEL_CANVAS));
+            }
             cJSON_Delete(root);
             return true;
         }
@@ -648,7 +654,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     return false;
 }
 
-bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_serial, bool is_authenticated)
+bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_serial, bool is_authenticated, bool is_manual_user)
 {
     DisplayManager& dm = DisplayManager::GetInstance();
 
@@ -669,15 +675,21 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     int mode_num = -1;
     if (sscanf(text_str, "mode %d", &mode_num) == 1) {
         if (!IsDirectDisplayMode(mode_num)) return false;
+        if (!is_manual_user && dm.IsManualOverrideActive()) return false;
         dm.SetMode(mode_num);
-        dm.SetManualOverride(mode_num != static_cast<int>(DisplayMode::PIXEL_CANVAS));
+        if (is_manual_user) {
+            dm.SetManualOverride(mode_num != static_cast<int>(DisplayMode::PIXEL_CANVAS));
+        }
         return true;
     }
 
     // 3. 模式快捷英文别名
     auto set_manual_mode = [&](DisplayMode m) {
+        if (!is_manual_user && dm.IsManualOverrideActive()) return false;
         dm.SetMode(m);
-        dm.SetManualOverride(m != DisplayMode::PIXEL_CANVAS);
+        if (is_manual_user) {
+            dm.SetManualOverride(m != DisplayMode::PIXEL_CANVAS);
+        }
         return true;
     };
     if (strcasecmp(text_str, "off") == 0)           { return set_manual_mode(DisplayMode::OFF); }

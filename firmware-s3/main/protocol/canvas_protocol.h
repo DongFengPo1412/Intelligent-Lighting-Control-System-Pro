@@ -89,6 +89,10 @@ public:
                          uint16_t offset, const uint8_t* data, size_t len,
                          uint16_t expected_crc = 0, bool commit_now = false, bool auto_mode = true);
 
+    // Full 768-byte atomic frame feed (high-speed single-shot delivery)
+    FeedResult FeedFullFrame(uint16_t frame_id, const uint8_t* data, size_t len,
+                             uint16_t expected_crc = 0, bool auto_mode = true);
+
     // Process complete binary frame according to header
     FeedResult ProcessBinaryFrame(const BinaryHeader& header, const uint8_t* payload);
 
