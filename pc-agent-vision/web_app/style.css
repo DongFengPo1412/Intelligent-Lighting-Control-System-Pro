@@ -4,6 +4,7 @@
   --surface: #1a1d22;
   --raised: #22262c;
   --line: #30343b;
+  --border-strong: #4e5561;
   --text: #f3eee8;
   --muted: #a0a3ac;
   --accent: #e39a8b;
@@ -11,6 +12,28 @@
   --lab-amber: #deb17e;
   --sidebar-bg: #15171b;
   --sidebar: 228px;
+
+  --input-bg: #15181d;
+  --input-border: #383d46;
+  --input-text: #f3eee8;
+  --input-placeholder: #727882;
+
+  --dialog-bg: #1e2127;
+  --dialog-border: #49404a;
+  --dialog-backdrop: #07080bd9;
+
+  --arcade-btn-bg: linear-gradient(140deg, #29242a, #1b2027);
+  --arcade-btn-border: var(--line);
+  --arcade-title: #f3eee8;
+  --arcade-desc: #c2bac2;
+  --arcade-btn-active-bg: linear-gradient(135deg, #48302f, #29222b);
+  --arcade-title-active: #f3eee8;
+  --arcade-desc-active: #e2dae2;
+
+  --mario-hud-bg: rgba(22, 30, 42, 0.95);
+  --mario-hud-border: #2b3949;
+  --mario-hud-text: #f3eee8;
+
   font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
@@ -20,13 +43,36 @@
   --surface: #ffffff;
   --raised: #e9e4dc;
   --line: #d8d0c5;
+  --border-strong: #8f857a;
   --text: #211e1c;
-  --muted: #6e675f;
-  --accent: #b84a3c;
-  --lab-red: #943c50;
+  --muted: #59534c;
+  --accent: #a8382a;
+  --lab-red: #a8382a;
   --lab-amber: #c48b4e;
   --sidebar-bg: #ece7e0;
+
+  --input-bg: #ffffff;
+  --input-border: #8f857a;
+  --input-text: #211e1c;
+  --input-placeholder: #59534c;
+
+  --dialog-bg: #ffffff;
+  --dialog-border: #8f857a;
+  --dialog-backdrop: rgba(33, 30, 28, 0.55);
+
+  --arcade-btn-bg: #fdfcfb;
+  --arcade-btn-border: #8f857a;
+  --arcade-title: #211e1c;
+  --arcade-desc: #59534c;
+  --arcade-btn-active-bg: #faede9;
+  --arcade-title-active: #211e1c;
+  --arcade-desc-active: #433d37;
+
+  --mario-hud-bg: #f5f2ee;
+  --mario-hud-border: #8f857a;
+  --mario-hud-text: #211e1c;
 }
+
 [data-theme="day"] body {
   background: radial-gradient(ellipse at 90% 0, #f6e6e8 0, transparent 45%), var(--bg);
 }
@@ -39,23 +85,513 @@
   border-bottom: 1px solid var(--line);
 }
 [data-theme="day"] .card {
+  background: var(--surface);
   border-color: var(--line);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
+[data-theme="day"] .card > .muted,
+[data-theme="day"] .card-heading .muted,
+[data-theme="day"] .page-heading .muted,
+[data-theme="day"] .muted {
+  color: var(--muted);
+}
 [data-theme="day"] .icon-button {
-  border-color: var(--line);
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface);
 }
 [data-theme="day"] .icon-button:hover {
   background: var(--raised);
+  border-color: var(--accent);
 }
 [data-theme="day"] .mobile-nav {
   background: var(--sidebar-bg);
   border-top: 1px solid var(--line);
 }
-[data-theme="day"] .modal {
+[data-theme="day"] .mobile-nav button {
+  color: var(--muted);
+}
+[data-theme="day"] .mobile-nav button.active {
+  color: var(--accent);
+}
+[data-theme="day"] .modal,
+[data-theme="day"] dialog {
+  background: var(--dialog-bg);
+  border: 1px solid var(--dialog-border);
+  color: var(--text);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+}
+[data-theme="day"] dialog::backdrop {
+  background: var(--dialog-backdrop);
+}
+[data-theme="day"] input,
+[data-theme="day"] select,
+[data-theme="day"] textarea {
+  color: var(--input-text);
+  background: var(--input-bg);
+  border-color: var(--input-border);
+}
+[data-theme="day"] input::placeholder,
+[data-theme="day"] textarea::placeholder {
+  color: var(--input-placeholder);
+}
+[data-theme="day"] input:focus-visible,
+[data-theme="day"] select:focus-visible,
+[data-theme="day"] textarea:focus-visible {
+  outline-color: var(--accent);
+}
+[data-theme="day"] .primary {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-theme="day"] .primary:hover {
+  background: #8e2f23;
+}
+[data-theme="day"] .secondary,
+[data-theme="day"] .file-label {
   background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .secondary:hover,
+[data-theme="day"] .file-label:hover {
+  background: var(--raised);
+  border-color: var(--accent);
+}
+[data-theme="day"] .quiet {
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .quiet:hover {
+  background: var(--line);
+}
+[data-theme="day"] .nav-item {
+  color: var(--text);
+}
+[data-theme="day"] .nav-item:hover {
+  background: var(--raised);
+}
+[data-theme="day"] .nav-item.active {
+  background: #faede9;
+  color: var(--accent);
+}
+[data-theme="day"] .nav-caption {
+  color: var(--muted);
+}
+[data-theme="day"] .segmented {
+  background: var(--raised);
+  border-color: var(--border-strong);
+}
+[data-theme="day"] .segmented button {
+  color: var(--muted);
+}
+[data-theme="day"] .segmented button.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+[data-theme="day"] .hero-card {
+  border-color: #d8a29b;
+  background:
+    radial-gradient(ellipse at 85% 35%, rgba(168, 56, 42, 0.12), transparent 65%),
+    linear-gradient(120deg, #faede9, #ffffff 70%);
+  box-shadow: 0 4px 20px rgba(168, 56, 42, 0.08);
+}
+[data-theme="day"] .character-tag {
+  color: var(--accent);
+}
+[data-theme="day"] .character-tag i {
+  background: var(--accent);
+}
+[data-theme="day"] .hero-copy h2 {
+  color: var(--text);
+}
+[data-theme="day"] .hero-copy h2 span {
+  color: var(--accent);
+}
+[data-theme="day"] .hero-copy > p,
+[data-theme="day"] .hero-footnote {
+  color: var(--muted);
+}
+[data-theme="day"] .hero-secondary {
+  color: var(--accent);
+}
+[data-theme="day"] .chat-message > span {
+  color: var(--muted);
+}
+[data-theme="day"] .chat-message p {
+  background: var(--bg);
   border: 1px solid var(--line);
   color: var(--text);
+}
+[data-theme="day"] .chat-message.user p {
+  background: #faede9;
+  border: 1px solid #d8a29b;
+  color: var(--text);
+}
+[data-theme="day"] .prompt-chips button {
+  background: var(--surface);
+  color: var(--muted);
+  border-color: var(--border-strong);
+}
+[data-theme="day"] .prompt-chips button:hover {
+  background: #faede9;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+[data-theme="day"] .chat-composer {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+[data-theme="day"] .chat-composer input {
+  color: var(--text);
+}
+[data-theme="day"] .chat-composer input::placeholder {
+  color: var(--muted);
+}
+[data-theme="day"] .send-button {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-theme="day"] .send-button:hover {
+  background: #8e2f23;
+}
+[data-theme="day"] .effect-card {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .effect-card strong {
+  color: var(--text);
+}
+[data-theme="day"] .effect-card small {
+  color: var(--muted);
+}
+[data-theme="day"] .effect-card:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+[data-theme="day"] .effect-card.active {
+  background: #faede9;
+  border-color: var(--accent);
+}
+[data-theme="day"] .effect-card.active strong {
+  color: var(--accent);
+}
+[data-theme="day"] .timer-presets button {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .timer-presets button:hover {
+  background: #faede9;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+[data-theme="day"] .live-tag,
+[data-theme="day"] .subtle-badge,
+[data-theme="day"] .count-badge {
+  background: var(--raised);
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+[data-theme="day"] .music-player {
+  background: linear-gradient(125deg, #faede9, #ffffff 70%);
+  border: 1px solid var(--line);
+}
+[data-theme="day"] .player-content h2 {
+  color: var(--text);
+}
+[data-theme="day"] .player-controls label,
+[data-theme="day"] .player-options label,
+[data-theme="day"] #musicTime {
+  color: var(--muted);
+}
+[data-theme="day"] .round-control {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-theme="day"] .progress-row progress::-webkit-progress-bar {
+  background: var(--raised);
+}
+[data-theme="day"] .library-table-head {
+  color: var(--muted);
+  border-bottom-color: var(--line);
+}
+[data-theme="day"] .track-row {
+  border-bottom-color: var(--line);
+}
+[data-theme="day"] .track-index,
+[data-theme="day"] .track-meta small {
+  color: var(--muted);
+}
+[data-theme="day"] .track-meta strong {
+  color: var(--text);
+}
+[data-theme="day"] .track-row.active {
+  background: #faede9;
+}
+[data-theme="day"] .track-row.active .track-meta strong {
+  color: var(--accent);
+}
+[data-theme="day"] .track-row .play-track {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+[data-theme="day"] .track-row .play-track:hover {
+  background: #faede9;
+}
+[data-theme="day"] .arcade-card {
+  border-top: 2px solid var(--accent);
+  border-color: var(--line);
+  background: var(--surface);
+}
+[data-theme="day"] .arcade-card .game-selection button {
+  background: var(--arcade-btn-bg);
+  border-color: var(--arcade-btn-border);
+  color: var(--text);
+}
+[data-theme="day"] .arcade-card .game-selection button:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+[data-theme="day"] .arcade-card .game-selection button strong {
+  color: var(--arcade-title);
+}
+[data-theme="day"] .arcade-game-description {
+  color: var(--arcade-desc);
+}
+[data-theme="day"] .arcade-card .game-selection button.active {
+  background: var(--arcade-btn-active-bg);
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+[data-theme="day"] .arcade-card .game-selection button.active strong {
+  color: var(--arcade-title-active);
+}
+[data-theme="day"] .arcade-card .game-selection button.active .arcade-game-description {
+  color: var(--arcade-desc-active);
+}
+[data-theme="day"] .arcade-catalog-note {
+  color: var(--muted);
+}
+[data-theme="day"] .arcade-filter-bar button {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .arcade-filter-bar button.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+[data-theme="day"] .mario-help {
+  background: #fdf6f4;
+  border: 1px solid #d8a29b;
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+}
+[data-theme="day"] .mario-help::before {
+  color: var(--accent);
+  font-weight: 700;
+}
+[data-theme="day"] .mario-container {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+[data-theme="day"] .mario-header {
+  color: var(--accent);
+}
+[data-theme="day"] .mario-sync-pill {
+  background: #e8f5e9;
+  border-color: #2e7d32;
+  color: #1b5e20;
+}
+[data-theme="day"] .mario-screen-housing {
+  border-color: var(--border-strong);
+}
+[data-theme="day"] .mario-progress-track {
+  background: var(--raised);
+  border-color: var(--border-strong);
+}
+[data-theme="day"] .mario-progress-bar {
+  background: linear-gradient(90deg, #2e7d32, #c48b4e);
+}
+[data-theme="day"] .mario-hud-panel {
+  background: var(--mario-hud-bg);
+  border-color: var(--mario-hud-border);
+  color: var(--mario-hud-text);
+}
+[data-theme="day"] .mario-hud-row {
+  color: var(--mario-hud-text);
+}
+[data-theme="day"] .mario-state-badge {
+  background: var(--lab-amber);
+  color: #ffffff;
+}
+[data-theme="day"] .mario-ctrl-btn {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .mario-ctrl-btn:active,
+[data-theme="day"] .mario-ctrl-btn.pressed {
+  background: var(--raised);
+}
+[data-theme="day"] .mario-ctrl-btn.quiet {
+  background: var(--raised);
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+[data-theme="day"] .mario-ctrl-btn.primary {
+  background: var(--accent);
+  border-color: #8e2f23;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(168, 56, 42, 0.3);
+}
+[data-theme="day"] .mario-dpad {
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+}
+[data-theme="day"] .mario-dbtn {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: 0 3px 0 var(--border-strong);
+}
+[data-theme="day"] .mario-dbtn:active,
+[data-theme="day"] .mario-dbtn.pressed {
+  background: #faede9;
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 1px 0 var(--border-strong);
+}
+[data-theme="day"] .fs-gamepad-overlay {
+  background: var(--bg);
+  background-image: radial-gradient(circle at 50% 50%, #ffffff 0%, #e9e4dc 100%);
+  color: var(--text);
+}
+[data-theme="day"] .fs-top-bar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .fs-game-title {
+  color: var(--accent);
+}
+[data-theme="day"] .fs-badge {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border-color: #2e7d32;
+}
+[data-theme="day"] .fs-bar-stats {
+  color: var(--text);
+}
+[data-theme="day"] .fs-stat-item.score {
+  color: #b45309;
+}
+[data-theme="day"] .fs-stat-item.hi {
+  color: var(--accent);
+}
+[data-theme="day"] .fs-bar-btn {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .fs-bar-btn:active {
+  background: var(--raised);
+}
+[data-theme="day"] .fs-bar-btn.fs-bar-close {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+[data-theme="day"] .fs-dpad {
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+[data-theme="day"] .fs-dbtn {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  box-shadow: 0 3px 0 var(--border-strong);
+}
+[data-theme="day"] .fs-dbtn:active,
+[data-theme="day"] .fs-dbtn.pressed,
+[data-theme="day"] .fs-dbtn.active {
+  background: #faede9 !important;
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 12px rgba(168, 56, 42, 0.4) !important;
+}
+[data-theme="day"] .fs-dpad-center {
+  background: var(--raised);
+}
+[data-theme="day"] .fs-dpad-center::after {
+  background: var(--line);
+  border-color: var(--border-strong);
+}
+[data-theme="day"] .fs-lr-btn {
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+[data-theme="day"] .fs-lr-btn:active,
+[data-theme="day"] .fs-lr-btn.pressed {
+  background: #faede9 !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+[data-theme="day"] .fs-screen-bezel {
+  background: var(--raised);
+  border: 4px solid var(--border-strong);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+[data-theme="day"] .fs-screen-label,
+[data-theme="day"] .fs-guide-text {
+  color: var(--muted);
+}
+[data-theme="day"] .toast {
+  background: #211e1c;
+  border: 1px solid var(--muted);
+  color: #ffffff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+[data-theme="day"] pre {
+  background: #fdfcfb;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+[data-theme="day"] .stack-label {
+  color: var(--text);
+}
+[data-theme="day"] .device-list > div {
+  border-bottom-color: var(--line);
+}
+[data-theme="day"] .device-list dt {
+  color: var(--muted);
+}
+[data-theme="day"] .device-list dd {
+  color: var(--text);
+}
+[data-theme="day"] .memory-list p {
+  border-top-color: var(--line);
+  color: var(--text);
+}
+[data-theme="day"] .frame-caption {
+  color: var(--muted);
+}
+[data-theme="day"] .pagination > span {
+  color: var(--muted);
+}
+[data-theme="day"] .phone-camera-wrapper,
+[data-theme="day"] .camera-stream-wrapper {
+  border-color: var(--border-strong) !important;
 }
 * {
   box-sizing: border-box;
@@ -773,9 +1309,9 @@ input[type="range"] {
 input,
 select,
 textarea {
-  color: var(--text);
-  background: #15181d;
-  border: 1px solid #383d46;
+  color: var(--input-text, var(--text));
+  background: var(--input-bg, #15181d);
+  border: 1px solid var(--input-border, #383d46);
   border-radius: 8px;
   padding: 10px 12px;
   max-width: 100%;
@@ -783,7 +1319,7 @@ textarea {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #727882;
+  color: var(--input-placeholder, #727882);
 }
 select {
   font-size: 12px;
@@ -1440,15 +1976,15 @@ pre {
 }
 dialog {
   color: var(--text);
-  background: #1e2127;
-  border: 1px solid #49404a;
+  background: var(--dialog-bg, #1e2127);
+  border: 1px solid var(--dialog-border, #49404a);
   border-radius: 18px;
   padding: 28px;
   max-width: 480px;
   width: calc(100% - 36px);
 }
 dialog::backdrop {
-  background: #07080bd9;
+  background: var(--dialog-backdrop, #07080bd9);
   backdrop-filter: blur(7px);
 }
 dialog p {
@@ -2624,13 +3160,13 @@ dialog p {
   justify-content: flex-start;
   white-space: normal;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--arcade-btn-border, var(--line));
   border-radius: 10px;
-  background: linear-gradient(140deg, #29242a, #1b2027);
+  background: var(--arcade-btn-bg, linear-gradient(140deg, #29242a, #1b2027));
 }
-.arcade-card .game-selection button strong { color: var(--text); font-weight: 600; }
+.arcade-card .game-selection button strong { color: var(--arcade-title, var(--text)); font-weight: 600; }
 .arcade-game-description {
-  color: #c2bac2;
+  color: var(--arcade-desc, #c2bac2);
   font-size: 11px;
   font-weight: 400;
   line-height: 1.65;
@@ -2641,8 +3177,14 @@ dialog p {
 }
 .arcade-card .game-selection button.active {
   border-color: var(--accent);
-  background: linear-gradient(135deg, #48302f, #29222b);
+  background: var(--arcade-btn-active-bg, linear-gradient(135deg, #48302f, #29222b));
   box-shadow: inset 3px 0 var(--accent);
+}
+.arcade-card .game-selection button.active strong {
+  color: var(--arcade-title-active, var(--text));
+}
+.arcade-card .game-selection button.active .arcade-game-description {
+  color: var(--arcade-desc-active, #e2dae2);
 }
 .arcade-catalog-note { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
 .two-columns:has(.arcade-card) { align-items: start; }

@@ -2618,6 +2618,10 @@ function applyTheme(theme) {
   const isDay = theme === "day";
   if (typeof document !== "undefined" && document && document.documentElement && document.documentElement.setAttribute) {
     document.documentElement.setAttribute("data-theme", isDay ? "day" : "night");
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", isDay ? "#f5f2ee" : "#111316");
+    }
   }
   const btn = $("toggleThemeBtn");
   if (btn) {
