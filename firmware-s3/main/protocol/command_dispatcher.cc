@@ -367,7 +367,7 @@ void CommandDispatcher::SendStatus()
     SendReply(status_buf);
 }
 
-bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
+bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial, bool is_authenticated)
 {
     if (!line || strlen(line) == 0) return false;
 
@@ -390,7 +390,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
             const bool pair=cJSON_IsString(name) && !strcasecmp(name->valuestring,"pair");
             const bool status=cJSON_IsString(name) && !strcasecmp(name->valuestring,"status");
             const char* key=pair ? NetworkAuth::GetInstance().TokenForUsbPairing() : "";
-            const bool ok=usb_json_reply::ValidId(request) && (pair ? key[0]!=0 : request && ProcessJsonCommand(line,false));
+            const bool ok=usb_json_reply::ValidId(request) && (pair ? key[0]!=0 : request && ProcessJsonCommand(line,false,is_authenticated));
             cJSON* response=cJSON_CreateObject();
             cJSON_AddStringToObject(response,"status",ok?"ok":"error");
             if(pair && ok)cJSON_AddStringToObject(response,"control_token",key);
@@ -406,14 +406,14 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
             cJSON_Delete(response);cJSON_Delete(request);
             return ok;
         }
-        if (ProcessJsonCommand(line, reply_serial)) {
+        if (ProcessJsonCommand(line, reply_serial, is_authenticated)) {
             if (reply_serial) SendReply("{\"status\":\"ok\"}\r\n");
             return true;
         }
     }
 
     // 3. 极速纯文本短语指令
-    if (*line != '{' && ProcessTextCommand(line, false)) {
+    if (*line != '{' && ProcessTextCommand(line, false, is_authenticated)) {
         if (reply_serial) {
             if(!strcasecmp(line,"status"))SendStatus();
             else SendReply("{\"status\":\"ok\"}\r\n");
@@ -426,7 +426,7 @@ bool CommandDispatcher::ProcessLine(const char* line, bool reply_serial)
     return false;
 }
 
-bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_serial)
+bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_serial, bool is_authenticated)
 {
     cJSON* root = cJSON_Parse(json_str);
     if (!root) {
@@ -601,6 +601,10 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     }
     // {"cmd":"mic", "enable":true}
     else if (strcasecmp(cmd, "mic") == 0) {
+        if (!reply_serial && !is_authenticated) {
+            cJSON_Delete(root);
+            return false;
+        }
         cJSON* en_item = cJSON_GetObjectItem(root, "enable");
         if (en_item && cJSON_IsBool(en_item)) {
             bool ok = SetMicStreaming(cJSON_IsTrue(en_item));
@@ -642,7 +646,7 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     return false;
 }
 
-bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_serial)
+bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_serial, bool is_authenticated)
 {
     DisplayManager& dm = DisplayManager::GetInstance();
 
@@ -687,8 +691,14 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     if (strcasecmp(text_str, "fire") == 0)          { dm.SetMode(DisplayMode::CYBER_FIRE); return true; }
     if (strcasecmp(text_str, "matrix") == 0)        { dm.SetMode(DisplayMode::MATRIX_RAIN_PRO); return true; }
     if (strcasecmp(text_str, "beep") == 0)          { return AudioHAL::GetInstance().PlayBeep(1000, 200) == ESP_OK; }
-    if (strcasecmp(text_str, "mic on") == 0)        { return SetMicStreaming(true); }
-    if (strcasecmp(text_str, "mic off") == 0)       { return SetMicStreaming(false); }
+    if (strcasecmp(text_str, "mic on") == 0) {
+        if (!reply_serial && !is_authenticated) return false;
+        return SetMicStreaming(true);
+    }
+    if (strcasecmp(text_str, "mic off") == 0) {
+        if (!reply_serial && !is_authenticated) return false;
+        return SetMicStreaming(false);
+    }
     if (strcasecmp(text_str, "board_led green") == 0 || strcasecmp(text_str, "led green") == 0 || strcasecmp(text_str, "led speaking") == 0) {
         BoardLed::GetInstance().SetMode(BoardLedMode::SOLID_GREEN);
         return true;

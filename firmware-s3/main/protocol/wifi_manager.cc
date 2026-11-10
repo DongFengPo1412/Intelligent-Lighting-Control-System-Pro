@@ -13,6 +13,7 @@
 #include "display_manager.h"
 #include "arcade_manager.h"
 #include "network_auth.h"
+#include "command_auth.h"
 #include "udp_request_guard.h"
 #include "frame_encoding.h"
 #include <mbedtls/sha256.h>
@@ -348,6 +349,8 @@ void WifiManager::UdpServerTaskLoop()
             cJSON* validated = nullptr;
             char cmd_name[32] = {0};
             bool compact_frame = false;
+            const char* cmd_trim = command;
+            while (*cmd_trim == ' ' || *cmd_trim == '\t' || *cmd_trim == '\r' || *cmd_trim == '\n') cmd_trim++;
             if (!error) {
                 validated = cJSON_ParseWithOpts(command, nullptr, true);
                 if (validated && cJSON_IsObject(validated)) {
@@ -359,12 +362,7 @@ void WifiManager::UdpServerTaskLoop()
                     compact_frame = cJSON_IsString(encoding) && !strcmp(encoding->valuestring, "base64");
                 }
                 if (!token_ok) {
-                    if (!strcasecmp(cmd_name, "mic") ||
-                        !strcasecmp(cmd_name, "audio_abort") ||
-                        !strcasecmp(cmd_name, "request_audio_ticket") ||
-                        !strcasecmp(cmd_name, "reboot") ||
-                        !strcasecmp(cmd_name, "factory_reset") ||
-                        !strcasecmp(cmd_name, "pair")) {
+                    if (!command_auth::IsPermittedUnauthenticated(cmd_trim, validated)) {
                         error = "pairing_required";
                     }
                 }
@@ -398,10 +396,10 @@ void WifiManager::UdpServerTaskLoop()
             }
             // JSON must be complete. Retain authenticated legacy text commands
             // (e.g. BANDS) used by the existing music pipeline.
-            bool json_command = command[0] == '{' || command[0] == '[';
+            bool json_command = (*cmd_trim == '{' || *cmd_trim == '[');
             bool ok = !strchr(command, '\n') && !strchr(command, '\r') &&
                 (!json_command || cJSON_IsObject(validated)) &&
-                CommandDispatcher::GetInstance().ProcessLine(command, false);
+                CommandDispatcher::GetInstance().ProcessLine(command, false, token_ok);
             if (validated) {
                 cJSON_Delete(validated);
                 validated = nullptr;

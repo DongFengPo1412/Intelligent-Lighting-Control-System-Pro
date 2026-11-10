@@ -11,6 +11,7 @@
 #include "pcm_tx_queue.h"
 #include "afe_sample_stream.h"
 #include "../firmware-s3/main/display/board_led_profile.h"
+#include "../firmware-s3/main/protocol/command_auth.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -387,12 +388,23 @@ int main() {
         assert(ValidateFrameHeader(h_echo.data(), out_bytes) == ParseFrameStatus::OkControlEcho && out_bytes == 64);
 
         // Production Handshake Parser Validation
-        const char* extracted_token = nullptr;
+        char extracted_token[65] = {0};
         std::string good_token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         std::string good_payload = std::string(kHelloPrefix) + "|" + good_token;
         auto h_hs = make_header(4, good_payload.size());
         assert(ValidateHandshakePayload(h_hs.data(), reinterpret_cast<const uint8_t*>(good_payload.data()), good_payload.size(), extracted_token));
-        assert(extracted_token != nullptr && std::string(extracted_token, 64) == good_token);
+        assert(std::strlen(extracted_token) == 64 && std::string(extracted_token) == good_token);
+
+        // Dirty buffer with non-zero trailing bytes (reproducing 64 bytes read as 233 bytes)
+        uint8_t dirty_buffer[256];
+        std::memset(dirty_buffer, 0xFF, sizeof(dirty_buffer));
+        std::memcpy(dirty_buffer, good_payload.data(), good_payload.size());
+        char token_from_dirty[65] = {0};
+        assert(ValidateHandshakePayload(h_hs.data(), dirty_buffer, good_payload.size(), token_from_dirty));
+        // MUST be safely terminated with exactly 64 characters, NOT 233 bytes!
+        assert(std::strlen(token_from_dirty) == 64);
+        assert(token_from_dirty[64] == '\0');
+        assert(std::string(token_from_dirty) == good_token);
 
         // Missing '|' separator
         std::string bad_payload_no_pipe = std::string(kHelloPrefix) + "X" + good_token;
@@ -471,25 +483,27 @@ int main() {
             return true;
         };
 
-        // Hotspot client without token: safe commands allowed, sensitive commands forbidden!
-        assert(is_cmd_permitted(true, false, "mode") == true);
-        assert(is_cmd_permitted(true, false, "brightness") == true);
-        assert(is_cmd_permitted(true, false, "arcade") == true);
-        assert(is_cmd_permitted(true, false, "frame") == true);
-        assert(is_cmd_permitted(true, false, "pet") == true);
-        assert(is_cmd_permitted(true, false, "mic") == false);
-        assert(is_cmd_permitted(true, false, "audio_abort") == false);
-        assert(is_cmd_permitted(true, false, "request_audio_ticket") == false);
+        // Production command_auth::IsPermittedUnauthenticated validation
+        // Plain text ordinary commands: allowed
+        assert(command_auth::IsPermittedUnauthenticated("mode 1", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("   mode 1", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("arcade 41", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("pet", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("b 25", nullptr) == true);
+        assert(command_auth::IsPermittedUnauthenticated("f,beat,1,2", nullptr) == true);
 
-        // Authorized PC with token: all commands allowed
-        assert(is_cmd_permitted(true, true, "mode") == true);
-        assert(is_cmd_permitted(true, true, "mic") == true);
-        assert(is_cmd_permitted(true, true, "audio_abort") == true);
-        assert(is_cmd_permitted(true, true, "request_audio_ticket") == true);
-
-        // External non-hotspot client without token: all rejected
-        assert(is_cmd_permitted(false, false, "mode") == false);
-        assert(is_cmd_permitted(false, false, "request_audio_ticket") == false);
+        // Plain text sensitive commands: strictly rejected
+        assert(command_auth::IsPermittedUnauthenticated("mic on", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("   mic on", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("mic off", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("   mic off", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("reboot", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("   reboot", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("pair", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("factory_reset", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("audio_abort", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("request_audio_ticket", nullptr) == false);
+        assert(command_auth::IsPermittedUnauthenticated("unknown_cmd", nullptr) == false);
 
         std::puts("PASS: production audio protocol parser, ticket single-use lifecycle and UDP authorization guards");
     }
@@ -603,6 +617,30 @@ int main() {
         stream.FeedChunk(kFeedChunk, scratch);
         stream.Emit(dest1, in1, 256);
         assert(dest1[0] == 1001 && dest1[255] == 1256);
+
+        // 4. Exact Reviewer Reproduction Case: Partial fetch & dropped sample test
+        // S1: PushFetched(1, 2)
+        // S2: Emit(dest, fallback=1,2,3,4, count=4) -> fallback transparent pass
+        // S3: PushFetched(3, 4, 5, 6, 7, 8)
+        // S4: Emit(dest, fallback=5,6,7,8, count=4) -> filtered AFE output
+        // Verify: out1 is [1, 2, 3, 4], out2 is [5, 6, 7, 8], no repetition of 1,2 and no loss of 5,6!
+        audio_afe::AfeSampleStream repro_stream;
+        int16_t fetched_part1[2] = {1, 2};
+        repro_stream.PushFetched(fetched_part1, 2);
+        int16_t fallback_raw1[4] = {1, 2, 3, 4};
+        int16_t repro_out1[4] = {0};
+        bool repro_ok1 = repro_stream.Emit(repro_out1, fallback_raw1, 4);
+        assert(!repro_ok1); // Fallback used
+        assert(repro_out1[0] == 1 && repro_out1[1] == 2 && repro_out1[2] == 3 && repro_out1[3] == 4);
+
+        int16_t fetched_part2[6] = {3, 4, 5, 6, 7, 8};
+        repro_stream.PushFetched(fetched_part2, 6);
+        int16_t fallback_raw2[4] = {5, 6, 7, 8};
+        int16_t repro_out2[4] = {0};
+        bool repro_ok2 = repro_stream.Emit(repro_out2, fallback_raw2, 4);
+        assert(repro_ok2); // Filtered AFE used!
+        // MUST BE 5, 6, 7, 8, NOT 1, 2, 7, 8!
+        assert(repro_out2[0] == 5 && repro_out2[1] == 6 && repro_out2[2] == 7 && repro_out2[3] == 8);
 
         std::puts("PASS: AFE sample stream cross-chunk, cold-start priming, duplicate discard, and monotonic ordering");
     }

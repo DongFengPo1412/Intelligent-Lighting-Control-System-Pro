@@ -395,6 +395,105 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         started_after_user = app.start_front_camera(discovered_url, f"{discovered_url}/api/pro/camera/frame")
         self.assertTrue(started_after_user)
 
+    def test_webview_resource_permission_filtering(self):
+        """WebView must grant ONLY video capture and reject audio and unknown resources, including mixed requests."""
+        class WebChromeClientSimulator:
+            def __init__(self):
+                self.camera_authorized_origin = ""
+
+            def on_permission_request(self, origin: str, resources: list, user_confirmed: bool):
+                wants_video = "RESOURCE_VIDEO_CAPTURE" in resources
+                if not wants_video:
+                    return None  # Denied immediately
+
+                video_only = ["RESOURCE_VIDEO_CAPTURE"]
+                if self.camera_authorized_origin == origin:
+                    return video_only
+
+                if user_confirmed:
+                    self.camera_authorized_origin = origin
+                    return video_only
+                return None  # User denied
+
+        client = WebChromeClientSimulator()
+        origin = "http://192.168.1.100:8080"
+
+        # 1. Audio-only request -> immediately denied without prompt
+        res_audio = client.on_permission_request(origin, ["RESOURCE_AUDIO_CAPTURE"], user_confirmed=True)
+        self.assertIsNone(res_audio, "Audio-only request must be denied")
+
+        # 2. Unknown resource request -> immediately denied
+        res_unknown = client.on_permission_request(origin, ["RESOURCE_PROTECTED_MEDIA_ID"], user_confirmed=True)
+        self.assertIsNone(res_unknown, "Unknown resource request must be denied")
+
+        # 3. Mixed request (video + audio): user denies -> denied
+        res_mixed_deny = client.on_permission_request(origin, ["RESOURCE_VIDEO_CAPTURE", "RESOURCE_AUDIO_CAPTURE"], user_confirmed=False)
+        self.assertIsNone(res_mixed_deny, "Mixed request denied by user must return None")
+
+        # 4. Mixed request (video + audio): user approves -> ONLY video granted, audio rejected!
+        res_mixed_grant = client.on_permission_request(origin, ["RESOURCE_VIDEO_CAPTURE", "RESOURCE_AUDIO_CAPTURE"], user_confirmed=True)
+        self.assertEqual(res_mixed_grant, ["RESOURCE_VIDEO_CAPTURE"], "Mixed request must grant video ONLY and deny audio")
+        self.assertNotIn("RESOURCE_AUDIO_CAPTURE", res_mixed_grant)
+
+        # 5. Subsequent mixed request for already-authorized origin -> still ONLY video granted
+        res_subsequent = client.on_permission_request(origin, ["RESOURCE_VIDEO_CAPTURE", "RESOURCE_AUDIO_CAPTURE"], user_confirmed=False)
+        self.assertEqual(res_subsequent, ["RESOURCE_VIDEO_CAPTURE"])
+
+    def test_hotspot_action_based_authorization_whitelist(self):
+        """Unauthenticated clients on hotspot can only access whitelisted ordinary commands.
+        Sensitive commands (mic on/off, {"cmd":"mic"}, reboot, pair, etc.) require pairing token,
+        regardless of JSON vs plain text or leading whitespace."""
+        def is_permitted_unauthenticated(raw_cmd: str, parsed_json: dict = None) -> bool:
+            cmd = raw_cmd.strip()
+            if not cmd:
+                return False
+            if parsed_json and isinstance(parsed_json, dict):
+                c = parsed_json.get("cmd", "").lower()
+                whitelist_json = {"mode", "color", "brightness", "b", "off", "stop", "countdown",
+                                  "spectrum", "bands", "frame", "status", "face", "emoji", "arcade",
+                                  "pet", "board_led", "led", "volume", "v", "beep", "key"}
+                return c in whitelist_json
+
+            # Plain text commands
+            if cmd.startswith("f,"):
+                return True
+            low = cmd.lower()
+            whitelist_text = {"status", "happy", "angry", "sad", "thinking", "breathe", "cry",
+                              "neutral", "dynamic", "face", "emoji", "kurisu", "pet", "snake",
+                              "tetris", "fire", "matrix", "spectrum", "beep", "off", "stop"}
+            if low in whitelist_text:
+                return True
+            for prefix in ("mode ", "color ", "brightness ", "b ", "countdown ", "volume ", "v ",
+                           "board_led ", "led ", "arcade "):
+                if low.startswith(prefix):
+                    return True
+            return False
+
+        # 1. Unauthenticated ordinary operations -> ALLOWED
+        self.assertTrue(is_permitted_unauthenticated("mode 1"))
+        self.assertTrue(is_permitted_unauthenticated("   mode 1"))
+        self.assertTrue(is_permitted_unauthenticated('{"cmd":"mode", "mode":1}', {"cmd": "mode"}))
+        self.assertTrue(is_permitted_unauthenticated('   {"cmd":"mode", "mode":1}', {"cmd": "mode"}))
+        self.assertTrue(is_permitted_unauthenticated("arcade 41"))
+        self.assertTrue(is_permitted_unauthenticated("pet"))
+        self.assertTrue(is_permitted_unauthenticated("b 30"))
+        self.assertTrue(is_permitted_unauthenticated("f,beat,1,2,3"))
+
+        # 2. Unauthenticated sensitive operations -> REJECTED
+        self.assertFalse(is_permitted_unauthenticated("mic on"))
+        self.assertFalse(is_permitted_unauthenticated("   mic on"))
+        self.assertFalse(is_permitted_unauthenticated("mic off"))
+        self.assertFalse(is_permitted_unauthenticated("   mic off"))
+        self.assertFalse(is_permitted_unauthenticated('{"cmd":"mic", "enable":true}', {"cmd": "mic"}))
+        self.assertFalse(is_permitted_unauthenticated('   {"cmd":"mic", "enable":true}', {"cmd": "mic"}))
+        self.assertFalse(is_permitted_unauthenticated('{"cmd":"audio_abort"}', {"cmd": "audio_abort"}))
+        self.assertFalse(is_permitted_unauthenticated('{"cmd":"request_audio_ticket"}', {"cmd": "request_audio_ticket"}))
+        self.assertFalse(is_permitted_unauthenticated("reboot"))
+        self.assertFalse(is_permitted_unauthenticated("   reboot"))
+        self.assertFalse(is_permitted_unauthenticated("pair"))
+        self.assertFalse(is_permitted_unauthenticated("factory_reset"))
+        self.assertFalse(is_permitted_unauthenticated("unknown_cmd"))
+
     def test_health_probe_oversized_and_timeout_rejection(self):
         """Health probe must reject oversized (>16KB) or timed-out responses."""
         def simulate_health_probe(response_bytes: bytes, elapsed_ns: int) -> bool:

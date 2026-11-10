@@ -48,7 +48,8 @@ inline ParseFrameStatus ValidateFrameHeader(const uint8_t header[7], size_t& out
 }
 
 inline bool ValidateHandshakePayload(const uint8_t header[7], const uint8_t* payload, size_t payload_len,
-                                    const char*& out_token_64) {
+                                    char out_token_65[65]) {
+    if (!header || !payload || !out_token_65) return false;
     if (header[0] != 'K' || header[1] != 'A' || header[2] != 'P' || header[3] != '1' || header[4] != 4) {
         return false;
     }
@@ -59,7 +60,8 @@ inline bool ValidateHandshakePayload(const uint8_t header[7], const uint8_t* pay
     if (std::memcmp(payload, kHelloPrefix, prefix_len) != 0 || payload[prefix_len] != '|') {
         return false;
     }
-    out_token_64 = reinterpret_cast<const char*>(payload + prefix_len + 1);
+    std::memcpy(out_token_65, payload + prefix_len + 1, 64);
+    out_token_65[64] = '\0';
     return true;
 }
 
@@ -86,7 +88,10 @@ public:
     }
 
     bool CheckAndConsume(const char* token, struct in_addr ip, uint32_t now_ms) {
-        if (!token || std::strlen(token) != 64) return false;
+        if (!token) return false;
+        size_t len = 0;
+        while (len < 65 && token[len] != '\0') ++len;
+        if (len != 64) return false;
         if (ticket_[0] == '\0' || expire_ms_ <= now_ms) return false;
         if (ticket_ip_.s_addr != ip.s_addr) return false;
         unsigned char diff = 0;

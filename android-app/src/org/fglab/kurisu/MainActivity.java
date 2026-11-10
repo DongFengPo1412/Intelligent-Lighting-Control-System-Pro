@@ -382,11 +382,12 @@ public class MainActivity extends Activity {
                             }
                         }
                         if (!wantsVideo) {
-                            request.grant(request.getResources());
+                            request.deny();
                             return;
                         }
+                        final String[] videoOnly = new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE};
                         if (isCameraAuthorized(reqOrigin)) {
-                            request.grant(request.getResources());
+                            request.grant(videoOnly);
                             return;
                         }
                         new AlertDialog.Builder(MainActivity.this)
@@ -394,7 +395,7 @@ public class MainActivity extends Activity {
                             .setMessage("网页 (" + reqOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
                             .setPositiveButton("允许", (d, w) -> {
                                 cameraAuthorizedOrigin = reqOrigin;
-                                request.grant(request.getResources());
+                                request.grant(videoOnly);
                             })
                             .setNegativeButton("拒绝", (d, w) -> request.deny())
                             .setOnCancelListener(d -> request.deny())

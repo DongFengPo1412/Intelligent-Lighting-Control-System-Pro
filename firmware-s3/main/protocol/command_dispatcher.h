@@ -15,7 +15,7 @@ public:
     esp_err_t StartSerialTask(UBaseType_t priority = 4, BaseType_t core_id = 0);
 
     // 解析并执行单行指令 (自动识别纯文本极速指令、旧版串口频谱流或标准 JSON)
-    bool ProcessLine(const char* line, bool reply_serial = true);
+    bool ProcessLine(const char* line, bool reply_serial = true, bool is_authenticated = true);
 
     // 发送当前系统状态到上位机
     void SendStatus();
@@ -47,8 +47,8 @@ private:
     static void AudioPlayTaskTrampoline(void* arg);
     void AudioPlayTaskLoop();
 
-    bool ProcessJsonCommand(const char* json_str, bool reply_serial);
-    bool ProcessTextCommand(const char* text_str, bool reply_serial);
+    bool ProcessJsonCommand(const char* json_str, bool reply_serial, bool is_authenticated = true);
+    bool ProcessTextCommand(const char* text_str, bool reply_serial, bool is_authenticated = true);
 
     TaskHandle_t task_handle_;
     TaskHandle_t mic_task_handle_;

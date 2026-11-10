@@ -146,8 +146,9 @@ void NetworkAudio::Run(){
         pcm_transport::ValidateFrameHeader(header, first_size);
         const size_t prefix = strlen(hello);
         bool valid_hello = false;
-        const char* token = nullptr;
+        char token[65] = {};
         if (header[4] == 4 && first_size < sizeof(handshake_payload) && read_all(fd, handshake_payload, first_size)) {
+            handshake_payload[first_size] = '\0';
             if (pcm_transport::ValidateHandshakePayload(header, handshake_payload, first_size, token)) {
                 if (NetworkAuth::GetInstance().Check(token) || CheckAudioTicket(token, client_addr.sin_addr)) {
                     valid_hello = true;

@@ -41,7 +41,10 @@ bool NetworkAuth::Init(bool nvs_ready) {
     return ready_;
 }
 bool NetworkAuth::Check(const char* token) const {
-    if (!ready_ || !token || strlen(token) != 64) return false;
+    if (!ready_ || !token) return false;
+    size_t len = 0;
+    while (len < 65 && token[len] != '\0') ++len;
+    if (len != 64) return false;
     unsigned char diff = 0;
     for (size_t i = 0; i < 64; ++i) diff |= token_[i] ^ token[i];
     return diff == 0;
