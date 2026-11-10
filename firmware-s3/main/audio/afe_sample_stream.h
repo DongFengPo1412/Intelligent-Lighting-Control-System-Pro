@@ -92,13 +92,11 @@ public:
         if (fallback_raw) {
             std::memcpy(dest_buf, fallback_raw, count * sizeof(int16_t));
         }
-        // If out_buf_ had partial samples that were superseded by fallback_raw,
-        // clear out_buf_ and discard matching future samples to prevent duplicates.
+        // To prevent duplicate samples when AFE produces delayed samples matching
+        // this fallback window, clear partial out_buf_ and increment discard_pending_.
         size_t partial = out_buf_.size();
-        if (partial > 0) {
-            discard_pending_ = count > partial ? count - partial : 0;
-            out_buf_.clear();
-        }
+        discard_pending_ += (count > partial ? count - partial : 0);
+        out_buf_.clear();
         return false;
     }
 

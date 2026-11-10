@@ -528,6 +528,92 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         # Timeout (>800ms)
         self.assertFalse(simulate_health_probe(valid_body, 850_000_000), "Timeout must be rejected")
 
+    def test_direct_android_udp_client_path_dispatch(self):
+        """Direct Android UDP controller dispatch verification:
+        Ensures unauthenticated countdown start/cancel and desk pet entrance pass cleanly,
+        while sensitive microphone and audio session commands are strictly blocked.
+        """
+        def evaluate_udp_packet(payload_str: str, has_auth_token: bool = False) -> tuple[bool, str]:
+            # Mirrors firmware command_auth.h and udp_server.cc dispatch logic
+            raw = payload_str.strip()
+            if not raw:
+                return False, "EMPTY"
+
+            parsed = None
+            if raw.startswith("{") and raw.endswith("}"):
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    parsed = None
+
+            if parsed and isinstance(parsed, dict):
+                cmd = str(parsed.get("cmd", "")).strip().lower()
+                # Unauthenticated allowed JSON commands
+                unauth_allowed = {
+                    "mode", "color", "brightness", "b", "off", "stop",
+                    "countdown", "stop_countdown", "stop_cd", "spectrum",
+                    "bands", "frame", "status", "face", "emoji", "arcade",
+                    "pet", "kurisu", "board_led", "led", "volume", "v", "beep", "key"
+                }
+                if cmd in unauth_allowed:
+                    return True, f"JSON_DISPATCH:{cmd}"
+                if cmd in {"mic", "audio_abort", "request_audio_ticket", "reboot", "factory_reset"}:
+                    if has_auth_token:
+                        return True, f"JSON_AUTH_DISPATCH:{cmd}"
+                    return False, f"JSON_AUTH_REQUIRED:{cmd}"
+                return False, f"JSON_UNKNOWN:{cmd}"
+
+            # Plain text commands
+            if raw.startswith("f,"):
+                return True, "TEXT_DISPATCH:frame"
+            low = raw.lower()
+            unauth_text_exact = {
+                "status", "happy", "angry", "sad", "thinking", "breathe", "cry",
+                "neutral", "dynamic", "face", "emoji", "kurisu", "pet", "snake",
+                "tetris", "fire", "matrix", "spectrum", "beep", "off", "stop",
+                "stop_countdown", "stop_cd"
+            }
+            if low in unauth_text_exact:
+                return True, f"TEXT_DISPATCH:{low}"
+            for prefix in ("mode ", "color ", "brightness ", "b ", "countdown ", "volume ", "v ",
+                           "board_led ", "led ", "arcade "):
+                if low.startswith(prefix):
+                    return True, f"TEXT_DISPATCH:{prefix.strip()}"
+
+            # Sensitive text commands
+            if low.startswith("mic ") or low in {"mic", "reboot", "factory_reset", "pair"}:
+                if has_auth_token:
+                    return True, f"TEXT_AUTH_DISPATCH:{low}"
+                return False, f"TEXT_AUTH_REQUIRED:{low}"
+
+            return False, f"TEXT_UNKNOWN:{low}"
+
+        # 1. Android Direct Countdown start & cancel (both plain text and JSON)
+        for pkt in ["countdown 60", "  countdown 120  ", "stop_countdown", "  stop_countdown  ", "stop_cd", "  stop_cd  ",
+                    '{"cmd":"countdown","seconds":60}', '{"cmd":"stop_countdown"}', '{"cmd":"stop_cd"}']:
+            ok, reason = evaluate_udp_packet(pkt, has_auth_token=False)
+            self.assertTrue(ok, f"Direct Android countdown packet '{pkt}' must be allowed unauthenticated, got {reason}")
+
+        # 2. Desk Pet entrance (both 'pet' and 'kurisu' aliases, text and JSON)
+        for pkt in ["pet", "  pet  ", "kurisu", "  kurisu  ", '{"cmd":"pet"}', '{"cmd":"kurisu"}']:
+            ok, reason = evaluate_udp_packet(pkt, has_auth_token=False)
+            self.assertTrue(ok, f"Direct Android pet packet '{pkt}' must be allowed unauthenticated, got {reason}")
+
+        # 3. Sensitive commands strictly blocked without token
+        sensitive_packets = [
+            "mic on", "  mic on  ", "mic off", "  mic off  ",
+            '{"cmd":"mic","enable":true}', '{"cmd":"mic","enable":false}',
+            '{"cmd":"audio_abort"}', '{"cmd":"request_audio_ticket"}'
+        ]
+        for pkt in sensitive_packets:
+            ok, reason = evaluate_udp_packet(pkt, has_auth_token=False)
+            self.assertFalse(ok, f"Sensitive packet '{pkt}' MUST be blocked without token, got {reason}")
+
+        # 4. Sensitive commands permitted with valid token
+        for pkt in sensitive_packets:
+            ok, reason = evaluate_udp_packet(pkt, has_auth_token=True)
+            self.assertTrue(ok, f"Sensitive packet '{pkt}' with valid token must be dispatched, got {reason}")
+
 
 if __name__ == "__main__":
     unittest.main()

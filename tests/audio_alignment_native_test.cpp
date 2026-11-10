@@ -577,52 +577,57 @@ int main() {
         bool normal1 = stream.Emit(dest1, in1, 256);
         assert(!normal1); // Cold start raw fallback during bounded warmup!
         assert(!stream.IsWarmedUp());
-        assert(stream.DiscardPending() == 0);
+        assert(stream.DiscardPending() == 256); // 256 samples pending discard to prevent 1..256 repeat
 
-        // Chunk 2 (257..512): AFE finishes delayed processing of chunk 1 (samples 1..256)
+        // Chunk 2 (257..512): AFE catches up, delivers delayed chunk 1 (1..256) + current chunk 2 (257..512)
         int16_t in2[256];
         for (int i = 0; i < 256; ++i) in2[i] = ++val;
         stream.PushInput(in2, 256);
         stream.FeedChunk(kFeedChunk, scratch);
-        int16_t afe_delayed_1[256];
-        for (int i = 0; i < 256; ++i) afe_delayed_1[i] = i + 1; // Filtered 1..256
-        stream.PushFetched(afe_delayed_1, 256);
+        int16_t afe_delayed_1_2[512];
+        for (int i = 0; i < 512; ++i) afe_delayed_1_2[i] = i + 1; // 1..512
+        stream.PushFetched(afe_delayed_1_2, 512);
+        // Delayed 1..256 discarded; fresh 257..512 kept in out_buf_!
+        assert(stream.DiscardPending() == 0);
         assert(stream.OutBufferSize() == 256);
         int16_t dest2[256];
         bool normal2 = stream.Emit(dest2, in2, 256);
         assert(normal2); // Steady-state filtered output engaged!
         assert(stream.IsWarmedUp());
         assert(stream.OutBufferSize() == 0);
+        assert(dest2[0] == 257 && dest2[255] == 512);
         std::memcpy(filtered_all + filtered_pos, dest2, 256 * sizeof(int16_t));
         filtered_pos += 256;
 
-        // Chunk 3 (513..768): AFE outputs delayed chunk 2 (257..512)
+        // Chunk 3 (513..768): AFE outputs chunk 3 (513..768)
         int16_t in3[256];
         for (int i = 0; i < 256; ++i) in3[i] = ++val;
         stream.PushInput(in3, 256);
         stream.FeedChunk(kFeedChunk, scratch);
         int16_t afe_delayed_2[256];
-        for (int i = 0; i < 256; ++i) afe_delayed_2[i] = 257 + i; // Filtered 257..512
+        for (int i = 0; i < 256; ++i) afe_delayed_2[i] = 513 + i; // Filtered 513..768
         stream.PushFetched(afe_delayed_2, 256);
         assert(stream.OutBufferSize() == 256);
         int16_t dest3[256];
         bool normal3 = stream.Emit(dest3, in3, 256);
         assert(normal3); // Normal steady-state filtered path!
         assert(stream.OutBufferSize() == 0);
+        assert(dest3[0] == 513 && dest3[255] == 768);
         std::memcpy(filtered_all + filtered_pos, dest3, 256 * sizeof(int16_t));
         filtered_pos += 256;
 
-        // Chunk 4 (769..1024): normal steady-state AFE flow for chunk 3 (513..768)
+        // Chunk 4 (769..1024): normal steady-state AFE flow for chunk 4 (769..1024)
         int16_t in4[256];
         for (int i = 0; i < 256; ++i) in4[i] = ++val;
         stream.PushInput(in4, 256);
         stream.FeedChunk(kFeedChunk, scratch);
         int16_t afe_delayed_3[256];
-        for (int i = 0; i < 256; ++i) afe_delayed_3[i] = 513 + i; // Filtered 513..768
+        for (int i = 0; i < 256; ++i) afe_delayed_3[i] = 769 + i; // Filtered 769..1024
         stream.PushFetched(afe_delayed_3, 256);
         int16_t dest4[256];
         bool normal4 = stream.Emit(dest4, in4, 256);
         assert(normal4);
+        assert(dest4[0] == 769 && dest4[255] == 1024);
         std::memcpy(filtered_all + filtered_pos, dest4, 256 * sizeof(int16_t));
         filtered_pos += 256;
 
@@ -684,19 +689,27 @@ int main() {
         // 5. Codex 20-Block Fixed Delay Test (stably delayed by 1 block = 240 samples)
         // Under bounded warm-up and buffering, AFE MUST transition from block 0 warm-up
         // to continuous steady-state filtered output across blocks 1..19!
+        // Fixed 1-block delay: Block 0 emits raw 1..240. When AFE warms up and delivers delayed 1..240,
+        // it must be discarded so 1..240 is NEVER repeatedly emitted as the next block's filtered sample.
+        // The ENTIRE sent sequence (raw + filtered) across all 20 blocks must be strictly monotonic 1..4800!
         audio_afe::AfeSampleStream fixed_delay_stream;
         int true_count = 0;
         int false_count = 0;
-        std::vector<int16_t> filtered_stream;
+        std::vector<int16_t> entire_send_sequence;
 
         for (int b = 0; b < 20; ++b) {
             int16_t raw_block[240];
             for (int i = 0; i < 240; ++i) raw_block[i] = static_cast<int16_t>(b * 240 + i + 1);
 
-            if (b > 0) {
-                // AFE outputs filtered samples of previous block (fixed 240-sample delay)
+            if (b == 1) {
+                // At block 1, AFE catches up: produces delayed block 0 (1..240) + current block 1 (241..480)
+                int16_t afe_catchup[480];
+                for (int i = 0; i < 480; ++i) afe_catchup[i] = static_cast<int16_t>(i + 1);
+                fixed_delay_stream.PushFetched(afe_catchup, 480);
+            } else if (b > 1) {
+                // Steady state: AFE produces current block filtered samples
                 int16_t afe_block[240];
-                for (int i = 0; i < 240; ++i) afe_block[i] = static_cast<int16_t>((b - 1) * 240 + i + 1);
+                for (int i = 0; i < 240; ++i) afe_block[i] = static_cast<int16_t>(b * 240 + i + 1);
                 fixed_delay_stream.PushFetched(afe_block, 240);
             }
 
@@ -704,16 +717,16 @@ int main() {
             bool ok = fixed_delay_stream.Emit(dest_block, raw_block, 240);
             if (ok) {
                 true_count++;
-                filtered_stream.insert(filtered_stream.end(), dest_block, dest_block + 240);
             } else {
                 false_count++;
             }
+            entire_send_sequence.insert(entire_send_sequence.end(), dest_block, dest_block + 240);
 
             // Block 0 is bounded warm-up (fallback); blocks 1..19 MUST ALL be filtered AFE output!
             if (b == 0) {
-                assert(!ok);
+                assert(!ok); // Raw fallback
             } else {
-                assert(ok);
+                assert(ok);  // Filtered takeover
             }
         }
 
@@ -723,11 +736,35 @@ int main() {
         double filtered_ratio = static_cast<double>(true_count) / 20.0;
         assert(filtered_ratio >= 0.90); // 95% steady-state filtered output!
 
-        // Continuous monotonic ordering across all 4560 filtered samples without jumps or duplicates!
-        assert(filtered_stream.size() == 4560);
-        for (size_t i = 1; i < filtered_stream.size(); ++i) {
-            assert(filtered_stream[i] == filtered_stream[i - 1] + 1);
+        // Continuous monotonic ordering across ENTIRE 4800 sent samples without jumps or duplicates!
+        // Block 0 emitted raw 1..240; Block 1 emitted filtered 241..480; 1..240 is NEVER repeated!
+        assert(entire_send_sequence.size() == 4800);
+        assert(entire_send_sequence[0] == 1 && entire_send_sequence[239] == 240);
+        assert(entire_send_sequence[240] == 241 && entire_send_sequence[479] == 480);
+        for (size_t i = 1; i < entire_send_sequence.size(); ++i) {
+            assert(entire_send_sequence[i] == entire_send_sequence[i - 1] + 1);
         }
+
+        // 5b. Mid-stream Anomaly Recovery Test:
+        // Simulate temporary AFE glitch mid-stream -> raw fallback -> instant recovery when AFE resumes
+        int16_t anomaly_raw[240];
+        for (int i = 0; i < 240; ++i) anomaly_raw[i] = static_cast<int16_t>(5000 + i);
+        int16_t anomaly_dest[240] = {0};
+        // AFE produces 0 samples this round -> fallback raw
+        bool glitch_ok = fixed_delay_stream.Emit(anomaly_dest, anomaly_raw, 240);
+        assert(!glitch_ok); // Fallback used during anomaly
+        assert(anomaly_dest[0] == 5000 && anomaly_dest[239] == 5239);
+
+        // AFE resumes with delayed duplicate 5000..5239 + fresh 5240..5479
+        int16_t recovered_afe[480];
+        for (int i = 0; i < 480; ++i) recovered_afe[i] = static_cast<int16_t>(5000 + i);
+        fixed_delay_stream.PushFetched(recovered_afe, 480);
+        int16_t recovered_dest[240] = {0};
+        int16_t next_raw[240];
+        for (int i = 0; i < 240; ++i) next_raw[i] = static_cast<int16_t>(5240 + i);
+        bool rec_ok = fixed_delay_stream.Emit(recovered_dest, next_raw, 240);
+        assert(rec_ok); // Cleanly recovered to steady-state filtered output!
+        assert(recovered_dest[0] == 5240 && recovered_dest[239] == 5479);
 
         // 6. Fetch size (64) != Read size (240) across 20 blocks
         audio_afe::AfeSampleStream asymmetric_stream;
