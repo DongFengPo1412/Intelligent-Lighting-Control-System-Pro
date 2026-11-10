@@ -2,19 +2,19 @@ menu "Kurisu Pro Audio Configuration"
 
     choice AUDIO_MIC_SHIFT
         prompt "INMP441 Microphone Bit Shift & Gain"
-        default AUDIO_MIC_SHIFT_16
+        default AUDIO_MIC_SHIFT_12
         help
             Select bit shift applied to INMP441 24-bit I2S data in 32-bit slot.
 
+        config AUDIO_MIC_SHIFT_12
+            bool "12-bit shift (+24dB High Sensitivity, Aligned with Mid NoAudioCodec)"
+            help
+                Matches Mid NoAudioCodec directly for soft-voice wake up and capture.
+
         config AUDIO_MIC_SHIFT_16
-            bool "16-bit shift (Clean, Zero Clipping, Baseline Recommended)"
+            bool "16-bit shift (Clean, Zero Clipping, Conservative)"
             help
                 Preserves clean dynamic range without digital clipping.
-
-        config AUDIO_MIC_SHIFT_12
-            bool "12-bit shift (+24dB High Sensitivity, Mid Compatibility)"
-            help
-                +24dB amplification for distant speech. Warning: close loud speech may saturate.
     endchoice
 
     config AUDIO_ENABLE_AFE

@@ -287,10 +287,10 @@ class VoiceEngine:
             b_lp, a_lp = scipy.signal.butter(2, 14500.0 / (sr / 2.0), btype='low')
             y = scipy.signal.lfilter(b_lp, a_lp, y)
 
-            # 6. 动态电平安全归一化与音量增益映射
+            # 6. 动态电平安全归一化 (对齐中阶：板端硬件独立做二次方音量控制，PC 端保持纯净 0.88 数字余量，彻底消除双重音量缩放导致的三次方劣化)
             peak = float(np.max(np.abs(y)))
             if peak > 1e-4:
-                target_scale = (self.current_volume / 100.0) * 0.88
+                target_scale = 0.88
                 y = (y / peak) * 32767.0 * target_scale
             return np.clip(y, -32768, 32767).astype(np.int16)
         except Exception as e:

@@ -92,8 +92,16 @@ public:
     }
 };
 
-inline size_t PackMono16kTo24k(const int16_t* source, size_t count_16k, uint32_t factor, int32_t* output, bool flush = false) {
+inline Resampler16kTo24k& GlobalResampler16kTo24k() {
     static Resampler16kTo24k s_resampler;
-    return s_resampler.Process(source, count_16k, factor, output, flush);
+    return s_resampler;
+}
+
+inline size_t PackMono16kTo24k(const int16_t* source, size_t count_16k, uint32_t factor, int32_t* output, bool flush = false) {
+    return GlobalResampler16kTo24k().Process(source, count_16k, factor, output, flush);
+}
+
+inline void ResetResampler16kTo24k() {
+    GlobalResampler16kTo24k().Reset();
 }
 }

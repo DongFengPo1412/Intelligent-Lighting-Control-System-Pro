@@ -100,22 +100,20 @@ def process_speaker_audio(pcm_bytes, gain=0.62):
     b_hp, a_hp = scipy.signal.butter(2, 105.0 / (sr / 2.0), btype="high")
     hp = scipy.signal.lfilter(b_hp, a_hp, s)
 
-    target_ceiling = min(0.95, max(0.40, g))
-    p_high = float(np.percentile(np.abs(hp), 99.5))
-    if p_high < 1e-4:
+    target_ceiling = min(0.85, max(0.40, g))
+    peak = float(np.max(np.abs(hp)))
+    if peak < 1e-4:
         return (np.clip(hp, -target_ceiling, target_ceiling) * 32767.0).astype("<i2").tobytes()
 
-    norm_gain = min(2.5, target_ceiling / p_high)
-    scaled = hp * norm_gain
+    # 纯线性增益缩放，杜绝非线性 tanh 饱和失真与削顶变糊
+    # 保持 -2.5dB (~0.75) 干净数字余量，避免 MAX98357A 在 5V 供电轨 100% 音量下发生模拟轨削顶
+    if peak > target_ceiling:
+        gain_scale = target_ceiling / peak
+    else:
+        # 对于较轻柔的曲目，允许最高 1.25x 线性轻度增益，且严格受限于 target_ceiling
+        gain_scale = min(1.25, target_ceiling / peak) if peak > 0 else 1.0
 
-    th = target_ceiling * 0.84
-    abs_s = np.abs(scaled)
-    sign_s = np.sign(scaled)
-    out = np.where(
-        abs_s <= th,
-        scaled,
-        sign_s * (th + (target_ceiling - th) * np.tanh((abs_s - th) / (target_ceiling - th))),
-    )
+    out = hp * gain_scale
     return (np.clip(out, -target_ceiling, target_ceiling) * 32767.0).astype("<i2").tobytes()
 
 

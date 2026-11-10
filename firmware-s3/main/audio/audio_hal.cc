@@ -371,6 +371,7 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
 
     // 采用对齐中阶 NoAudioCodec 的音量平方律映射与 16k -> 24k 重采样:
     const uint32_t v_factor = volume_factor_.load();
+    audio_pcm::ResetResampler16kTo24k();
 
     while (written_total < count) {
         size_t frames_in = std::min(chunk_size, count - written_total);
