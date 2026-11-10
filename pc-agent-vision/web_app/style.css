@@ -217,6 +217,32 @@
 [data-theme="day"] .hero-secondary {
   color: var(--accent);
 }
+[data-theme="day"] #heroPlayMario {
+  border: 1px solid #a8382a;
+  background: #faede9;
+  color: #8e2216;
+  font-weight: 700;
+}
+[data-theme="day"] #heroPlayMario:hover {
+  background: #f5ddd6;
+  border-color: #731b11;
+  color: #731b11;
+}
+[data-theme="day"] .connection-pill {
+  color: #1b5e20;
+  font-weight: 500;
+}
+[data-theme="day"] .connection-pill.offline {
+  color: #8c361e;
+  font-weight: 600;
+}
+[data-theme="day"] .status-dot {
+  background: #8c361e;
+}
+[data-theme="day"] .connected .status-dot {
+  background: #2e7d32;
+  box-shadow: 0 0 6px rgba(46, 125, 50, 0.3);
+}
 [data-theme="day"] .chat-message > span {
   color: var(--muted);
 }
@@ -869,7 +895,7 @@ small,
   color: #b9c5ba;
 }
 .connection-pill.offline {
-  color: #d2a18b;
+  color: #e5a892;
 }
 .avatar-small {
   width: 35px;
@@ -1026,6 +1052,21 @@ main {
   background: transparent;
   color: #d6b9ab;
   padding: 10px 0;
+}
+#heroPlayMario {
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  background: rgba(185, 28, 28, 0.45);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#heroPlayMario:hover {
+  background: rgba(220, 38, 38, 0.6);
+  border-color: rgba(252, 165, 165, 0.8);
 }
 .hero-footnote {
   display: block;
