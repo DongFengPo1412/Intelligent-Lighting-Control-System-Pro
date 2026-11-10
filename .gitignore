@@ -6,6 +6,7 @@ out/
 dist/
 *.tmp
 *.log
+*.bin
 
 # ESP-IDF
 firmware-s3/build/
