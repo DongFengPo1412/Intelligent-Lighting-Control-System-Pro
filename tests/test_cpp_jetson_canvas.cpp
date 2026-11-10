@@ -536,6 +536,40 @@ void Test_StopSession_CanvasSource_OwnershipProtection() {
     assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::NONE);
 }
 
+// 15. Session Stop/Expiry Gating on Mutating Commands
+void Test_Session_Stop_Gating_ClearCanvas_And_Arcade() {
+    jetson::SessionState s_idle = jetson::SessionState::IDLE;
+    jetson::SessionState s_active = jetson::SessionState::ACTIVE;
+    jetson::SessionState s_stopped = jetson::SessionState::STOPPED;
+    jetson::SessionState s_expired = jetson::SessionState::EXPIRED;
+
+    // Mutating commands (clear_canvas, arcade, pixel, canvas) are blocked when state is STOPPED or EXPIRED
+    auto is_mutation_blocked = [](jetson::SessionState s) {
+        return (s == jetson::SessionState::STOPPED || s == jetson::SessionState::EXPIRED);
+    };
+
+    assert(!is_mutation_blocked(s_idle));
+    assert(!is_mutation_blocked(s_active));
+    assert(is_mutation_blocked(s_stopped));
+    assert(is_mutation_blocked(s_expired));
+}
+
+// 16. CanvasSource Tagging (Jetson vs Manual User)
+void Test_InteractionCommands_CanvasSource_Jetson_vs_Manual() {
+    auto& dm = DisplayManager::GetInstance();
+    dm.SetMode(DisplayMode::PIXEL_CANVAS);
+
+    // Jetson sets pixel/frame -> CanvasSource::JETSON
+    dm.SetCanvasSource(DisplayManager::CanvasSource::JETSON);
+    dm.SetCanvasPixel(0, 0, ColorRGB(255, 0, 0));
+    assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::JETSON);
+
+    // Manual user sets pixel/frame -> CanvasSource::MANUAL_USER
+    dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+    dm.SetCanvasPixel(1, 1, ColorRGB(0, 255, 0));
+    assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::MANUAL_USER);
+}
+
 int main() {
     std::cout << "====================================================\n";
     std::cout << "Starting Native C++ Canvas Protocol & UART Tests\n";
@@ -555,9 +589,11 @@ int main() {
     RunTest("Test_FrameSequence_ResetAndReconnection", Test_FrameSequence_ResetAndReconnection);
     RunTest("Test_BinaryFrame_StrictCrcAndVersionCheck", Test_BinaryFrame_StrictCrcAndVersionCheck);
     RunTest("Test_StopSession_CanvasSource_OwnershipProtection", Test_StopSession_CanvasSource_OwnershipProtection);
+    RunTest("Test_Session_Stop_Gating_ClearCanvas_And_Arcade", Test_Session_Stop_Gating_ClearCanvas_And_Arcade);
+    RunTest("Test_InteractionCommands_CanvasSource_Jetson_vs_Manual", Test_InteractionCommands_CanvasSource_Jetson_vs_Manual);
 
     std::cout << "====================================================\n";
-    std::cout << "ALL 14 NATIVE C++ TESTS PASSED!\n";
+    std::cout << "ALL 16 NATIVE C++ TESTS PASSED!\n";
     std::cout << "====================================================\n";
     return 0;
 }

@@ -271,3 +271,8 @@ class JetsonUartTransport:
         except Exception:
             pass
 
+
+# Friendly alias for handoff docs and concise scripts
+UartTransport = JetsonUartTransport
+
+

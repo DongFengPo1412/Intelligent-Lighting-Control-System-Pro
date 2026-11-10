@@ -148,6 +148,31 @@ class CommandBuilder:
         return json.dumps(cmd)
 
     @staticmethod
+    def session_start(
+        session_id: str = "canvas_stream",
+        initial_seq: int = 0,
+        mode_name: Optional[str] = None,
+        take_control: bool = False,
+        req_id: Optional[str] = None,
+    ) -> str:
+        return CommandBuilder.session(
+            action="start",
+            session_id=session_id,
+            mode_name=mode_name,
+            initial_seq=initial_seq,
+            take_control=take_control,
+            req_id=req_id,
+        )
+
+    @staticmethod
+    def session_ping(req_id: Optional[str] = None) -> str:
+        return CommandBuilder.session(action="ping", req_id=req_id)
+
+    @staticmethod
+    def session_stop(req_id: Optional[str] = None) -> str:
+        return CommandBuilder.session(action="stop", req_id=req_id)
+
+    @staticmethod
     def track_cal(
         x0: float = 0.0,
         y0: float = 0.0,

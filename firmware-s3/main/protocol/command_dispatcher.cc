@@ -445,7 +445,8 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
     ESP_LOGD(TAG, "Command: %s", cmd);
     DisplayManager& dm = DisplayManager::GetInstance();
     if(!strcmp(cmd,"audio_abort")){AbortAudio();cJSON_Delete(root);return true;}
-    int extended=HandleInteractionCommand(cmd,root,dm);
+    DisplayManager::CanvasSource canvas_source = is_manual_user ? DisplayManager::CanvasSource::MANUAL_USER : DisplayManager::CanvasSource::JETSON;
+    int extended = HandleInteractionCommand(cmd, root, dm, canvas_source);
     if(extended>=0){cJSON_Delete(root);return extended==1;}
 
     // {"cmd":"countdown", "seconds":60}

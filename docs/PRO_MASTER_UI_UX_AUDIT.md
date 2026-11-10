@@ -54,3 +54,4 @@
 2. **升级兼容性**：
    - Manifest 中 `versionCode=30`，`versionName="2.2.0"`；
    - 采用持久化官方签名密钥 `kurisu_release.keystore` 签名，保证现有用户直接无损覆盖升级，保留原有 WiFi 配置与偏好。
+

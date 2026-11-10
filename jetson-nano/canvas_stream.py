@@ -1,11 +1,16 @@
 """Jetson Nano 16x16 Universal Pixel Canvas Streamer & Procedural Animation Generators.
 Supports single pixel, 2-chunk JSON with CRC, and 1-shot high-speed binary frame delivery.
 """
+import logging
 import math
 import random
+import threading
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Union
+
 from protocol import BIN_FULL_FRAME, CommandBuilder, pack_binary_frame
+
+logger = logging.getLogger("CanvasStreamer")
 
 ColorRGB = Tuple[int, int, int]
 
@@ -20,6 +25,12 @@ class CanvasStreamer:
         self.last_committed = False
         self.last_displayed = False
         self.last_overridden = False
+        self.session_active = False
+        self.session_id = ""
+        self._heartbeat_thread = None
+        self._stop_heartbeat = threading.Event()
+        self.heartbeat_alive = False
+        self.last_heartbeat_time = 0.0
 
     @property
     def is_displayed(self) -> bool:
@@ -40,37 +51,132 @@ class CanvasStreamer:
         """Resets the client-side frame sequence number."""
         self.frame_seq = int(initial_seq)
 
+    def start(
+        self,
+        session_id: str = "canvas_stream",
+        initial_seq: int = 0,
+        mode_name: str = None,
+        take_control: bool = False,
+        heartbeat_interval: float = 3.0,
+        timeout: float = 2.0,
+    ) -> bool:
+        """Starts a vision canvas streaming session with the ESP32.
+
+        Sends session_start command, verifies ESP32 ACK ('active': True),
+        resets sequence number, and spawns background heartbeat thread.
+        """
+        if hasattr(self.transport, "is_connected") and not self.transport.is_connected:
+            if hasattr(self.transport, "connect"):
+                self.transport.connect()
+
+        self.reset_sequence(initial_seq)
+        cmd = CommandBuilder.session_start(
+            session_id=session_id,
+            initial_seq=initial_seq,
+            mode_name=mode_name,
+            take_control=take_control,
+        )
+        reply = self.transport.send_line(cmd, wait_reply=True, timeout=timeout)
+        if not reply or reply.get("status") != "ok" or not reply.get("active"):
+            logger.error(f"[CanvasStreamer] Session start failed. Reply: {reply}")
+            self.session_active = False
+            return False
+
+        self.session_id = session_id
+        self.session_active = True
+        self.heartbeat_alive = True
+        self.last_heartbeat_time = time.time()
+
+        # Stop any existing heartbeat thread
+        self._stop_heartbeat.set()
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=1.0)
+
+        self._stop_heartbeat.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_worker,
+            args=(heartbeat_interval, timeout),
+            daemon=True,
+            name="CanvasHeartbeatWorker",
+        )
+        self._heartbeat_thread.start()
+        logger.info(f"[CanvasStreamer] Session '{session_id}' started (seq={initial_seq}). Heartbeat active.")
+        return True
+
+    def _heartbeat_worker(self, interval: float, timeout: float):
+        while not self._stop_heartbeat.wait(interval):
+            if not self.session_active:
+                break
+            try:
+                cmd = CommandBuilder.session_ping()
+                reply = self.transport.send_line(cmd, wait_reply=True, timeout=timeout)
+                if reply and reply.get("status") == "ok" and reply.get("active", True):
+                    self.heartbeat_alive = True
+                    self.last_heartbeat_time = time.time()
+                else:
+                    self.heartbeat_alive = False
+                    logger.warning(f"[CanvasStreamer] Heartbeat ping unacknowledged: {reply}")
+            except Exception as e:
+                self.heartbeat_alive = False
+                logger.warning(f"[CanvasStreamer] Heartbeat ping exception: {e}")
+
+    def stop(self, timeout: float = 1.0) -> bool:
+        """Stops the session and terminates heartbeat thread."""
+        self._stop_heartbeat.set()
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=1.0)
+        self._heartbeat_thread = None
+
+        self.session_active = False
+        cmd = CommandBuilder.session_stop()
+        reply = self.transport.send_line(cmd, wait_reply=True, timeout=timeout)
+        logger.info("[CanvasStreamer] Session stopped.")
+        return reply is not None and reply.get("status") == "ok"
+
     def send_pixel(self, x: int, y: int, r: int, g: int, b: int, auto_mode: bool = True) -> bool:
         cmd = CommandBuilder.pixel(x, y, r, g, b, auto_mode=auto_mode)
         reply = self.transport.send_line(cmd, wait_reply=True)
         return reply is not None and reply.get("status") == "ok"
 
-    def send_binary_frame(
-        self, colors: List[ColorRGB], auto_mode: bool = True, timeout: float = 1.0, require_displayed: bool = False
+    def send_full_frame(
+        self,
+        frame_data: Union[bytes, bytearray, List[ColorRGB], List[int]],
+        auto_mode: bool = True,
+        timeout: float = 1.0,
+        require_displayed: bool = False,
     ) -> bool:
         """Sends full 16x16 frame (768 bytes) in a single high-speed binary packet and verifies ESP32 commit ACK.
-        
-        Args:
-            colors: 256 RGB tuples
-            auto_mode: whether to switch display to Mode 29 if not overridden
-            timeout: response timeout in seconds
-            require_displayed: if True, returns True only if the frame was actually rendered to the display
+
+        Supports:
+            - bytes or bytearray of length 768
+            - list of 256 (r, g, b) tuples
+            - list of 768 integers
         """
-        if len(colors) != 256:
-            raise ValueError(f"Expected exactly 256 pixels, got {len(colors)}")
+        if isinstance(frame_data, (bytes, bytearray)):
+            payload = bytes(frame_data)
+            if len(payload) != 768:
+                raise ValueError(f"Expected 768 bytes, got {len(payload)}")
+        elif isinstance(frame_data, (list, tuple)):
+            if len(frame_data) == 256:
+                raw = bytearray(768)
+                for i, (r, g, b) in enumerate(frame_data):
+                    idx = i * 3
+                    raw[idx] = max(0, min(255, int(r)))
+                    raw[idx + 1] = max(0, min(255, int(g)))
+                    raw[idx + 2] = max(0, min(255, int(b)))
+                payload = bytes(raw)
+            elif len(frame_data) == 768:
+                payload = bytes([max(0, min(255, int(v))) for v in frame_data])
+            else:
+                raise ValueError(f"Expected 256 RGB tuples or 768 bytes, got length {len(frame_data)}")
+        else:
+            raise TypeError(f"Unsupported frame data type: {type(frame_data)}")
 
         self.frame_seq = (self.frame_seq + 1) & 0xFFFF
-        raw_payload = bytearray(768)
-        for i, (r, g, b) in enumerate(colors):
-            idx = i * 3
-            raw_payload[idx] = max(0, min(255, int(r)))
-            raw_payload[idx + 1] = max(0, min(255, int(g)))
-            raw_payload[idx + 2] = max(0, min(255, int(b)))
-
         packet = pack_binary_frame(
             frame_type=BIN_FULL_FRAME,
             frame_seq=self.frame_seq,
-            payload=bytes(raw_payload),
+            payload=payload,
             offset=0,
             commit_now=True,
             auto_mode=auto_mode,
@@ -86,13 +192,22 @@ class CanvasStreamer:
             return False
 
         self.last_reply = reply
-        self.last_committed = (reply.get("status") == "ok" and reply.get("committed", False) is True)
+        self.last_committed = bool(reply.get("status") == "ok" and reply.get("committed", False) is True)
         self.last_overridden = bool(reply.get("mode_overridden", False))
-        self.last_displayed = bool(reply.get("displayed", self.last_committed and not self.last_overridden))
+        if "displayed" in reply:
+            self.last_displayed = bool(reply.get("displayed"))
+        else:
+            self.last_displayed = bool(self.last_committed and not self.last_overridden)
 
         if require_displayed:
             return self.last_displayed
         return self.last_committed
+
+    def send_binary_frame(
+        self, colors: List[ColorRGB], auto_mode: bool = True, timeout: float = 1.0, require_displayed: bool = False
+    ) -> bool:
+        """Legacy helper: sends 256 RGB tuples."""
+        return self.send_full_frame(colors, auto_mode=auto_mode, timeout=timeout, require_displayed=require_displayed)
 
     def send_chunked_frame(
         self, colors: List[ColorRGB], chunk_count: int = 2, auto_mode: bool = True, require_displayed: bool = False

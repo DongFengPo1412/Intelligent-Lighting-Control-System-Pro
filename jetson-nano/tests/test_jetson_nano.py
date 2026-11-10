@@ -113,6 +113,10 @@ class TestVisionMapper(unittest.TestCase):
 
 
 class TestCanvasStreamerAck(unittest.TestCase):
+    def test_uart_transport_alias(self):
+        from uart_transport import UartTransport, JetsonUartTransport
+        self.assertIs(UartTransport, JetsonUartTransport)
+
     def test_streamer_ack_distinction(self):
         from canvas_stream import CanvasStreamer
 
@@ -121,7 +125,7 @@ class TestCanvasStreamerAck(unittest.TestCase):
                 self.reply = reply
             def send_raw_with_ack(self, pkt, expected_frame_seq, timeout=1.0):
                 return self.reply
-            def send_line(self, line, wait_reply=True):
+            def send_line(self, line, wait_reply=True, timeout=1.0):
                 return self.reply
 
         # When overridden by user manual control
@@ -141,6 +145,82 @@ class TestCanvasStreamerAck(unittest.TestCase):
         self.assertTrue(ok2)
         self.assertTrue(st2.is_displayed)
         self.assertFalse(st2.is_overridden)
+
+    def test_streamer_lifecycle_start_and_stop(self):
+        from canvas_stream import CanvasStreamer
+
+        class ScriptedTransport:
+            def __init__(self):
+                self.lines_sent = []
+                self.raw_sent = []
+            def send_line(self, line, wait_reply=True, timeout=1.0):
+                self.lines_sent.append(line)
+                parsed = json.loads(line)
+                act = parsed.get("action")
+                if act == "start":
+                    return {"status": "ok", "active": True, "session_id": parsed.get("session_id", "")}
+                elif act == "ping":
+                    return {"status": "ok", "active": True}
+                elif act == "stop":
+                    return {"status": "ok", "session_state": "stopped"}
+                return {"status": "ok"}
+            def send_raw_with_ack(self, pkt, expected_frame_seq, timeout=1.0):
+                self.raw_sent.append(pkt)
+                return {"status": "ok", "type": "bin_frame", "frame_id": expected_frame_seq, "committed": True, "displayed": True}
+
+        tr = ScriptedTransport()
+        st = CanvasStreamer(tr)
+        # 1. Start session
+        started = st.start(session_id="test_sess_01", initial_seq=10, heartbeat_interval=0.2)
+        self.assertTrue(started)
+        self.assertTrue(st.session_active)
+        self.assertEqual(st.frame_seq, 10)
+
+        # 2. Send full frame using 768-byte bytes object (as in handoff doc)
+        raw_red = bytes([255, 0, 0] * 256)
+        ok_frame = st.send_full_frame(raw_red, auto_mode=True)
+        self.assertTrue(ok_frame)
+        self.assertEqual(st.frame_seq, 11)
+        self.assertTrue(st.is_committed)
+        self.assertTrue(st.is_displayed)
+
+        # 3. Stop session
+        stopped = st.stop()
+        self.assertTrue(stopped)
+        self.assertFalse(st.session_active)
+
+    def test_streamer_start_failure_rejected(self):
+        from canvas_stream import CanvasStreamer
+
+        class FailingTransport:
+            def send_line(self, line, wait_reply=True, timeout=1.0):
+                return {"status": "error", "error": "session_rejected", "active": False}
+
+        st = CanvasStreamer(FailingTransport())
+        started = st.start(session_id="fail_sess")
+        self.assertFalse(started)
+        self.assertFalse(st.session_active)
+
+    def test_send_full_frame_accepts_bytes_and_list(self):
+        from canvas_stream import CanvasStreamer
+
+        class EchoTransport:
+            def send_raw_with_ack(self, pkt, expected_frame_seq, timeout=1.0):
+                return {"status": "ok", "type": "bin_frame", "frame_id": expected_frame_seq, "committed": True, "displayed": True}
+
+        st = CanvasStreamer(EchoTransport())
+        # A. bytes of length 768
+        self.assertTrue(st.send_full_frame(b"\x10" * 768))
+
+        # B. list of 256 RGB tuples
+        self.assertTrue(st.send_full_frame([(10, 20, 30)] * 256))
+
+        # C. list of 768 ints
+        self.assertTrue(st.send_full_frame([42] * 768))
+
+        # D. invalid size raises ValueError
+        with self.assertRaises(ValueError):
+            st.send_full_frame(b"\x00" * 100)
 
 
 if __name__ == "__main__":

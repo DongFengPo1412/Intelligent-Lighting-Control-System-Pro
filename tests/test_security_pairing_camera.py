@@ -641,8 +641,33 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             req = MockRequest(sens_path)
             self.assertFalse(policy.authorized(req), f"Sensitive path {sens_path} MUST be rejected without token even on trusted network")
 
+        # Explicit Default-Deny check on critical sensitive endpoints
+        for unlisted_sens_path in [
+            "/api/pro/camera/feed",
+            "/api/pro/camera/frame",
+            "/api/pro/vision/frame",
+            "/api/pro/enroll",
+            "/api/pro/calibrate",
+            "/api/pro/device-tool",
+            "/api/pro/library",
+            "/api/pro/unknown_action",
+        ]:
+            req = MockRequest(unlisted_sens_path)
+            self.assertFalse(
+                policy.authorized(req),
+                f"Unlisted/dynamic path {unlisted_sens_path} MUST be default-denied on LAN without token"
+            )
+
         # B. Trusted LAN peer WITH token -> ALLOWED everywhere
-        for sens_path in SENSITIVE_ENDPOINTS:
+        for sens_path in list(SENSITIVE_ENDPOINTS) + [
+            "/api/pro/camera/feed",
+            "/api/pro/camera/frame",
+            "/api/pro/vision/frame",
+            "/api/pro/enroll",
+            "/api/pro/calibrate",
+            "/api/pro/device-tool",
+            "/api/pro/library",
+        ]:
             req = MockRequest(sens_path, token_header=token)
             self.assertTrue(policy.authorized(req), f"Sensitive path {sens_path} with token must be allowed")
 

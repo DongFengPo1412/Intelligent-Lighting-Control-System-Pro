@@ -10,9 +10,9 @@
 
 | 交付组件 | 产物文件名与路径 | 版本标识 | 文件大小 | SHA-256 校验和 |
 | :--- | :--- | :---: | :---: | :--- |
-| **ESP32-S3 生产固件** | `firmware-s3/build/s3_led_matrix_test.bin` | `v2.3.1-pro` | 1,604,912 字节 | `01CB3F6AC9C52DB7D5E570FADD2AD1BC470B759E30B29FB8FCC0850AFD7FC866` |
+| **ESP32-S3 生产固件** | `firmware-s3/build/s3_led_matrix_test.bin` | `v2.3.1-pro` | 1,605,120 字节 | `03B334D413D7471F147E0A38A4040929C7C4B9A948C924CA6A8DC6B7BFE0A402` |
 | **Android 生产客户端** | `android-app/Kurisu_Amadeus_v2.2.0_pro.apk` | `2.2.0 (30)` | 2,845,153 字节 | `E6D92232205EBE5AB066F65B473D913C27DD789A810D825AC76E8BC43E5EA78B` |
-| **Jetson 独立开发包** | `jetson-nano.zip` | `v2.3.1` | 21,230 字节 | `796C4CA987E2D879FD78987DB764852E2E5B0437FFB3402019B7DBCE55311265` |
+| **Jetson 独立开发包** | `jetson-nano.zip` | `v2.3.1` | 47,862 字节 | `1443DFD58D9FF4A6FD909A95FDB89AFB1169A277A45AEAE8668B6F1CEF618458` |
 
 ---
 
@@ -26,7 +26,7 @@
 python -m esptool -p COM9 -b 460800 --chip esp32s3 write_flash 0x20000 firmware-s3/build/s3_led_matrix_test.bin
 
 # 烧录后回读校验命令
-python -m esptool -p COM9 -b 460800 --chip esp32s3 read_flash 0x20000 1604912 readback.bin
+python -m esptool -p COM9 -b 460800 --chip esp32s3 read_flash 0x20000 1605120 readback.bin
 Get-FileHash -Algorithm SHA256 firmware-s3/build/s3_led_matrix_test.bin, readback.bin
 ```
 
@@ -55,3 +55,4 @@ python web_server.py
 adb install -r android-app/Kurisu_Amadeus_v2.2.0_pro.apk
 ```
 应用保持原有官方 keystore 签名，直接覆盖旧版并保留历史配对密钥。
+

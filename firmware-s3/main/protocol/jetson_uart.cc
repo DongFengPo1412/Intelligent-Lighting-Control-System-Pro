@@ -514,11 +514,8 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
 
                 DisplayManager& dm = DisplayManager::GetInstance();
                 bool manual_active = dm.IsManualOverrideActive();
-                cJSON* take_ctrl = cJSON_GetObjectItemCaseSensitive(root, "take_control");
-                if (take_ctrl && cJSON_IsTrue(take_ctrl)) {
-                    dm.SetManualOverride(false);
-                    manual_active = false;
-                }
+                // Human user control priority: Jetson UART cannot unilaterally clear manual override.
+                // If human user set manual mode on App/Web, manual_override remains protected.
                 cJSON* mode_item = cJSON_GetObjectItemCaseSensitive(root, "mode");
                 bool mode_executed = false;
                 if (mode_item) {
@@ -727,6 +724,22 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
             }
             cJSON_Delete(resp);
         } else if (!strcasecmp(cmd, "clear_canvas") || !strcasecmp(cmd, "canvas_clear")) {
+            SessionState state = GetInstance().GetSessionState();
+            if (state == SessionState::STOPPED || state == SessionState::EXPIRED) {
+                cJSON* resp = cJSON_CreateObject();
+                cJSON_AddStringToObject(resp, "status", "error");
+                cJSON_AddStringToObject(resp, "error", (state == SessionState::STOPPED) ? "session_stopped" : "session_expired");
+                cJSON_AddBoolToObject(resp, "cleared", false);
+                append_req_id(resp);
+                char* rendered = cJSON_PrintUnformatted(resp);
+                if (rendered) {
+                    snprintf(out_reply, out_reply_size, "%s", rendered);
+                    cJSON_free(rendered);
+                }
+                cJSON_Delete(resp);
+                return;
+            }
+
             uint8_t r = 0, g = 0, b = 0;
             auto* r_item = cJSON_GetObjectItemCaseSensitive(root, "r");
             auto* g_item = cJSON_GetObjectItemCaseSensitive(root, "g");
@@ -752,6 +765,22 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
         } else if (!strcasecmp(cmd, "arcade")) {
             cJSON* act_item = cJSON_GetObjectItemCaseSensitive(root, "action");
             const char* act = (act_item && cJSON_IsString(act_item)) ? act_item->valuestring : "";
+
+            SessionState state = GetInstance().GetSessionState();
+            if (strcasecmp(act, "status") != 0 && (state == SessionState::STOPPED || state == SessionState::EXPIRED)) {
+                cJSON* resp = cJSON_CreateObject();
+                cJSON_AddStringToObject(resp, "status", "error");
+                cJSON_AddStringToObject(resp, "error", (state == SessionState::STOPPED) ? "session_stopped" : "session_expired");
+                cJSON_AddBoolToObject(resp, "executed", false);
+                append_req_id(resp);
+                char* rendered = cJSON_PrintUnformatted(resp);
+                if (rendered) {
+                    snprintf(out_reply, out_reply_size, "%s", rendered);
+                    cJSON_free(rendered);
+                }
+                cJSON_Delete(resp);
+                return;
+            }
 
             if (!strcasecmp(act, "status")) {
                 auto& am = arcade::ArcadeManager::GetInstance();

@@ -18,6 +18,37 @@ REVOKED_TOKENS = frozenset({
 })
 
 
+# Explicit safe unauthenticated LAN endpoints (Default-Deny policy).
+# Only safe telemetry, basic lighting commands, and general chat are permitted
+# unauthenticated from trusted private LAN subnets when trust_private is enabled.
+# ALL other endpoints (camera feeds, face enroll, device tools, music library/upload,
+# memory, documents, MCP, settings, restart, calibration, dynamic actions) strictly
+# require valid token/cookie or localhost loopback.
+SAFE_UNAUTHENTICATED_LAN_ENDPOINTS = frozenset({
+    "/api/health",
+    "/api/auth/challenge",
+    "/api/pair",
+    "/api/status",
+    "/api/pro/status",
+    "/api/state",
+    "/api/preview",
+    "/api/display/frame",
+    "/api/game/mario/frame",
+    "/api/arcade/frame",
+    "/api/command",
+    "/api/mode",
+    "/api/brightness",
+    "/api/volume",
+    "/api/cmd",
+    "/api/game",
+    "/api/arcade",
+    "/api/ceremony",
+    "/api/chat",
+    "/api/pro/chat",
+    "/api/retry_warmup",
+    "/ws",
+})
+
 # Sensitive endpoints strictly requiring token/cookie pairing or localhost loopback,
 # even if client IP belongs to trusted private network.
 SENSITIVE_ENDPOINTS = (
@@ -25,6 +56,12 @@ SENSITIVE_ENDPOINTS = (
     "/api/pro/memories",
     "/api/pro/memory",
     "/api/pro/face",
+    "/api/pro/enroll",
+    "/api/pro/camera",
+    "/api/pro/vision",
+    "/api/pro/device-tool",
+    "/api/pro/library",
+    "/api/pro/calibrate",
     "/api/pro/music-upload",
     "/api/config",
     "/api/restart",
@@ -130,14 +167,18 @@ class AccessPolicy:
                 bearer.encode('utf-8'), self.xiaozhi_token.encode('utf-8')):
             return True # Scoped compatibility with the existing optional native adapter.
 
-        # 2. Graded security policy:
+        # 2. Strict Default-Deny LAN security policy:
         # Trusted private network peers can perform everyday non-sensitive control (lighting, status, chat)
-        # without pairing, but sensitive operations (privacy documents, memories, face database, arbitrary file upload, MCP tool execution)
-        # strictly require explicit token/cookie pairing or localhost loopback.
+        # without pairing, ONLY IF the endpoint is explicitly in SAFE_UNAUTHENTICATED_LAN_ENDPOINTS.
+        # ALL other endpoints (camera feed/frame, face enrollment, device tools, music library/upload,
+        # documents, memories, MCP tools, settings, restart, calibration, dynamic actions) strictly
+        # require explicit token/cookie pairing or localhost loopback.
         if self.trust_private and self.is_trusted_peer(request.remote or ""):
-            is_sensitive = any(request.path.startswith(prefix) for prefix in SENSITIVE_ENDPOINTS)
-            if not is_sensitive:
+            path = getattr(request, "path", "")
+            norm_path = path.rstrip("/") if path != "/" else "/"
+            if norm_path in SAFE_UNAUTHENTICATED_LAN_ENDPOINTS:
                 return True
+            return False
 
         return False
 

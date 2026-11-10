@@ -16,7 +16,7 @@ bool boolean(cJSON* r,const char* key,bool& out) {
 }
 int digit(char c) { if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;if(c>='A'&&c<='F')return c-'A'+10;return -1; }
 }
-int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
+int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm,DisplayManager::CanvasSource source) {
     double x=0,y=0,z=0,a=0,b=0,c=0;bool first=false,second=false;
     if(!strcmp(cmd,"frame"))return 1;
     if(!strcmp(cmd,"celebrate")) { dm.Celebrate();return 1; }
@@ -65,7 +65,7 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
-        dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+        dm.SetCanvasSource(source);
         dm.SetCanvasPixel((int)x,(int)y,ColorRGB((uint8_t)a,(uint8_t)b,(uint8_t)c));
         return 1;
     }
@@ -82,7 +82,7 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm) {
         if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
-        dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+        dm.SetCanvasSource(source);
         dm.SetCanvasFrame(colors);
         return 1;
     }
