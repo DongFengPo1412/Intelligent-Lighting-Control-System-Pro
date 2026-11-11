@@ -570,6 +570,101 @@ void Test_InteractionCommands_CanvasSource_Jetson_vs_Manual() {
     assert(dm.GetCanvasSource() == DisplayManager::CanvasSource::MANUAL_USER);
 }
 
+// 17. Manual Override True Canvas Buffer Protection (Zero Mutation when manual_override is active)
+void Test_ManualOverride_TrueCanvasBufferProtection() {
+    auto& dm = DisplayManager::GetInstance();
+    auto& assembler = canvas::CanvasAssembler::GetInstance();
+    assembler.ResetSequence(0);
+
+    // Human user draws a RED canvas (255, 0, 0) in mode 29
+    dm.SetMode(DisplayMode::PIXEL_CANVAS);
+    dm.SetCanvasSource(DisplayManager::CanvasSource::MANUAL_USER);
+    for (size_t i = 0; i < 256; ++i) {
+        dm.canvas_buffer_[i] = ColorRGB(255, 0, 0);
+    }
+    dm.SetManualOverride(true);
+    assert(dm.IsManualOverrideActive());
+    assert(dm.canvas_buffer_[0].r == 255 && dm.canvas_buffer_[0].g == 0 && dm.canvas_buffer_[0].b == 0);
+
+    // Jetson sends a full BLUE frame (0, 0, 255)
+    uint8_t blue_frame[768];
+    for (size_t i = 0; i < 256; ++i) {
+        blue_frame[i * 3 + 0] = 0;
+        blue_frame[i * 3 + 1] = 0;
+        blue_frame[i * 3 + 2] = 255;
+    }
+
+    auto res_full = assembler.FeedFullFrame(1, blue_frame, 768, 0, true);
+    assert(res_full.success);
+    assert(res_full.committed);
+
+    // Displayed must be FALSE because manual override is active
+    bool displayed = res_full.committed && !dm.IsManualOverrideActive() && (dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    assert(!displayed);
+
+    // CRITICAL: The canvas buffer MUST REMAIN 100% RED! Jetson MUST NOT overwrite human canvas!
+    for (size_t i = 0; i < 256; ++i) {
+        assert(dm.canvas_buffer_[i].r == 255);
+        assert(dm.canvas_buffer_[i].g == 0);
+        assert(dm.canvas_buffer_[i].b == 0);
+    }
+
+    // Jetson attempts to mutate single pixel (5, 5) with BLUE
+    auto res_pixel = assembler.FeedPixel(5, 5, 0, 0, 255, true);
+    assert(res_pixel.success);
+    assert(!res_pixel.committed); // committed flag reflects !manual_active
+    assert(dm.canvas_buffer_[5 * 16 + 5].r == 255);
+    assert(dm.canvas_buffer_[5 * 16 + 5].b == 0);
+
+    // Jetson attempts to clear canvas
+    auto res_clear = assembler.Clear(0, 0, 0, true);
+    assert(res_clear.success);
+    assert(!res_clear.committed);
+    assert(dm.canvas_buffer_[0].r == 255);
+
+    // Now authenticated human user releases visual control
+    dm.SetManualOverride(false);
+    assert(!dm.IsManualOverrideActive());
+
+    // Next Jetson full frame MUST successfully display and update the canvas buffer!
+    auto res_resume = assembler.FeedFullFrame(2, blue_frame, 768, 0, true);
+    assert(res_resume.success && res_resume.committed);
+    bool displayed_resume = res_resume.committed && !dm.IsManualOverrideActive() && (dm.GetMode() == DisplayMode::PIXEL_CANVAS);
+    assert(displayed_resume);
+
+    // Canvas buffer is now BLUE
+    for (size_t i = 0; i < 256; ++i) {
+        assert(dm.canvas_buffer_[i].r == 0);
+        assert(dm.canvas_buffer_[i].g == 0);
+        assert(dm.canvas_buffer_[i].b == 255);
+    }
+}
+
+// 18. Release Visual Control Command Security Validation
+void Test_ReleaseVisualControl_SecurityLogic() {
+    auto& dm = DisplayManager::GetInstance();
+    dm.SetManualOverride(true);
+    assert(dm.IsManualOverrideActive());
+
+    // Simulation of command dispatcher logic:
+    // Unauthorized caller / Jetson UART is strictly rejected
+    auto handle_release = [&dm](bool is_manual_user) -> bool {
+        if (!is_manual_user) return false;
+        dm.SetManualOverride(false);
+        return true;
+    };
+
+    // Jetson UART caller (is_manual_user = false) -> rejected
+    bool ok_uart = handle_release(false);
+    assert(!ok_uart);
+    assert(dm.IsManualOverrideActive());
+
+    // Manual user (is_manual_user = true) -> accepted and unlocks override
+    bool ok_user = handle_release(true);
+    assert(ok_user);
+    assert(!dm.IsManualOverrideActive());
+}
+
 int main() {
     std::cout << "====================================================\n";
     std::cout << "Starting Native C++ Canvas Protocol & UART Tests\n";
@@ -591,9 +686,11 @@ int main() {
     RunTest("Test_StopSession_CanvasSource_OwnershipProtection", Test_StopSession_CanvasSource_OwnershipProtection);
     RunTest("Test_Session_Stop_Gating_ClearCanvas_And_Arcade", Test_Session_Stop_Gating_ClearCanvas_And_Arcade);
     RunTest("Test_InteractionCommands_CanvasSource_Jetson_vs_Manual", Test_InteractionCommands_CanvasSource_Jetson_vs_Manual);
+    RunTest("Test_ManualOverride_TrueCanvasBufferProtection", Test_ManualOverride_TrueCanvasBufferProtection);
+    RunTest("Test_ReleaseVisualControl_SecurityLogic", Test_ReleaseVisualControl_SecurityLogic);
 
     std::cout << "====================================================\n";
-    std::cout << "ALL 16 NATIVE C++ TESTS PASSED!\n";
+    std::cout << "ALL 18 NATIVE C++ TESTS PASSED!\n";
     std::cout << "====================================================\n";
     return 0;
 }

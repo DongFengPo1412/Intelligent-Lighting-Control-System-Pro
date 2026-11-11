@@ -104,6 +104,7 @@ class CanvasStreamer:
         return True
 
     def _heartbeat_worker(self, interval: float, timeout: float):
+        consecutive_failures = 0
         while not self._stop_heartbeat.wait(interval):
             if not self.session_active:
                 break
@@ -113,19 +114,46 @@ class CanvasStreamer:
                 if reply and reply.get("status") == "ok" and reply.get("active", True):
                     self.heartbeat_alive = True
                     self.last_heartbeat_time = time.time()
+                    consecutive_failures = 0
                 else:
+                    consecutive_failures += 1
                     self.heartbeat_alive = False
-                    logger.warning(f"[CanvasStreamer] Heartbeat ping unacknowledged: {reply}")
+                    logger.warning(f"[CanvasStreamer] Heartbeat ping unacknowledged ({consecutive_failures}/3): {reply}")
+                    if consecutive_failures >= 3:
+                        logger.error("[CanvasStreamer] 3 consecutive heartbeat ping failures! Deactivating session.")
+                        self.session_active = False
+                        break
             except Exception as e:
+                consecutive_failures += 1
                 self.heartbeat_alive = False
-                logger.warning(f"[CanvasStreamer] Heartbeat ping exception: {e}")
+                logger.warning(f"[CanvasStreamer] Heartbeat ping exception ({consecutive_failures}/3): {e}")
+                if consecutive_failures >= 3:
+                    logger.error("[CanvasStreamer] 3 consecutive heartbeat exceptions! Deactivating session.")
+                    self.session_active = False
+                    break
+
+    def release_keys(self, timeout: float = 1.0) -> bool:
+        """Explicitly releases any held arcade inputs."""
+        try:
+            cmd = CommandBuilder.arcade_input(down=0, pressed=0)
+            reply = self.transport.send_line(cmd, wait_reply=True, timeout=timeout)
+            return reply is not None and reply.get("status") == "ok"
+        except Exception:
+            return False
 
     def stop(self, timeout: float = 1.0) -> bool:
-        """Stops the session and terminates heartbeat thread."""
+        """Stops the session, releases arcade keys, and terminates heartbeat thread."""
         self._stop_heartbeat.set()
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=1.0)
         self._heartbeat_thread = None
+
+        # Auto-release any arcade keys on stop
+        try:
+            cmd_rel = CommandBuilder.arcade_input(down=0, pressed=0)
+            self.transport.send_line(cmd_rel, wait_reply=False)
+        except Exception:
+            pass
 
         self.session_active = False
         cmd = CommandBuilder.session_stop()
@@ -194,10 +222,8 @@ class CanvasStreamer:
         self.last_reply = reply
         self.last_committed = bool(reply.get("status") == "ok" and reply.get("committed", False) is True)
         self.last_overridden = bool(reply.get("mode_overridden", False))
-        if "displayed" in reply:
-            self.last_displayed = bool(reply.get("displayed"))
-        else:
-            self.last_displayed = bool(self.last_committed and not self.last_overridden)
+        # Strictly verify displayed field from ESP32 ACK; never guess True when missing
+        self.last_displayed = bool(reply.get("displayed", False))
 
         if require_displayed:
             return self.last_displayed
@@ -253,7 +279,8 @@ class CanvasStreamer:
         if last_reply:
             self.last_committed = (all_ok and last_reply.get("committed", False) is True)
             self.last_overridden = bool(last_reply.get("mode_overridden", False))
-            self.last_displayed = bool(last_reply.get("displayed", self.last_committed and not self.last_overridden))
+            # Strictly verify displayed field from ESP32 ACK; never guess True when missing
+            self.last_displayed = bool(last_reply.get("displayed", False))
         else:
             self.last_committed = False
             self.last_overridden = False

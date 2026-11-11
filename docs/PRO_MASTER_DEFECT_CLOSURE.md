@@ -117,18 +117,44 @@
   1. 明确区分 1,992 项自动化全生命周期测试通过 与 4 款代表作（#001, #020, #033, #041）实机硬件游玩验证；
   2. 引入 `[MEASURED]`、`[TESTED]`、`[DERIVED]`、`[PENDING_PHYSICAL_BURNIN]` 标定体系，移除未执行的 60 分钟烧机断言，保持技术诚信。
 
+### 11. DEF-M11: 手动画布内存真正物理隔离（人工控制期零污染）
+* **问题文件**：`firmware-s3/main/protocol/canvas_protocol.cc`, `interaction_commands.cc`
+* **根因**：原 `CanvasAssembler::CommitFrame()` 在人工独占激活时虽返回了 `displayed: false`，但仍无条件执行了 `dm.SetCanvasFrame(colors)`，导致 Web/App 用户正在绘制的画面被 Jetson 异步推流在内存中直接抹除。
+* **修复方案**：
+  1. 在 `CanvasAssembler::CommitFrame` 中引入防护门禁：仅在 `!dm.IsManualOverrideActive()` 时允许调用 `dm.SetCanvasFrame(colors)` 及设置 `JETSON` 来源；帧序号及确认回执仍正常核算以保持流水线同步；
+  2. 在 `CanvasAssembler::FeedPixel` 与 `Clear` 中同步增加 `!dm.IsManualOverrideActive()` 内存写入防护；
+  3. 在 `interaction_commands.cc` 的 `pixel` 与 `canvas` 中增加针对 `source == CanvasSource::JETSON` 的人工覆盖状态校验。
+* **测试证据**：原生 C++ 测试 `Test 17: Test_ManualOverride_TrueCanvasBufferProtection` 验证通过；人工手绘 RED 画布在 Jetson 持续灌注 BLUE 全帧、单像素与清屏指令下，内存缓冲区 100% 保持纯红不变。
+
+### 12. DEF-M12: 显式人工控制权释放与越权防护机制
+* **问题文件**：`firmware-s3/main/protocol/command_dispatcher.cc`, `jetson_uart.cc`
+* **根因**：系统缺乏合法退出人工独占保护的标准通道，导致人工使用结束后 Jetson 无法恢复自动切模；同时需严防 Jetson UART 越权盗用释放接口。
+* **修复方案**：
+  1. 在 `CommandDispatcher` 增加 `release_visual_control` 与 `release_control` 指令，**强制校验 `is_manual_user == true`**，仅允许经本地 USB 配对或合法 Web/App 调用的用户执行 `dm.SetManualOverride(false)`；
+  2. 将 `release_visual_control` 与 `release_control` 明确列入 `jetson_uart.cc` 的 `kDisallowedCmds` 禁止指令清单中，Jetson 端调用直接拒绝。
+* **测试证据**：原生 C++ 测试 `Test 18: Test_ReleaseVisualControl_SecurityLogic` 及 Python 安全测试 `test_15_strict_security_rejections` 验证通过。
+
+### 13. DEF-M13: Jetson 客户端心跳失联保护与退出按键自释放
+* **问题文件**：`jetson-nano/canvas_stream.py`
+* **根因**：Jetson 客户端在心跳失联后未主动标记停机；进程退出时若按键处于按下状态可能导致 ESP32 街机按键持续卡死；且存在将缺失 `displayed` 字段推断为 `True` 的潜在风险。
+* **修复方案**：
+  1. 在 `_heartbeat_worker` 中引入 3 次连续重试与失联门禁：连续 3 次心跳未被板端 ACK 则自动标记 `session_active = False` 并退出线程；
+  2. 在 `stop()` 中主动发送 `arcade_input(down=0, pressed=0)` 彻底释放所有物理按键；
+  3. 彻底移除推断默认 `True` 的逻辑，严格以板端返回的 `displayed` 布尔值为准（缺失即默认为 `False`）。
+* **测试证据**：`jetson-nano/tests/test_jetson_nano.py` 新增 3 项测试（`test_strict_displayed_flag_no_inference`, `test_stop_auto_releases_arcade_keys`, `test_heartbeat_consecutive_failures_deactivates_session`），全部通过。
+
 ---
 
 ## 二、测试闭环汇总表
 
 | 测试套件 | 测试文件 | 用例数 | 结果 | 耗时 |
 | :--- | :--- | :---: | :---: | :---: |
-| **原生 C++ 单元测试** | `tests/test_cpp_jetson_canvas.cpp` | 16 | **全部 PASS** | 0.05s |
+| **原生 C++ 单元测试** | `tests/test_cpp_jetson_canvas.cpp` | 18 | **全部 PASS** | 0.05s |
 | **100合1街机全生命周期** | `run_all_arcade_tests.py` | 1992 | **全部 PASS** | 3.88s |
 | **Jetson UART 协议回归** | `tests/test_jetson_uart_protocol.py` | 25 | **全部 PASS** | 0.35s |
 | **全审计闭环定向测试** | `tests/test_audit_closure_defects.py` | 21 | **全部 PASS** | 11.79s |
 | **安全分级与相机边界** | `tests/test_security_pairing_camera.py` | 14 | **全部 PASS** | 0.58s |
 | **网络网关与接入安全** | `tests/test_phase_a_network.py` | 14 | **全部 PASS** | 2.10s |
-| **Jetson Nano 客户端组件**| `jetson-nano/tests/test_jetson_nano.py` | 14 | **全部 PASS** | 0.01s |
-| **总计** | — | **2,096** | **100% PASS** | **18.76s** |
+| **Jetson Nano 客户端组件**| `jetson-nano/tests/test_jetson_nano.py` | 17 | **全部 PASS** | 0.02s |
+| **总计** | — | **2,101** | **100% PASS** | **18.77s** |
 

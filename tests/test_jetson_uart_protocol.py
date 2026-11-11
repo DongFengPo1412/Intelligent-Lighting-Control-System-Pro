@@ -525,7 +525,7 @@ class JetsonUartParser:
                 disallowed = {
                     "pair", "control_token", "token", "reboot", "restart",
                     "factory_reset", "reset_nvs", "erase_flash", "write_flash",
-                    "mic_export", "audio_capture", "ota"
+                    "mic_export", "audio_capture", "ota", "release_visual_control", "release_control"
                 }
                 if cmd_lower in disallowed:
                     return with_req_id({"status": "error", "error": "unauthorized_command", "executed": False})
@@ -851,6 +851,8 @@ class TestJetsonUartProtocol(unittest.TestCase):
             b'{"cmd":"reset_nvs"}\n',
             b'{"cmd":"erase_flash"}\n',
             b'{"cmd":"mic_export"}\n',
+            b'{"cmd":"release_visual_control"}\n',
+            b'{"cmd":"release_control"}\n',
             b'reboot\n',
             b'pair\n',
         ]

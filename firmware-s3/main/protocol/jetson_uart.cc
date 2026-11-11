@@ -750,11 +750,13 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
             auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
             bool auto_mode = auto_item ? cJSON_IsTrue(auto_item) : false;
 
-            canvas::CanvasAssembler::GetInstance().Clear(r, g, b, auto_mode);
+            bool manual_overridden = DisplayManager::GetInstance().IsManualOverrideActive();
+            auto res = canvas::CanvasAssembler::GetInstance().Clear(r, g, b, auto_mode);
 
             cJSON* resp = cJSON_CreateObject();
             cJSON_AddStringToObject(resp, "status", "ok");
-            cJSON_AddBoolToObject(resp, "cleared", true);
+            cJSON_AddBoolToObject(resp, "cleared", res.committed);
+            cJSON_AddBoolToObject(resp, "mode_overridden", manual_overridden);
             append_req_id(resp);
             char* rendered = cJSON_PrintUnformatted(resp);
             if (rendered) {
@@ -835,7 +837,7 @@ void JetsonUart::ProcessCommand(const char* line, char* out_reply, size_t out_re
             const char* const kDisallowedCmds[] = {
                 "pair", "control_token", "token", "reboot", "restart",
                 "factory_reset", "reset_nvs", "erase_flash", "write_flash",
-                "mic_export", "audio_capture", "ota"
+                "mic_export", "audio_capture", "ota", "release_visual_control", "release_control"
             };
             bool disallowed = false;
             for (const auto& d : kDisallowedCmds) {

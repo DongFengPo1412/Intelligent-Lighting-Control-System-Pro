@@ -222,6 +222,65 @@ class TestCanvasStreamerAck(unittest.TestCase):
         with self.assertRaises(ValueError):
             st.send_full_frame(b"\x00" * 100)
 
+    def test_strict_displayed_flag_no_inference(self):
+        from canvas_stream import CanvasStreamer
+
+        class NoDisplayedReplyTransport:
+            def send_raw_with_ack(self, pkt, expected_frame_seq, timeout=1.0):
+                # Returns status ok and committed True, but OMITS displayed!
+                return {"status": "ok", "type": "bin_frame", "frame_id": expected_frame_seq, "committed": True}
+
+        st = CanvasStreamer(NoDisplayedReplyTransport())
+        # With require_displayed=True, must return False because displayed was not explicitly confirmed
+        displayed_ok = st.send_full_frame(b"\x10" * 768, require_displayed=True)
+        self.assertFalse(displayed_ok)
+        self.assertFalse(st.is_displayed)
+        self.assertTrue(st.is_committed)
+
+    def test_stop_auto_releases_arcade_keys(self):
+        from canvas_stream import CanvasStreamer
+
+        sent_commands = []
+        class CommandCollectorTransport:
+            def send_line(self, cmd, wait_reply=True, timeout=1.0):
+                sent_commands.append(cmd)
+                return {"status": "ok", "active": False}
+
+        st = CanvasStreamer(CommandCollectorTransport())
+        st.session_active = True
+        ok = st.stop()
+        self.assertTrue(ok)
+        self.assertFalse(st.session_active)
+        # Verify arcade input down=0 was sent prior to or along with session stop
+        arcade_released = any('"cmd": "arcade"' in c and '"down": 0' in c for c in sent_commands)
+        self.assertTrue(arcade_released)
+
+    def test_heartbeat_consecutive_failures_deactivates_session(self):
+        import time
+        from canvas_stream import CanvasStreamer
+
+        call_count = 0
+        class FailingHeartbeatTransport:
+            def send_line(self, cmd, wait_reply=True, timeout=1.0):
+                nonlocal call_count
+                if '"cmd": "session"' in cmd and '"action": "start"' in cmd:
+                    return {"status": "ok", "active": True}
+                if '"action": "heartbeat"' in cmd or '"action": "ping"' in cmd:
+                    call_count += 1
+                    return {"status": "error", "error": "session_expired", "active": False}
+                return {"status": "ok"}
+
+        st = CanvasStreamer(FailingHeartbeatTransport())
+        st.start(session_id="hb_fail_test", heartbeat_interval=0.05, timeout=0.1)
+        self.assertTrue(st.session_active)
+
+        # Wait for 3 heartbeat iterations (approx 0.2s)
+        time.sleep(0.3)
+        self.assertFalse(st.session_active)
+        self.assertFalse(st.heartbeat_alive)
+        self.assertGreaterEqual(call_count, 3)
+        st.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

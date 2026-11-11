@@ -545,6 +545,16 @@ bool CommandDispatcher::ProcessJsonCommand(const char* json_str, bool reply_seri
             return true;
         }
     }
+    // {"cmd":"release_visual_control"} / {"cmd":"release_control"}
+    else if (strcasecmp(cmd, "release_visual_control") == 0 || strcasecmp(cmd, "release_control") == 0) {
+        if (!is_manual_user) {
+            cJSON_Delete(root);
+            return false;
+        }
+        dm.SetManualOverride(false);
+        cJSON_Delete(root);
+        return true;
+    }
     // Explicit physical USB pairing; this credential is NEVER returned over UDP.
     else if (strcasecmp(cmd, "pair") == 0) {
         // Handled only by the physical SerialTask/ProcessLine reply path.
@@ -669,6 +679,13 @@ bool CommandDispatcher::ProcessTextCommand(const char* text_str, bool reply_seri
     }
     if (strcasecmp(text_str, "stop_countdown") == 0 || strcasecmp(text_str, "stop_cd") == 0) {
         dm.StopCountdown();
+        return true;
+    }
+
+    // 1.1 手动控制权释放: "release_visual_control" / "release_control"
+    if (strcasecmp(text_str, "release_visual_control") == 0 || strcasecmp(text_str, "release_control") == 0) {
+        if (!is_manual_user) return false;
+        dm.SetManualOverride(false);
         return true;
     }
 

@@ -61,8 +61,16 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm,Disp
     if(!strcmp(cmd,"pixel")) {
         if(!number(root,"x",0,15,x,true)||!number(root,"y",0,15,y,true)||!number(root,"r",0,255,a,true)||
            !number(root,"g",0,255,b,true)||!number(root,"b",0,255,c,true))return 0;
+        bool manual_active = dm.IsManualOverrideActive();
+        if (source == DisplayManager::CanvasSource::JETSON && manual_active) {
+            // Under manual override by PC/phone, Jetson pixel writes are suppressed from modifying the active canvas.
+            return 1;
+        }
+        if (source == DisplayManager::CanvasSource::MANUAL_USER) {
+            dm.SetManualOverride(true);
+        }
         auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
-        if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        if (auto_item && cJSON_IsTrue(auto_item) && (!manual_active || source == DisplayManager::CanvasSource::MANUAL_USER) && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
         dm.SetCanvasSource(source);
@@ -78,8 +86,16 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm,Disp
             auto* s=hex->valuestring+i*6;
             colors[i]=ColorRGB(digit(s[0])*16+digit(s[1]),digit(s[2])*16+digit(s[3]),digit(s[4])*16+digit(s[5]));
         }
+        bool manual_active = dm.IsManualOverrideActive();
+        if (source == DisplayManager::CanvasSource::JETSON && manual_active) {
+            // Under manual override by PC/phone, Jetson canvas frames are suppressed from modifying the active canvas.
+            return 1;
+        }
+        if (source == DisplayManager::CanvasSource::MANUAL_USER) {
+            dm.SetManualOverride(true);
+        }
         auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
-        if (auto_item && cJSON_IsTrue(auto_item) && !dm.IsManualOverrideActive() && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
+        if (auto_item && cJSON_IsTrue(auto_item) && (!manual_active || source == DisplayManager::CanvasSource::MANUAL_USER) && dm.GetMode() != DisplayMode::PIXEL_CANVAS) {
             dm.SetMode(static_cast<uint8_t>(DisplayMode::PIXEL_CANVAS));
         }
         dm.SetCanvasSource(source);
@@ -140,6 +156,14 @@ int HandleInteractionCommand(const char* cmd,cJSON* root,DisplayManager& dm,Disp
         return res.success ? 1 : 0;
     }
     if (!strcmp(cmd, "clear_canvas") || !strcmp(cmd, "canvas_clear")) {
+        bool manual_active = dm.IsManualOverrideActive();
+        if (source == DisplayManager::CanvasSource::JETSON && manual_active) {
+            // Jetson clear suppressed when manual override active
+            return 1;
+        }
+        if (source == DisplayManager::CanvasSource::MANUAL_USER) {
+            dm.SetManualOverride(true);
+        }
         auto* auto_item = cJSON_GetObjectItemCaseSensitive(root, "auto_mode");
         bool auto_mode = auto_item ? cJSON_IsTrue(auto_item) : false;
         canvas::CanvasAssembler::GetInstance().Clear(0, 0, 0, auto_mode);
