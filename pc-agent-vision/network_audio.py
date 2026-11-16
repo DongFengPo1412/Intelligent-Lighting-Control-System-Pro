@@ -279,7 +279,7 @@ class WiFiPcmClient:
                 if self.cancelled.wait(max(0, start + total / 32000 + 0.35 - time.monotonic())):
                     return False
                 expected_samples = total // 2
-                confirm_deadline = time.monotonic() + 2.5
+                confirm_deadline = time.monotonic() + 4.5
                 delta = {"audio_rx": 0, "audio_played": 0, "audio_dropped": 0, "audio_errors": 0}
                 after = {}
                 valid = False

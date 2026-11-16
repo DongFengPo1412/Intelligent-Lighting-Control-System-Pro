@@ -76,7 +76,10 @@ class VoiceListener:
         # 唤醒状态机 (True 表示已唤醒，正在等待具体指令)
         self.is_awake = False
         self.session = ConversationSession(os.environ.get('KURISU_CONTINUOUS', '1') != '0')
-        self.duplex = os.environ.get('KURISU_BARGE_IN') == '1' and os.environ.get('KURISU_AUDIO_TRANSPORT') == 'wifi'
+        self.duplex = (
+            os.environ.get('KURISU_BARGE_IN') == '1'
+            and os.environ.get('KURISU_AUDIO_TRANSPORT', 'wifi').strip().lower() == 'wifi'
+        )
         self._barge_audio = bytearray()
         self._barge_last = 0.
         self._barge_thread = None
@@ -115,8 +118,8 @@ class VoiceListener:
         self.wake_detector = None
         try:
             from wake_detector import WakeDetector
-            self.wake_detector = WakeDetector(threshold=.50)
-            print('[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 克里斯蒂娜 / 牧濑红莉栖；阈值 0.50')
+            self.wake_detector = WakeDetector(threshold=.38, score=1.5)
+            print('[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 克里斯蒂娜 / 牧濑红莉栖；阈值 0.38 (score=1.5)')
         except Exception as error:
             print(f'[VoiceListener] 声学唤醒未就绪，关闭自动唤醒，保留网页控制：{error}')
 
@@ -153,14 +156,20 @@ class VoiceListener:
             if asr_device != 'cpu' and torch.cuda.is_available():
                 from faster_whisper import WhisperModel
                 print("[VoiceListener] 正在载入本地 Whisper-Base 离线极速 ASR (NVIDIA RTX CUDA fp16)...")
-                self.whisper_model = WhisperModel("base", device="cuda", compute_type="float16")
+                cuda_model = WhisperModel("base", device="cuda", compute_type="float16", local_files_only=True)
+                # Verify CTranslate2 CUDA runtime (e.g. cublas64_12.dll) eagerly at startup.
+                cuda_model.encode(np.zeros((80, 3000), dtype=np.float32))
+                self.whisper_model = cuda_model
                 print("[VoiceListener] >>> 本地离线 Whisper-Base ASR 已就绪 (GPU CUDA 加速) <<<")
             else:
                 raise RuntimeError("CPU explicitly selected" if asr_device == 'cpu' else "CUDA not available")
         except Exception as e:
             print(f"[VoiceListener] Whisper 使用 CPU int8 引擎 ({e})...")
             from faster_whisper import WhisperModel
-            self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
+            try:
+                self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4, local_files_only=True)
+            except Exception:
+                self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
             print("[VoiceListener] >>> 本地离线 Whisper-Base ASR CPU int8 就绪 <<<")
 
     def _configure_vad(self):
@@ -172,9 +181,7 @@ class VoiceListener:
         self.vad = webrtcvad.Vad(self.vad_mode)
 
     def _speech_energy_thresholds(self, ambient_energy):
-        # Slightly softer wake speech is allowed into KWS, while WebRTC VAD,
-        # acoustic keyword confirmation and ASR still guard actual activation.
-        # Keep the established in-conversation endpoint profile unchanged.
+        # Keep the documented ratio baseline while hardware room floors are enforced in _process_loop.
         if self.is_awake:
             return max(300.0, ambient_energy * 1.8), max(200.0, ambient_energy * 1.3)
         return max(240.0, ambient_energy * 1.6), max(160.0, ambient_energy * 1.2)
@@ -443,7 +450,7 @@ class VoiceListener:
                 self._utterance_queue.get_nowait()
             except queue.Empty:
                 break
-        self._resume_warmup_frames = 10 # 恢复后前 10 帧 (300ms) 仅用于校准底噪，防止扬声器残留尾音误触发
+        self._resume_warmup_frames = 18 # 恢复后前 18 帧 (540ms) 仅用于校准底噪，防止扬声器残留尾音拖高门限或误触发
         try:
             self.controller.enable_mic(True)
         except Exception:
@@ -509,11 +516,10 @@ class VoiceListener:
                 self._is_processing = False
 
     def _asr_prompt(self):
-        # Biasing prompt for Whisper to guide Chinese recognition of common commands
+        # Concise domain hints without generic "开灯" that can pull short color phrases into "开灯".
         prompt = (
-            "以下是普通话中文日常对话与控制指令：播放音乐、播放歌曲、暂停、上一首、下一首、"
-            "调大音量、调小音量、红灯、绿灯、蓝灯、彩虹、贪吃蛇、俄罗斯方块、超级马里奥、街机小游戏。"
-            "助手，克里斯，克里斯蒂娜，红莉栖，牧濑红莉栖。"
+            "助手，红莉栖，牧濑红莉栖，克里斯，克里斯蒂娜。"
+            "结束对话，再见，灯光效果，红灯，蓝灯，绿灯，幻彩霓虹，呼吸极光，流星划过，繁星点点，赛博烈焰，代码雨，世界线，红莉栖桌宠，贪吃蛇，俄罗斯方块。"
         )
         controller = getattr(self, 'controller', None)
         player = getattr(controller, '_music_player', None)
@@ -544,7 +550,20 @@ class VoiceListener:
                 text = ""
                 if self.whisper_model is not None:
                     try:
-                        audio_np = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                        raw_float = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                        raw_rms = float(np.sqrt(np.mean(raw_float ** 2))) if len(raw_float) else 0.0
+                        if len(raw_float) >= 480:
+                            n_f = len(raw_float) // 480
+                            frame_rms_arr = np.sqrt(np.mean(raw_float[:n_f * 480].reshape(n_f, 480) ** 2, axis=1))
+                            p90_rms = float(np.percentile(frame_rms_arr, 90))
+                        else:
+                            p90_rms = raw_rms
+                        audio_np = raw_float.copy()
+                        try:
+                            from scipy.signal import lfilter
+                            audio_np = lfilter([1.0, -1.0], [1.0, -0.965], audio_np).astype(np.float32)
+                        except Exception:
+                            pass
                         peak = float(np.max(np.abs(audio_np))) if len(audio_np) else 0
                         if peak > 1e-5:
                             audio_np *= min(8.0, .75 / peak)
@@ -574,15 +593,33 @@ class VoiceListener:
 
                         parts = []
                         scores = []
+                        no_speech_probs = []
                         for s in segments:
-                            if hasattr(s, 'no_speech_prob') and s.no_speech_prob > 0.85:
+                            nsp = float(getattr(s, 'no_speech_prob', 0.0) or 0.0)
+                            if nsp > 0.85:
                                 continue
                             parts.append(s.text.strip())
+                            no_speech_probs.append(nsp)
                             if hasattr(s, 'avg_logprob'):
                                 scores.append(float(s.avg_logprob))
 
                         text = "".join(parts).strip()
                         dt_asr = (time.perf_counter() - t_asr_start) * 1000.0
+                        avg_lp = (sum(scores) / len(scores)) if scores else None
+                        max_nsp = max(no_speech_probs) if no_speech_probs else 0.0
+                        compact_txt = re.sub(r'[，,。.!！?？、…~\s]', '', text)
+                        if avg_lp is not None and not acoustic_keyword:
+                            # Use active 90th-percentile frame RMS so valid speech inside a longer window
+                            # is not penalized by surrounding pauses, while low-energy fan hum stays gated.
+                            low_conf = (
+                                (avg_lp < -1.65 or max_nsp > 0.45)
+                                if p90_rms >= 0.055
+                                else (avg_lp < -0.90 or (avg_lp < -0.75 and (max_nsp > 0.25 or len(compact_txt) <= 4)))
+                            )
+                            if low_conf:
+                                print(f"[语音过滤] 丢弃低置信噪声识别: text={text!r} avg_logprob={avg_lp:.3f} no_speech={max_nsp:.2f} raw_rms={raw_rms:.4f} p90_rms={p90_rms:.4f}")
+                                self._update_board_led("active" if self.is_awake else "listening")
+                                return
                         if scores or getattr(self, 'asr_backend', '') == 'sensevoice':
                             # Keep only the most recent command for local ASR diagnosis.
                             try:
@@ -619,8 +656,9 @@ class VoiceListener:
                         text = acoustic_keyword
                         print('[唤醒归一化]: 连续呼唤同一称呼，合并为一次唤醒')
 
-                # 过滤 ASR 常见重复字符幻觉
-                if re.search(r'(.)\1{4,}', text) or re.search(r'(.{2,4})\1{3,}', text):
+                # 过滤 ASR 常见重复字符/短语幻觉（去标点后检测 2~10 字循环超过 2 次）
+                compact_rep = re.sub(r'[，,。.!！?？、…~\s]', '', text)
+                if re.search(r'(.)\1{4,}', compact_rep) or re.search(r'(.{2,10}?)\1{2,}', compact_rep):
                     print(f"[待命监听]: 过滤到 ASR 重复字符噪声: \"{text[:30]}...\"，静默丢弃。")
                     text = ""
 
@@ -674,7 +712,6 @@ class VoiceListener:
                 # 状态 B: 当前已处于唤醒等待指令状态 (is_awake == True)
                 # =========================================================
                 else:
-                    self.last_awake_time = time.time()
                     # A name can be misspelled during continuous listening too.
                     # Correct only with fresh acoustic evidence, never from text alone.
                     if self._has_wake_homophone_prefix(text):
@@ -683,10 +720,25 @@ class VoiceListener:
                         text = self._normalize_acoustic_name(text, acoustic_keyword)
                     is_wake, stripped_cmd = self._check_wake_word(text)
                     if is_wake:
+                        if not stripped_cmd.strip('，,。！？!? '):
+                            detector = getattr(self, 'wake_detector', None)
+                            if not acoustic_keyword and detector is not None:
+                                acoustic_keyword = detector.detect(pcm_bytes)
+                            if not acoustic_keyword:
+                                self._update_board_led("active")
+                                return
+                            match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
+                            self._acknowledge_wake(match.group() if match else acoustic_keyword)
+                            return
                         match = re.search(r'牧濑红莉栖|克里斯蒂娜|红莉栖|克里斯|助手', text)
                         self._acknowledge_wake(match.group() if match else None)
-                        if not stripped_cmd.strip('，,。！？!? '):return
                     cmd_to_exec = stripped_cmd if (is_wake and len(stripped_cmd) >= 2) else text
+
+                    # Normalize high-frequency ASR homophones of "结束对话" while awake without negations.
+                    sleep_clean = re.sub(r'[，,。.!！?？、…~\s]', '', cmd_to_exec)
+                    if (not any(neg in sleep_clean for neg in ConversationSession.NEGATIONS)
+                            and re.fullmatch(r'(?:结束|接触)(?:对话|的|队|对)|(?:结束了?|就到这里)', sleep_clean)):
+                        cmd_to_exec = "结束对话"
 
                     # 提取纯汉字与字母数字有效字符
                     clean_words = re.sub(r'[，。！？、…~\s\da-zA-Z]', '', cmd_to_exec).strip()
@@ -709,6 +761,7 @@ class VoiceListener:
                         return
 
                     print(f"[执行指令]: \"{cmd_to_exec}\"")
+                    self.last_awake_time = time.time()
                     self._update_board_led("thinking")
                     self.pause()
                     is_async = bool(getattr(self.callback, 'is_async_turn', False))
@@ -830,7 +883,13 @@ class VoiceListener:
             self._barge_pending = None
             print('[语音状态] cancelled: 旧轮次收尾，保留新监听缓冲')
             return
-        self.is_awake = self.session.after_reply() and not self.session.should_end(text)
+        ctrl_ended = (getattr(self.controller, '_last_turn_should_end', False) is True)
+        if hasattr(self.controller, '_last_turn_should_end'):
+            try:
+                self.controller._last_turn_should_end = False
+            except Exception:
+                pass
+        self.is_awake = self.session.after_reply() and not self.session.should_end(text) and not ctrl_ended
         if getattr(self,'_barge_woke',False):self.is_awake=True
         pending=getattr(self,'_barge_pending',None)
         self._barge_pending=None;self._barge_woke=False
@@ -1019,11 +1078,12 @@ class VoiceListener:
         FRAME_BYTES = FRAME_SAMPLES * 2  # 960 字节
 
         raw_stream_buffer = bytearray()
-        preroll_frames = collections.deque(maxlen=16) # 预留 480ms 预滚动帧，完整保留起始辅音音素
+        preroll_frames = collections.deque(maxlen=20) # 预留 600ms 预滚动帧，完整保留起始辅音音素
         speech_frames = []
         is_speaking = False
         silent_count = 0
         speech_trigger_count = 0
+        continue_streak = 0
         ambient_energy = 1000.0  # 动态环境声能基线
         warmup_frames = 20  # 启动前 600ms 用于麦克风硬件稳定与 DC 校准
 
@@ -1085,20 +1145,25 @@ class VoiceListener:
                     ambient_energy = 0.9 * ambient_energy + 0.1 * ac_rms
                     continue
 
-                # 3. 动态自适应跟踪环境底噪声能
-                if not is_speaking:
-                    ambient_energy = 0.98 * ambient_energy + 0.02 * ac_rms
-
-                # Retain the adaptive noise floor; only standby wake capture
-                # uses the owner's slightly softer profile.
-                start_threshold, continue_threshold = self._speech_energy_thresholds(ambient_energy)
-
-                # 4. WebRTC VAD 模式 2 工业级判决
+                # 3. 先执行 WebRTC VAD 判决，严防人声/尾音拖高环境底噪基线
                 frame_vad_speech = False
                 try:
                     frame_vad_speech = self.vad.is_speech(ac_bytes, 16000)
                 except Exception:
                     frame_vad_speech = False
+
+                # 4. 仅在非说话且非 VAD 语音的安静底噪帧更新环境基线
+                if not is_speaking and not frame_vad_speech and ac_rms < max(ambient_energy * 1.8, 900.0):
+                    ambient_energy = min(750.0, 0.98 * ambient_energy + 0.02 * ac_rms)
+
+                # Schmitt-trigger 迟滞门限：高起振门槛拦住风扇底噪，低延续门槛 + 840ms 悬挂耐受句中短停顿
+                start_threshold, continue_threshold = self._speech_energy_thresholds(ambient_energy)
+                if self.is_awake:
+                    start_threshold = max(1050.0, min(max(start_threshold, ambient_energy * 2.2), 1300.0))
+                    continue_threshold = max(650.0, min(max(continue_threshold, ambient_energy * 1.35), 800.0))
+                else:
+                    start_threshold = max(900.0, min(max(start_threshold, ambient_energy * 1.9), 1150.0))
+                    continue_threshold = max(600.0, min(max(continue_threshold, ambient_energy * 1.3), 750.0))
 
                 # 5. 状态机：端点检测 (起始检测 vs 结束判定)
                 if not is_speaking:
@@ -1109,10 +1174,9 @@ class VoiceListener:
                         if speech_trigger_count >= 2:
                             is_speaking = True
                             self._speech_active = True
-                            if self.is_awake:
-                                self.last_awake_time = time.time()
                             silent_count = 0
                             speech_trigger_count = 0
+                            continue_streak = 0
                             speech_frames = list(preroll_frames)
                             # 对齐中阶 single_led.cc: 说话时点亮鲜红 hearing (HIGH_BRIGHTNESS)
                             self._update_board_led("hearing")
@@ -1123,32 +1187,30 @@ class VoiceListener:
                 else:
                     speech_frames.append(ac_bytes)
 
-                    # 最大拾音时长保护：待命期最多 3.5s (116帧)，等待指令期最多 8.0s (266帧)
-                    max_frames = 266 if self.is_awake else 116
+                    # 最大拾音时长保护：待命期最多 3.3s (110帧)，等待指令期最多 6.0s (200帧)
+                    max_frames = 200 if self.is_awake else 110
                     if len(speech_frames) >= max_frames:
                         silent_count = 999 # 达到上限立即强制判停交付
                     elif (not frame_vad_speech) or (ac_rms < continue_threshold):
+                        continue_streak = 0
                         silent_count += 1
                     else:
-                        # 只要 WebRTC VAD 确认是人声且能量高于持续门限，保持静音计数为 0
-                        silent_count = 0
-                        self._update_board_led("hearing")
+                        continue_streak += 1
+                        # Require 2 consecutive active frames (60ms) before resetting accumulated silence
+                        # so isolated 30ms room-hum spikes cannot pin the mic open for 8 seconds.
+                        if silent_count == 0 or continue_streak >= 2:
+                            silent_count = 0
+                            self._update_board_led("hearing")
 
                     # 悬挂断句门限：
-                    # 待命唤醒期 16 帧 (~480ms 干净利落切断唤醒词)；
-                    # 等待指令期 36 帧 (~1080ms 充分容纳词间换气与断句，绝不把完整长句腰斩切成两截！)
-                    silent_limit = 36 if self.is_awake else 16
+                    # 待命唤醒期 14 帧 (~420ms 干净切断唤醒词)；
+                    # 等待指令期 28 帧 (~840ms 容忍句中自然换气/思考停顿不半途截断，说完后仍果断进思考)
+                    silent_limit = 28 if self.is_awake else 14
                     if silent_count >= silent_limit:
                         is_speaking = False
                         silent_count = 0
                         speech_trigger_count = 0
-
-                        # 语音结束端点已到达！
-                        # 指示灯根据当前状态切换：若未唤醒退回微光暗红，已唤醒转入青蓝思考流光
-                        if not self.is_awake:
-                            self._update_board_led("listening")
-                        else:
-                            self._update_board_led("thinking")
+                        continue_streak = 0
 
                         total_samples = len(speech_frames) * FRAME_SAMPLES
                         # 要求有效发音时长至少 0.35 秒 (12 帧以上)
@@ -1156,16 +1218,28 @@ class VoiceListener:
                             full_pcm = b"".join(speech_frames)
                             has_real_speech = True
 
-                            # 仅对小于 0.8s 的极短片段做 Silero 二次验证
-                            if total_samples < 16000 * 0.8:
+                            # Neural Silero VAD check: filter empty clicks (<0.8s) and pure long-window noise (>=1.5s)
+                            if total_samples < 16000 * 0.8 or total_samples >= 16000 * 1.5:
                                 try:
                                     audio_float = np.frombuffer(full_pcm, dtype=np.int16).astype(np.float32) / 32768.0
                                     timestamps = get_speech_timestamps(audio_float)
-                                    has_real_speech = len(timestamps) > 0
+                                    voiced_samples = sum((t.get('end', 0) - t.get('start', 0)) for t in timestamps)
+                                    has_real_speech = (voiced_samples > 0) if total_samples < 16000 * 0.8 else (voiced_samples >= 16000 * 0.18)
+                                    # Trim leading/trailing dead fan hum on long clips so Whisper receives crisp speech.
+                                    if has_real_speech and timestamps and total_samples >= 16000 * 1.5:
+                                        s_idx = max(0, int(timestamps[0]['start']) - 3840)
+                                        e_idx = min(len(audio_float), int(timestamps[-1]['end']) + 3840)
+                                        if e_idx - s_idx >= 16000 * 0.45:
+                                            full_pcm = np.clip(audio_float[s_idx:e_idx] * 32768.0, -32768, 32767).astype(np.int16).tobytes()
+                                            total_samples = (e_idx - s_idx)
                                 except Exception:
                                     has_real_speech = True
 
                             if has_real_speech:
+                                # Do NOT refresh last_awake_time or switch to thinking cyan on mere VAD;
+                                # keep dark red (listening) until ASR confirms a real non-noise command.
+                                state_led = "active" if self.is_awake else "listening"
+                                self._update_board_led(state_led)
                                 print(f" [VAD 端点检测完成: 拾取语音 {(total_samples/16000.0):.2f}s]")
                                 if not self.is_paused:
                                     try:

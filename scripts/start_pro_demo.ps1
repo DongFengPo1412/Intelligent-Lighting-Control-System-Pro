@@ -36,10 +36,20 @@ try {
     Write-Host "=== Kurisu Pro One-Click Demo Launcher ===" -ForegroundColor Cyan
     Write-Host "Repo: $RepoRoot"
 
-    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $pythonCmd) {
-        throw "Python executable not found in PATH."
+    $aiCvPython = "C:\Users\Liu\anaconda3\envs\ai_cv_env\python.exe"
+    $pythonExe = if ($env:KURISU_PYTHON -and (Test-Path $env:KURISU_PYTHON)) {
+        $env:KURISU_PYTHON
+    } elseif ($env:CONDA_PREFIX -and (Test-Path (Join-Path $env:CONDA_PREFIX "python.exe"))) {
+        Join-Path $env:CONDA_PREFIX "python.exe"
+    } elseif (Test-Path $aiCvPython) {
+        $aiCvPython
+    } else {
+        $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $pythonCmd) { throw "Python executable not found in PATH." }
+        $pythonCmd.Source
     }
+    if (-not $env:KURISU_VAD_MODE) { $env:KURISU_VAD_MODE = "2" }
+    if (-not $env:KURISU_BARGE_IN) { $env:KURISU_BARGE_IN = "1" }
 
     $localIp = Get-HotspotIpv4
     Write-Host "[1/5] Local LAN/Hotspot IP: $localIp"
@@ -97,23 +107,23 @@ import json, socket, time
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 sock.settimeout(1.2)
-sock.sendto(b'{"cmd":"kurisu_discover"}', ('255.255.255.255', 8890))
+sock.sendto(b'{"cmd":"kurisu_discover"}', ('255.255.255.255', 8888))
 try:
     data, addr = sock.recvfrom(1024)
     info = json.loads(data.decode('utf-8', 'ignore'))
-    print(f"DISCOVERED: {addr[0]} board_sta_ip={info.get('board_sta_ip')} mode={info.get('mode')}")
+    print(f"DISCOVERED_BOARD: {addr[0]} board_sta_ip={info.get('board_sta_ip') or addr[0]} mode={info.get('mode')}")
 except Exception as e:
-    print(f"WARN_NO_UDP_BEACON: {e}")
+    print(f"WARN_NO_BOARD_UDP_BEACON: {e}")
 finally:
     sock.close()
 "@
-    $probeCode | & $pythonCmd.Source -
+    $probeCode | & $pythonExe -
 
     Write-Host "[5/5] Starting WebServer on http://$localIp`:$Port (Ctrl+C to stop cleanly)..." -ForegroundColor Green
     $webArgs = @((Join-Path $PcDir "web_server.py"), "--host", "0.0.0.0", "--port", "$Port")
     if ($NoAudio) { $webArgs += "--no-audio" }
 
-    $WebProc = Start-Process -FilePath $pythonCmd.Source -ArgumentList $webArgs -WorkingDirectory $PcDir -NoNewWindow -PassThru
+    $WebProc = Start-Process -FilePath $pythonExe -ArgumentList $webArgs -WorkingDirectory $PcDir -NoNewWindow -PassThru
     $WebProc.WaitForExit()
 }
 finally {

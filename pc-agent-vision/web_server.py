@@ -630,7 +630,9 @@ async def handle_mode(request: web.Request):
     """设置光场 25 种原生模式编号"""
     try:
         data = await request.json()
-        mode_num = data.get("mode", 11)
+        if not isinstance(data, dict) or "mode" not in data:
+            raise ValueError("Mode is required")
+        mode_num = data["mode"]
         loop = asyncio.get_running_loop()
         await device_call(controller.set_mode, mode_num)
         await broadcast_ws({"type": "mode_changed", "mode": mode_num})
@@ -866,6 +868,11 @@ async def handle_status(request: web.Request):
     gw = get_wifi_gateway()
     probe=await asyncio.to_thread(gw.request,'{"cmd":"status"}')
     wifi_info = gw.get_status()
+    if probe.get("status") == "ok":
+        wifi_info = dict(wifi_info)
+        wifi_info["last_command"] = dict(probe)
+        if "mode" in probe:
+            wifi_info["last_mode"] = probe["mode"]
     local_ip = get_local_ip(wifi_info.get("board_sta_ip"))
     is_local_req = bool(request.app.get('access_policy') and request.app['access_policy'].local(request))
 

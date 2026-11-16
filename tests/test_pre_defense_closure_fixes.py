@@ -273,6 +273,68 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         self.assertEqual(calls["connect"], 2)
         self.assertEqual(len(b"".join(sent)), 1024)
 
+    def test_stage_c_semantic_negation_hypothetical_and_short_color_fastpath(self):
+        from semantic_control import SemanticControl
+
+        planner = SemanticControl()
+        self.assertEqual(
+            planner.plan("开蓝灯"),
+            {"kind": "control", "actions": [{"tool": "set_light_mode", "value": 2}]},
+        )
+        self.assertEqual(planner.plan("不要开灯。"), {"kind": "chat", "actions": []})
+        self.assertEqual(planner.plan("如果打开蓝灯会怎么样？"), {"kind": "chat", "actions": []})
+        self.assertEqual(planner.plan("我不是让你关灯。"), {"kind": "chat", "actions": []})
+        # Generic "开灯" must NOT be hardcoded to mode 5; it goes through LLM semantic planning.
+        from semantic_control import exact_plan
+        self.assertIsNone(exact_plan("开灯"))
+        # Unambiguous named lighting effects resolve cleanly as keyword fast-path assist
+        expected_effects = [
+            ("开机红灯", 1),
+            ("开幻彩霓虹", 4),
+            ("呼吸极光", 5),
+            ("流星", 6),
+            ("星空", 7),
+            ("全屏色彩", 8),
+            ("雨滴", 9),
+            ("波纹", 10),
+            ("笑脸", 11),
+            ("壁炉火焰", 23),
+            ("代码雨", 24),
+            ("世界线", 28),
+            ("回桌宠", 17),
+            ("环境微光", 31),
+            ("关掉灯光", 0),
+        ]
+        for utterance, mode_id in expected_effects:
+            self.assertEqual(
+                planner.plan(utterance),
+                {"kind": "control", "actions": [{"tool": "set_light_mode", "value": mode_id}]},
+                msg=f"Failed lighting fast-path for {utterance!r}",
+            )
+        self.assertNotEqual(
+            (planner.plan("不要开红灯") or {}).get("kind"),
+            "control",
+        )
+        from conversation_session import ConversationSession
+        for end_txt in ("结束对话", "结束会话", "再见", "明天见", "退下"):
+            self.assertTrue(ConversationSession.should_end(end_txt))
+        self.assertFalse(ConversationSession.should_end("不要结束对话"))
+
+    def test_wake_detector_defaults_to_five_name_profile(self):
+        import types
+        import tempfile
+        import wake_detector
+
+        captured = {}
+        fake_sherpa = types.SimpleNamespace(KeywordSpotter=lambda **kw: captured.update(kw))
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"KURISU_CACHE_DIR": tmp}), mock.patch.dict(
+                sys.modules, {"sherpa_onnx": fake_sherpa}
+            ):
+                wake_detector.WakeDetector()
+        self.assertAlmostEqual(captured["keywords_threshold"], 0.38)
+        self.assertAlmostEqual(captured["keywords_score"], 1.5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ import numpy as np
 
 
 class WakeDetector:
-    def __init__(self, threshold=.50):
+    def __init__(self, threshold=.38, score=1.5):
         root = Path(__file__).resolve().parents[1]
         sys.path.insert(0, str(root / 'pc-agent-vision' / '.runtime_deps'))
         import sherpa_onnx
@@ -48,7 +48,7 @@ class WakeDetector:
             tokens=str(model / 'tokens.txt'), encoder=str(model / ('encoder' + suffix)),
             decoder=str(model / ('decoder' + suffix)), joiner=str(model / ('joiner' + suffix)),
             keywords_file=str(keywords), keywords_threshold=threshold,
-            keywords_score=1.0, num_trailing_blanks=2, num_threads=2)
+            keywords_score=score, num_trailing_blanks=2, num_threads=2)
         self._lock = threading.Lock()
 
     def detect(self, pcm_bytes):

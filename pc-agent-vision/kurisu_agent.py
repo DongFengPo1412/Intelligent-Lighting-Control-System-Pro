@@ -138,6 +138,9 @@ class KurisuAgent:
             self.last_translation_error = None
             self.last_tts_error = None
             self.last_turn_timings = {}
+            self.last_turn_should_end = False
+            if getattr(self, 'controller', None) is not None:
+                self.controller._last_turn_should_end = False
             self._turn_started = turn_started
             # Keep complete user turns so tool messages are never orphaned.
             users = [i for i, msg in enumerate(self.history) if msg.get("role") == "user"]
@@ -153,20 +156,17 @@ class KurisuAgent:
                 return chat_hook(user_message)
 
             shortcut_reply = None
-            if ConversationSession.should_end(user_message):
-                shortcut_reply = self._finish_reply('好，需要时再叫我。\n分かったわ。また必要になったら呼んでね。', turn_id=turn_id)
-            else:
-                remember = re.fullmatch(r'请?记住[：:，,\s]*(.+)', user_message.strip(), re.S)
-                if remember:
-                    if hasattr(self.memory, 'remember_preference'):
-                        self.memory.remember_preference(remember.group(1))
-                    else:
-                        self.memory.remember(remember.group(1))
-                    shortcut_reply = self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。', turn_id=turn_id)
-                elif re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
-                    self.history = self.history[:1]
-                    self.memory.clear()
-                    shortcut_reply = self._finish_reply('已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。', turn_id=turn_id)
+            remember = re.fullmatch(r'请?记住[：:，,\s]*(.+)', user_message.strip(), re.S)
+            if remember:
+                if hasattr(self.memory, 'remember_preference'):
+                    self.memory.remember_preference(remember.group(1))
+                else:
+                    self.memory.remember(remember.group(1))
+                shortcut_reply = self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。', turn_id=turn_id)
+            elif re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
+                self.history = self.history[:1]
+                self.memory.clear()
+                shortcut_reply = self._finish_reply('已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。', turn_id=turn_id)
 
             if shortcut_reply is None:
                 is_query = bool(re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', user_message.strip()))
@@ -191,16 +191,31 @@ class KurisuAgent:
             reply = shortcut_reply
         else:
             reply = None
-            music_commands = getattr(self, 'music_commands', None)
-            if music_commands:
-                music_result = music_commands.handle(user_message)
-                if music_result is not None:
-                    reply = self._finish_reply(
-                        music_result['reply'],
-                        turn_id=turn_id,
-                        speak=music_result['speak'],
-                        speech_text=music_result.get('spoken_reply'),
-                    )
+            is_farewell = ConversationSession.should_end(user_message)
+            if not is_farewell and hasattr(self.semantic, 'is_farewell'):
+                is_farewell = self.semantic.is_farewell(user_message)
+            if is_farewell:
+                self.last_turn_should_end = True
+                if getattr(self, 'controller', None) is not None:
+                    self.controller._last_turn_should_end = True
+                reply = self._converse(
+                    user_message=user_message,
+                    turn_id=turn_id,
+                    cancelled=turn_cancel,
+                    executed_facts=['用户正在主动结束本次语音对话。请以牧濑红莉栖的人格与用户记忆自然简短地道别（无需改变灯光）。'],
+                    fallback_reply='好，需要时再叫我。\n分かったわ。また必要になったら呼んでね。',
+                )
+            else:
+                music_commands = getattr(self, 'music_commands', None)
+                if music_commands:
+                    music_result = music_commands.handle(user_message)
+                    if music_result is not None:
+                        reply = self._finish_reply(
+                            music_result['reply'],
+                            turn_id=turn_id,
+                            speak=music_result['speak'],
+                            speech_text=music_result.get('spoken_reply'),
+                        )
 
             if reply is None:
                 plan = None
@@ -227,7 +242,8 @@ class KurisuAgent:
                     if plan['kind'] == 'clarify':
                         reply = self._finish_reply('请说清想要哪一种灯效；如果是倒计时，也请告诉我时长。\nどの光の効果にするか教えて。カウントダウンなら時間も教えてね。', turn_id=turn_id)
                     elif plan['kind'] == 'control':
-                        zh, ja = [], []
+                        zh, ja, facts = [], [], []
+                        hw_ok = True
                         for action in plan['actions']:
                             if turn_cancel.is_set() or self._active_turn_id != turn_id:
                                 return ''
@@ -235,16 +251,30 @@ class KurisuAgent:
                             arguments = {ARGUMENTS[tool]: value} if tool in ARGUMENTS else {}
                             result = self._execute_action(tool, arguments)
                             if result.get('status') not in ('success', 'ok'):
+                                hw_ok = False
                                 zh.append('板端没有确认这项操作，请检查连接。')
                                 ja.append('この操作は確認できなかったわ。接続を確認してね。')
                                 break
                             if tool == 'get_device_status':
-                                zh.append(f"板端在线，当前显示模式为{result.get('current_mode')}。")
+                                msg_zh = f"板端在线，当前显示模式为{result.get('current_mode')}。"
+                                zh.append(msg_zh)
                                 ja.append(f"デバイスはオンラインで、表示モードは{result.get('current_mode')}よ。")
+                                facts.append(msg_zh)
                             else:
                                 line_zh, line_ja = describe_action(action)
                                 zh.append(line_zh); ja.append(line_ja)
-                        reply = self._finish_reply(''.join(zh) + '\n' + ''.join(ja), turn_id=turn_id)
+                                facts.append(line_zh)
+                        fallback = ''.join(zh) + '\n' + ''.join(ja)
+                        if not hw_ok:
+                            reply = self._finish_reply(fallback, turn_id=turn_id)
+                        else:
+                            reply = self._converse(
+                                user_message=user_message,
+                                turn_id=turn_id,
+                                cancelled=turn_cancel,
+                                executed_facts=facts,
+                                fallback_reply=fallback,
+                            )
                     else:
                         reply = self._converse(user_message=user_message, turn_id=turn_id, cancelled=turn_cancel)
 
@@ -373,7 +403,7 @@ class KurisuAgent:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [text[:120] for _, text in scored[:limit]]
 
-    def _converse(self, user_message=None, turn_id=None, cancelled=None):
+    def _converse(self, user_message=None, turn_id=None, cancelled=None, executed_facts=None, fallback_reply=None):
         # Conversation cannot execute tools or parse instructions from model prose.
         # Step 1: finalize clean Chinese meaning first; Step 2: generate strictly equivalent Japanese.
         import urllib.request
@@ -498,6 +528,18 @@ class KurisuAgent:
                 + json.dumps(rendered_memories, ensure_ascii=False)
             )
 
+        if executed_facts:
+            system_sections.append(
+                '【本轮最高优先回复要求（已实测完成硬件操作）】：' + '；'.join(executed_facts) +
+                '。请以牧濑红莉栖的性格、人设与已存用户记忆，只用 1 到 2 句简短自然的话回复（总计不超过 40 个汉字）：'
+                '先简短点明已为对方点亮/切换符合所提事物的灯效（例如“已为你点亮……”），再结合对方刚说的话顺带互动或傲娇吐槽一句即可；'
+                '严禁长篇科普或偏题报时。'
+            )
+        else:
+            system_sections.append(
+                '【本轮事实边界】：本轮未改变实体灯板的灯效、亮度、倒计时或街机游戏。如果只是纯聊天或问答，只需正面回答用户的问题或对话，严禁虚构或声称“已经帮你开灯/换色/启动游戏”。'
+            )
+
         conv_history = [{'role': m['role'], 'content': m['content']} for m in self.history[1:] if m.get('role') in ('user', 'assistant')]
         messages = [{'role': 'system', 'content': '\n\n'.join(system_sections)}] + conv_history
         payload = {'model': self.model, 'messages': messages, 'stream': False}
@@ -505,7 +547,7 @@ class KurisuAgent:
             payload['options'] = {
                 'temperature': 0.55,
                 'repeat_penalty': 1.05,
-                'num_predict': 120,
+                'num_predict': 75 if executed_facts else 120,
                 'num_ctx': 4096,
                 'stop': ['\n', '<|im_end|>', '<|endoftext|>'],
             }
@@ -553,6 +595,8 @@ class KurisuAgent:
                 self.last_turn_timings['translation_ms'] = round((time.perf_counter()-translation_started)*1000,1)
 
             if not ja:
+                if fallback_reply:
+                    return self._finish_reply(fallback_reply, turn_id=turn_id)
                 self.last_translation_error = (
                     getattr(self.voice, 'last_translation_error', None)
                     or '日语翻译失败，未使用固定台词替代'
@@ -562,6 +606,8 @@ class KurisuAgent:
             return self._finish_reply(zh + '\n' + ja, turn_id=turn_id)
         except Exception as error:
             self.last_model_error = str(error)
+            if fallback_reply:
+                return self._finish_reply(fallback_reply, turn_id=turn_id)
             return self._finish_reply('本地模型暂时无法回复，请稍后再试。\nローカルモデルは今応答できないわ。後でもう一度試して。', turn_id=turn_id)
 
 if __name__ == "__main__":

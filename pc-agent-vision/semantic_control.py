@@ -128,6 +128,7 @@ def extract_negations(text: str) -> dict:
         'brightness': set(),
         'volume': set(),
         'modes': set(),
+        'all_lights': False,
     }
     all_neg, neg_games = extract_negated_games(text)
     result['all_games'] = all_neg
@@ -139,6 +140,8 @@ def extract_negations(text: str) -> dict:
         if re.search(neg_pattern, c_compact):
             if re.search(r'倒计时|计时|沙漏', c_compact):
                 result['countdown'] = True
+            if re.search(r'(?:不要|别|不想|不用|先不要|先别|暂不|禁止)(?:打开|开)?(?:灯光?|亮灯)', c_compact):
+                result['all_lights'] = True
             for m, (mname, _, _) in EFFECTS.items():
                 if mname in c_compact:
                     result['modes'].add(m)
@@ -244,7 +247,7 @@ def validate_plan(plan, user_text=None):
                 if negs.get('countdown'):
                     raise ValueError("Plan contradicts user explicit negation: countdown was explicitly negated")
             elif tool == 'set_light_mode':
-                if val in negs.get('modes', set()):
+                if negs.get('all_lights') or val in negs.get('modes', set()):
                     raise ValueError(f"Plan contradicts user explicit negation: light mode {val} was explicitly negated")
             elif tool == 'set_brightness':
                 if val in negs.get('brightness', set()):
@@ -275,17 +278,49 @@ def plain_knowledge_question(text):
 
 
 def has_control_intent(text):
-    """Require a current request before letting a model propose physical actions.
+    """Require a candidate request, display, or lighting-imagery cue before invoking the LLM planner.
 
-    Conversation history and a mention of a chime/reply are not instructions.
-    Literal mode names are handled separately by exact_plan().
+    Does NOT depend on enumerating specific object names (e.g., 森林/西瓜/春联);
+    the LLM itself reasons semantically whether an expression is a control command or pure chat/Q&A.
     """
     return bool(re.search(
-        r'帮我|给我|我想|我要|想看|想玩|让|把|将|切换|换[个种一]|亮成|打开|开启|关闭|关掉|关灯|开灯|'
+        r'帮我|给我|我想|我要|想看|要看|想玩|想听|试试|体验|喜欢看|看看|想要|希望|让|把|将|'
+        r'切换|切[到成]|换[个种一下]?|亮成|打开|开启|开机|开一下|开个|开|关闭|关掉|关灯|'
         r'设为|设置|改成|换成|调[整节大小高低亮暗到成为]|开始|停止|暂停|继续|恢复|'
-        r'显示|展示|播放|来个|来点|来一|回到|返回|进入|退出|启动|结束|触发|'
-        r'点亮|熄灭|亮一点|暗一点|大声|小声|查.*(?:设备|灯板)|'
-        r'(?:灯光?|声音|音量|亮度).*(?:太|更|一点)|像.*(?:那样|一样)|那种', text))
+        r'显示|展示|播放|放[个首一]?|来[个点一下]|回到|返回|进入|退出|启动|结束|触发|'
+        r'点亮|熄灭|熄灯|亮一点|暗一点|大声|小声|查.*(?:设备|灯板)|'
+        r'灯光?|光线|颜色|色彩|感觉|氛围|灯效|模式|亮度|音量|声音|计时|倒计时|游戏|街机|手势|指尖|沙盒|桌宠|世界线|'
+        r'像.*(?:那样|一样)|那种', text))
+
+
+_LIGHT_MODE_ALIASES = {
+    0: ('关灯', '熄灯', '清屏'),
+    1: ('红灯', '红色灯光'),
+    2: ('蓝灯', '蓝色灯光'),
+    3: ('绿灯', '绿色灯光'),
+    4: ('幻彩霓虹', '幻彩灯', '幻彩', '霓虹灯', '霓虹', '彩虹灯', '彩虹波浪', '彩虹', '七彩灯'),
+    5: ('呼吸极光', '极光灯', '极光', '北极光', '呼吸灯'),
+    6: ('流星划过', '流星雨', '流星灯', '流星'),
+    7: ('繁星点点', '繁星', '星空', '满天星', '星光'),
+    8: ('全屏色彩', '全屏换色', '色彩循环', '彩色循环', '变色灯'),
+    9: ('乱序雨滴', '雨滴', '雨点', '下雨', '落雨'),
+    10: ('中心波纹', '水波纹', '水波', '波纹', '涟漪'),
+    11: ('笑脸盈盈', '笑脸', '微笑'),
+    12: ('垂头丧气', '哭脸', '难过表情'),
+    13: ('面无表情', '平静脸', '严肃表情'),
+    14: ('瞬息万变', '动态表情', '眨眼表情', '表情轮换'),
+    15: ('音乐随动', '音乐频谱', '频谱'),
+    16: ('ai反馈', '对话反馈'),
+    17: ('红莉栖桌宠', '红莉栖立绘', '桌面宠物', '桌宠', '宠物模式'),
+    23: ('赛博烈焰', '壁炉火焰', '火焰灯', '火焰', '烈焰', '篝火', '壁炉'),
+    24: ('代码雨pro', '代码雨', '黑客帝国', '数字雨'),
+    26: ('指尖追踪',),
+    27: ('光球沙盒', '沙盒'),
+    28: ('世界线仪表', '世界线变动率', '世界线彩蛋', '世界线'),
+    29: ('像素画布', '像素涂鸦'),
+    30: ('音乐光环',),
+    31: ('环境微光', '微光', '小夜灯'),
+}
 
 
 def exact_plan(text):
@@ -293,11 +328,26 @@ def exact_plan(text):
     compact = re.sub(r'[，,。.!！\s]', '', text)
     compact = compact.replace('音乐流体','音乐光环')
     compact = re.sub(r'(?:哗翅车|滩翅舌|滩吃蛇|贪吃车|探吃蛇|探池蛇|弹吃蛇|弹翅车)', '贪吃蛇', compact)
+    compact_lower = compact.lower()
+    has_non_exec_guard = bool(
+        re.search(r'(?:不要|别|不想|不用|不能|不准|禁止|不是|没让|如果|假如|要是|假设)', compact)
+        or re.search(r'(?:吗|呢|什么|怎么|怎样|如何|多少|哪个|还是|或者|为什么|\?|？)', compact)
+    )
 
-    # 1. Explicit color & lighting modes first (prevents lighting commands like "切换到红灯" from hitting arcade)
-    color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|想看|要看|打开|开启|切换成|切换到|切到|切成|换成|改成|把灯切换成|把灯换成|把灯调成|把灯变成|调成|变成)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:吧|一下)?', compact)
-    if color:
-        return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}
+    # 1. Auxiliary fast-path for unambiguous explicit color & named modes only.
+    # Vague ("开灯") or metaphorical ("大海的颜色") phrases intentionally fall through to LLM semantic planning.
+    if not has_non_exec_guard:
+        if re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:关闭|关掉|关上|关|熄灭)?(?:全部|所有)?(?:关灯|熄灯|清屏|把灯关了|把灯关掉|把灯关上|关掉灯|关掉灯光|关闭灯光|关闭灯板|灯光关闭|灯关掉)(?:吧|一下)?', compact):
+            return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': 0}]}
+        color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|我想|我要|想看|要看|开机|打开|开启|开一下|开个|开|切换成|切换到|切到|切成|换成|换个|改回|改成|把灯切换成|把灯换成|把灯调成|把灯变成|调成|变成|显示|展示|来个)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:模式|效果)?(?:吧|一下)?', compact)
+        if color:
+            return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}
+        light_prefix = r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|我想|我要|想看|要看|开机|打开|开启|开一下|开个|开|切换成|切换到|切到|切成|换成|换个|换一下|改回|改成|调成|变成|显示|展示|启动|进入|来个|来一点|来点|点亮|放个|回到|返回)?'
+        light_suffix = r'(?:模式|灯效|效果|画面|动画|灯)?(?:吧|一下)?'
+        for mode, aliases in _LIGHT_MODE_ALIASES.items():
+            for alias in aliases:
+                if re.fullmatch(light_prefix + re.escape(alias.lower()) + light_suffix, compact_lower):
+                    return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': mode}]}
     for mode, (name, _, _) in EFFECTS.items():
         if mode == 25:
             continue
@@ -506,6 +556,13 @@ class SemanticControl:
     def plan(self, text, history=(), timeout=30, abort_event: Optional[threading.Event] = None):
         if abort_event and abort_event.is_set():
             raise InterruptedError("Semantic plan aborted before start")
+        compact = re.sub(r'[，,。.!！?？\s]', '', text or '')
+        if (
+            re.match(r'^(?:如果|假如|要是|假设).*(?:会怎样|会怎么样|怎么办|什么效果|如何)$', compact)
+            or re.match(r'^(?:我)?(?:不是|并不是|没|没有|并非)(?:让你|叫你|要你).*', compact)
+            or re.fullmatch(r'(?:请)?(?:不要|别|先不要|先别|不想|不用)(?:打开|开)?(?:灯光?|亮灯)', compact)
+        ):
+            return {'kind': 'chat', 'actions': []}
         direct = exact_plan(text)
         if direct:
             return direct
@@ -515,14 +572,20 @@ class SemanticControl:
             return {'kind': 'chat', 'actions': []}
         parameters = explicit_parameters(text)
         catalog = '\n'.join(f'{mode}: {entry[0]} — {entry[2]}' for mode, entry in EFFECTS.items())
-        prompt = """你是灯板控制语义解析器。只输出规定JSON，不扮演角色。
-kind=control 仅用于用户请求灯板动作、计时、调亮度/音量、游戏、设备查询；一般聊天、情绪描述和知识问答用chat。
-歌曲点播由独立曲库处理。涉及歌名、歌手、播放歌曲的剩余请求不要转成灯效动作；不确定时用chat或clarify。
-“我很难过”是聊天，不能自动显示哭脸；“给我哭脸”才是控制。比较灯效或询问喜好也不能换灯。
-理解比喻：“桌面像壁炉一样暖”=赛博烈焰，“水面一圈圈扩散”=中心波纹。只执行用户要求的设置，不添加动作。
-理解否定：“不要红灯，给我星光”只执行繁星点点。“别改灯效”“别关灯”保持现状。
+        prompt = """你是16×16智能灯板的具身控制语义解析器。只输出规定JSON，不扮演角色。
+判断顺序（先意图，后灯效）：
+1) 判断意图：在本设备对话中，只要用户表达想体验/观赏/点亮/改变某种颜色或画面（例如“我想看XX的颜色”“给我XX的颜色”“想要XX的氛围/感觉”“来个XX的光”——无论XX是食物、植物、器物、风景还是抽象概念），都属于对灯板的控制请求，必须输出 kind=control！
+   只有纯粹询问科学原理、属性、喜好比较、情绪倾诉或与展示无关的闲聊（如“为什么苹果是红的？”“西瓜甜不甜？”“雪和冰哪个更冷？”“今天心情不好”），才输出 kind=chat，绝不改灯。
+2) 选择灯效：一旦确认为展示某种颜色/光效的请求，运用你的常识推理XX最典型的颜色与动态特征，从目录中选最贴合的唯一灯效：
+   - 偏红/喜庆/火热事物 → 红灯（火光/篝火/壁炉意象 → 赛博烈焰）
+   - 偏绿/翠绿植物果蔬茶饮 → 绿灯
+   - 偏蓝/海洋晴空冷水宝石 → 蓝灯
+   - 五彩斑斓/节日霓虹炫彩 → 幻彩霓虹；柔和变幻 → 呼吸极光；夜空星辰 → 繁星点点；闪烁飞逝 → 流星划过；雨丝 → 乱序雨滴；水波荡漾 → 中心波纹；数字科技 → 代码雨Pro。
+歌曲点播由独立曲库处理；仅当要求播放某歌/歌手时才用chat或clarify。
+“我很难过”是聊天，不能自动显示哭脸；“给我哭脸”才是控制。
+理解否定与组合：“不要红灯，给我星光”只执行繁星点点；“别改灯效”“别关灯”用chat保持现状。
 字段约定：
-effect：选择目录中最符合意图的中文名称；不换灯效为保持现状。单色绿必须选绿灯，不能选全屏色彩；全屏色彩仅表示不同颜色轮流循环。
+effect：选择目录中最符合意图的中文名称；不换灯效为保持现状。单色绿必须选绿灯，单色红选红灯，单色蓝选蓝灯，不能错选全屏色彩；全屏色彩仅表示多种颜色轮流循环。
 timer_seconds：仅当请求倒计时时填写秒数，分钟换成秒；否则0。没说时长的倒计时用clarify。
 brightness：仅当请求调灯光亮度才填1..60；一半亮度=30。没要求填-1。不是声音音量。
 volume：仅当请求调播报声音大小才填0..100；没要求填-1。不是灯光亮度。
@@ -535,6 +598,12 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                    for item in list(history)[-4:] if item.get('role') in ('user', 'assistant')]
         examples = [
             ('像在北极看到柔和变化的光一样，让灯板也变成那样', [{'tool': 'set_light_mode', 'value': 5}]),
+            ('我想看大海的颜色', [{'tool': 'set_light_mode', 'value': 2}]),
+            ('我想看天空的颜色', [{'tool': 'set_light_mode', 'value': 2}]),
+            ('我想看森林的颜色', [{'tool': 'set_light_mode', 'value': 3}]),
+            ('我想看彩虹的颜色', [{'tool': 'set_light_mode', 'value': 4}]),
+            ('试试手势指尖追踪', [{'tool': 'set_light_mode', 'value': 26}]),
+            ('玩一下光球沙盒', [{'tool': 'set_light_mode', 'value': 27}]),
             ('红色不用了，给我黑客屏幕上数字往下落的那种效果', [{'tool': 'set_light_mode', 'value': 24}]),
             ('切到壁炉的感觉', [{'tool': 'set_light_mode', 'value': 23}]),
             ('灯太刺眼了，亮度设为十', [{'tool': 'set_brightness', 'value': 10}]),
@@ -543,6 +612,8 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
             ('灯板设成纯红', [{'tool': 'set_light_mode', 'value': 1}]),
             ('灯板设成纯蓝', [{'tool': 'set_light_mode', 'value': 2}]),
             ('灯板设成纯绿', [{'tool': 'set_light_mode', 'value': 3}]),
+            ('天空为什么是蓝色的？', []),
+            ('森林为什么是绿色的？', []),
             ('你喜欢什么颜色？', []),
             ('我今天心情不好', []),
             ('别改灯效，也不要关灯', []),
@@ -587,6 +658,48 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                     raise ValueError(f"Semantic plan failed validation after retry: {error}")
                 payload['messages'] += [{'role': 'assistant', 'content': raw}, {'role': 'user',
                     'content': f'计划校验失败：{error}。纠正你的计划，只保留原用户请求的操作，不添加设置，严禁执行被用户否定的操作。'}]
+
+    def is_farewell(self, text, timeout=10):
+        """Hybrid end-of-conversation check: keyword assist first, LLM semantic check for natural farewells."""
+        from conversation_session import ConversationSession
+        if not text:
+            return False
+        if ConversationSession.should_end(text):
+            return True
+        compact = re.sub(r'[，,。.!！?？\s]', '', text)
+        if any(neg in compact for neg in ConversationSession.NEGATIONS):
+            return False
+        if not re.search(r'(?:睡|走|下线|关机|休息|不聊|再聊|下次|明天|回聊|忙|bye|see\s*you|结束|挂了|先去|拜|停|歇|回见|再会|下回|撤)', text, re.I):
+            return False
+        if not self.is_ollama:
+            return False
+        schema = {
+            'type': 'object',
+            'properties': {'end_conversation': {'type': 'boolean'}},
+            'required': ['end_conversation'],
+            'additionalProperties': False,
+        }
+        prompt = (
+            '判断用户这句话是否在告别或想结束当前语音对话（例如“今天先聊到这”“我先去睡了”“明天见”为true；'
+            '“明天有什么安排”“不要结束对话”“我还没睡”为false）。只输出JSON。'
+        )
+        endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/chat'
+        payload = {
+            'model': self.model,
+            'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': text}],
+            'stream': False,
+            'format': schema,
+            'keep_alive': '30m',
+            'options': {'temperature': 0, 'num_predict': 30, 'num_ctx': 1024},
+        }
+        try:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            req = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+            with opener.open(req, timeout=timeout) as resp:
+                raw = json.loads(resp.read())['message']['content']
+            return bool(json.loads(raw).get('end_conversation', False))
+        except Exception:
+            return False
 
 
 def describe_action(action):

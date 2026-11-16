@@ -102,7 +102,7 @@ class ServiceAdvertisement:
             "server_url": f"http://{host_ip}:{port}",
             "host": host_ip,
             "port": port,
-            "version": "2.2.0",
+            "version": "2.2.2",
             "board_ip": board_ip,
             "pairing_required": pairing_req,
         }, separators=(",", ":")).encode("utf-8")
