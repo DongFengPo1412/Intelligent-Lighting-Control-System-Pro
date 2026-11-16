@@ -272,5 +272,116 @@ class ConditionalRealMusicLibraryTests(unittest.TestCase):
             self.assertGreaterEqual(res["count"], 0)
 
 
+class PreDefenseWifiDiscoveryFixTests(unittest.TestCase):
+    def _make_mock_gateway(self):
+        import socket
+        import threading
+        from wifi_gateway import WiFiGateway
+
+        gw = WiFiGateway.__new__(WiFiGateway)
+        gw.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        gw.sock.bind(("127.0.0.1", 0))
+        gw.sock.settimeout(0.1)
+        gw.port = 8888
+        gw.is_running = True
+        gw._trust_private = True
+        gw.control_token = ""
+        gw.boot_id = None
+        gw.client_id = "c" * 32
+        gw._sequence = 1
+        gw.board_sta_ip = None
+        gw.board_ap_ip = "192.168.4.1"
+        gw.last_seen = 0.0
+        gw.last_mode = None
+        gw.last_result = {}
+        gw._pending = {}
+        gw._pending_lock = threading.Lock()
+        gw._send_lock = threading.RLock()
+        gw._read_lock = threading.Lock()
+        gw._read_sequence = 1
+        gw._read_boot = None
+        tmp = tempfile.TemporaryDirectory()
+        gw._state_path = Path(tmp.name) / "device-state.json"
+        return gw, tmp
+
+    def test_first_discovery_without_token_probes_broadcast_then_sends_unicast_mode(self):
+        import ipaddress
+        import threading
+        from wifi_gateway import WiFiGateway
+
+        gw, tmp = self._make_mock_gateway()
+        sent_packets = []
+        boot_id = "b" * 32
+        board_ip = "192.168.43.88"
+
+        class FakeSock:
+            def sendto(self, data, addr):
+                sent_packets.append((json.loads(data.decode("utf-8")), addr))
+                msg = json.loads(data.decode("utf-8"))
+                rid = msg["request_id"]
+                if "command" not in msg:
+                    # Simulate ESP32 STA reply from hotspot IP on port 8888
+                    def inject():
+                        with gw._pending_lock:
+                            p = gw._pending.get(rid)
+                            if p and gw._is_valid_unicast_target(board_ip):
+                                p["result"] = {"request_id": rid, "status": "error", "error": "pairing_required", "boot_id": boot_id}
+                                p["sender_ip"] = board_ip
+                                gw.board_sta_ip = board_ip
+                                p["event"].set()
+                    threading.Thread(target=inject, daemon=True).start()
+                else:
+                    def ack():
+                        with gw._pending_lock:
+                            p = gw._pending.get(rid)
+                            if p and addr[0] == board_ip:
+                                p["result"] = {"request_id": rid, "status": "ok", "mode": 2}
+                                gw.last_seen = time.monotonic()
+                                p["event"].set()
+                    threading.Thread(target=ack, daemon=True).start()
+                return len(data)
+
+            def close(self):
+                pass
+
+        gw.sock.close()
+        gw.sock = FakeSock()
+        try:
+            with patch("access_control.AccessPolicy.get_trusted_subnets", return_value=[ipaddress.ip_network("192.168.43.0/24")]):
+                ok = gw.send_command('{"cmd":"mode","val":2}', timeout=0.5, retries=0)
+                self.assertTrue(ok, f"Expected first-discovery mode ok, got: {gw.last_result}")
+                self.assertEqual(gw.board_sta_ip, board_ip)
+                # Ensure read-only probe hit broadcast, while side-effect mode command ONLY hit verified unicast IP!
+                probes = [p for p in sent_packets if "command" not in p[0]]
+                cmds = [p for p in sent_packets if "command" in p[0]]
+                self.assertTrue(any(addr[0] in ("255.255.255.255", "192.168.43.255") for _, addr in probes))
+                self.assertEqual(len(cmds), 1)
+                self.assertEqual(cmds[0][1][0], board_ip)
+                self.assertNotIn("255.255.255.255", [addr[0] for _, addr in cmds])
+
+                # Stale cached IP from another network must NOT block discovery on new hotspot
+                gw.board_sta_ip = "192.168.186.161"
+                gw.last_seen = 0.0
+                gw.boot_id = None
+                sent_packets.clear()
+                self.assertTrue(gw.send_command('{"cmd":"brightness","val":20}', timeout=0.5, retries=0))
+                self.assertEqual(gw.board_sta_ip, board_ip)
+
+                # Sensitive commands MUST still fail closed without control_token
+                sent_packets.clear()
+                for sens in ('{"cmd":"request_audio_ticket"}', '{"cmd":"reboot"}', '{"cmd":"pair"}'):
+                    self.assertFalse(gw.send_command(sens, timeout=0.2, retries=0))
+                    self.assertEqual(gw.last_result.get("error"), "pairing_required")
+                self.assertEqual(sent_packets, [])
+
+                # VPN / untrusted / broadcast IPs rejected by unicast guard
+                self.assertFalse(WiFiGateway._is_valid_unicast_target("26.59.0.60"))
+                self.assertFalse(WiFiGateway._is_valid_unicast_target("255.255.255.255"))
+                self.assertFalse(WiFiGateway._is_valid_unicast_target("192.168.43.255"))
+                self.assertTrue(WiFiGateway._is_valid_unicast_target("192.168.43.88"))
+        finally:
+            tmp.cleanup()
+
+
 if __name__ == "__main__":
     unittest.main()

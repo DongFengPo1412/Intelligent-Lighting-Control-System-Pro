@@ -107,13 +107,43 @@ class ChatJob:
         return f"<ChatJob id={self.job_id} state={self.state} done={self.is_done()}>"
 
 
+import weakref
+
+class _LoopBoundAsyncLock:
+    """Per-event-loop asyncio.Lock wrapper so multiple asyncio.run() lifecycles never collide."""
+
+    def __init__(self):
+        self._locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = weakref.WeakKeyDictionary()
+
+    def _current(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        lock = self._locks.get(loop)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[loop] = lock
+        return lock
+
+    async def __aenter__(self):
+        return await self._current().acquire()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._current().release()
+
+    def locked(self) -> bool:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+        lock = self._locks.get(loop)
+        return bool(lock and lock.locked())
+
 shutting_down = False
 chat_job_lock = threading.Lock()
 active_chat_jobs: Dict[int, ChatJob] = {}
 _chat_job_counter = 0
 active_chat_threads: Set[threading.Thread] = set()
 active_chat_tasks: Set[asyncio.Task] = set()
-chat_lock = asyncio.Lock()
+chat_lock = _LoopBoundAsyncLock()
 active_chat_turn_task: Optional[asyncio.Task] = None
 active_chat_turn_cancel: Optional[threading.Event] = None
 active_chat_turn_id: int = 0

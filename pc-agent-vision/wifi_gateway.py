@@ -125,21 +125,25 @@ class WiFiGateway:
                         pending = self._pending.get(payload["request_id"])
                         if pending and payload.get("status") in ("ok", "error"):
                             # A reply must come from the board port and one of the
-                            # selected destinations (or trusted hotspot IP when broadcast probe was sent).
-                            is_target = (addr[0] in pending["targets"]) or (
-                                any(t.endswith(".255") or t == "255.255.255.255" for t in pending["targets"])
-                                and self._is_trusted_hotspot_ip(addr[0])
+                            # selected destinations (or a verified unicast hotspot/loopback IP for discovery probes).
+                            sender_ip = addr[0]
+                            is_bcast_probe = bool(pending.get("allow_discovery_reply")) or any(
+                                t.endswith(".255") or t == "255.255.255.255" for t in pending["targets"]
+                            )
+                            is_target = (sender_ip in pending["targets"]) or (
+                                is_bcast_probe and self._is_valid_unicast_target(sender_ip)
                             )
                             if addr[1] != self.port or not is_target:
                                 continue
                             pending["result"] = payload
+                            pending["sender_ip"] = sender_ip
                             pending["reply_bytes"] = len(data)
                             if payload.get('status') == 'ok':
                                 self.last_seen = time.monotonic()
-                            if not addr[0].startswith("127.") and addr[0] != self.board_ap_ip:
-                                if self.board_sta_ip != addr[0]:
-                                    print(f"[WiFiGateway] 探活回执确认，更新灯板 STA IP: {self.board_sta_ip} -> {addr[0]}")
-                                    self.board_sta_ip = addr[0]
+                            if not sender_ip.startswith("127.") and sender_ip != self.board_ap_ip and self._is_valid_unicast_target(sender_ip):
+                                if self.board_sta_ip != sender_ip:
+                                    print(f"[WiFiGateway] 探活回执确认，更新灯板 STA IP: {self.board_sta_ip} -> {sender_ip}")
+                                    self.board_sta_ip = sender_ip
                             if "mode" in payload:
                                 self.last_mode = int(payload["mode"])
                             self._remember_board()
@@ -182,6 +186,84 @@ class WiFiGateway:
         except (ValueError, TypeError):
             return False
 
+    @classmethod
+    def _is_valid_unicast_target(cls, ip_str: Optional[str]) -> bool:
+        if not ip_str:
+            return False
+        try:
+            addr = ipaddress.ip_address(ip_str)
+        except (ValueError, TypeError):
+            return False
+        if addr.version != 4 or addr.is_multicast or addr.is_unspecified or ip_str == "255.255.255.255":
+            return False
+        if not cls._is_trusted_hotspot_ip(ip_str):
+            return False
+        if addr.is_loopback:
+            return True
+        from access_control import AccessPolicy
+        for trusted_net in AccessPolicy.get_trusted_subnets():
+            if addr == trusted_net.broadcast_address:
+                return False
+        return str(addr).split(".")[-1] != "255"
+
+    @staticmethod
+    def _is_unauthenticated_whitelisted_command(cmd_str: str) -> bool:
+        raw = (cmd_str or "").strip()
+        if not raw:
+            return False
+        allowed_json_cmds = {
+            "mode", "color", "brightness", "b", "off", "stop",
+            "countdown", "stop_countdown", "stop_cd", "spectrum", "bands",
+            "frame", "status", "face", "emoji", "arcade", "pet", "kurisu",
+            "board_led", "led", "volume", "v", "beep", "key", "track",
+            "track_cal", "hand", "pet_context", "celebrate", "pixel",
+            "canvas", "canvas_chunk", "clear_canvas", "canvas_clear",
+            "difficulty", "performance", "mir", "gamma",
+            "get_capabilities", "capabilities", "release_input", "session",
+        }
+        if raw.startswith("{"):
+            try:
+                obj = json.loads(raw)
+            except (ValueError, TypeError):
+                return False
+            if not isinstance(obj, dict):
+                return False
+            name = obj.get("cmd")
+            return isinstance(name, str) and name.lower() in allowed_json_cmds
+        lower = raw.lower()
+        if lower.startswith("f,"):
+            return True
+        if lower in {
+            "status", "happy", "angry", "sad", "thinking", "breathe", "cry",
+            "neutral", "dynamic", "face", "emoji", "kurisu", "pet", "snake",
+            "tetris", "fire", "matrix", "rainbow", "aurora", "meteor", "stars",
+            "ripple", "cycle", "rain", "smile", "spectrum", "beep",
+            "off", "stop", "stop_countdown", "stop_cd",
+        }:
+            return True
+        return any(
+            lower.startswith(prefix)
+            for prefix in ("mode ", "color ", "brightness ", "b ", "countdown ", "volume ", "v ", "board_led ", "led ", "pixel ")
+        )
+
+    def get_discovery_targets(self) -> List[str]:
+        targets: List[str] = []
+        if self.board_sta_ip and self._is_valid_unicast_target(self.board_sta_ip):
+            targets.append(self.board_sta_ip)
+        try:
+            from access_control import AccessPolicy
+            for net in AccessPolicy.get_trusted_subnets():
+                bcast = str(net.broadcast_address)
+                if bcast not in targets:
+                    targets.append(bcast)
+        except Exception:
+            pass
+        if "255.255.255.255" not in targets:
+            targets.append("255.255.255.255")
+        if self.board_ap_ip and self._is_valid_unicast_target(self.board_ap_ip) and self.board_ap_ip not in targets:
+            targets.append(self.board_ap_ip)
+        return targets
+
     def is_online(self) -> bool:
         return self.last_seen > 0 and time.monotonic() - self.last_seen < 8.0
 
@@ -216,17 +298,31 @@ class WiFiGateway:
             if not self.sock or not self.is_running or not cmd_str.strip():
                 self.last_result = {"status": "error", "error": "transport_unavailable"}
                 return False
-            if len(self.control_token) != 64 or any(c not in '0123456789abcdef' for c in self.control_token):
-                target_is_trusted = all(
-                    self._is_trusted_hotspot_ip(ip) for ip in self.get_target_ips()
-                )
-                if not (self._trust_private and target_is_trusted):
+            has_token = len(self.control_token) == 64 and all(c in '0123456789abcdef' for c in self.control_token)
+            command_targets: Optional[List[str]] = None
+
+            if not has_token:
+                if not getattr(self, "_trust_private", True) or not self._is_unauthenticated_whitelisted_command(cmd_str):
                     self.last_result = {"status": "error", "error": "pairing_required"}
                     return False
-            if not self.boot_id:
-                # This probe only obtains a boot nonce. No command is executed.
+                if (
+                    self.board_sta_ip
+                    and self._is_valid_unicast_target(self.board_sta_ip)
+                    and (self.is_online() or self.board_sta_ip.startswith("127."))
+                ):
+                    command_targets = [self.board_sta_ip]
+
+            need_probe = (not self.boot_id) or (not has_token and command_targets is None)
+            if need_probe:
+                # Read-only discovery/boot_id probe (no command field executed on ESP32).
+                probe_targets = self.get_discovery_targets() if not has_token else self.get_target_ips()
                 probe_id = uuid.uuid4().hex
-                probe = {"event": threading.Event(), "result": None, "targets": self.get_target_ips()}
+                probe = {
+                    "event": threading.Event(),
+                    "result": None,
+                    "targets": probe_targets,
+                    "allow_discovery_reply": not has_token,
+                }
                 with self._pending_lock:
                     self._pending[probe_id] = probe
                 try:
@@ -249,12 +345,22 @@ class WiFiGateway:
                         self.last_result = {"status": "error", "error": "invalid_boot_id"}
                         self.boot_id = None
                         return False
+                    verified_sender = probe.get("sender_ip")
+                    if not has_token:
+                        if not self._is_valid_unicast_target(verified_sender):
+                            self.last_result = {"status": "error", "error": "pairing_required"}
+                            return False
+                        command_targets = [verified_sender]
                 except OSError:
                     self.last_result = {"status": "error", "error": "transport_unavailable"}
                     return False
                 finally:
                     with self._pending_lock:
                         self._pending.pop(probe_id, None)
+
+            if command_targets is None:
+                command_targets = self.get_target_ips()
+
             rid = request_id or uuid.uuid4().hex
             if not isinstance(rid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', rid):
                 self.last_result = {"status":"error","error":"invalid_request_id"}
@@ -264,7 +370,7 @@ class WiFiGateway:
             if len(rid) > 64:
                 self.last_result = {"status":"error","error":"invalid_request_id"}
                 return False
-            pending = {"event": threading.Event(), "result": None, "targets": self.get_target_ips()}
+            pending = {"event": threading.Event(), "result": None, "targets": command_targets}
             data = json.dumps({"request_id": rid, "command": cmd_str.strip(),
                                "token": self.control_token or "", "boot_id": self.boot_id,
                                "client_id": self.client_id, "seq": self._sequence}, separators=(",", ":")).encode("utf-8")
