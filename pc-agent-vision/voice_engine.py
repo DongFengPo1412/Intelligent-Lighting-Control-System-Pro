@@ -637,7 +637,16 @@ class VoiceEngine:
             generator.close()
             translation_pool.shutdown(wait=not stopped(), cancel_futures=True)
             synthesis_pool.shutdown(wait=not stopped(), cancel_futures=True)
+            self._restore_board_led(ctrl)
             timings['bilingual_stream_ms'] = round((time.perf_counter()-speech_started)*1000, 1)
+
+    @staticmethod
+    def _restore_board_led(ctrl):
+        try:
+            waiting = getattr(getattr(ctrl, '_voice_listener', None), 'is_awake', False)
+            ctrl.set_board_led('listening' if waiting else 'off')
+        except Exception:
+            pass
 
     def _speak_chinese_first(self, text, cancelled=None):
         from light_controller import get_light_controller
@@ -697,6 +706,8 @@ class VoiceEngine:
                     time.sleep(.18)
         except Exception as exc:
             self.last_tts_error = str(exc) + ('；中文已播放' if self.last_spoken_text else '')
+        finally:
+            self._restore_board_led(ctrl)
 
     def speak(self, text: str, block: bool = True, to_board: bool = True, cancelled=None):
         """
@@ -728,19 +739,22 @@ class VoiceEngine:
         from light_controller import get_light_controller
         ctrl = get_light_controller()
         board_ready = ctrl.audio_connected or (getattr(ctrl, 'audio_transport', 'usb') == 'wifi' and ctrl.connect_audio())
-        if board_ready:
-            ctrl.set_board_led("speaking")
-
         if to_board and board_ready:
             # One physical output avoids delayed PC/board copies sounding like echo.
+            ctrl.set_board_led("speaking")
             playback_started = time.perf_counter()
             playback_options = {'cancelled': cancelled} if cancelled is not None else {}
-            if not ctrl.play_audio_pcm(pcm_16k, **playback_options):
-                if cancelled is not None and cancelled.is_set():return
-                self.last_tts_error = "板载语音流发送或播放失败"
-                print('[VoiceEngine] 板载语音播放失败')
-            self.last_speech_timings['playback_ms'] = round((time.perf_counter()-playback_started)*1000,1)
+            try:
+                if not ctrl.play_audio_pcm(pcm_16k, **playback_options):
+                    if cancelled is not None and cancelled.is_set():return
+                    self.last_tts_error = "板载语音流发送或播放失败"
+                    print('[VoiceEngine] 板载语音播放失败')
+                self.last_speech_timings['playback_ms'] = round((time.perf_counter()-playback_started)*1000,1)
+            finally:
+                self._restore_board_led(ctrl)
             return
+        if board_ready:
+            self._restore_board_led(ctrl)
         try:
             import winsound
             winsound.PlaySound(wav_32k_bytes, winsound.SND_MEMORY)

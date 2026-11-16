@@ -1404,7 +1404,7 @@ class VoiceListener:
                         if hasattr(self.controller, 'enable_mic'):
                             self.controller.enable_mic(False)
                         if gen_to_teardown == self._session_generation:
-                            self._update_board_led("green")
+                            self._update_board_led("off")
                     except Exception as ex:
                         print(f"[VoiceListener] 硬件收尾异常: {ex}")
 

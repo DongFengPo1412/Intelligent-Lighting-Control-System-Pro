@@ -981,8 +981,13 @@ async def handle_index(request: web.Request):
     return response
 
 async def handle_apk_download(request: web.Request):
-    apk_path = os.environ.get("KURISU_APK_PATH") or os.path.join(STATIC_DIR, "Kurisu_Amadeus.apk")
-    if not os.path.isfile(apk_path):
+    candidates = [
+        os.environ.get("KURISU_APK_PATH"),
+        os.path.join(STATIC_DIR, "Kurisu_Amadeus.apk"),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "android-app", "Kurisu_Amadeus_Pro.apk")),
+    ]
+    apk_path = next((p for p in candidates if p and os.path.isfile(p)), None)
+    if not apk_path:
         return web.json_response({"status": "error", "error": "apk_not_found"}, status=404)
     return web.FileResponse(
         apk_path,
@@ -997,7 +1002,7 @@ async def handle_health(request: web.Request):
     return web.json_response({
         "status": "ok",
         "service": "KurisuPro",
-        "version": "2.2.0"
+        "version": "2.2.1"
     })
 
 async def handle_ceremony(request: web.Request):
@@ -1261,7 +1266,7 @@ async def background_model_warmup(app: web.Application, max_retries: int = 5, in
 
             def _run_warmup():
                 try:
-                    agent.semantic.warmup(timeout=30.0, abort_event=abort_event)
+                    agent.semantic.warmup(timeout=90.0, abort_event=abort_event)
                 except Exception as ex:
                     warmup_exc.append(ex)
                 finally:
@@ -1293,6 +1298,8 @@ async def background_model_warmup(app: web.Application, max_retries: int = 5, in
                     if not app.get('no_audio') and not app.get('xiaozhi_bridge') and not getattr(listener, 'wake_reply_pcm', None):
                         app['voice_startup_state'] = 'error'
                         print('[WebServer] 唤醒应答未准备好，不播放成功音、不放行自动语音；网页灯控仍可用。')
+                        if controller:
+                            await asyncio.get_running_loop().run_in_executor(None, controller.set_board_led, 'off')
                         return
                     app['voice_startup_state'] = 'starting_capture'
                     # Keep startup under the existing lifecycle owner; do not
@@ -1303,12 +1310,21 @@ async def background_model_warmup(app: web.Application, max_retries: int = 5, in
                         print("[WebServer] 语音监听已随模型就绪自动启动。")
                     else:
                         print("[WebServer] 语音监听自动启动失败 (上组线程退出中或硬件忙)。")
+                        if controller:
+                            await asyncio.get_running_loop().run_in_executor(None, controller.set_board_led, 'off')
                 else:
                     app['voice_startup_state'] = 'waiting_wake'
+            elif controller:
+                await asyncio.get_running_loop().run_in_executor(None, controller.set_board_led, 'off')
             return
         except (asyncio.CancelledError, InterruptedError):
             print("[WebServer] 后台模型预热任务被取消/中断。")
             agent.model_status = "cancelled"
+            if controller and not (listener and getattr(listener, 'is_listening', False)):
+                try:
+                    controller.set_board_led('off')
+                except Exception:
+                    pass
             raise asyncio.CancelledError()
         except Exception as error:
             agent.model_status = "error"
@@ -1334,6 +1350,8 @@ async def background_model_warmup(app: web.Application, max_retries: int = 5, in
                 guidance = f"本地大模型服务不可达。请检查 Ollama 服务是否已启动 (如执行 `ollama serve`)，并核对模型 '{getattr(agent.semantic, 'model', 'qwen2.5:7b')}' 是否已拉取。恢复后可通过 POST /api/retry_warmup 触发重试。"
                 agent.model_recovery_guidance = guidance
                 print(f"[WebServer] {guidance}")
+                if controller and not (listener and getattr(listener, 'is_listening', False)):
+                    await asyncio.get_running_loop().run_in_executor(None, controller.set_board_led, 'off')
 
 async def on_cleanup(app: web.Application):
     global listener, agent, controller, pro_api, shutting_down

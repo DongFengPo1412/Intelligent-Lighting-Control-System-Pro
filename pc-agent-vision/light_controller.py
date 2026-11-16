@@ -48,7 +48,9 @@ class LightController(ProControlMixin):
 
     @property
     def audio_connected(self):
-        return self.is_connected or bool(self._network_audio and self._network_audio.connected)
+        if self.audio_transport == 'wifi':
+            return bool(self._network_audio and self._network_audio.connected)
+        return self.is_connected
 
     def connect_audio(self):
         if self.audio_transport != 'wifi':return self.is_connected
@@ -156,7 +158,14 @@ class LightController(ProControlMixin):
                     except Exception:
                         pass
                     self.ser = None
-                self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+                ser = serial.Serial()
+                ser.port = self.port
+                ser.baudrate = self.baudrate
+                ser.timeout = self.timeout
+                ser.dtr = False
+                ser.rts = False
+                ser.open()
+                self.ser = ser
                 time.sleep(0.15) # 等待 DTR/RTS 稳定
                 self.is_connected = True
                 print(f"[LightController] 识别到 ESP32-S3 USB 接口: {self.port} (核心交互控制强制通过 WiFi 通信)")
@@ -188,7 +197,7 @@ class LightController(ProControlMixin):
         gateway = get_wifi_gateway()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if gateway.send_command('{"cmd":"status"}', timeout=0.3, retries=0):
+            if gateway.send_command('{"cmd":"status"}', timeout=0.8, retries=1):
                 return True
             time.sleep(0.1)
         return False

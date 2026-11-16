@@ -1,0 +1,36 @@
+{
+  "release_tag": "pro-v2.3.2",
+  "prerelease": true,
+  "branch": "main",
+  "target": "ESP32-S3 + PC Agent + Android Pro",
+  "firmware": {
+    "filename": "s3_led_matrix_test_pro-v2.3.2.bin",
+    "size_bytes": 1619104,
+    "sha256": "cadf3b153f5def8015cd634e566d28faeaef608022b8faaaccc65d0bc5850dc60",
+    "flash_offset": "0x20000",
+    "partition": "ota_0",
+    "flash_mode": "app_only",
+    "readback_verified": true,
+    "esp_mac": "14:c1:9f:28:d5:30"
+  },
+  "android_apk": {
+    "filename": "Kurisu_Amadeus_Pro_v2.2.1_vc31.apk",
+    "package": "org.fglab.kurisu",
+    "version_name": "2.2.1",
+    "version_code": 31,
+    "size_bytes": 2861537,
+    "sha256": "ed215baa6cc9144cbbf9e153a61fb0e83dbdb2b6012cbc2a1b7b2bb354dbe8fb",
+    "signing_cert_sha256": "EC:BF:63:8D:DD:30:3F:C3:2A:21:70:C9:1A:B0:99:2C:AD:5C:42:7A:2B:B1:3E:60:8F:53:03:C9:77:05:A0:2E",
+    "signature_schemes": ["v2", "v3"],
+    "matches_v2_2_0_cert": true
+  },
+  "verification_status": {
+    "wifi_tcp8889_10s_stream": "PASS (699 chunks, 10.52s, drop=0, busy=0, tx_err=0)",
+    "usb_pair_bootstrap": "PASS (non-resetting serial COM9 pair + local control-pairing.json)",
+    "ollama_kurisu_warmup_and_nl": "PASS (kurisu:latest warmup=2.1s warm / 36.8s cold, NL LED control + Chinese/Japanese reply)",
+    "gpio48_state_reset": "PASS (fixed teardown green, speech finally reset, warmup failure/cancel reset)",
+    "speaker_audible_playback": "NOT_TESTED (deferred pending user readiness for audible speaker output)",
+    "live_human_acoustic_wake": "NOT_TESTED (offline KWS '红莉栖' matched on synth PCM; live spoken test pending user readiness)",
+    "real_android_phone_apk_ui": "NOT_TESTED (APK v2.2.1 built & v2/v3 cert verified; no physical phone APK touch test executed)"
+  }
+}

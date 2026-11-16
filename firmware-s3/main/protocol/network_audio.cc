@@ -77,14 +77,19 @@ void NetworkAudio::FailLocked(const char* reason,int error){
 bool NetworkAudio::FlushLocked(){
     const int fd=client_;
     int write_error=0;
-    const auto result=queue_->Flush(now_ms(),[fd,&write_error](const uint8_t* p,size_t length){
+    const auto now=now_ms();
+    auto writer=[fd,&write_error](const uint8_t* p,size_t length){
         const int count=send(fd,p,length,MSG_DONTWAIT);
         if(count>0)return pcm_transport::TxWrite{static_cast<size_t>(count),pcm_transport::TxState::Progress};
         write_error=count==0?ECONNRESET:errno;
         if(count<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))
             return pcm_transport::TxWrite{0,pcm_transport::TxState::Blocked};
         return pcm_transport::TxWrite{0,pcm_transport::TxState::Fault};
-    });
+    };
+    auto result=queue_->Flush(now,writer);
+    if(result==pcm_transport::FlushResult::Expired && queue_->DropExpiredMic(now)>0){
+        result=queue_->Flush(now,writer);
+    }
     SyncStatsLocked();
     if(result==pcm_transport::FlushResult::Fault || result==pcm_transport::FlushResult::Expired){
         FailLocked(result==pcm_transport::FlushResult::Expired?"TX queue expired":"socket write failed",
@@ -180,7 +185,7 @@ void NetworkAudio::Run(){
             timeval poll={0,10000};
             const int selected=select(fd+1,&readable,nullptr,nullptr,&poll);
             if(selected<0)break;
-            if(!selected){if(uint32_t(now_ms()-last_rx)>2000)break;continue;}
+            if(!selected){if(uint32_t(now_ms()-last_rx)>6000)break;continue;}
             if(!read_all(fd,header,sizeof(header)))break;
             size_t bytes = 0;
             const auto frame_status = pcm_transport::ValidateFrameHeader(header, bytes);

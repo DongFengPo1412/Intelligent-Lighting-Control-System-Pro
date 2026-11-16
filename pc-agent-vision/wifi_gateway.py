@@ -473,6 +473,96 @@ class WiFiGateway:
                     return ticket
         return None
 
+    def bootstrap_usb_pairing(self, timeout: float = 2.0) -> bool:
+        """Obtain control_token once via physical USB CDC when local pairing is missing or stale."""
+        if os.environ.get("KURISU_DISABLE_USB_PAIR_BOOTSTRAP") == "1":
+            return False
+        lock = getattr(self, "_pair_lock", None)
+        if lock is None:
+            lock = self._pair_lock = threading.Lock()
+        with lock:
+            try:
+                import serial
+                import serial.tools.list_ports
+            except ImportError:
+                return False
+            ports = [
+                p.device
+                for p in serial.tools.list_ports.comports()
+                if (getattr(p, "vid", None) == 0x303A and getattr(p, "pid", None) == 0x1001)
+                or "JTAG" in (getattr(p, "description", "") or "").upper()
+                or "ESP32" in (getattr(p, "description", "") or "").upper()
+            ]
+            if not ports:
+                return False
+            rid = f"pair_{uuid.uuid4().hex[:16]}"
+            payload = (
+                b"\n"
+                + json.dumps({"request_id": rid, "cmd": "pair"}, separators=(",", ":")).encode("utf-8")
+                + b"\n"
+            )
+            for dev in ports:
+                ser = None
+                try:
+                    ser = serial.Serial()
+                    ser.port = dev
+                    ser.baudrate = 115200
+                    ser.timeout = 0.1
+                    ser.dtr = False
+                    ser.rts = False
+                    ser.open()
+                    try:
+                        ser.reset_input_buffer()
+                    except OSError:
+                        pass
+                    ser.write(payload)
+                    ser.flush()
+                    deadline = time.monotonic() + max(0.5, float(timeout))
+                    while time.monotonic() < deadline:
+                        raw = ser.readline()
+                        if not raw or raw.startswith(b"\x55\xaa"):
+                            continue
+                        text = raw.decode("utf-8", errors="ignore").strip()
+                        if not text.startswith("{") or not text.endswith("}"):
+                            continue
+                        try:
+                            obj = json.loads(text)
+                        except ValueError:
+                            continue
+                        if obj.get("request_id") and obj.get("request_id") != rid:
+                            continue
+                        token = obj.get("control_token")
+                        if (
+                            obj.get("status") == "ok"
+                            and isinstance(token, str)
+                            and len(token) == 64
+                            and all(c in "0123456789abcdef" for c in token)
+                        ):
+                            from pro_paths import data_dir
+                            cfg_dir = data_dir()
+                            cfg_dir.mkdir(parents=True, exist_ok=True)
+                            cfg_path = cfg_dir / "control-pairing.json"
+                            cfg_path.write_text(
+                                json.dumps({"control_token": token}, separators=(",", ":")),
+                                encoding="utf-8",
+                            )
+                            try:
+                                os.chmod(cfg_path, 0o600)
+                            except OSError:
+                                pass
+                            self.control_token = token
+                            print("[WiFiGateway] 已通过物理 USB 自动完成控制凭据配对并写入本地数据目录")
+                            return True
+                except OSError:
+                    continue
+                finally:
+                    if ser is not None:
+                        try:
+                            ser.close()
+                        except OSError:
+                            pass
+            return False
+
     def broadcast_json(self, payload: Dict[str, Any]) -> bool:
         return self.send_command(json.dumps(payload, separators=(",", ":")))
 

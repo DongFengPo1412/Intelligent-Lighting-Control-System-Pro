@@ -54,6 +54,19 @@ public:
         return count_ ? FlushResult::Pending : FlushResult::Idle;
     }
 
+    size_t DropExpiredMic(uint32_t now) {
+        size_t dropped = 0;
+        while(count_) {
+            const Frame& frame=frames_[head_];
+            if(frame.offset!=0 || frame.data[4]!=2 || uint32_t(now-frame.queued_ms)<=kMaxAgeMs) break;
+            dropped_samples_+=(frame.length-7u)/2u;
+            head_=(head_+1)%kSlots;
+            --count_;
+            ++dropped;
+        }
+        return dropped;
+    }
+
     void Clear() {
         while(count_) {
             const Frame& frame=frames_[head_];
