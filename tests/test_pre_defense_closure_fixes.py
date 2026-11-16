@@ -187,6 +187,33 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         self.assertEqual(fake_agent.model_status, "unreachable")
         self.assertEqual(led_calls[-1], "off")
 
+    def test_wifi_pcm_play_stream_waits_for_delayed_hardware_playback_confirmation(self):
+        from network_audio import WiFiPcmClient
+
+        ctrl = type(
+            "Ctrl",
+            (),
+            {
+                "_mic_enabled": False,
+                "playback_started_at": 0.0,
+                "enable_mic": staticmethod(lambda _en: True),
+            },
+        )()
+        client = WiFiPcmClient(ctrl)
+        client.connect = lambda: True
+        client._send = lambda *_a, **_kw: None
+
+        status_seq = iter([
+            {"status": "ok", "audio_rx": 100, "audio_played": 100, "audio_dropped": 0, "audio_errors": 0},
+            {"status": "ok", "audio_rx": 100, "audio_played": 100, "audio_dropped": 0, "audio_errors": 0},
+            {"status": "ok", "audio_rx": 612, "audio_played": 612, "audio_dropped": 0, "audio_errors": 0},
+        ])
+        ctrl.command_result = lambda _cmd: next(status_seq)
+
+        ok = client.play_stream(iter([b"\x01\x00" * 512]), chunk_samples=512)
+        self.assertTrue(ok)
+        self.assertIsNone(client.last_error)
+
 
 if __name__ == "__main__":
     unittest.main()

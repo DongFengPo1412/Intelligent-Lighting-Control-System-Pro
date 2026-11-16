@@ -67,32 +67,56 @@ class WiFiPcmClient:
         gateway = get_wifi_gateway()
         if not self.controller.wait_for_control():
             return False
+        sock = None
         try:
             token = getattr(gateway, "control_token", "")
             ticket = gateway.request_audio_ticket() if (len(token) == 64 or not token) else None
-            if (
+            last_err = (getattr(gateway, "last_result", None) or {}).get("error")
+            need_usb_pair = (len(token) != 64) or (
                 (not ticket or len(ticket) != 64)
+                and last_err in ("pairing_required", "invalid_token", "invalid_command")
+            )
+            if (
+                need_usb_pair
                 and not __import__("os").environ.get("PYTEST_CURRENT_TEST")
                 and hasattr(gateway, "bootstrap_usb_pairing")
                 and gateway.bootstrap_usb_pairing()
             ):
                 token = getattr(gateway, "control_token", "")
+                self.controller.wait_for_control(10.0)
                 ticket = gateway.request_audio_ticket()
             if ticket and isinstance(ticket, str) and len(ticket) == 64:
                 token = ticket
             if len(token) != 64:
                 raise PermissionError("PCM authentication required: host must be paired with control_token or valid audio ticket")
-            sock = socket.create_connection(
-                (gateway.board_sta_ip or gateway.board_ap_ip, 8889), timeout=5
-            )
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
-            sock.settimeout(6.0)
-            payload = HELLO + b"|" + token.encode("ascii")
-            sock.sendall(packet(4, payload))
-            rx_kind, rx_payload = receive(sock)
-            if rx_kind != 4 or rx_payload != HELLO:
-                raise ValueError("Unsupported PCM protocol or handshake rejected")
+            target_ip = gateway.board_sta_ip or gateway.board_ap_ip
+            last_net_exc = None
+            for attempt in range(2):
+                attempt_sock = None
+                try:
+                    attempt_sock = socket.create_connection((target_ip, 8889), timeout=5)
+                    attempt_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    attempt_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
+                    attempt_sock.settimeout(6.0)
+                    payload = HELLO + b"|" + token.encode("ascii")
+                    attempt_sock.sendall(packet(4, payload))
+                    rx_kind, rx_payload = receive(attempt_sock)
+                    if rx_kind != 4 or rx_payload != HELLO:
+                        raise ValueError("Unsupported PCM protocol or handshake rejected")
+                    sock = attempt_sock
+                    break
+                except OSError as exc:
+                    last_net_exc = exc
+                    if attempt_sock is not None:
+                        attempt_sock.close()
+                    if attempt == 0:
+                        time.sleep(0.3)
+                except ValueError:
+                    if attempt_sock is not None:
+                        attempt_sock.close()
+                    raise
+            if sock is None:
+                raise last_net_exc or OSError("PCM connection failed")
             self.sock = sock
             self.boot_id = gateway.boot_id
             self.connected = True
@@ -103,7 +127,7 @@ class WiFiPcmClient:
             return True
         except (OSError, ValueError, PermissionError) as exc:
             self.last_error = str(exc)
-            if "sock" in locals():
+            if sock is not None:
                 sock.close()
             return False
 
@@ -243,19 +267,30 @@ class WiFiPcmClient:
                     total += len(pcm)
                 if self.cancelled.wait(max(0, start + total / 32000 + 0.35 - time.monotonic())):
                     return False
-                after = self.controller.command_result({"cmd": "status"})
-                delta = {
-                    k: (after.get(k, 0) - before.get(k, 0)) & 0xFFFFFFFF
-                    for k in ("audio_rx", "audio_played", "audio_dropped", "audio_errors")
-                }
-                valid = (
-                    before.get("status") == "ok"
-                    and after.get("status") == "ok"
-                    and delta["audio_rx"] == total // 2 == delta["audio_played"]
-                    and not (delta["audio_dropped"] or delta["audio_errors"])
-                )
+                expected_samples = total // 2
+                confirm_deadline = time.monotonic() + 2.5
+                delta = {"audio_rx": 0, "audio_played": 0, "audio_dropped": 0, "audio_errors": 0}
+                after = {}
+                valid = False
+                while True:
+                    after = self.controller.command_result({"cmd": "status"})
+                    if before.get("status") == "ok" and after.get("status") == "ok":
+                        delta = {
+                            k: (after.get(k, 0) - before.get(k, 0)) & 0xFFFFFFFF
+                            for k in ("audio_rx", "audio_played", "audio_dropped", "audio_errors")
+                        }
+                        valid = (
+                            delta["audio_rx"] == expected_samples == delta["audio_played"]
+                            and not (delta["audio_dropped"] or delta["audio_errors"])
+                        )
+                        if valid or delta["audio_dropped"] or delta["audio_errors"] or delta["audio_rx"] > expected_samples:
+                            break
+                    if time.monotonic() >= confirm_deadline or self.cancelled.is_set() or (cancelled is not None and cancelled.is_set()):
+                        break
+                    if self.cancelled.wait(0.18):
+                        return False
                 if not valid:
-                    self.last_error = dict(expected=total // 2, **delta)
+                    self.last_error = dict(expected=expected_samples, **delta)
                 return valid
             except (OSError, ValueError) as exc:
                 self.last_error = str(exc)

@@ -464,10 +464,10 @@ class WiFiGateway:
                 self.send_command(command)
             return dict(self.last_result)
 
-    def request_audio_ticket(self, timeout: float = 1.0) -> Optional[str]:
+    def request_audio_ticket(self, timeout: float = 1.5) -> Optional[str]:
         cmd = json.dumps({"cmd": "request_audio_ticket"}, separators=(",", ":"))
         with self._send_lock:
-            if self.send_command(cmd, timeout=timeout, retries=1):
+            if self.send_command(cmd, timeout=timeout, retries=2):
                 ticket = self.last_result.get("audio_ticket")
                 if ticket and isinstance(ticket, str) and len(ticket) == 64:
                     return ticket
@@ -551,6 +551,7 @@ class WiFiGateway:
                             except OSError:
                                 pass
                             self.control_token = token
+                            self.boot_id = None
                             print("[WiFiGateway] 已通过物理 USB 自动完成控制凭据配对并写入本地数据目录")
                             return True
                 except OSError:
