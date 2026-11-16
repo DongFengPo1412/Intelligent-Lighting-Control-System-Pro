@@ -571,8 +571,10 @@ def register(app, api_getter):
         session_id = request.headers.get("X-Vision-Session") or request.query.get("session_id")
         rot_hdr = request.headers.get("X-Camera-Rotation")
         mir_hdr = request.headers.get("X-Camera-Mirrored")
+        apply_rot_hdr = request.headers.get("X-Camera-Rotate")
         rotation = int(rot_hdr) if rot_hdr is not None and rot_hdr.lstrip("-").isdigit() else None
         mirrored = None if mir_hdr is None else (mir_hdr.lower() in ("1", "true", "yes"))
+        apply_rotation = bool(apply_rot_hdr and apply_rot_hdr.lower() in ("1", "true", "yes"))
         try:
             obs = await asyncio.to_thread(
                 api.vision.process_remote_frame,
@@ -581,16 +583,36 @@ def register(app, api_getter):
                 session_id,
                 rotation,
                 mirrored,
+                apply_rotation,
             )
             vision_status = api.vision.status()
+            frame_cmd = obs.get("device_command")
+            if isinstance(frame_cmd, dict):
+                cmd_attempted = bool(frame_cmd.get("attempted", False))
+                cmd_ack = frame_cmd.get("acknowledged") if cmd_attempted else None
+                cmd_error = frame_cmd.get("error") if cmd_attempted else None
+                frame_seq = frame_cmd.get("frame_seq")
+                cmd_session = frame_cmd.get("session_id")
+            else:
+                cmd_attempted = False
+                cmd_ack = None
+                cmd_error = obs.get("reason") if (obs.get("stale") or obs.get("dropped")) else None
+                frame_seq = None
+                cmd_session = session_id
+            if obs.get("stale") or obs.get("dropped"):
+                cmd_attempted = False
+                cmd_ack = None
             return web.json_response(
                 {
                     "status": "ok",
-                    "upload_accepted": True,
+                    "upload_accepted": not bool(obs.get("dropped")),
                     "observation_fresh": bool(not obs.get("stale") and not obs.get("dropped") and vision_status.get("fresh")),
-                    "device_command_attempted": vision_status.get("device_command_attempted", False),
-                    "device_command_acknowledged": vision_status.get("device_command_acknowledged"),
-                    "device_error": vision_status.get("device_error"),
+                    "session_id": cmd_session,
+                    "frame_seq": frame_seq,
+                    "device_command_attempted": cmd_attempted,
+                    "device_command_acknowledged": cmd_ack,
+                    "device_error": cmd_error,
+                    "device_command": frame_cmd,
                     "observation": obs,
                     "vision": vision_status,
                 }

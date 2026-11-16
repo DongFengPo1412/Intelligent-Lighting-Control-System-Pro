@@ -121,6 +121,8 @@ class MultimodalHub:
         self._remote_hands = None
         self._remote_face = None
         self._remote_pending_frames = 0
+        self._remote_frame_seq = 0
+        self._frame_cmd_ctx = threading.local()
         self.input_rotation = 0
         self.input_mirrored = True
         self.input_width = 0
@@ -163,11 +165,29 @@ class MultimodalHub:
             handle.request_close()
 
     def _record_device_command(self, ok):
+        ack_ok = bool(ok)
+        ctx = getattr(self._frame_cmd_ctx, "current", None)
+        if ctx is not None:
+            meta = ctx.get("frame_meta")
+            if meta is not None and not self._is_frame_valid(meta):
+                return ack_ok
+            ctx["attempted"] = True
+            ctx["command_count"] += 1
+            if not ack_ok:
+                ctx["failed_count"] += 1
+            ctx["acknowledged"] = (ctx["failed_count"] == 0)
+            ctx["error"] = None if ctx["failed_count"] == 0 else "板端未确认视觉联动指令"
         self.last_device_command_attempted = True
-        self.last_device_command_acknowledged = bool(ok)
+        self.last_device_command_acknowledged = ack_ok if ctx is None else ctx["acknowledged"]
         self.last_device_command_at = time.time()
-        self.last_device_error = None if ok else "板端未确认视觉联动指令"
-        return bool(ok)
+        self.last_device_error = None if self.last_device_command_acknowledged else "板端未确认视觉联动指令"
+        return ack_ok
+
+    def _reset_device_command_state(self):
+        self.last_device_command_attempted = False
+        self.last_device_command_acknowledged = None
+        self.last_device_command_at = 0.0
+        self.last_device_error = None
 
     def get_latest_jpeg(self):
         if hasattr(self, "frame_lock"):
@@ -218,6 +238,8 @@ class MultimodalHub:
                                 camera_id=target_camera,
                                 rotation=target_rotation,
                                 mirrored=target_mirrored,
+                                width=0,
+                                height=0,
                             )
                         )
                         if not ok:
@@ -320,6 +342,7 @@ class MultimodalHub:
             with self.frame_lock:
                 self.latest_jpeg = None
         self._detach_remote_mp()
+        self._reset_device_command_state()
         return True
 
     def stop(self):
@@ -338,6 +361,7 @@ class MultimodalHub:
             with self.frame_lock:
                 self.latest_jpeg = None
         self._detach_remote_mp()
+        self._reset_device_command_state()
 
     def _record_face(self, image):
         """Publish a detached sample; a missing/invalid crop invalidates enrollment."""
@@ -364,13 +388,38 @@ class MultimodalHub:
                 return False
             return True
 
-    def _process_cv_frame(self, image, hands_or_handle, face=None, is_flipped=False, frame_meta=None):
+    def _process_cv_frame(
+        self,
+        image,
+        hands_or_handle,
+        face=None,
+        is_flipped=False,
+        frame_meta=None,
+        raw_mirrored=None,
+        apply_flip=None,
+        source=None,
+        rotation=None,
+        apply_rotation=False,
+    ):
         import cv2
         import numpy as np
         import mediapipe as mp
 
-        if not is_flipped:
+        frame_rotation = self.input_rotation if rotation is None else (int(rotation) % 360)
+        if apply_rotation and frame_rotation in (90, 180, 270):
+            rot_code = {
+                90: cv2.ROTATE_90_CLOCKWISE,
+                180: cv2.ROTATE_180,
+                270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+            }[frame_rotation]
+            image = cv2.rotate(image, rot_code)
+
+        do_flip = (not is_flipped) if apply_flip is None else bool(apply_flip)
+        declared_raw_mirrored = bool(is_flipped) if raw_mirrored is None else bool(raw_mirrored)
+        if do_flip:
             image = cv2.flip(image, 1)
+        effective_mirrored = (not declared_raw_mirrored) if do_flip else declared_raw_mirrored
+
         h, w = image.shape[:2]
         side = min(h, w)
         image = image[
@@ -378,7 +427,15 @@ class MultimodalHub:
         ]
         self.input_width = int(w)
         self.input_height = int(h)
-        active_profile = self.current_calibration_profile(mirrored=bool(is_flipped or True), width=w, height=h)
+        frame_source = source or (frame_meta[0] if frame_meta else None) or (self.source if self.source in ("camera", "remote") else "camera")
+        active_profile = self.current_calibration_profile(
+            source=frame_source,
+            camera_id=self.camera if frame_source == "camera" else None,
+            rotation=frame_rotation,
+            mirrored=effective_mirrored,
+            width=w,
+            height=h,
+        )
         self._check_calibration_compatibility(active_profile)
 
         preview = image.copy()
@@ -455,7 +512,7 @@ class MultimodalHub:
             self.process(observation, frame_meta=frame_meta)
         return observation
 
-    def process_remote_frame(self, raw_bytes, mode=None, session_id=None, rotation=None, mirrored=None):
+    def process_remote_frame(self, raw_bytes, mode=None, session_id=None, rotation=None, mirrored=None, apply_rotation=False):
         import cv2
         import numpy as np
         import mediapipe as mp
@@ -467,6 +524,8 @@ class MultimodalHub:
 
         handle = None
         acquired_slot = False
+        frame_cmd = None
+        prev_ctx = getattr(self._frame_cmd_ctx, "current", None)
         with self._state_lock:
             if not self.started or self.stop_event.is_set():
                 raise RuntimeError("Vision session is stopped")
@@ -479,8 +538,24 @@ class MultimodalHub:
             if session_id != self.active_session_id:
                 raise RuntimeError("Stale or invalid session ID")
             if self._remote_pending_frames >= self.MAX_REMOTE_PENDING_FRAMES:
-                return {"present": False, "dropped": True, "reason": "queue_full"}
+                return {
+                    "present": False,
+                    "dropped": True,
+                    "reason": "queue_full",
+                    "device_command": {
+                        "session_id": session_id,
+                        "epoch": self.session_epoch,
+                        "frame_seq": None,
+                        "attempted": False,
+                        "command_count": 0,
+                        "failed_count": 0,
+                        "acknowledged": None,
+                        "error": "queue_full",
+                    },
+                }
             self._remote_pending_frames += 1
+            self._remote_frame_seq += 1
+            frame_seq = self._remote_frame_seq
             acquired_slot = True
 
             try:
@@ -492,6 +567,19 @@ class MultimodalHub:
                     self.input_mirrored = bool(mirrored)
 
                 frame_meta = (self.source, session_id, self.session_epoch)
+                frame_rotation = self.input_rotation
+                frame_mirrored = bool(self.input_mirrored)
+                frame_cmd = {
+                    "session_id": session_id,
+                    "epoch": self.session_epoch,
+                    "frame_seq": frame_seq,
+                    "attempted": False,
+                    "command_count": 0,
+                    "failed_count": 0,
+                    "acknowledged": None,
+                    "error": None,
+                    "frame_meta": frame_meta,
+                }
 
                 if self._remote_hands is not None or self._remote_face is not None:
                     if (
@@ -518,14 +606,50 @@ class MultimodalHub:
                 self._remote_pending_frames = max(0, self._remote_pending_frames - 1)
                 raise
 
+        self._frame_cmd_ctx.current = frame_cmd
         try:
             if handle is not None:
-                return self._process_cv_frame(img, handle, is_flipped=True, frame_meta=frame_meta)
-            return {"present": False}
+                obs = self._process_cv_frame(
+                    img,
+                    handle,
+                    is_flipped=frame_mirrored,
+                    raw_mirrored=frame_mirrored,
+                    apply_flip=False,
+                    source="remote",
+                    rotation=frame_rotation,
+                    apply_rotation=bool(apply_rotation),
+                    frame_meta=frame_meta,
+                )
+            else:
+                obs = {"present": False}
+            if obs.get("stale") or not self._is_frame_valid(frame_meta):
+                obs["device_command"] = {
+                    "session_id": session_id,
+                    "epoch": frame_meta[2],
+                    "frame_seq": frame_seq,
+                    "attempted": False,
+                    "command_count": 0,
+                    "failed_count": 0,
+                    "acknowledged": None,
+                    "error": "frame_stale",
+                }
+            else:
+                obs["device_command"] = {
+                    "session_id": session_id,
+                    "epoch": frame_meta[2],
+                    "frame_seq": frame_seq,
+                    "attempted": bool(frame_cmd["attempted"]),
+                    "command_count": int(frame_cmd["command_count"]),
+                    "failed_count": int(frame_cmd["failed_count"]),
+                    "acknowledged": frame_cmd["acknowledged"] if frame_cmd["attempted"] else None,
+                    "error": frame_cmd["error"] if frame_cmd["attempted"] else None,
+                }
+            return obs
         except Exception as exc:
             self.error = f"远程视觉推理异常: {exc}"
             raise
         finally:
+            self._frame_cmd_ctx.current = prev_ctx
             if handle is not None:
                 handle.release()
             if acquired_slot:
@@ -560,7 +684,17 @@ class MultimodalHub:
                     if not ok:
                         raise RuntimeError("Camera stream ended")
                     meta = (self.source, self.active_session_id, self.session_epoch)
-                    self._process_cv_frame(image, hands, face, is_flipped=False, frame_meta=meta)
+                    self._process_cv_frame(
+                        image,
+                        hands,
+                        face,
+                        is_flipped=False,
+                        raw_mirrored=False,
+                        apply_flip=True,
+                        source="camera",
+                        rotation=0,
+                        frame_meta=meta,
+                    )
                     self.stop_event.wait(0.04)
         except Exception as exc:
             self.error = str(exc)

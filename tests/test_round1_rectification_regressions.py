@@ -731,5 +731,366 @@ class F09F10BilingualAndNackTests(unittest.TestCase):
                 store.close()
 
 
+class Round2TargetedPatchTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _make_jpg(w=64, h=48):
+        import cv2
+        ok, buf = cv2.imencode(".jpg", np.zeros((h, w, 3), dtype=np.uint8))
+        assert ok
+        return buf.tobytes()
+
+    @staticmethod
+    def _make_face_landmarks():
+        pts = [types.SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(478)]
+        # Give left/right eye corners, eyelids, mouth, and iris valid non-degenerate separation
+        coords = {
+            33: (0.35, 0.40), 133: (0.45, 0.40), 159: (0.40, 0.37), 145: (0.40, 0.43), 468: (0.40, 0.40),
+            362: (0.55, 0.40), 263: (0.65, 0.40), 386: (0.60, 0.37), 374: (0.60, 0.43), 473: (0.60, 0.40),
+            61: (0.42, 0.65), 291: (0.58, 0.65), 13: (0.50, 0.64), 14: (0.50, 0.66),
+            70: (0.35, 0.33), 300: (0.65, 0.33), 1: (0.50, 0.50), 152: (0.50, 0.78),
+        }
+        for idx, (x, y) in coords.items():
+            pts[idx] = types.SimpleNamespace(x=x, y=y, z=0.0)
+        return pts
+
+    async def test_r1_01_and_r1_02_per_frame_ack_isolation_and_scoped_camera_get(self):
+        import mediapipe as mp
+
+        app = web_server.create_app(simulate=True, no_audio=True)
+        async with TestServer(app) as server:
+            async with TestClient(server) as client:
+                policy = app["access_policy"]
+                pro = app.get("pro_api") or web_server.pro_api
+                # Replace controller with deterministic non-SIMULATION board stub whose ACK can be toggled
+                class FakeCtrl(SimulatedController):
+                    def __init__(self):
+                        super().__init__()
+                        self.port = "COM9"
+                        self.ack_ok = True
+                        self.fail_on_call_n = None
+                        self.track_calls = 0
+
+                    def send_json(self, payload):
+                        return bool(self.ack_ok)
+
+                    def track(self, x, y, present, count=1):
+                        self.track_calls += 1
+                        if self.fail_on_call_n is not None and self.track_calls >= self.fail_on_call_n:
+                            return False
+                        return bool(self.ack_ok)
+
+                fake_ctrl = FakeCtrl()
+                pro.controller = fake_ctrl
+                pro.vision.controller = fake_ctrl
+                hub = pro.vision
+
+                face_lms = self._make_face_landmarks()
+                hand_lms = [types.SimpleNamespace(x=0.5, y=0.5, z=0.0) for _ in range(21)]
+                state = {"include_hand": True}
+
+                class StubHands:
+                    def process(self, rgb):
+                        if state["include_hand"]:
+                            return types.SimpleNamespace(multi_hand_landmarks=[types.SimpleNamespace(landmark=hand_lms)])
+                        return types.SimpleNamespace(multi_hand_landmarks=None)
+
+                    def close(self):
+                        pass
+
+                class StubFace:
+                    def process(self, rgb):
+                        return types.SimpleNamespace(multi_face_landmarks=[types.SimpleNamespace(landmark=face_lms)])
+
+                    def close(self):
+                        pass
+
+                fake_mp = types.SimpleNamespace(
+                    hands=types.SimpleNamespace(Hands=lambda **kw: StubHands(), HAND_CONNECTIONS=[]),
+                    face_mesh=types.SimpleNamespace(FaceMesh=lambda **kw: StubFace()),
+                    drawing_utils=types.SimpleNamespace(draw_landmarks=lambda *a, **k: None),
+                )
+                jpg = self._make_jpg()
+
+                with patch.object(mp, "solutions", fake_mp):
+                    # Emulate trusted hotspot peer IP ("172.20.10.5")
+                    with patch.object(policy, "local", return_value=False), \
+                         patch.object(AccessPolicy, "is_trusted_peer", return_value=True):
+                        # Unauthenticated LAN GET /api/pro/camera/frame & /feed -> 401
+                        self.assertEqual((await client.get("/api/pro/camera/frame")).status, 401)
+                        self.assertEqual((await client.get("/api/pro/camera/feed")).status, 401)
+
+                        # 1. Start remote session in fingertip mode (issues scoped vision_token)
+                        start_resp = await client.post("/api/pro/vision", json={"enabled": True, "source": "remote", "mode": "fingertip"})
+                        self.assertEqual(start_resp.status, 200)
+                        start_data = await start_resp.json()
+                        sid = start_data["session_id"]
+                        vtok = start_data["vision_token"]
+                        self.assertTrue(sid and vtok)
+
+                        # Frame N: fingertip mode sends track() and ACK=True
+                        resp_n = await client.post(
+                            f"/api/pro/camera/frame?session_id={sid}",
+                            headers={"X-Vision-Token": vtok, "X-Vision-Session": sid, "X-Vision-Mode": "fingertip"},
+                            data=jpg,
+                        )
+                        self.assertEqual(resp_n.status, 200)
+                        body_n = await resp_n.json()
+                        self.assertTrue(body_n["device_command_attempted"])
+                        self.assertTrue(body_n["device_command_acknowledged"])
+
+                        # R1-02: GET /api/pro/camera/frame with valid scoped token + session -> 200 JPEG!
+                        get_ok = await client.get(
+                            f"/api/pro/camera/frame?session_id={sid}",
+                            headers={"X-Vision-Token": vtok},
+                        )
+                        self.assertEqual(get_ok.status, 200)
+                        self.assertEqual(get_ok.headers["Content-Type"], "image/jpeg")
+                        self.assertGreater(len(await get_ok.read()), 0)
+
+                        # Wrong session_id / missing session_id / sensitive endpoints with vision token -> 401!
+                        self.assertEqual(
+                            (await client.get("/api/pro/camera/frame", headers={"X-Vision-Token": vtok})).status,
+                            401,
+                        )
+                        self.assertEqual(
+                            (await client.get(f"/api/pro/camera/frame?session_id=wrong", headers={"X-Vision-Token": vtok, "X-Vision-Session": "wrong"})).status,
+                            401,
+                        )
+                        self.assertEqual(
+                            (await client.get("/api/pro/memory", headers={"Authorization": f"Bearer {vtok}"})).status,
+                            401,
+                        )
+
+                        # R1-01 CRITICAL: Frame N+1 switches mode to 'pet' with face present -> sends ZERO hardware commands!
+                        # It MUST NOT inherit Frame N's device_command_acknowledged=True!
+                        state["include_hand"] = False
+                        resp_n1 = await client.post(
+                            f"/api/pro/camera/frame?session_id={sid}",
+                            headers={"X-Vision-Token": vtok, "X-Vision-Session": sid, "X-Vision-Mode": "pet"},
+                            data=jpg,
+                        )
+                        self.assertEqual(resp_n1.status, 200)
+                        body_n1 = await resp_n1.json()
+                        self.assertFalse(body_n1["device_command_attempted"], "pet frame sent 0 commands")
+                        self.assertIsNone(body_n1["device_command_acknowledged"], "Must NOT inherit previous frame True ACK!")
+
+                        # Frame N+2: fingertip mode with NACK -> device_command_acknowledged=False!
+                        state["include_hand"] = True
+                        fake_ctrl.ack_ok = False
+                        resp_n2 = await client.post(
+                            f"/api/pro/camera/frame?session_id={sid}",
+                            headers={"X-Vision-Token": vtok, "X-Vision-Session": sid, "X-Vision-Mode": "fingertip"},
+                            data=jpg,
+                        )
+                        body_n2 = await resp_n2.json()
+                        self.assertTrue(body_n2["device_command_attempted"])
+                        self.assertFalse(body_n2["device_command_acknowledged"])
+
+                        # Multi-command aggregation inside one frame: 1st succeeds, 2nd fails -> frame ACK must be False!
+                        hub._frame_cmd_ctx.current = {
+                            "session_id": sid, "epoch": hub.session_epoch, "frame_seq": 99,
+                            "attempted": False, "command_count": 0, "failed_count": 0,
+                            "acknowledged": None, "error": None, "frame_meta": ("remote", sid, hub.session_epoch),
+                        }
+                        hub._record_device_command(True)
+                        hub._record_device_command(False)
+                        self.assertEqual(hub._frame_cmd_ctx.current["command_count"], 2)
+                        self.assertFalse(hub._frame_cmd_ctx.current["acknowledged"])
+                        hub._frame_cmd_ctx.current = None
+
+                        # Stop session revokes capability -> GET /api/pro/camera/frame returns 401
+                        await client.post("/api/pro/vision", json={"enabled": False, "source": "remote", "session_id": sid})
+                        self.assertEqual(
+                            (await client.get(f"/api/pro/camera/frame?session_id={sid}", headers={"X-Vision-Token": vtok})).status,
+                            401,
+                        )
+
+    def test_r1_03_chat_pause_coordinator_handoff_race_and_bounded_history(self):
+        class TrackedListener:
+            def __init__(self):
+                self.is_paused = False
+                self.is_listening = True
+                self._music_suspended = False
+                self.calls = []
+                self.resume_entered = threading.Event()
+                self.resume_release = None
+
+            def pause(self):
+                self.calls.append("pause")
+                self.is_paused = True
+
+            def resume(self):
+                self.calls.append("resume")
+                if self.resume_release is not None:
+                    self.resume_entered.set()
+                    self.resume_release.wait(timeout=2.0)
+                self.is_paused = False
+
+        # Part 1: Turn A leaves release() _lock BEFORE acquiring _hw_lock -> Turn B enters prepare_pause()!
+        coord = web_server.ChatPauseCoordinator()
+        listener = TrackedListener()
+        handoff_entered = threading.Event()
+        handoff_release = threading.Event()
+
+        def paused_handoff():
+            handoff_entered.set()
+            handoff_release.wait(timeout=2.0)
+
+        coord._on_before_resume_handoff = paused_handoff
+        owns_a, need_a = coord.prepare_pause(listener, 1)
+        self.assertTrue(owns_a and need_a)
+        coord.execute_pause(listener)
+        self.assertTrue(listener.is_paused)
+
+        res_a = []
+        t_a = threading.Thread(target=lambda: res_a.append(coord.release(listener, 1)))
+        t_a.start()
+        self.assertTrue(handoff_entered.wait(timeout=1.5))
+
+        # Turn B enters WHILE Turn A is between _lock and _hw_lock/resume()!
+        owns_b, need_b = coord.prepare_pause(listener, 2)
+        self.assertTrue(owns_b, "Turn B MUST NOT misdiagnose in-flight handoff as external pause!")
+        self.assertFalse(need_b, "Listener is already paused; Turn A resume was cancelled")
+
+        # Release Turn A -> Turn A MUST NOT call listener.resume() while Turn B owns pause!
+        handoff_release.set()
+        t_a.join(timeout=2.0)
+        self.assertEqual(res_a, [False])
+        self.assertTrue(listener.is_paused)
+        self.assertEqual(listener.calls, ["pause"])
+
+        # Turn B completes -> NOW listener resumes exactly once
+        coord._on_before_resume_handoff = lambda: None
+        self.assertTrue(coord.release(listener, 2))
+        self.assertFalse(listener.is_paused)
+        self.assertEqual(listener.calls, ["pause", "resume"])
+
+        # Part 2: Turn A ALREADY inside slow listener.resume() while Turn B calls prepare_pause() -> serializes pause behind resume without deadlock!
+        listener2 = TrackedListener()
+        listener2.resume_release = threading.Event()
+        coord2 = web_server.ChatPauseCoordinator()
+        coord2.prepare_pause(listener2, 10)
+        coord2.execute_pause(listener2)
+
+        t_a2 = threading.Thread(target=lambda: coord2.release(listener2, 10))
+        t_a2.start()
+        self.assertTrue(listener2.resume_entered.wait(timeout=1.5))
+
+        owns_b2, need_b2 = coord2.prepare_pause(listener2, 11)
+        self.assertTrue(owns_b2 and need_b2, "Active in-flight resume requires Turn B to re-pause behind _hw_lock")
+
+        b2_paused = threading.Event()
+
+        def run_b2_pause():
+            coord2.execute_pause(listener2)
+            b2_paused.set()
+
+        t_b2 = threading.Thread(target=run_b2_pause)
+        t_b2.start()
+        time.sleep(0.05)
+        self.assertFalse(b2_paused.is_set(), "Turn B pause cleanly waits on _hw_lock for Turn A resume")
+        listener2.resume_release.set()
+        t_a2.join(timeout=2.0)
+        t_b2.join(timeout=2.0)
+        self.assertTrue(b2_paused.is_set())
+        self.assertTrue(listener2.is_paused, "After handoff completes, Turn B owns an actively paused listener!")
+
+        listener2.resume_release = None
+        self.assertTrue(coord2.release(listener2, 11))
+        self.assertFalse(listener2.is_paused)
+        self.assertEqual(listener2.calls, ["pause", "resume", "pause", "resume"])
+
+        # Part 3: Repeated releases remain bounded (<= MAX_RETIRED_TURNS)
+        listener3 = TrackedListener()
+        coord3 = web_server.ChatPauseCoordinator()
+        for tid in range(1, 501):
+            coord3.prepare_pause(listener3, tid)
+            coord3.release(listener3, tid)
+        self.assertLessEqual(len(coord3._released_turns), coord3.MAX_RETIRED_TURNS)
+
+    def test_r1_04_f05_mirrored_false_vs_true_rotation_geometry_and_cross_source(self):
+        import mediapipe as mp
+
+        ctrl = SimulatedController()
+        ctrl.port = "COM9"
+        hub = MultimodalHub(ctrl)
+        samples = [
+            [0.2, 0.2, 0.1, 0.1],
+            [0.8, 0.2, 0.9, 0.1],
+            [0.2, 0.8, 0.1, 0.9],
+            [0.8, 0.8, 0.9, 0.9],
+            [0.5, 0.5, 0.5, 0.5],
+        ]
+
+        face_lms = self._make_face_landmarks()
+        jpg_64x48 = self._make_jpg(64, 48)
+
+        class StubHands:
+            def process(self, rgb):
+                return types.SimpleNamespace(multi_hand_landmarks=None)
+
+            def close(self):
+                pass
+
+        class StubFace:
+            def process(self, rgb):
+                return types.SimpleNamespace(multi_face_landmarks=[types.SimpleNamespace(landmark=face_lms)])
+
+            def close(self):
+                pass
+
+        fake_mp = types.SimpleNamespace(
+            hands=types.SimpleNamespace(Hands=lambda **kw: StubHands(), HAND_CONNECTIONS=[]),
+            face_mesh=types.SimpleNamespace(FaceMesh=lambda **kw: StubFace()),
+            drawing_utils=types.SimpleNamespace(draw_landmarks=lambda *a, **k: None),
+        )
+
+        # 1. Calibrate specifically for remote mirrored=True, rotation=0
+        prof_mir = hub.current_calibration_profile(source="remote", rotation=0, mirrored=True, width=64, height=48)
+        self.assertTrue(prof_mir["mirrored"])
+        hub.features.gaze.fit(samples, profile=prof_mir)
+
+        ctrl.mode = 32
+        with patch("arcade_runner.get_arcade_session", return_value=types.SimpleNamespace(status={"game_id": 33})), \
+             patch.object(mp, "solutions", fake_mp):
+            # 2. Switch to remote with mirrored=False -> old mirrored=True calibration MUST fail & observation["calibrated"]==False!
+            sid = hub.start_remote(mode="pet", rotation=0, mirrored=False)
+            obs_non_mir = hub.process_remote_frame(jpg_64x48, session_id=sid, rotation=0, mirrored=False)
+            self.assertFalse(obs_non_mir["calibrated"], "mirrored=False MUST NOT silently use mirrored=True calibration!")
+            st = hub.status()
+            self.assertFalse(st["calibration_valid"])
+            self.assertIn("mirrored", st["calibration_invalidated_reason"])
+
+            # Starting gaze_game with mismatched mirrored calibration must be rejected
+            with self.assertRaises(ValueError):
+                hub.start_remote(mode="gaze_game", rotation=0, mirrored=False)
+
+            # 3. Calibrate specifically for remote mirrored=False, rotation=90 with geometry rotation applied (64x48 -> 48x64)
+            ctrl.mode = 32
+            prof_unmir_90 = hub.current_calibration_profile(source="remote", rotation=90, mirrored=False, width=48, height=64)
+            self.assertFalse(prof_unmir_90["mirrored"])
+            hub.features.gaze.fit(samples, profile=prof_unmir_90)
+            sid2 = hub.start_remote(mode="gaze_game", rotation=90, mirrored=False)
+            obs_rot90 = hub.process_remote_frame(
+                jpg_64x48, session_id=sid2, rotation=90, mirrored=False, apply_rotation=True
+            )
+            self.assertEqual((hub.input_width, hub.input_height), (48, 64))
+            self.assertTrue(obs_rot90["calibrated"])
+            self.assertTrue(hub.status()["calibration_valid"])
+
+            # Rotation change to 180 or 270 invalidates calibration
+            obs_rot180 = hub.process_remote_frame(jpg_64x48, session_id=sid2, rotation=180, mirrored=False)
+            self.assertFalse(obs_rot180["calibrated"])
+            self.assertIn("rotation", hub.status()["calibration_invalidated_reason"])
+            hub.stop_remote(sid2)
+
+            # 4. Cross-source PC mirrored=True != phone mirrored=True
+            ctrl.mode = 32
+            prof_pc = hub.current_calibration_profile(source="camera", camera_id=0, rotation=0, mirrored=True)
+            hub.features.gaze.fit(samples, profile=prof_pc)
+            with self.assertRaises(ValueError):
+                hub.start_remote(mode="gaze_game", rotation=0, mirrored=True)
+
+
 if __name__ == "__main__":
     unittest.main()

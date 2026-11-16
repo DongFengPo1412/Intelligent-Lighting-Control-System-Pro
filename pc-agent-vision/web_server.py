@@ -11,6 +11,7 @@ import asyncio
 import socket
 import time
 import threading
+from collections import deque
 from typing import Set, Optional, Dict, List
 from aiohttp import web
 
@@ -119,13 +120,31 @@ active_chat_turn_id: int = 0
 
 
 class ChatPauseCoordinator:
-    """Thread-safe ownership tracker for listener pause/resume across preempting chat turns."""
+    """Thread-safe, deadlock-free ownership tracker for listener pause/resume across preempting chat turns."""
+
+    MAX_RETIRED_TURNS = 256
 
     def __init__(self):
         self._lock = threading.RLock()
+        # Dedicated serializer for slow hardware listener.pause()/resume() transitions.
+        # Lock order invariant: ALWAYS acquire _hw_lock before _lock (never _lock before _hw_lock).
+        self._hw_lock = threading.Lock()
         self._listener_id: Optional[int] = None
         self._active_owners: Set[int] = set()
         self._released_turns: Set[int] = set()
+        self._released_order: deque = deque()
+        self._resume_pending: bool = False
+        self._resume_in_progress: bool = False
+        self._transition_seq: int = 0
+
+    def _mark_retired_locked(self, turn_id: int):
+        if turn_id in self._released_turns:
+            return
+        self._released_turns.add(turn_id)
+        self._released_order.append(turn_id)
+        while len(self._released_order) > self.MAX_RETIRED_TURNS:
+            old = self._released_order.popleft()
+            self._released_turns.discard(old)
 
     def _sync_listener_locked(self, target_listener) -> Optional[int]:
         lid = id(target_listener) if target_listener is not None else None
@@ -133,12 +152,21 @@ class ChatPauseCoordinator:
             self._listener_id = lid
             self._active_owners.clear()
             self._released_turns.clear()
+            self._released_order.clear()
+            self._resume_pending = False
+            self._resume_in_progress = False
+            self._transition_seq += 1
         return lid
 
+    def _on_before_resume_handoff(self):
+        """Hook invoked after releasing _lock and before acquiring _hw_lock (no-op in production)."""
+        pass
+
     def prepare_pause(self, target_listener, turn_id: int) -> tuple:
-        """Register turn_id as a pause owner if pause is free or already owned by chat.
+        """Register turn_id as a pause owner if pause is free or already owned/handing-off by chat.
 
         Returns (owns_pause, need_hardware_pause_call).
+        Never waits on _hw_lock, so slow listener hardware calls cannot block or deadlock turn intake.
         """
         with self._lock:
             self._sync_listener_locked(target_listener)
@@ -148,13 +176,43 @@ class ChatPauseCoordinator:
                 # Preempting an in-flight chat turn: inherit pause responsibility without double-pausing.
                 self._active_owners.add(turn_id)
                 self._released_turns.discard(turn_id)
+                self._transition_seq += 1
+                self._resume_pending = False
                 return True, False
+            if self._resume_pending:
+                # Previous turn already left _active_owners and intends to resume,
+                # but has NOT executed listener.resume() yet: cancel pending resume and keep paused.
+                self._active_owners.add(turn_id)
+                self._released_turns.discard(turn_id)
+                self._transition_seq += 1
+                self._resume_pending = False
+                return True, False
+            if self._resume_in_progress:
+                # Previous turn is currently inside listener.resume() outside _lock:
+                # Wait in execute_pause() behind _hw_lock after releasing _lock, then re-pause cleanly.
+                self._active_owners.add(turn_id)
+                self._released_turns.discard(turn_id)
+                self._transition_seq += 1
+                return True, True
             if getattr(target_listener, 'is_paused', False):
                 # Paused externally (music playback or manual stop); chat must not steal resume rights.
                 return False, False
             self._active_owners.add(turn_id)
             self._released_turns.discard(turn_id)
+            self._transition_seq += 1
             return True, True
+
+    def execute_pause(self, target_listener):
+        """Serialize hardware pause behind any in-flight resume transition without holding _lock."""
+        if target_listener is None:
+            return
+        with self._hw_lock:
+            with self._lock:
+                if id(target_listener) != self._listener_id or not self._active_owners:
+                    return
+                if getattr(target_listener, 'is_paused', False):
+                    return
+            target_listener.pause()
 
     def rollback_failed_pause(self, target_listener, turn_id: int):
         with self._lock:
@@ -162,17 +220,20 @@ class ChatPauseCoordinator:
             if lid != self._listener_id:
                 return
             self._active_owners.discard(turn_id)
-            self._released_turns.add(turn_id)
+            self._mark_retired_locked(turn_id)
+            self._transition_seq += 1
+            if not self._active_owners:
+                self._resume_pending = False
 
     def release(self, target_listener, turn_id: int, is_shutting_down: bool = False) -> bool:
         """Release turn_id's pause claim; calls listener.resume() once when last owner exits."""
-        should_resume = False
+        my_seq = None
         with self._lock:
             if target_listener is None or id(target_listener) != self._listener_id:
                 return False
             if turn_id in self._released_turns:
                 return False
-            self._released_turns.add(turn_id)
+            self._mark_retired_locked(turn_id)
             if turn_id not in self._active_owners:
                 return False
             self._active_owners.discard(turn_id)
@@ -180,16 +241,42 @@ class ChatPauseCoordinator:
                 # Newer/concurrent chat turn still owns pause; wait until the final owner finishes.
                 return False
             if is_shutting_down:
+                self._resume_pending = False
                 return False
             if getattr(target_listener, '_music_suspended', False):
+                self._resume_pending = False
                 return False
             if not getattr(target_listener, 'is_listening', True):
+                self._resume_pending = False
                 return False
-            should_resume = True
-        if should_resume:
-            target_listener.resume()
-            return True
-        return False
+            self._transition_seq += 1
+            my_seq = self._transition_seq
+            self._resume_pending = True
+
+        self._on_before_resume_handoff()
+
+        with self._hw_lock:
+            with self._lock:
+                if (
+                    id(target_listener) != self._listener_id
+                    or self._active_owners
+                    or not self._resume_pending
+                    or self._transition_seq != my_seq
+                    or getattr(target_listener, '_music_suspended', False)
+                    or not getattr(target_listener, 'is_listening', True)
+                ):
+                    if not self._active_owners and id(target_listener) == self._listener_id:
+                        self._resume_pending = False
+                    return False
+                self._resume_pending = False
+                self._resume_in_progress = True
+            try:
+                target_listener.resume()
+                return True
+            finally:
+                with self._lock:
+                    if id(target_listener) == self._listener_id:
+                        self._resume_in_progress = False
 
 
 chat_pause_coordinator = ChatPauseCoordinator()
@@ -337,7 +424,7 @@ async def run_chat(message: str, cancelled=None):
             if job:
                 job.owns_pause = owns_pause
             if need_pause_call:
-                pause_fut = loop.run_in_executor(None, listener.pause)
+                pause_fut = loop.run_in_executor(None, chat_pause_coordinator.execute_pause, listener)
                 try:
                     await asyncio.shield(pause_fut)
                 except asyncio.CancelledError:

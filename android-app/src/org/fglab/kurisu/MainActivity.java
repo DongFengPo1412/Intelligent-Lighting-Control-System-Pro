@@ -50,6 +50,22 @@ public class MainActivity extends Activity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private AlertDialog activeCameraDialog = null;
     private Runnable activeCameraTimeout = null;
+    private static final class PendingCameraRequest {
+        final String requestId;
+        final String uploadUrl;
+        final String mode;
+        final String visionToken;
+        final int navEpoch;
+        PendingCameraRequest(String requestId, String uploadUrl, String mode, String visionToken, int navEpoch) {
+            this.requestId = requestId;
+            this.uploadUrl = uploadUrl;
+            this.mode = mode;
+            this.visionToken = visionToken;
+            this.navEpoch = navEpoch;
+        }
+    }
+    private volatile PendingCameraRequest pendingOsCameraRequest = null;
+    private volatile boolean awaitingOsCameraPermission = false;
     private volatile int discoveryRetryCount = 0;
     private volatile int consecutiveHealthFailures = 0;
     private ConnectivityManager connectivityManager = null;
@@ -92,9 +108,6 @@ public class MainActivity extends Activity {
             getSharedPreferences("config",MODE_PRIVATE).getString("device_token",""));
         clientId=getSharedPreferences("config",MODE_PRIVATE).getString("device_client",java.util.UUID.randomUUID().toString().replace("-",""));
         getSharedPreferences("config",MODE_PRIVATE).edit().putString("device_client",clientId).apply();
-        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 102);
-        }
         frontCameraBridge = new FrontCameraBridge(this, webView);
         initWebSettings();
         webView.loadUrl(OFFLINE);
@@ -600,6 +613,8 @@ public class MainActivity extends Activity {
 
     private void cancelPendingCameraRequest(String reason) {
         final String cancelledId = activeCameraRequestId.getAndSet("");
+        awaitingOsCameraPermission = false;
+        pendingOsCameraRequest = null;
         mainHandler.post(() -> {
             if (activeCameraTimeout != null) {
                 mainHandler.removeCallbacks(activeCameraTimeout);
@@ -872,8 +887,10 @@ public class MainActivity extends Activity {
     }
     private void stopDiscovery() { NsdManager.DiscoveryListener current=discovery;discovery=null;if(nsd!=null&&current!=null)try{nsd.stopServiceDiscovery(current);}catch(IllegalArgumentException ignored){} }
     @Override protected void onPause() {
-        cancelPendingCameraRequest("backgrounded");
-        if (frontCameraBridge != null) frontCameraBridge.stop();
+        if (!awaitingOsCameraPermission) {
+            cancelPendingCameraRequest("backgrounded");
+            if (frontCameraBridge != null) frontCameraBridge.stop();
+        }
         backgrounded=true;releaseDeviceInput();
         mainHandler.removeCallbacks(discoveryRetryRunnable);
         mainHandler.removeCallbacks(healthCheckRunnable);
@@ -891,6 +908,37 @@ public class MainActivity extends Activity {
         if(webView!=null)webView.onResume();
         autoDiscoverAndConnect(false);
         scheduleHealthCheck(8000L);
+    }
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != 102) {
+            return;
+        }
+        awaitingOsCameraPermission = false;
+        final PendingCameraRequest pending = pendingOsCameraRequest;
+        pendingOsCameraRequest = null;
+        if (pending == null || destroyed || isFinishing()) {
+            return;
+        }
+        String sessId = "";
+        try {
+            sessId = pending.uploadUrl != null ? Uri.parse(pending.uploadUrl.trim()).getQueryParameter("session_id") : "";
+        } catch (Exception ignored) {}
+        final String reqSessId = sessId != null ? sessId : "";
+        boolean granted = grantResults != null && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+        if (!granted) {
+            if (activeCameraTimeout != null) {
+                mainHandler.removeCallbacks(activeCameraTimeout);
+                activeCameraTimeout = null;
+            }
+            activeCameraRequestId.compareAndSet(pending.requestId, "");
+            emitCameraStatusJson(pending.requestId, "denied", "os_camera_permission_denied", reqSessId, 0L);
+            return;
+        }
+        mainHandler.post(() -> {
+            backgrounded = false;
+            proceedWithFrontCameraAuthorization(pending.requestId, pending.uploadUrl, pending.mode, pending.visionToken, pending.navEpoch);
+        });
     }
     @Override protected void onDestroy() {
         cancelPendingCameraRequest("destroyed");
@@ -930,32 +978,115 @@ public class MainActivity extends Activity {
             }
         }); } catch(java.util.concurrent.RejectedExecutionException ignored) { /* Board watchdog releases/pause in 500/1000ms. */ }
     }
+    private boolean validateUploadTarget(String uploadUrl, String expectedOrigin) {
+        if (uploadUrl == null || uploadUrl.trim().isEmpty() || expectedOrigin == null || expectedOrigin.isEmpty()) return false;
+        try {
+            Uri parsed = Uri.parse(uploadUrl.trim());
+            if (!("http".equalsIgnoreCase(parsed.getScheme()) || "https".equalsIgnoreCase(parsed.getScheme()))) return false;
+            String host = parsed.getHost();
+            int port = parsed.getPort() != -1 ? parsed.getPort() : ("https".equalsIgnoreCase(parsed.getScheme()) ? 443 : 80);
+            Uri authUri = Uri.parse(expectedOrigin);
+            String authHost = authUri.getHost();
+            int authPort = authUri.getPort() != -1 ? authUri.getPort() : ("https".equalsIgnoreCase(authUri.getScheme()) ? 443 : 80);
+            if (host == null || !host.equalsIgnoreCase(authHost) || port != authPort) return false;
+            String path = parsed.getPath();
+            if (path == null || !(path.equals("/api/vision/phone_frame") || path.equals("/api/pro/vision/frame") || path.equals("/api/pro/camera/frame"))) {
+                return false;
+            }
+            String sessionId = parsed.getQueryParameter("session_id");
+            return sessionId != null && !sessionId.trim().isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void proceedWithFrontCameraAuthorization(final String requestId, final String uploadUrl, final String mode, final String visionToken, final int startNavEpoch) {
+            if (destroyed || isFinishing() || backgrounded || !requestId.equals(activeCameraRequestId.get()) || pageNavigationEpoch.get() != startNavEpoch) {
+                emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", "", 0L);
+                return;
+            }
+            // WebView.getUrl() MUST only be accessed on the UI / WebView thread.
+            String curUrl = webView != null ? webView.getUrl() : null;
+            if (curUrl == null || isOfflinePage(curUrl)) {
+                activeCameraRequestId.compareAndSet(requestId, "");
+                emitCameraStatusJson(requestId, "failed", "offline_or_untrusted_page", "", 0L);
+                return;
+            }
+            final String curOrigin = extractOrigin(curUrl);
+            if (serverOrigin == null || serverOrigin.isEmpty() || !serverOrigin.equalsIgnoreCase(curOrigin) || !BridgePolicy.privateIpv4(Uri.parse(curUrl).getHost())) {
+                activeCameraRequestId.compareAndSet(requestId, "");
+                emitCameraStatusJson(requestId, "denied", "origin_mismatch", "", 0L);
+                return;
+            }
+            if (!validateUploadTarget(uploadUrl, curOrigin)) {
+                activeCameraRequestId.compareAndSet(requestId, "");
+                emitCameraStatusJson(requestId, "denied", "invalid_upload_target", "", 0L);
+                return;
+            }
+            final String reqSessId = Uri.parse(uploadUrl.trim()).getQueryParameter("session_id");
+            if (isCameraAuthorized(curOrigin)) {
+                if (activeCameraTimeout != null) {
+                    mainHandler.removeCallbacks(activeCameraTimeout);
+                    activeCameraTimeout = null;
+                }
+                activeCameraRequestId.compareAndSet(requestId, "");
+                boolean ok = frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, visionToken);
+                emitCameraStatusJson(requestId, ok ? "started" : "failed", ok ? "" : "camera_open_failed", reqSessId, frontCameraBridge != null ? frontCameraBridge.getSessionEpoch() : 0L);
+                return;
+            }
+            if (activeCameraDialog != null) {
+                try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
+                activeCameraDialog = null;
+            }
+            if (activeCameraTimeout != null) {
+                mainHandler.removeCallbacks(activeCameraTimeout);
+            }
+            final Runnable timeoutTask = () -> {
+                if (activeCameraRequestId.compareAndSet(requestId, "")) {
+                    awaitingOsCameraPermission = false;
+                    pendingOsCameraRequest = null;
+                    if (activeCameraDialog != null) {
+                        try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
+                        activeCameraDialog = null;
+                    }
+                    emitCameraStatusJson(requestId, "timeout", "authorization_timeout", reqSessId, 0L);
+                }
+            };
+            activeCameraTimeout = timeoutTask;
+            mainHandler.postDelayed(timeoutTask, 30000L);
+            activeCameraDialog = new AlertDialog.Builder(MainActivity.this)
+                .setTitle("摄像头权限申请")
+                .setMessage("网页 (" + curOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
+                .setPositiveButton("允许", (d, w) -> {
+                    mainHandler.removeCallbacks(timeoutTask);
+                    activeCameraDialog = null;
+                    if (!activeCameraRequestId.compareAndSet(requestId, "") || destroyed || isFinishing() || backgrounded || pageNavigationEpoch.get() != startNavEpoch) {
+                        emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", reqSessId, 0L);
+                        return;
+                    }
+                    cameraAuthorizedOrigin = curOrigin;
+                    boolean ok = frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, visionToken);
+                    emitCameraStatusJson(requestId, ok ? "started" : "failed", ok ? "" : "camera_open_failed", reqSessId, frontCameraBridge != null ? frontCameraBridge.getSessionEpoch() : 0L);
+                })
+                .setNegativeButton("拒绝", (d, w) -> {
+                    mainHandler.removeCallbacks(timeoutTask);
+                    activeCameraDialog = null;
+                    activeCameraRequestId.compareAndSet(requestId, "");
+                    emitCameraStatusJson(requestId, "denied", "user_denied", reqSessId, 0L);
+                })
+                .setOnCancelListener(d -> {
+                    mainHandler.removeCallbacks(timeoutTask);
+                    activeCameraDialog = null;
+                    activeCameraRequestId.compareAndSet(requestId, "");
+                    emitCameraStatusJson(requestId, "denied", "user_cancelled", reqSessId, 0L);
+                })
+                .show();
+    }
+
     public class NativeUdpBridge {
         @android.webkit.JavascriptInterface
         public boolean hasNativeCamera() {
             return true;
-        }
-
-        private boolean validateUploadTarget(String uploadUrl, String expectedOrigin) {
-            if (uploadUrl == null || uploadUrl.trim().isEmpty() || expectedOrigin == null || expectedOrigin.isEmpty()) return false;
-            try {
-                Uri parsed = Uri.parse(uploadUrl.trim());
-                if (!("http".equalsIgnoreCase(parsed.getScheme()) || "https".equalsIgnoreCase(parsed.getScheme()))) return false;
-                String host = parsed.getHost();
-                int port = parsed.getPort() != -1 ? parsed.getPort() : ("https".equalsIgnoreCase(parsed.getScheme()) ? 443 : 80);
-                Uri authUri = Uri.parse(expectedOrigin);
-                String authHost = authUri.getHost();
-                int authPort = authUri.getPort() != -1 ? authUri.getPort() : ("https".equalsIgnoreCase(authUri.getScheme()) ? 443 : 80);
-                if (host == null || !host.equalsIgnoreCase(authHost) || port != authPort) return false;
-                String path = parsed.getPath();
-                if (path == null || !(path.equals("/api/vision/phone_frame") || path.equals("/api/pro/vision/frame") || path.equals("/api/pro/camera/frame"))) {
-                    return false;
-                }
-                String sessionId = parsed.getQueryParameter("session_id");
-                return sessionId != null && !sessionId.trim().isEmpty();
-            } catch (Exception e) {
-                return false;
-            }
         }
 
         @android.webkit.JavascriptInterface
@@ -964,93 +1095,23 @@ public class MainActivity extends Activity {
                 emitCameraStatusJson(requestId, "failed", "unavailable", "", 0L);
                 return "{\"status\":\"failed\",\"reason\":\"unavailable\"}";
             }
-            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                emitCameraStatusJson(requestId, "denied", "os_camera_permission_missing", "", 0L);
-                mainHandler.post(() -> {
-                    if (!destroyed && !isFinishing()) {
-                        requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 102);
-                    }
-                });
-                return "{\"status\":\"denied\",\"reason\":\"os_camera_permission_missing\"}";
-            }
             activeCameraRequestId.set(requestId);
             final int startNavEpoch = pageNavigationEpoch.get();
-            mainHandler.post(() -> {
-                if (destroyed || isFinishing() || backgrounded || !requestId.equals(activeCameraRequestId.get()) || pageNavigationEpoch.get() != startNavEpoch) {
-                    emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", "", 0L);
-                    return;
-                }
-                // WebView.getUrl() MUST only be accessed on the UI / WebView thread.
-                String curUrl = webView != null ? webView.getUrl() : null;
-                if (curUrl == null || isOfflinePage(curUrl)) {
-                    activeCameraRequestId.compareAndSet(requestId, "");
-                    emitCameraStatusJson(requestId, "failed", "offline_or_untrusted_page", "", 0L);
-                    return;
-                }
-                final String curOrigin = extractOrigin(curUrl);
-                if (serverOrigin == null || serverOrigin.isEmpty() || !serverOrigin.equalsIgnoreCase(curOrigin) || !BridgePolicy.privateIpv4(Uri.parse(curUrl).getHost())) {
-                    activeCameraRequestId.compareAndSet(requestId, "");
-                    emitCameraStatusJson(requestId, "denied", "origin_mismatch", "", 0L);
-                    return;
-                }
-                if (!validateUploadTarget(uploadUrl, curOrigin)) {
-                    activeCameraRequestId.compareAndSet(requestId, "");
-                    emitCameraStatusJson(requestId, "denied", "invalid_upload_target", "", 0L);
-                    return;
-                }
-                final String reqSessId = Uri.parse(uploadUrl.trim()).getQueryParameter("session_id");
-                if (isCameraAuthorized(curOrigin)) {
-                    activeCameraRequestId.compareAndSet(requestId, "");
-                    boolean ok = frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, visionToken);
-                    emitCameraStatusJson(requestId, ok ? "started" : "failed", ok ? "" : "camera_open_failed", reqSessId, frontCameraBridge != null ? frontCameraBridge.getSessionEpoch() : 0L);
-                    return;
-                }
-                if (activeCameraDialog != null) {
-                    try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
-                    activeCameraDialog = null;
-                }
-                if (activeCameraTimeout != null) {
-                    mainHandler.removeCallbacks(activeCameraTimeout);
-                }
-                final Runnable timeoutTask = () -> {
-                    if (activeCameraRequestId.compareAndSet(requestId, "")) {
-                        if (activeCameraDialog != null) {
-                            try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
-                            activeCameraDialog = null;
-                        }
-                        emitCameraStatusJson(requestId, "timeout", "authorization_timeout", reqSessId, 0L);
+            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingOsCameraRequest = new PendingCameraRequest(requestId, uploadUrl, mode, visionToken, startNavEpoch);
+                awaitingOsCameraPermission = true;
+                mainHandler.post(() -> {
+                    if (destroyed || isFinishing() || !requestId.equals(activeCameraRequestId.get()) || pageNavigationEpoch.get() != startNavEpoch) {
+                        awaitingOsCameraPermission = false;
+                        pendingOsCameraRequest = null;
+                        emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", "", 0L);
+                        return;
                     }
-                };
-                activeCameraTimeout = timeoutTask;
-                mainHandler.postDelayed(timeoutTask, 30000L);
-                activeCameraDialog = new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("摄像头权限申请")
-                    .setMessage("网页 (" + curOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
-                    .setPositiveButton("允许", (d, w) -> {
-                        mainHandler.removeCallbacks(timeoutTask);
-                        activeCameraDialog = null;
-                        if (!activeCameraRequestId.compareAndSet(requestId, "") || destroyed || isFinishing() || backgrounded || pageNavigationEpoch.get() != startNavEpoch) {
-                            emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", reqSessId, 0L);
-                            return;
-                        }
-                        cameraAuthorizedOrigin = curOrigin;
-                        boolean ok = frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, visionToken);
-                        emitCameraStatusJson(requestId, ok ? "started" : "failed", ok ? "" : "camera_open_failed", reqSessId, frontCameraBridge != null ? frontCameraBridge.getSessionEpoch() : 0L);
-                    })
-                    .setNegativeButton("拒绝", (d, w) -> {
-                        mainHandler.removeCallbacks(timeoutTask);
-                        activeCameraDialog = null;
-                        activeCameraRequestId.compareAndSet(requestId, "");
-                        emitCameraStatusJson(requestId, "denied", "user_denied", reqSessId, 0L);
-                    })
-                    .setOnCancelListener(d -> {
-                        mainHandler.removeCallbacks(timeoutTask);
-                        activeCameraDialog = null;
-                        activeCameraRequestId.compareAndSet(requestId, "");
-                        emitCameraStatusJson(requestId, "denied", "user_cancelled", reqSessId, 0L);
-                    })
-                    .show();
-            });
+                    requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 102);
+                });
+                return "{\"status\":\"pending\",\"request_id\":" + org.json.JSONObject.quote(requestId) + "}";
+            }
+            mainHandler.post(() -> proceedWithFrontCameraAuthorization(requestId, uploadUrl, mode, visionToken, startNavEpoch));
             return "{\"status\":\"pending\",\"request_id\":" + org.json.JSONObject.quote(requestId) + "}";
         }
 

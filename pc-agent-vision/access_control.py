@@ -423,7 +423,7 @@ class AccessPolicy:
             if norm_path in SCOPED_VISION_FRAME_PATHS and method == "POST":
                 if self._has_valid_vision_capability(request):
                     return True
-            if norm_path == "/api/pro/camera/feed" and method == "GET":
+            if norm_path in SCOPED_VISION_FEED_PATHS and method == "GET":
                 if self._has_valid_vision_capability(request):
                     return True
             if norm_path in SCOPED_VISION_CALIBRATE_PATHS and method == "POST":

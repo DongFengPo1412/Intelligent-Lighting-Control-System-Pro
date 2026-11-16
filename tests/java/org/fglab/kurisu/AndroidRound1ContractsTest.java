@@ -11,6 +11,9 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
@@ -215,6 +218,94 @@ public final class AndroidRound1ContractsTest {
         cam.stop("sess_2", ep2);
         check(!cam.running && "stopped:2".equals(cam.lastEvent), "matching epoch+session stop shuts down cleanly");
 
-        System.out.println("PASS: AndroidRound1ContractsTest (BridgePolicy, health probe, origin normalization, epoch isolation)");
+        // 5. R1-05 On-demand OS CAMERA permission contract & MainActivity.onCreate inspection
+        Path mainActivityPath = Paths.get("C:\\workspace\\Intelligent-Lighting-Control-System-Pro\\android-app\\src\\org\\fglab\\kurisu\\MainActivity.java");
+        String mainSrc = new String(Files.readAllBytes(mainActivityPath), StandardCharsets.UTF_8);
+        int onCreateStart = mainSrc.indexOf("protected void onCreate(");
+        int registerStart = mainSrc.indexOf("private void registerNetworkCallback(");
+        check(onCreateStart >= 0 && registerStart > onCreateStart, "MainActivity.onCreate boundary must exist");
+        String onCreateBody = mainSrc.substring(onCreateStart, registerStart);
+        check(!onCreateBody.contains("requestPermissions(") && !onCreateBody.contains("Manifest.permission.CAMERA"),
+                "MainActivity.onCreate must NOT eagerly prompt OS CAMERA permission at first startup!");
+        check(mainSrc.contains("public void onRequestPermissionsResult(int requestCode"),
+                "MainActivity must implement onRequestPermissionsResult for lazy CAMERA continuation");
+
+        class LazyPermissionFlowModel {
+            boolean osCameraGranted = false;
+            boolean awaitingOsPermission = false;
+            int osPromptCount = 0;
+            String activeReqId = "";
+            String pendingReqId = "";
+            int navEpoch = 1;
+            int pendingNavEpoch = 0;
+            String emittedStatus = "";
+            String emittedReason = "";
+            boolean bridgeStarted = false;
+
+            void onPause() {
+                if (!awaitingOsPermission) {
+                    activeReqId = "";
+                    pendingReqId = "";
+                    emittedStatus = "cancelled";
+                    emittedReason = "backgrounded";
+                }
+            }
+
+            String requestFrontCamera(String requestId) {
+                activeReqId = requestId;
+                if (!osCameraGranted) {
+                    pendingReqId = requestId;
+                    pendingNavEpoch = navEpoch;
+                    awaitingOsPermission = true;
+                    osPromptCount++;
+                    return "pending";
+                }
+                bridgeStarted = true;
+                emittedStatus = "started";
+                return "pending";
+            }
+
+            void onRequestPermissionsResult(int reqCode, boolean granted) {
+                if (reqCode != 102) return;
+                awaitingOsPermission = false;
+                String pid = pendingReqId;
+                int pEpoch = pendingNavEpoch;
+                pendingReqId = "";
+                if (pid.isEmpty() || pEpoch != navEpoch || !pid.equals(activeReqId)) {
+                    emittedStatus = "cancelled";
+                    emittedReason = "stale_lifecycle";
+                    return;
+                }
+                if (!granted) {
+                    activeReqId = "";
+                    emittedStatus = "denied";
+                    emittedReason = "os_camera_permission_denied";
+                    return;
+                }
+                osCameraGranted = true;
+                activeReqId = "";
+                bridgeStarted = true;
+                emittedStatus = "started";
+                emittedReason = "";
+            }
+        }
+
+        LazyPermissionFlowModel permFlow = new LazyPermissionFlowModel();
+        check(permFlow.osPromptCount == 0, "no OS camera prompt at startup");
+        permFlow.requestFrontCamera("req_perm_1");
+        check(permFlow.osPromptCount == 1 && permFlow.awaitingOsPermission, "clicking camera prompts OS permission lazily");
+        permFlow.onPause(); // System permission dialog pauses MainActivity transiently
+        check(permFlow.awaitingOsPermission && !permFlow.pendingReqId.isEmpty(), "system dialog transient onPause must preserve pending request");
+        permFlow.onRequestPermissionsResult(102, true);
+        check(permFlow.bridgeStarted && "started".equals(permFlow.emittedStatus), "granting OS permission resumes pending request cleanly");
+
+        LazyPermissionFlowModel denyFlow = new LazyPermissionFlowModel();
+        denyFlow.requestFrontCamera("req_perm_deny");
+        denyFlow.onPause();
+        denyFlow.onRequestPermissionsResult(102, false);
+        check(!denyFlow.bridgeStarted && "denied".equals(denyFlow.emittedStatus) && "os_camera_permission_denied".equals(denyFlow.emittedReason),
+                "denying OS permission reports honest denied status");
+
+        System.out.println("PASS: AndroidRound1ContractsTest (BridgePolicy, health probe, origin normalization, epoch isolation, lazy CAMERA permission)");
     }
 }

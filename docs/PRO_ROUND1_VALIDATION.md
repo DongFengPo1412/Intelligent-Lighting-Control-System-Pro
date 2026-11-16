@@ -96,7 +96,7 @@
 - `tests/test_cpp_jetson_canvas.cpp`（MSVC `/std:c++17`）：**18/18 ALL NATIVE C++ TESTS PASSED**
 - `tests/java/org/fglab/kurisu/AndroidRound1ContractsTest.java`（JDK 17）：**PASS（exit=0）**
 - `tests/java/org/fglab/kurisu/WebViewCookieIsolationTest.java`（JDK 17）：**SUCCESS（exit=0）**
-- **已知历史基线限制（不隐瞒）**：`scripts/test_phase_a_native.py` 中 `tests/phase_a_core_test.cpp` 与 `tests/java/org/fglab/kurisu/DeviceUdpClientTest.java` 未计入通过：`phase_a_core_test.cpp` 已通过 F19 与 NVS 测试编译并在运行期 NVS 段后于第 64 行 `test_protocol()` 命中 `#101` 扩展前的旧 `game_id=101` 断言（记为 **F22**）；`DeviceUdpClientTest.java` 依赖外部 `org.json:json:20240303` JAR 而未在本地直接运行。
+- **已知历史基线限制（不隐瞒）**：`scripts/test_phase_a_native.py` 中 `tests/phase_a_core_test.cpp` 与 `tests/java/org/fglab/kurisu/DeviceUdpClientTest.java` 未计入通过：`phase_a_core_test.cpp` 已通过 F19 与 NVS 测试编译并在运行期 NVS 段后于第 64 行 `test_protocol()` 命中 `#101` 扩展前的旧 `game_id=101` 断言（单独记为 **TC-01**，不替代 `F22`）；`DeviceUdpClientTest.java` 依赖外部 `org.json:json:20240303` JAR 而未在本地直接运行。
 
 ---
 
@@ -116,3 +116,15 @@
 3. **手机前摄推流与视觉联动**：在 Android WebView 点击开启前置相机（`pet` / `fingertip` / `sandbox` / `gaze_game`），确认无弹窗卡死、5 阶段真实进度反馈正常、快速停止/切换来源不崩溃，且在 `gaze_game` 下切换摄像头或旋转角度后要求重新校准。
 4. **连续对话与音质听感**：连续发送多轮语音对话并发起打断，核查 ESP32 扬声器 16k->24k TTS 无分块咔哒声、PC 音乐不同增益挡位（`0.25`–`0.75`）无破音且听感单调递进、打断收尾后麦克风仅恢复一次。
 5. **Jetson UART 共存冒烟**：确认实板 `v2.3.1` 协议下 `ping` / `status` / `caps` 及模式 29 自定义画布与 PC/App 人工覆盖锁定逻辑仍 100% 正常工作。
+
+---
+
+## 八、Round 2 定向补丁与回归补充（基于 `36cf142` 独立复核）
+
+- **改动范围**：`pc-agent-vision/multimodal_hub.py`、`pc-agent-vision/advanced_api.py`、`pc-agent-vision/access_control.py`、`pc-agent-vision/web_server.py`、`android-app/src/org/fglab/kurisu/MainActivity.java`、`tests/test_round1_rectification_regressions.py`、`tests/java/org/fglab/kurisu/AndroidRound1ContractsTest.java`、`docs/PRO_REVIEW_F01_F22_LEDGER.md`、`docs/PRO_ROUND1_VALIDATION.md`。
+- **ESP32 生产代码变化**：**无变更**（沿用 Round 1 已验证的 `s3_led_matrix_test.bin`，`1,606,400` B，SHA-256: `4EA2F1E7F6410FAB706061E79A6DCE385CECFAFE3D8A95E074D1FCE7A5BE70B7`；注意当前实体 ESP32 板内仍为早先烧录固件，尚未烧录此候选包）。
+- **Android Round 2 候选 APK**：已重新编译与 v2/v3 签名校验通过，输出 `scratch/apk_out/Kurisu_Amadeus_Pro_round2_candidate.apk`（`2,861,537` B，SHA-256: `2ADB03D4A375F48134C9121AB44548671F0E9CFFBFC2F78594BC27E2B86A3948`，尚未安装真机）。
+- **Round 2 复测统计（最终修改后执行）**：
+  - Python Pytest（22 组核心与 Round 2 新增测试）：**383 passed, 1 skipped, 0 failed**（`116 subtests passed`；含 `test_round1_rectification_regressions.py` **20 passed**——验证 `R1-01` 跨帧 ACK 隔离与多指令失败聚合、`R1-02` `GET /api/pro/camera/frame` 作用域凭据、`R1-03` `ChatPauseCoordinator` 释放-抢占两阶段线程 Barrier 竞争窗口、`R1-04` F05 `mirrored=false` 与 90/180 旋转及切源失效；跳过项仍为需 `KURISU_RENDERER_WASM` 的 `test_real_cpp_renderer_feeds_modes_canvas_and_games`）。
+  - Node.js & JVM 回归：`test_phone_camera_requests.cjs` (12/12)、`final_closure.test.cjs` (3/3)、`final_device_transport.test.cjs` (5/5)、`phase_a1_pairing.test.cjs` (4/4)、`phase_a_transport.test.cjs` (12/12)、`AndroidRound1ContractsTest`（含 `R1-05` `MainActivity.onCreate` 无主动权限弹窗源码检查与 `onRequestPermissionsResult` 懒授权流程校验）与 `WebViewCookieIsolationTest` 全部退出码 `0` 通过。
+  - 既有台账恢复：**F14～F22** 已在 `docs/PRO_REVIEW_F01_F22_LEDGER.md` 完整恢复原始编号与正式需求状态（`F16～F18` 保持正式后续待办需求，未降级）。
