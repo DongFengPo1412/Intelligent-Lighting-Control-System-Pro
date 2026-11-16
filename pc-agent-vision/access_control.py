@@ -387,6 +387,14 @@ class AccessPolicy:
             meta["expires_at"] = max(meta["expires_at"], now + 300.0)
             return True
 
+    def is_vision_session_owner(self, request, session_id=None) -> bool:
+        """True if caller holds admin auth or the matching active scoped vision capability for session_id."""
+        if self.has_admin_auth(request):
+            return True
+        if session_id is None or not str(session_id).strip():
+            return False
+        return self._has_valid_vision_capability(request, required_session_id=str(session_id).strip())
+
     def has_admin_auth(self, request) -> bool:
         """True only for full master pairing credential or verified localhost loopback."""
         supplied = request.headers.get("Authorization", "")

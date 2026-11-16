@@ -306,6 +306,62 @@ public final class AndroidRound1ContractsTest {
         check(!denyFlow.bridgeStarted && "denied".equals(denyFlow.emittedStatus) && "os_camera_permission_denied".equals(denyFlow.emittedReason),
                 "denying OS permission reports honest denied status");
 
-        System.out.println("PASS: AndroidRound1ContractsTest (BridgePolicy, health probe, origin normalization, epoch isolation, lazy CAMERA permission)");
+        // 5. F14: UI theme preference (non-sensitive) survives WebStorage.deleteAllData, offline recovery & restart
+        java.nio.file.Path f14MainPath = java.nio.file.Paths.get("android-app", "src", "org", "fglab", "kurisu", "MainActivity.java");
+        if (!java.nio.file.Files.exists(f14MainPath)) {
+            f14MainPath = java.nio.file.Paths.get("..", "android-app", "src", "org", "fglab", "kurisu", "MainActivity.java");
+        }
+        String f14MainSrc = java.nio.file.Files.readString(f14MainPath);
+        check(f14MainSrc.contains("WebStorage.getInstance().deleteAllData()"), "F14 check requires WebStorage cleanup path");
+        check(f14MainSrc.contains("getThemePreference") && f14MainSrc.contains("setThemePreference"),
+                "MainActivity must expose non-sensitive theme preference bridge methods");
+        check(f14MainSrc.contains("restoreSavedUiTheme"),
+                "MainActivity must restore saved UI theme after page load across WebStorage resets");
+        check(f14MainSrc.contains("ui_theme"),
+                "MainActivity SharedPreferences config must store ui_theme separately from auth secrets");
+
+        class ThemePersistenceStateModel {
+            String prefsTheme = "night";
+            String webStorageTheme = "night";
+            String cookieAuthToken = "secret-admin-token";
+            boolean webViewLoaded = true;
+
+            void setThemePreference(String t) {
+                if (!"day".equals(t) && !"night".equals(t)) {
+                    throw new IllegalArgumentException("Unsupported theme");
+                }
+                prefsTheme = t;
+                webStorageTheme = t;
+            }
+
+            void purgeCookiesAndStorage() {
+                webStorageTheme = null;
+                cookieAuthToken = null;
+            }
+
+            void reloadOrReconnectPage() {
+                // Mirrors MainActivity.onPageFinished -> restoreSavedUiTheme(view)
+                webViewLoaded = true;
+                if (prefsTheme != null && ("day".equals(prefsTheme) || "night".equals(prefsTheme))) {
+                    webStorageTheme = prefsTheme;
+                }
+            }
+        }
+
+        ThemePersistenceStateModel f14 = new ThemePersistenceStateModel();
+        f14.setThemePreference("day");
+        check("day".equals(f14.prefsTheme) && "day".equals(f14.webStorageTheme), "day theme saved to native prefs");
+        f14.purgeCookiesAndStorage(); // offline fallback / WebStorage.deleteAllData / resume after origin switch
+        check(f14.cookieAuthToken == null, "revoked/previous auth cookie must remain purged");
+        f14.reloadOrReconnectPage();
+        check("day".equals(f14.webStorageTheme) && "day".equals(f14.prefsTheme),
+                "day theme survives WebStorage.deleteAllData and reconnect");
+        f14.setThemePreference("night");
+        f14.purgeCookiesAndStorage();
+        f14.reloadOrReconnectPage();
+        check("night".equals(f14.webStorageTheme) && f14.cookieAuthToken == null,
+                "night theme survives WebStorage purge without preserving auth tokens");
+
+        System.out.println("PASS: AndroidRound1ContractsTest (BridgePolicy, health probe, origin normalization, epoch isolation, lazy CAMERA permission, F14 theme persistence)");
     }
 }

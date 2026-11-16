@@ -33,6 +33,13 @@
   --mario-hud-bg: rgba(22, 30, 42, 0.95);
   --mario-hud-border: #2b3949;
   --mario-hud-text: #f3eee8;
+  --hud-score: #ffd23f;
+  --hud-high: #fbbf24;
+  --hud-sub: #cbd5e1;
+  --mario-header-color: #ffd23f;
+  --hud-sync-bg: rgba(53, 199, 89, 0.15);
+  --hud-sync-border: rgba(53, 199, 89, 0.35);
+  --hud-sync-text: #4ade80;
 
   font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
@@ -71,6 +78,13 @@
   --mario-hud-bg: #f5f2ee;
   --mario-hud-border: #8f857a;
   --mario-hud-text: #211e1c;
+  --hud-score: #7c4a03;
+  --hud-high: #9a3412;
+  --hud-sub: #475569;
+  --mario-header-color: #854d0e;
+  --hud-sync-bg: #e8f5e9;
+  --hud-sync-border: #166534;
+  --hud-sync-text: #14532d;
 }
 
 [data-theme="day"] body {
@@ -455,8 +469,29 @@
   color: var(--mario-hud-text);
 }
 [data-theme="day"] .mario-state-badge {
-  background: var(--lab-amber);
+  background: #854d0e;
   color: #ffffff;
+}
+.mario-state-badge.state-code-0 { background: #475569; color: #ffffff; }
+.mario-state-badge.state-code-1 { background: #15803d; color: #ffffff; }
+.mario-state-badge.state-code-2 { background: #ffd23f; color: #10141a; }
+.mario-state-badge.state-code-3 { background: #b91c1c; color: #ffffff; }
+.mario-state-badge.state-code-4 { background: #f59e0b; color: #10141a; }
+[data-theme="day"] .mario-state-badge.state-code-0 { background: #475569; color: #ffffff; }
+[data-theme="day"] .mario-state-badge.state-code-1 { background: #166534; color: #ffffff; }
+[data-theme="day"] .mario-state-badge.state-code-2 { background: #854d0e; color: #ffffff; }
+[data-theme="day"] .mario-state-badge.state-code-3 { background: #991b1b; color: #ffffff; }
+[data-theme="day"] .mario-state-badge.state-code-4 { background: #9a3412; color: #ffffff; }
+.hud-score {
+  color: var(--hud-score);
+  font-weight: bold;
+}
+.hud-high {
+  color: var(--hud-high);
+  font-weight: bold;
+}
+.mario-hud-subrow {
+  color: var(--hud-sub);
 }
 [data-theme="day"] .mario-ctrl-btn {
   background: var(--surface);
@@ -2736,7 +2771,7 @@ dialog p {
   align-items: center;
   font-size: 13px;
   font-weight: 700;
-  color: #ffd23f;
+  color: var(--mario-header-color);
   letter-spacing: 0.5px;
 }
 
@@ -2745,9 +2780,9 @@ dialog p {
   font-weight: 600;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(53, 199, 89, 0.15);
-  border: 1px solid rgba(53, 199, 89, 0.35);
-  color: #35c759;
+  background: var(--hud-sync-bg);
+  border: 1px solid var(--hud-sync-border);
+  color: var(--hud-sync-text);
 }
 
 .mario-screen-housing {

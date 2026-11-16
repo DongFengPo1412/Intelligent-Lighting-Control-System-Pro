@@ -14,6 +14,7 @@ class BatchCartridge(BaseCartridge):
         self.reset()
 
     def reset(self):
+        self._high_score = getattr(self, '_high_score', 0)
         self._state = STATE_TITLE
         self._score = 0
         self.elapsed = self.timer = self.repeat = 0.

@@ -401,6 +401,7 @@ public class MainActivity extends Activity {
                 mainFrameUrl = url != null ? url : "";
                 mainFrameOrigin = extractOrigin(url);
                 bridgeTrusted=isOfflinePage(url) || isPageAuthenticated(view);super.onPageFinished(view,url);
+                restoreSavedUiTheme(view);
                 if (isPageAuthenticated(view)) {
                     android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
                     String tok = prefs.getString("access_token", "");
@@ -1083,7 +1084,32 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    private void restoreSavedUiTheme(WebView view) {
+        if (view == null || destroyed) return;
+        String savedTheme = getSharedPreferences("config", MODE_PRIVATE).getString("ui_theme", "");
+        if ("day".equals(savedTheme) || "night".equals(savedTheme)) {
+            final String safeTheme = "day".equals(savedTheme) ? "day" : "night";
+            String js = "try{localStorage.setItem('kurisu_theme','" + safeTheme + "');if(window.applyTheme)window.applyTheme('" + safeTheme + "');}catch(e){}";
+            view.evaluateJavascript(js, null);
+        }
+    }
+
     public class NativeUdpBridge {
+        @android.webkit.JavascriptInterface
+        public String getThemePreference() {
+            String savedTheme = getSharedPreferences("config", MODE_PRIVATE).getString("ui_theme", "");
+            return ("day".equals(savedTheme) || "night".equals(savedTheme)) ? savedTheme : "";
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean setThemePreference(final String theme) {
+            if (!"day".equals(theme) && !"night".equals(theme)) {
+                return false;
+            }
+            getSharedPreferences("config", MODE_PRIVATE).edit().putString("ui_theme", theme).apply();
+            return true;
+        }
+
         @android.webkit.JavascriptInterface
         public boolean hasNativeCamera() {
             return true;

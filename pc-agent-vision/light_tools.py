@@ -158,13 +158,13 @@ LIGHT_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "start_game",
-            "description": "在 16x16 矩阵光场上启动并游玩 100 款经典像素街机卡带游戏 (支持编号 1~100 或游戏名称/别名，如 mario/超级马里奥 #001、snake/贪吃蛇 #033、tetris/俄罗斯方块 #041、pong/双人乒乓 #020 等)。",
+            "description": "在 16x16 矩阵光场上启动并游玩 101 款经典像素街机卡带游戏 (支持编号 1~101 或游戏名称/别名，如 mario/超级马里奥 #001、pong/双人乒乓 #020、snake/贪吃蛇 #033、tetris/俄罗斯方块 #041、MicroLight/微光纪元 #101 等)。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "game": {
                         "type": "string",
-                        "description": "游戏名称、别名或编号 (例如 '1', 'mario', '超级马里奥', 'snake', '贪吃蛇', 'tetris', '俄罗斯方块', 'pong', '打砖块' 等)"
+                        "description": "游戏名称、别名或编号 (例如 '1', 'mario', '超级马里奥', 'snake', '贪吃蛇', 'tetris', '俄罗斯方块', 'MicroLight', '微光纪元', '101' 等)"
                     }
                 },
                 "required": ["game"]

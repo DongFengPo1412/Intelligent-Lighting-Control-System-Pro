@@ -47,7 +47,7 @@ WIRE_SCHEMA = {'type': 'object', 'properties': {
     'timer_seconds': {'type': 'integer', 'minimum': 0, 'maximum': 86400},
     'brightness': {'type': 'integer', 'minimum': -1, 'maximum': 60},
     'volume': {'type': 'integer', 'minimum': -1, 'maximum': 100},
-    'game_id': {'type': 'integer', 'minimum': 0, 'maximum': 100},
+    'game_id': {'type': 'integer', 'minimum': 0, 'maximum': 101},
     'stop_countdown': {'type': 'boolean'}, 'query_status': {'type': 'boolean'}, 'worldline': {'type': 'boolean'},
 }, 'required': ['kind', 'effect', 'timer_seconds', 'brightness', 'volume', 'game_id', 'stop_countdown', 'query_status', 'worldline'], 'additionalProperties': False}
 
@@ -178,8 +178,11 @@ def from_wire(wire, user_text=None):
     for field, tool in [('brightness', 'set_brightness'), ('volume', 'set_volume')]:
         value = wire[field]
         if value != -1: actions.append({'tool': tool, 'value': value})
-    if wire.get('game_id', 0) > 0:
-        actions.append({'tool': 'start_game', 'value': wire['game_id']})
+    gid = wire.get('game_id', 0)
+    if type(gid) is not int or gid < 0 or gid > 101:
+        raise ValueError('Invalid game_id')
+    if gid > 0:
+        actions.append({'tool': 'start_game', 'value': gid})
     for field, tool in [('stop_countdown', 'stop_countdown'), ('query_status', 'get_device_status'), ('worldline', 'trigger_steins_gate_worldline')]:
         if type(wire[field]) is not bool: raise ValueError('Invalid flag')
         if wire[field]: actions.append({'tool': tool, 'value': 0})
@@ -523,7 +526,7 @@ effect：选择目录中最符合意图的中文名称；不换灯效为保持�
 timer_seconds：仅当请求倒计时时填写秒数，分钟换成秒；否则0。没说时长的倒计时用clarify。
 brightness：仅当请求调灯光亮度才填1..60；一半亮度=30。没要求填-1。不是声音音量。
 volume：仅当请求调播报声音大小才填0..100；没要求填-1。不是灯光亮度。
-game_id：仅当请求启动或游玩100款像素街机游戏时填入1..100正式卡带编号；否则0。
+game_id：仅当请求启动或游玩101款像素街机游戏时填入1..101正式卡带编号（其中101为《微光纪元》/MicroLight）；否则0。
 stop_countdown、query_status、worldline：只在请求停止计时/查设备状态/触发世界线彩蛋时为true，否则false。
 chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,volume-1,game_id0,其余false。
 目录：
@@ -547,6 +550,7 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
             ('开始沙漏，时长两分钟', [{'tool': 'start_countdown', 'value': 120}]),
             ('启动超级马里奥游戏', [{'tool': 'start_game', 'value': 1}]),
             ('来局双人乒乓', [{'tool': 'start_game', 'value': 20}]),
+            ('打开微光纪元', [{'tool': 'start_game', 'value': 101}]),
             ('不要玩游戏', []),
         ]
         few_shot = []

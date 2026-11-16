@@ -4,7 +4,7 @@
 - Branch policy: Always work directly on `main` (Owner directive). Do not create, switch to, or retain secondary branches. All changes are verified and committed directly to `main`, then pushed to `origin/main`.
 - Preserve inherited changes and hardware/system configurations. Label standalone experiments accurately; do not present unintegrated code as a working feature.
 - Hardware Pinout & Peripherals:
-  - ESP32-S3 Core 1: 60 FPS matrix physical rendering (FastLED linear grading, GPIO 17 WS2812 16×16 matrix).
+  - ESP32-S3 Core 1: Adaptive light-field physical rendering (~30 FPS / 33ms main loop, 8ms RMT DMA over 800kHz WS2812B 16×16 matrix at GPIO 17; theoretical peak frame rate 60 FPS).
   - ESP32-S3 Core 0: Real-time command dispatcher, Wi-Fi UDP 8888, USB-Serial-JTAG, and Jetson UART1.
   - Jetson Nano Hardware UART1: RX=GPIO8, TX=GPIO9, 115200 8N1, no flow control.
   - Audio: INMP441 Microphone (WS=4, SCK=5, DIN=6) + MAX98357A Speaker (DOUT=7, BCLK=15, LRCK=16).

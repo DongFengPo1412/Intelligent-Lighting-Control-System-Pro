@@ -1,6 +1,6 @@
 # Pro 最终需求基线
 
-基线日期：2026-11-05（Asia/Shanghai）。适用工程：Intelligent Lighting Control System Pro。当前开发分支为 `arcade-100-audit-and-elevation`；本轮审计起点为 `ccbc28f401be230fc63f28ab6f538ab60266f265`，后续修复的实际提交、构建身份和验收结果另行记录。
+基线日期：2026-11-05（Asia/Shanghai；2026-11-16 文档口径同步对齐）。适用工程：Intelligent Lighting Control System Pro。当前正式正式开发与交付分支为 `main`（历史审计期曾使用 `arcade-100-audit-and-elevation`，现已合入并统一至 `main`；历史基线起点为 `ccbc28f401be230fc63f28ab6f538ab60266f265`）；后续每次修复的实际提交 SHA、候选与实机烧录构建身份、以及软件/硬件验收结果另行于 [PRO_ROUND1_VALIDATION.md](PRO_ROUND1_VALIDATION.md) 与 [PRO_REVIEW_F01_F22_LEDGER.md](PRO_REVIEW_F01_F22_LEDGER.md) 独立记录。
 
 本文定义最终产品需要完成什么、哪些只是实现选择，以及怎样判定完成；不是“所有功能已完成”的声明。逐项实现、测试、依赖和实机状态见 [最终验收矩阵](PRO_FINAL_ACCEPTANCE_MATRIX.csv)。矩阵的 51 个能力拆分项是本轮审计组织方式，不代表用户提出过 51 条独立原始需求。
 

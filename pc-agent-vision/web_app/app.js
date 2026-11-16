@@ -1378,18 +1378,14 @@
       3: "游戏结束",
       4: "通关胜利",
     };
-    const stateColors = {
-      0: "#64748b",
-      1: "#22c55e",
-      2: "#eab308",
-      3: "#ef4444",
-      4: "#f59e0b",
-    };
     const stCode = Number(status.state !== undefined ? status.state : 0);
     const tag = $("marioStateTag");
     if (tag) {
       tag.textContent = status.state_name || stateLabels[stCode] || "待机";
-      tag.style.backgroundColor = stateColors[stCode] || "#64748b";
+      tag.classList.remove("state-code-0", "state-code-1", "state-code-2", "state-code-3", "state-code-4");
+      tag.classList.add(`state-code-${[0, 1, 2, 3, 4].includes(stCode) ? stCode : 0}`);
+      tag.style.backgroundColor = "";
+      tag.style.color = "";
     }
 
     if ($("marioScoreStat")) {
@@ -1971,6 +1967,7 @@
 
   async function stopPhoneCamera() {
     const sidToStop = currentVisionSessionId;
+    const vTokToSend = activeVisionToken;
     releaseLocalPhoneCapture();
     activeVisionToken = "";
     if (!sidToStop) {
@@ -1979,11 +1976,31 @@
     }
 
     try {
-      const res = await api("/api/pro/vision", {
-        enabled: false,
-        source: "remote",
-        session_id: sidToStop,
-      });
+      let res;
+      if (!nativeMode && typeof fetch === "function" && vTokToSend) {
+        const headers = {
+          "Content-Type": "application/json",
+          "X-Vision-Token": vTokToSend,
+          "X-Vision-Session": sidToStop,
+        };
+        const tok = getAccessToken();
+        if (tok) {
+          headers["Authorization"] = `Bearer ${tok}`;
+          headers["X-Access-Token"] = tok;
+        }
+        const resp = await fetch("/api/pro/vision", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ enabled: false, source: "remote", session_id: sidToStop }),
+        });
+        res = await resp.json().catch(() => ({ running: false }));
+      } else {
+        res = await api("/api/pro/vision", {
+          enabled: false,
+          source: "remote",
+          session_id: sidToStop,
+        });
+      }
 
       if (res && res.running === false && !res.error) {
         currentVisionSessionId = null;
@@ -2764,9 +2781,10 @@ window.addEventListener("pagehide", () => {
   dictation?.abort();
 });
 function applyTheme(theme) {
-  const isDay = theme === "day";
+  const norm = theme === "day" ? "day" : "night";
+  const isDay = norm === "day";
   if (typeof document !== "undefined" && document && document.documentElement && document.documentElement.setAttribute) {
-    document.documentElement.setAttribute("data-theme", isDay ? "day" : "night");
+    document.documentElement.setAttribute("data-theme", norm);
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
       metaThemeColor.setAttribute("content", isDay ? "#f5f2ee" : "#111316");
@@ -2778,13 +2796,33 @@ function applyTheme(theme) {
     btn.title = isDay ? "切换为夜间模式" : "切换为日间模式";
   }
 }
-const currentTheme = localStorage.getItem("kurisu_theme") || "night";
-applyTheme(currentTheme);
+window.applyTheme = applyTheme;
+let initialTheme = "night";
+try {
+  const nativeTheme = window.AmadeusNative && typeof window.AmadeusNative.getThemePreference === "function"
+    ? window.AmadeusNative.getThemePreference()
+    : "";
+  if (nativeTheme === "day" || nativeTheme === "night") {
+    initialTheme = nativeTheme;
+    localStorage.setItem("kurisu_theme", initialTheme);
+  } else {
+    const lsTheme = localStorage.getItem("kurisu_theme");
+    if (lsTheme === "day" || lsTheme === "night") initialTheme = lsTheme;
+  }
+} catch (_) {
+  initialTheme = localStorage.getItem("kurisu_theme") || "night";
+}
+applyTheme(initialTheme);
 if ($("toggleThemeBtn")) {
   $("toggleThemeBtn").addEventListener("click", () => {
     const cur = (document && document.documentElement && document.documentElement.getAttribute) ? document.documentElement.getAttribute("data-theme") : "night";
     const nextTheme = cur === "day" ? "night" : "day";
     localStorage.setItem("kurisu_theme", nextTheme);
+    try {
+      if (window.AmadeusNative && typeof window.AmadeusNative.setThemePreference === "function") {
+        window.AmadeusNative.setThemePreference(nextTheme);
+      }
+    } catch (_) { }
     applyTheme(nextTheme);
   });
 }

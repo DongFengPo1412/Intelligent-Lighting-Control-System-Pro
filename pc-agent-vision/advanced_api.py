@@ -224,16 +224,55 @@ class ProApi:
             elif action == "vision":
                 if type(data.get("enabled")) is not bool:
                     raise ValueError("enabled must be a boolean")
+                source_raw = str(data.get("source") or "camera").strip().lower()
+                is_remote_req = source_raw in ("remote", "phone")
+                source = "remote" if is_remote_req else "camera"
+                policy = request.app.get("access_policy")
+                is_admin = True if policy is None else policy.has_admin_auth(request)
+                active_source = getattr(self.vision, "source", "none")
+                active_sid = getattr(self.vision, "active_session_id", None)
+                is_running = bool(getattr(self.vision, "started", False))
+
+                if source == "camera" and not is_admin:
+                    return web.json_response(
+                        {"error": "pc_camera_requires_admin_auth", "pairing_required": True},
+                        status=401,
+                    )
+                if is_remote_req and data.get("enabled") and is_running:
+                    if active_source == "camera" and not is_admin:
+                        return web.json_response(
+                            {"error": "pc_camera_active_requires_admin_auth", "pairing_required": True},
+                            status=401,
+                        )
+                    if active_source == "remote" and active_sid:
+                        if policy is not None and not policy.is_vision_session_owner(request, session_id=active_sid):
+                            return web.json_response(
+                                {"error": "vision_session_ownership_required", "pairing_required": True},
+                                status=401,
+                            )
+                if not data.get("enabled") and is_running:
+                    if active_source == "camera" and not is_admin:
+                        return web.json_response(
+                            {"error": "pc_camera_requires_admin_auth", "pairing_required": True},
+                            status=401,
+                        )
+                    if active_source == "remote" and active_sid:
+                        target_sid = data.get("session_id") or active_sid
+                        if policy is not None and not policy.is_vision_session_owner(request, session_id=target_sid):
+                            return web.json_response(
+                                {"error": "vision_session_ownership_required", "pairing_required": True},
+                                status=401,
+                            )
+
                 if self.controller.port == "SIMULATION" and data.get("enabled"):
                     raise ValueError(
                         "Simulation does not open a camera; use observations"
                     )
-                source = data.get("source", "camera")
-                policy = request.app.get("access_policy")
+
                 vision_cap_cookie = None
                 clear_vision_cookie = False
                 if data.get("enabled"):
-                    if source in ("remote", "phone"):
+                    if source == "remote":
                         session_id = None
                         try:
                             session_id = await asyncio.to_thread(
@@ -271,7 +310,7 @@ class ProApi:
                             result["vision_token"] = vtok
                             vision_cap_cookie = vtok
                 else:
-                    if source in ("remote", "phone"):
+                    if source == "remote":
                         session_id = data.get("session_id")
                         stopped = await asyncio.to_thread(self.vision.stop_remote, session_id)
                         if policy is not None and stopped:

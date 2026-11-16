@@ -4,7 +4,7 @@
 > **正式整合与框架适配**：未来道具研究所 · PixelArcade Core  
 > **正式编号**：`#101`  
 > **英文标识**：`MicroLight`  
-> **控制模式**：`CTRL_ARCADE_AB`（方向键移动瞄准 + A键跳跃/挖掘 + B键建造/攻击）  
+> **控制模式**：`CTRL_ARCADE_AB`（左右移动 + `UP` 跳跃/上浮 + `DOWN` 潜水/俯瞄 + `A` 挖掘/开箱 + `B` 攻击/建造；`DOWN+A` 吃浆果回血）  
 
 ---
 
@@ -13,11 +13,26 @@
 | 原始文件路径 | 类型与用途 | 迁移状态 | 目标工程路径 | 说明 |
 |---|---|---|---|---|
 | `MicroLight.../README.md` | 游戏设计与键位文档 | 已整合归档 | 本报告及 `web_app/arcade_game_guides.js` | 保留队友署名与16×16设计初衷 |
-| `MicroLight.../game.py` | 核心逻辑与物理时钟 | 已重构迁移 | `firmware-s3/main/display/arcade/game_101_microlight.cpp`<br>`pc-agent-vision/arcade/game_101_microlight.py` | 适配 `BatchCartridge` 统一街机接口 |
-| `MicroLight.../tiles.py` | 30类方块与七大生态色彩 | 已重构迁移 | 同上 | 精准保留草地、森林、湖泊、沙漠、雪原、沼泽、火山七大生态色阶 |
-| `MicroLight.../renderer.py` | 16×16 RGB 帧渲染与昼夜光照 | 已重构迁移 | 同上 | 完美复刻昼夜天空渐变、星空、两像素主角（黄头青身）及右上角血条 |
+| `MicroLight.../game.py` | 核心逻辑与物理时钟 | 已重构迁移（Round 3 补齐） | `firmware-s3/main/display/arcade/game_101_microlight.cpp`<br>`pc-agent-vision/arcade/game_101_microlight.py` | 补齐真实挖掘、建造、扣料、碰撞、战斗、负坐标与位掩码计数 |
+| `MicroLight.../tiles.py` | 30类方块与七大生态色彩 | 已重构迁移（Round 3 对齐） | 同上 | 30类方块 ID 与掉落/硬度/光源与原型 1:1 对齐 |
+| `MicroLight.../world.py` | 噪声地形、生态边界与持久修改 | 已重构迁移（硬件裁剪） | 同上 | `hash64`+`ValueNoise`+数学向下取整；以 256 槽有界编辑表替代 SQLite 分块库 |
+| `MicroLight.../renderer.py` | 16×16 RGB 帧渲染与昼夜光照 | 已重构迁移 | 同上 | 复刻昼夜天空渐变、星光、点光源、黄头青身双像素主角与右上角血条 |
+| `MicroLight.../tests/test_game.py` | 原型行为单测基线 | 已吸收转写 | `tests/test_cpp_101_microlight.cpp`<br>`tests/test_round3_closure.py` | 扩展负坐标、无键位冲突、建造扣除、36,000步有界运行与 C++/Python 逐帧一致性 |
 | `MicroLight.../assets/*.png` | 游戏预览与真机效果图 | 备份保留 | `docs/assets/microlight/` | 作为 16×16 实机渲染对照依据 |
 | `MicroLight.../.idea/`, `__pycache__/` | IDE临时配置与 Python 字节码 | 已清理 | 无 | 明确可再生缓存，不纳入生产仓库 |
+
+---
+
+## 一之二、 原型 → 现实现对照与裁剪边界（Round 3 诚实披露）
+
+| 能力维度 | 原型 (`MicroLight_A8E7`) | Round 3 实现 (`#101` C++ & Python) | 缺失 / 适配说明 | 验证结论 |
+|---|---|---|---|---|
+| **键位操控（F18）** | PC 独立键盘（WASD/方向/J/K/F/E/I/C） | 街机 `CTRL_ARCADE_AB`：`UP` 跳/游、`A` 挖/开箱、`B` 攻/建、`DOWN+A` 回血 | 删除 Round 1/2 中 `KEY_A` 同时跳+挖冲突；适配器移除纯文本弹窗键 | `test_cpp_101_microlight` & `test_round3_closure` 通过 |
+| **世界持久化（F17）** | SQLite 分块库（32×16 块、96 块缓存） | 确定性种子噪声 + `256` 槽有界 `PutTile`/`put_tile` 编辑表 | **受限硬件裁剪**：ESP32 无磁盘数据库，改用零堆分配有界淘汰表（超出不越界） | 36,000 步运行 `edits <= 256` 通过 |
+| **负坐标与群落统计（F18）** | Python `wx // 40 % 7` 负向生态与独立集合 | C++ `FloorDiv`/`FloorMod` + Python `//` + 7-bit 弹窗 `VisitedBiomeCount()` | **修复旧 Bug**：解决 C++ 负数截断错位及 `bitmask >= 4` 误判胜利漏洞 | `-80..80` 边界点与胜负条件全通过 |
+| **方块、生态与环境伤害（F17）** | 30 种方块、7 大生态、水/岩浆/仙人掌/冰滑/宝箱/蘑菇 | 30 种方块 1:1 定义；含水浮/岩浆灼伤/仙人掌刺伤/冰面惯性/开箱掉落 | 完整迁移核心交互；未接入全屏昼夜雾效粒子（受限于 16×16 LED） | C++ 与 Python 同种子 180 帧渲染校验 `1362504820` 一致 |
+| **建造与合成系统（F17）** | 8 项建造（含梯子/平台）+ 6 项 `C`/`I` 菜单合成 | 6 项核心建造（火把/木墙/石墙/木桥/篝火/星核灯塔），踩水面向自动切木桥 | **菜单简化**：16×16 无字库手柄不设 `C`/`I` 模态合成菜单，`梯子/木平台` 保留为方块定义并默认 `pick_tier=1` | 扣料成功写块、缺料拒绝、实体挡人全通过 |
+| **敌对生物与战斗（F17）** | 4 类敌人（`slime`/`scorpion`/`icebug`/`wisp`）、昼夜刷新 | 4 类敌人按生态/地下刷新（上限 `kMaxEnemies=4`）、追击伤害、击退与掉落 | 受 ESP32 算力与视野限制，敌人上限锁定 4 只且远离 `>18` 格自动回收 | 击杀扣血/击退/掉落与 20 分钟有界运行通过 |
 
 ---
 

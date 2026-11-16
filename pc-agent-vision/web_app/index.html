@@ -496,12 +496,12 @@
         <div class="two-columns">
           <article class="card arcade-card">
             <div class="card-heading">
-              <h2>LED Mini Arcade 100</h2>
+              <h2>LED Mini Arcade 101</h2>
               <span class="subtle-badge" id="gameState">选择游戏开始</span>
             </div>
-            <div class="arcade-filter-bar" role="search" aria-label="100款街机分类与搜索">
+            <div class="arcade-filter-bar" role="search" aria-label="101款街机分类与搜索">
               <select id="arcadeCategoryFilter" aria-label="街机玩法分类">
-                <option value="all">全部 100 款游戏</option>
+                <option value="all">全部 101 款游戏</option>
                 <option value="A">A. 平台跳跃与空间移动 (8)</option>
                 <option value="B">B. 单键与时机挑战 (6)</option>
                 <option value="C">C. 反应、观察与记忆 (5)</option>
@@ -519,7 +519,7 @@
                 <option value="O">O. 触控技巧与特殊运动 (6)</option>
                 <option value="P">P. 精选拓展新作 (4)</option>
               </select>
-              <input id="arcadeSearchInput" type="search" aria-label="搜索游戏编号或名称" placeholder="搜索 #001~#100 或名称…" maxlength="60" autocomplete="off" />
+              <input id="arcadeSearchInput" type="search" aria-label="搜索游戏编号或名称" placeholder="搜索 #001~#101 或名称…" maxlength="60" autocomplete="off" />
               <span class="subtle-badge" id="arcadeVisibleCount">100 / 100</span>
             </div>
             <p class="arcade-catalog-note">选择下方的游戏卡带即可在灯板上开始游玩，手机触屏与电脑键盘均可操控。</p>
@@ -642,10 +642,10 @@
               <div class="mario-hud-panel">
                 <div class="mario-hud-row">
                   <span id="marioStateTag" class="mario-state-badge">待机</span>
-                  <span id="marioScoreStat" style="color:#ffd23f;font-weight:bold;">得分: 00000</span>
-                  <span id="arcadeHighScoreStat" style="color:#f59e0b;font-weight:bold;">最高: 00000</span>
+                  <span id="marioScoreStat" class="hud-score">得分: 00000</span>
+                  <span id="arcadeHighScoreStat" class="hud-high">最高: 00000</span>
                 </div>
-                <div class="mario-hud-row" style="color:#94a3b8;">
+                <div class="mario-hud-row mario-hud-subrow">
                   <span id="marioLivesStat">❤️ ×3</span>
                   <span id="marioCoinsStat">🪙/⚡ ×00</span>
                   <span id="marioProgressStat">🏁 0%</span>

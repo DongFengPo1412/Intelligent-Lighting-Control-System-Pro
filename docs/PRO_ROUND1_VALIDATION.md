@@ -128,3 +128,45 @@
   - Python Pytest（22 组核心与 Round 2 新增测试）：**383 passed, 1 skipped, 0 failed**（`116 subtests passed`；含 `test_round1_rectification_regressions.py` **20 passed**——验证 `R1-01` 跨帧 ACK 隔离与多指令失败聚合、`R1-02` `GET /api/pro/camera/frame` 作用域凭据、`R1-03` `ChatPauseCoordinator` 释放-抢占两阶段线程 Barrier 竞争窗口、`R1-04` F05 `mirrored=false` 与 90/180 旋转及切源失效；跳过项仍为需 `KURISU_RENDERER_WASM` 的 `test_real_cpp_renderer_feeds_modes_canvas_and_games`）。
   - Node.js & JVM 回归：`test_phone_camera_requests.cjs` (12/12)、`final_closure.test.cjs` (3/3)、`final_device_transport.test.cjs` (5/5)、`phase_a1_pairing.test.cjs` (4/4)、`phase_a_transport.test.cjs` (12/12)、`AndroidRound1ContractsTest`（含 `R1-05` `MainActivity.onCreate` 无主动权限弹窗源码检查与 `onRequestPermissionsResult` 懒授权流程校验）与 `WebViewCookieIsolationTest` 全部退出码 `0` 通过。
   - 既有台账恢复：**F14～F22** 已在 `docs/PRO_REVIEW_F01_F22_LEDGER.md` 完整恢复原始编号与正式需求状态（`F16～F18` 保持正式后续待办需求，未降级）。
+
+---
+
+## 九、Round 3 最终功能收口、安全补强与构建验收（基于 `b3f8c4b`）
+
+### 1. 本轮覆盖项与严格结论（`SOFTWARE_PASS` / `CONDITIONAL` / `FAIL`）
+
+| 领域 / 编号 | 最终软件结论 | 实体硬件状态 | 关键代码与验证摘要 |
+| :--- | :---: | :---: | :--- |
+| **New Security P1 (`R3-01` PC 摄像头鉴权与会话所有权)** | **`SOFTWARE_PASS`** | `CONDITIONAL`（待真热点/手机实测） | `access_control.py`, `advanced_api.py`, `app.js`；普通灯控/音乐/手机前摄（`remote`）保持热点免手工 Token；未经管理员鉴权开启/关闭 `camera` 或套取/劫持他人会话在业务判断前即拦截返回 `401`（`PcWebcamAuthAndSessionOwnershipTests` 实测）。 |
+| **F16（`#101` 语义规划 Schema / Prompt / NACK）** | **`SOFTWARE_PASS`** | `CONDITIONAL`（待真实语音联调） | `semantic_control.py`, `light_tools.py`, `web_app/index.html`；`WIRE_SCHEMA` 上限 `101`、`from_wire` 严格校型、`exact_plan` + Mock Ollama + 板端 NACK 诚实失败响应全通过。 |
+| **F17 / F18（`#101《微光纪元》` C++/Python 对称沙盒迁移）** | **`SOFTWARE_PASS`** | `CONDITIONAL`（待实体 ESP32 板屏实测） | `game_101_microlight.h/.cpp`, `game_101_microlight.py`；原型差异对照与裁剪边界见 `docs/ARCADE_101_MICROLIGHT_INTEGRATION.md`。实现 `KEY_UP` 跳跃与 `KEY_A` 挖掘无冲突、负坐标 `FloorDiv`/`FloorMod`、popcount `VisitedBiomeCount() >= 4`、30 方块、`PutTile`/`put_tile` 有界 256 槽、4 敌人战斗与生态机制；C++/Python 同种子 180 帧像素校验和精确一致（`1362504820`）。 |
+| **F14（Android 主题偏好持久化与凭据隔离）** | **`SOFTWARE_PASS`** | `CONDITIONAL`（待真机 APK 安装实测） | `MainActivity.java`, `app.js`；非敏感 `ui_theme`（`day`/`night`）独立存入 `SharedPreferences("config")` 并在 `onPageFinished()` 回填；`WebStorage.deleteAllData()` 仍全清 Token/Cookie（`AndroidRound1ContractsTest` 通过）。 |
+| **F15（日间 HUD 与动态状态 WCAG AA 对比度）** | **`SOFTWARE_PASS`** | 已无头 Edge 实测 | `index.html`, `style.css`, `app.js`；移除硬编码亮色与 JS 内联色值，`test_ui_contrast_f15.cjs` 实测 `360x800`/`390x844`/`768x1024`/`1280x800` 零横向溢出，日/夜 HUD 对比度实测 `[day PLAY] 6.43:1~14.85:1` / `[night PLAY] 5.02:1~11.70:1`。 |
+| **F21 / TC-01 / F22（测试隔离、历史断言与文档一致性）** | **`SOFTWARE_PASS`** | 适用 | `test_audio_discovery_alignment.py`（全隔离开源合成 `.wav` 夹具、`KURISU_REAL_MUSIC_DIR` 门控）、`phase_a_core_test.cpp`（`game_id=1..101` 合法、`>=102`/负/浮点/布尔/字符串拒绝）、`AGENTS.md`（写明 `~30 FPS / 33ms` 主循环与 `60 FPS` 理论峰值）及 `PRO_FINAL_REQUIREMENTS_BASELINE.md`（同步当前分支 `main`）。 |
+
+### 2. Round 3 候选构建产物（重要：尚未烧录实体板 / 尚未安装真机）
+
+| 构建对象 | 工具链 | 输出路径（仓库外隔离缓存） | 文件大小 | SHA-256 | 实体部署说明 |
+| :--- | :--- | :--- | :---: | :--- | :--- |
+| **ESP32-S3 Round 3 候选固件** | ESP-IDF `v5.5.4` | `scratch/esp_build_r3/s3_led_matrix_test.bin` | `1,618,912` B（`0x18b3e0`，分区余量 `74%`） | `C2FE815BD1D2EFA95591F5D6105ABA61E54BEFCA499C9056369B1A5BE39829A4` | **实体 ESP32 板内仍为早先烧录固件**，本轮未执行任何烧录 |
+| **Android Round 3 候选 APK** | Android SDK `35.0.0` + JDK 17 | `scratch/apk_out/Kurisu_Amadeus_Pro_round3_candidate.apk` | `2,861,537` B（v2/v3 签名校验 `true`） | `C3526C8AFB1CADC4352AD90314508225ABB64149468EA6EDECAC38BACB3248B5` | **测试手机尚未安装此候选包**，待手动安装验收 |
+
+### 3. Round 3 最终代码修改后实跑回归统计
+
+- **Python Pytest**：
+  - `tests/test_round3_closure.py` + `tests/test_audio_discovery_alignment.py`：**21 passed, 1 skipped**（跳过项为环境未设 `KURISU_REAL_MUSIC_DIR` 时的可选私人曲库测试）
+  - `tests/test_pro_runtime.py` + 全部 `tests/test_arcade*.py`：**2022 passed, 1 skipped, 101 subtests passed**（跳过项为未设 `KURISU_RENDERER_WASM` 时的 WASM 渲染可选测试）
+  - `test_local_asr.py`, `test_vision_voice_arcade.py`, `test_controller_validation.py`, `test_face_enrollment.py`, `test_delivery_regressions.py`, `test_final_closure.py`, `test_kurisu_palette.py`, `test_mario_game.py`, `test_power_limiter.py`：**68 passed, 17 subtests passed**
+  - 核心与 Jetson 合集（`test_round1_rectification_regressions.py`, `test_music_library.py`, `test_music_follow.py`, `test_listener_lifecycle.py`, `test_audit_closure_defects.py`, `test_t03_bilingual.py`, `test_security_pairing_camera.py`, `test_phase_a_network.py`, `test_vision_takeover_and_permission_closure.py`, `test_final_vision_health.py`, `test_final_voice_startup.py`, `test_final_wireless_default.py`, `test_jetson_uart_protocol.py`, `jetson-nano/tests/test_jetson_nano.py`）：同进程合跑 **290 passed, 1 failed, 116 subtests passed**（唯一失败为紧随 `test_round1_rectification_regressions.py` 后运行 `test_listener_lifecycle.py::test_7i_shutdown_during_preparation_stage` 时触发的 Python 3.10 模块级 `web_server.chat_lock` 跨事件循环绑定报错）；独立进程运行 `tests/test_listener_lifecycle.py`：**68 passed, 8 subtests passed**。
+- **原生 C++ / MSVC / ESP-IDF 验证**：
+  - `scripts/test_phase_a_native.py`（含更新后 `phase_a_core_test.cpp` 与全套 `001`～`101` C++ 卡带 + JVM `BridgePolicy`）：**PASS (exit=0)**
+  - `tests/test_cpp_101_microlight.cpp`（MSVC `/std:c++17`）：**PASS (exit=0)**，并与 Python 输出 `fb_csum=1362504820` 逐像素一致
+  - `scripts/test_audio_alignment_native.py`：**11 组全 PASS (exit=0)**
+  - `tests/test_cpp_jetson_canvas.cpp`：**18/18 ALL NATIVE C++ TESTS PASSED**
+- **Node.js / 无头浏览器 / JVM**：
+  - `final_closure.test.cjs` (**3/3**)、`final_device_transport.test.cjs` (**5/5**)、`phase_a1_pairing.test.cjs` (**4/4**)、`phase_a_transport.test.cjs` (**12/12**)、`test_phone_camera_requests.cjs` (**12/12**)、`test_ui_contrast_f15.cjs` (**PASS**, Edge headless 360/390/768/1280px `>= 5.02:1`)
+  - `AndroidRound1ContractsTest`（含 F14 状态机与源码契约）、`WebViewCookieIsolationTest`：**PASS (exit=0)**；`DeviceUdpClientTest.java` 因需外部 `org.json` JAR 未在本地运行。
+
+### 4. Round 3 新增真机/实板验收清单
+1. 备份当前 ESP32 分区后烧录 `s3_led_matrix_test.bin`（`C2FE815B...`），在 `16×16` LED 灯板上启动 `#101《微光纪元》`，实操验证 `UP` 跳跃与 `A` 挖掘不冲突、`B` 攻击/建造耗材与夜敌刷新正常。
+2. 手机手动安装 `Kurisu_Amadeus_Pro_round3_candidate.apk`（`C3526C8A...`），切换日间主题后断网恢复/冷重启，核实日间主题持久保留且 `WebStorage` 清理不残留旧配对凭据；在热点局域网内尝试免认证访问 `POST /api/pro/vision {"source":"camera"}` 应获 `401`，而手机前摄 `source="remote"` 免手工输入正常拉流。

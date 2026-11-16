@@ -60,11 +60,15 @@ static void test_replay() {
 }
 static void test_protocol() {
     const char* bad[]={"{\"action\":\"select\",\"game_id\":257}","{\"action\":\"select\",\"game_id\":-255}",
+        "{\"action\":\"select\",\"game_id\":-1}","{\"action\":\"select\",\"game_id\":0}",
         "{\"action\":\"select\",\"game_id\":1.5}","{\"action\":\"select\",\"game_id\":true}",
-        "{\"action\":\"select\",\"game_id\":101}","{\"action\":\"unknown\"}","{}",
+        "{\"action\":\"select\",\"game_id\":\"101\"}","{\"action\":\"select\",\"game_id\":102}",
+        "{\"action\":\"unknown\"}","{}",
         "{\"action\":\"input\",\"down\":-1,\"pressed\":0}","{\"action\":\"input\",\"down\":256,\"pressed\":0}",
         "{\"action\":\"input\",\"down\":2,\"pressed\":\"16\"}"};
     for(auto text:bad){auto json=cJSON_Parse(text);assert(!arcade_protocol::Valid(json));cJSON_Delete(json);}
+    const char* good_select[]={"{\"action\":\"select\",\"game_id\":1}","{\"action\":\"select\",\"game_id\":100}","{\"action\":\"select\",\"game_id\":101}"};
+    for(auto text:good_select){auto json=cJSON_Parse(text);assert(arcade_protocol::Valid(json));cJSON_Delete(json);}
     auto json=cJSON_Parse("{\"action\":\"input\",\"down\":18,\"pressed\":16}");assert(arcade_protocol::Valid(json));cJSON_Delete(json);
 }
 #include "phase_b_core_test.h"
