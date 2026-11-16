@@ -1,0 +1,34 @@
+{
+  "release_tag": "pro-v2.3.3",
+  "prerelease": true,
+  "branch": "main",
+  "target": "ESP32-S3 + PC Agent + Android Pro",
+  "firmware": {
+    "filename": "s3_led_matrix_test_pro-v2.3.3.bin",
+    "size_bytes": 1619120,
+    "sha256": "955c9073a49b4d422fbb81f0e645811b4dc2309b64a917ee270c8669f3f130b1",
+    "flash_offset": "0x20000",
+    "partition": "ota_0",
+    "flash_mode": "app_only",
+    "readback_verified": true,
+    "esp_mac": "14:c1:9f:28:d5:30"
+  },
+  "android_apk": {
+    "filename": "Kurisu_Amadeus_Pro_v2.2.2_vc32.apk",
+    "package": "org.fglab.kurisu",
+    "version_name": "2.2.2",
+    "version_code": 32,
+    "size_bytes": 2865633,
+    "sha256": "e3608e1bece2da7c868a0e3d6ef8edc60cf12c6de9777e1d093f8ba281717ef0",
+    "signing_cert_sha256": "EC:BF:63:8D:DD:30:3F:C3:2A:21:70:C9:1A:B0:99:2C:AD:5C:42:7A:2B:B1:3E:60:8F:53:03:C9:77:05:A0:2E",
+    "signature_schemes": ["v2", "v3"],
+    "matches_v2_2_0_cert": true
+  },
+  "verification_status": {
+    "hotspot_lan_zero_token_and_frame_preview": "PASS (GET /api/pro/frame, /api/status, /api/pro/status, /api/pro/library all 200 without pairing token on 192.168.8.90:8080)",
+    "wifi_tcp8889_ready_chime_and_music_playback": "PASS (ready_sound_status='confirmed', listener_listening=True, 9s music stream err=None, audio_rx=audio_played=161728, drop=0, errors=0, pcm_tx_err=0)",
+    "native_cpp_audio_tests": "PASS (11/11 checks via scripts/test_audio_alignment_native.py)",
+    "python_regression_suites": "PASS (219 passed, 1 skipped, 3 deselected -k 'not F17F18', 116 subtests passed across 11 test files)",
+    "real_android_phone_apk_ui": "PENDING_USER_INSTALL (APK v2.2.2 signed & served on /apk; JUnit contract tests passed; awaiting physical phone install/tap verification)"
+  }
+}

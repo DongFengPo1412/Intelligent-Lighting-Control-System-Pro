@@ -86,9 +86,9 @@ bool NetworkAudio::FlushLocked(){
             return pcm_transport::TxWrite{0,pcm_transport::TxState::Blocked};
         return pcm_transport::TxWrite{0,pcm_transport::TxState::Fault};
     };
-    auto result=queue_->Flush(now,writer);
+    auto result=queue_->Flush(now,writer,8,5000);
     if(result==pcm_transport::FlushResult::Expired && queue_->DropExpiredMic(now)>0){
-        result=queue_->Flush(now,writer);
+        result=queue_->Flush(now,writer,8,5000);
     }
     SyncStatsLocked();
     if(result==pcm_transport::FlushResult::Fault || result==pcm_transport::FlushResult::Expired){
@@ -140,7 +140,8 @@ void NetworkAudio::Run(){
         // PCM chunks are 15-32 ms long. Do not hold a small header/payload
         // behind Nagle while waiting for the peer's delayed acknowledgement.
         int no_delay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&no_delay,sizeof(no_delay));
-        timeval timeout={2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
+        // Match the 6000 ms idle rx budget so a hotspot TCP stall does not abort read_all() at 2 s.
+        timeval timeout={6,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
         timeout={0,200000};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));
         uint8_t header[7];
         uint8_t handshake_payload[256];

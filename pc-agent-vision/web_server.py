@@ -875,7 +875,7 @@ async def handle_status(request: web.Request):
         "lan_url": f"http://{local_ip}:{WEB_PORT}",
         "pairing_token": request.app['access_policy'].token if is_local_req else None,
         "port": controller.port,
-        "is_connected": probe.get('status')=='ok' or (probe.get('error')=='telemetry_busy' and wifi_info['wifi_online']),
+        "is_connected": probe.get('status')=='ok' or (probe.get('error') in ('telemetry_busy', 'ack_timeout') and wifi_info['wifi_online']),
         "control_probe": probe.get('error') or probe.get('status'),
         "audio_usb_connected": controller.is_connected,
         "board_audio_recent": bool(listener and listener.has_board_audio and time.time() - listener._last_board_frame_time < 3),
@@ -1002,7 +1002,7 @@ async def handle_health(request: web.Request):
     return web.json_response({
         "status": "ok",
         "service": "KurisuPro",
-        "version": "2.2.1"
+        "version": "2.2.2"
     })
 
 async def handle_ceremony(request: web.Request):

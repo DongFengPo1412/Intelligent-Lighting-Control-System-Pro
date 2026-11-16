@@ -210,6 +210,7 @@ SAFE_UNAUTHENTICATED_LAN_ENDPOINTS = frozenset({
 # Method-specific ordinary paths allowed on trusted hotspot (GET only, POST mutates config/disk)
 SAFE_UNAUTHENTICATED_LAN_GET_ENDPOINTS = frozenset({
     "/api/pro/library",
+    "/api/pro/frame",
 })
 
 # Paths that may use a short-lived, single-session, peer-bound vision capability credential

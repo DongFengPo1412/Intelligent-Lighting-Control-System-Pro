@@ -243,6 +243,9 @@ class WiFiPcmClient:
                 if not duplex and not self.controller.enable_mic(False):
                     return False
                 before = self.controller.command_result({"cmd": "status"})
+                if before.get("status") != "ok":
+                    time.sleep(0.1)
+                    before = self.controller.command_result({"cmd": "status"})
                 start = time.monotonic()
                 self.playback_active = True
                 self.controller.playback_started_at = start
@@ -263,7 +266,15 @@ class WiFiPcmClient:
                         echo = getattr(self.controller, "echo_canceller", None)
                         if echo is not None:
                             echo.feed_reference(chunk)
-                        self._send(1, chunk)
+                        try:
+                            self._send(1, chunk)
+                        except OSError:
+                            if self.cancelled.is_set() or (cancelled is not None and cancelled.is_set()):
+                                return False
+                            self.close()
+                            if not self.connect():
+                                raise
+                            self._send(1, chunk)
                     total += len(pcm)
                 if self.cancelled.wait(max(0, start + total / 32000 + 0.35 - time.monotonic())):
                     return False

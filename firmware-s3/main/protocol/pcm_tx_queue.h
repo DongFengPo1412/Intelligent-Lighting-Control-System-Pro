@@ -37,10 +37,10 @@ public:
     }
 
     template<typename Write>
-    FlushResult Flush(uint32_t now,Write write,unsigned budget=8) {
+    FlushResult Flush(uint32_t now,Write write,unsigned budget=8,uint32_t max_age_ms=kMaxAgeMs) {
         while(count_ && budget--) {
             Frame& frame=frames_[head_];
-            if(uint32_t(now-frame.queued_ms)>kMaxAgeMs)return FlushResult::Expired;
+            if(uint32_t(now-frame.queued_ms)>max_age_ms)return FlushResult::Expired;
             const size_t remaining=frame.length-frame.offset;
             const TxWrite result=write(frame.data.data()+frame.offset,remaining);
             if(result.state==TxState::Blocked) {

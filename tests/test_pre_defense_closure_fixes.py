@@ -214,6 +214,65 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIsNone(client.last_error)
 
+    def test_trusted_hotspot_allows_get_pro_frame_without_pairing_token(self):
+        from access_control import AccessPolicy
+
+        policy = AccessPolicy(token="t" * 32, trust_private=True)
+        get_frame_req = type(
+            "Req",
+            (),
+            {"remote": "192.168.8.146", "host": "192.168.8.90:8080", "path": "/api/pro/frame", "method": "GET", "headers": {}, "query": {}, "cookies": {}},
+        )()
+        get_settings_req = type(
+            "Req2",
+            (),
+            {"remote": "192.168.8.146", "host": "192.168.8.90:8080", "path": "/api/pro/settings", "method": "GET", "headers": {}, "query": {}, "cookies": {}},
+        )()
+        with mock.patch.object(AccessPolicy, "is_trusted_peer", return_value=True):
+            self.assertTrue(policy.authorized(get_frame_req))
+            self.assertFalse(policy.authorized(get_settings_req))
+
+    def test_play_stream_retries_before_status_and_transient_send_drop(self):
+        from network_audio import WiFiPcmClient
+
+        sent = []
+        calls = {"connect": 0, "send": 0}
+        ctrl = type(
+            "Ctrl",
+            (),
+            {
+                "_mic_enabled": False,
+                "playback_started_at": 0.0,
+                "enable_mic": staticmethod(lambda _en: True),
+            },
+        )()
+        client = WiFiPcmClient(ctrl)
+
+        def fake_connect():
+            calls["connect"] += 1
+            return True
+
+        def fake_send(_kind, data):
+            calls["send"] += 1
+            if calls["send"] == 1:
+                raise OSError("transient drop")
+            sent.append(data)
+
+        status_seq = iter([
+            {"status": "error", "error": "ack_timeout"},
+            {"status": "ok", "audio_rx": 0, "audio_played": 0, "audio_dropped": 0, "audio_errors": 0},
+            {"status": "ok", "audio_rx": 512, "audio_played": 512, "audio_dropped": 0, "audio_errors": 0},
+        ])
+        ctrl.command_result = lambda _cmd: next(status_seq)
+        client.connect = fake_connect
+        client.close = lambda: None
+        client._send = fake_send
+
+        ok = client.play_stream(iter([b"\x01\x00" * 512]), chunk_samples=512)
+        self.assertTrue(ok)
+        self.assertEqual(calls["connect"], 2)
+        self.assertEqual(len(b"".join(sent)), 1024)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -538,13 +538,13 @@ public class MainActivity extends Activity {
             java.net.URL healthUrl = new java.net.URL(candidateUrl.replaceAll("/+$", "") + "/api/health");
             conn = (java.net.HttpURLConnection) healthUrl.openConnection();
             conn.setInstanceFollowRedirects(false);
-            conn.setConnectTimeout(800);
-            conn.setReadTimeout(800);
+            conn.setConnectTimeout(1800);
+            conn.setReadTimeout(1800);
             conn.setRequestMethod("GET");
             if (conn.getResponseCode() != 200) return false;
             try (java.io.InputStream in = conn.getInputStream();
                  java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
-                long deadlineRead = System.nanoTime() + 800_000_000L;
+                long deadlineRead = System.nanoTime() + 1_800_000_000L;
                 byte[] buf = new byte[256];
                 int r;
                 while ((r = in.read(buf)) != -1) {
@@ -756,8 +756,10 @@ public class MainActivity extends Activity {
                     } catch (Exception ignored) {}
                 }
 
-                // Phase 1: Fast receive window after broadcast (600ms)
-                long deadline = System.nanoTime() + 600_000_000L;
+                // Phase 1: Receive window with redundant UDP broadcast probes for hotspot resilience (1500ms)
+                long deadline = System.nanoTime() + 1_500_000_000L;
+                long nextReprobe = System.nanoTime() + 350_000_000L;
+                int reprobes = 0;
                 byte[] buf = new byte[2048];
                 while (System.nanoTime() < deadline && discoveryGen.get() == myGen) {
                     java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
@@ -765,6 +767,18 @@ public class MainActivity extends Activity {
                         sock.receive(pkt);
                     } catch (java.net.SocketTimeoutException timeout) {
                         if (foundServerUrl != null && foundBoardIp != null) break;
+                        if (reprobes < 2 && System.nanoTime() >= nextReprobe) {
+                            reprobes++;
+                            nextReprobe = System.nanoTime() + 350_000_000L;
+                            try {
+                                if (foundServerUrl == null) sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName("255.255.255.255"), 8890));
+                                if (foundBoardIp == null) sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName("255.255.255.255"), 8888));
+                                for (String prefix : prefixes) {
+                                    if (foundServerUrl == null) sock.send(new java.net.DatagramPacket(pcProbe, pcProbe.length, java.net.InetAddress.getByName(prefix + "255"), 8890));
+                                    if (foundBoardIp == null) sock.send(new java.net.DatagramPacket(boardProbe, boardProbe.length, java.net.InetAddress.getByName(prefix + "255"), 8888));
+                                }
+                            } catch (Exception ignored) {}
+                        }
                         continue;
                     }
                     String senderIp = pkt.getAddress().getHostAddress();
@@ -805,7 +819,7 @@ public class MainActivity extends Activity {
                             } catch (Exception ignored) {}
                         }
                     }
-                    deadline = System.nanoTime() + 1_000_000_000L;
+                    deadline = System.nanoTime() + 1_800_000_000L;
                     while (System.nanoTime() < deadline && discoveryGen.get() == myGen) {
                         java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
                         try {
@@ -1204,7 +1218,7 @@ public class MainActivity extends Activity {
             final String identity=readOnly?java.util.UUID.nameUUIDFromBytes((clientId+":read").getBytes(StandardCharsets.UTF_8)).toString().replace("-",""):clientId;
             try { (readOnly?readExecutor:udpExecutor).execute(()->{
                 if(epoch!=bridgeEpoch.get()||backgrounded||destroyed)return;
-                String result=client.request(target.host,target.token,identity,message,readOnly?1200:Math.max(timeoutMs, 1200),readOnly?0:retries,callbackId);
+                String result=client.request(target.host,target.token,identity,message,readOnly?1600:Math.max(timeoutMs, 1600),readOnly?1:Math.max(retries, 1),callbackId);
                 dispatchResult(epoch,callbackId,result);
             }); } catch(java.util.concurrent.RejectedExecutionException full) {
                 dispatchResult(epoch,callbackId,DeviceUdpClient.error(callbackId,"queue_full"));
