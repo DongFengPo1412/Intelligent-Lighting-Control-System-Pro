@@ -15,6 +15,7 @@
 #include "../firmware-s3/main/protocol/jetson_uart.h"
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <optional>
@@ -322,6 +323,96 @@ int main() {
             assert(out1[i] == out3[i]);
         }
         std::puts("PASS: 24kHz resampler chunk slicing invariance (1, 2, 4 chunk splits identical)");
+    }
+
+    // Test F06: Production PcmPlaybackPipeline continuous 3.5kHz stream across 480-sample chunks,
+    // random chunking, odd incomplete tail, explicit reset between streams, and cancel/preemption recovery.
+    {
+        constexpr size_t kSineSamples = 4800; // 10 x 480 ringbuffer chunks -> 7200 @ 24kHz
+        std::vector<int16_t> sine_pcm(kSineSamples);
+        for (size_t i = 0; i < kSineSamples; ++i) {
+            sine_pcm[i] = static_cast<int16_t>(std::lround(12000.0 * std::sin(6.28318530718 * 3500.0 * i / 16000.0)));
+        }
+        const uint32_t factor = VolumeFactor(70);
+
+        auto run_pipeline = [&](const std::vector<int16_t>& src, const std::vector<size_t>& chunk_sizes) {
+            PcmPlaybackPipeline pipeline;
+            int32_t scratch[480] = {};
+            std::vector<int32_t> recorded;
+            size_t offset = 0, ci = 0;
+            while (offset < src.size()) {
+                size_t take = std::min(chunk_sizes[ci % chunk_sizes.size()], src.size() - offset);
+                ++ci;
+                bool ok = pipeline.ProcessChunk(src.data() + offset, take, factor, 1, scratch,
+                    [&](const int32_t* frames, size_t n) {
+                        recorded.insert(recorded.end(), frames, frames + n);
+                        return true;
+                    }, false);
+                assert(ok);
+                offset += take;
+            }
+            bool flushed = pipeline.FlushStream(factor, 1, scratch, [&](const int32_t* frames, size_t n) {
+                recorded.insert(recorded.end(), frames, frames + n);
+                return true;
+            });
+            assert(flushed);
+            assert(!pipeline.HasBufferedHistory());
+            return recorded;
+        };
+
+        // 1. Single continuous run
+        auto ref_out = run_pipeline(sine_pcm, {kSineSamples});
+        assert(ref_out.size() == 7200);
+
+        // 2. Chunked per 480 samples (matching AudioPlayTaskLoop xRingbufferReceiveUpTo 960 bytes)
+        auto out_480 = run_pipeline(sine_pcm, {480});
+        assert(out_480 == ref_out);
+
+        // 3. Random uneven chunks with incomplete trailing tail
+        auto out_rand = run_pipeline(sine_pcm, {1, 7, 13, 159, 480, 512, 33, 97, 240});
+        assert(out_rand == ref_out);
+
+        // 4. Incomplete final block (< block size), both odd (4837 -> 7255) and even (4838 -> 7257)
+        std::vector<int16_t> odd_sine(sine_pcm.begin(), sine_pcm.begin() + 4800);
+        odd_sine.resize(4837, 1234);
+        auto odd_ref = run_pipeline(odd_sine, {odd_sine.size()});
+        auto odd_chunked = run_pipeline(odd_sine, {480});
+        assert(odd_chunked == odd_ref);
+        assert(odd_ref.size() == 7255);
+        odd_sine.push_back(2345); // 4838 samples: exercises odd-phase Flush() at stream end
+        auto even_tail_ref = run_pipeline(odd_sine, {odd_sine.size()});
+        auto even_tail_chunked = run_pipeline(odd_sine, {480});
+        assert(even_tail_chunked == even_tail_ref);
+        assert(even_tail_ref.size() == 7257);
+
+        // 5. Distinct playback streams with generation increment MUST NOT leak state across streams
+        PcmPlaybackPipeline session_pipe;
+        int32_t scratch[480] = {};
+        std::vector<int32_t> stream1_out, stream2_out;
+        int16_t high_dc[3] = {20000, 20000, 20000};
+        // Leave odd history on gen=1 without flushing (simulate abrupt cancellation / preemption)
+        assert(session_pipe.ProcessChunk(high_dc, 2, factor, 1, scratch,
+            [&](const int32_t* f, size_t n) { stream1_out.insert(stream1_out.end(), f, f + n); return true; }, false));
+        assert(session_pipe.HasBufferedHistory());
+
+        // Preemption / new playback stream starts with gen=2: must NOT interpolate with high_dc!
+        int16_t fresh_zeros[4] = {0, 0, 0, 0};
+        assert(session_pipe.ProcessChunk(fresh_zeros, 4, factor, 2, scratch,
+            [&](const int32_t* f, size_t n) { stream2_out.insert(stream2_out.end(), f, f + n); return true; }, true));
+        assert(stream2_out.size() == 6);
+        for (int32_t v : stream2_out) assert(v == 0);
+
+        // 6. Mid-chunk I2S write fault resets pipeline cleanly so next replay starts uncorrupted
+        std::vector<int32_t> replay_out;
+        bool fail_ok = session_pipe.ProcessChunk(high_dc, 3, factor, 3, scratch,
+            [&](const int32_t*, size_t) { return false; }, false);
+        assert(!fail_ok);
+        assert(!session_pipe.HasBufferedHistory());
+        assert(session_pipe.ProcessChunk(fresh_zeros, 4, factor, 4, scratch,
+            [&](const int32_t* f, size_t n) { replay_out.insert(replay_out.end(), f, f + n); return true; }, true));
+        for (int32_t v : replay_out) assert(v == 0);
+
+        std::puts("PASS: F06 PcmPlaybackPipeline continuous/480/random/odd-tail invariance, stream reset & error recovery (host)");
     }
 
     // Test Microphone Shift: 16-bit shift vs 12-bit shift with clipping regression

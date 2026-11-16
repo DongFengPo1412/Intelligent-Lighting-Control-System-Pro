@@ -118,6 +118,83 @@ active_chat_turn_cancel: Optional[threading.Event] = None
 active_chat_turn_id: int = 0
 
 
+class ChatPauseCoordinator:
+    """Thread-safe ownership tracker for listener pause/resume across preempting chat turns."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._listener_id: Optional[int] = None
+        self._active_owners: Set[int] = set()
+        self._released_turns: Set[int] = set()
+
+    def _sync_listener_locked(self, target_listener) -> Optional[int]:
+        lid = id(target_listener) if target_listener is not None else None
+        if lid != self._listener_id:
+            self._listener_id = lid
+            self._active_owners.clear()
+            self._released_turns.clear()
+        return lid
+
+    def prepare_pause(self, target_listener, turn_id: int) -> tuple:
+        """Register turn_id as a pause owner if pause is free or already owned by chat.
+
+        Returns (owns_pause, need_hardware_pause_call).
+        """
+        with self._lock:
+            self._sync_listener_locked(target_listener)
+            if target_listener is None:
+                return False, False
+            if self._active_owners:
+                # Preempting an in-flight chat turn: inherit pause responsibility without double-pausing.
+                self._active_owners.add(turn_id)
+                self._released_turns.discard(turn_id)
+                return True, False
+            if getattr(target_listener, 'is_paused', False):
+                # Paused externally (music playback or manual stop); chat must not steal resume rights.
+                return False, False
+            self._active_owners.add(turn_id)
+            self._released_turns.discard(turn_id)
+            return True, True
+
+    def rollback_failed_pause(self, target_listener, turn_id: int):
+        with self._lock:
+            lid = id(target_listener) if target_listener is not None else None
+            if lid != self._listener_id:
+                return
+            self._active_owners.discard(turn_id)
+            self._released_turns.add(turn_id)
+
+    def release(self, target_listener, turn_id: int, is_shutting_down: bool = False) -> bool:
+        """Release turn_id's pause claim; calls listener.resume() once when last owner exits."""
+        should_resume = False
+        with self._lock:
+            if target_listener is None or id(target_listener) != self._listener_id:
+                return False
+            if turn_id in self._released_turns:
+                return False
+            self._released_turns.add(turn_id)
+            if turn_id not in self._active_owners:
+                return False
+            self._active_owners.discard(turn_id)
+            if self._active_owners:
+                # Newer/concurrent chat turn still owns pause; wait until the final owner finishes.
+                return False
+            if is_shutting_down:
+                return False
+            if getattr(target_listener, '_music_suspended', False):
+                return False
+            if not getattr(target_listener, 'is_listening', True):
+                return False
+            should_resume = True
+        if should_resume:
+            target_listener.resume()
+            return True
+        return False
+
+
+chat_pause_coordinator = ChatPauseCoordinator()
+
+
 def get_active_chat_jobs() -> List[ChatJob]:
     """线程安全地获取当前在途聊天工作记录快照"""
     lock = globals().get('chat_job_lock')
@@ -208,6 +285,7 @@ async def run_chat(message: str, cancelled=None):
 
     owns_pause = False
     worker_started = False
+    this_turn_id = 0
     loop = asyncio.get_running_loop()
 
     current_task = None
@@ -252,10 +330,13 @@ async def run_chat(message: str, cancelled=None):
                         pass
                     raise
 
-            if listener is not None and not getattr(listener, 'is_paused', False):
-                owns_pause = True
-                if job:
-                    job.owns_pause = True
+            active_chat_turn_id += 1
+            this_turn_id = active_chat_turn_id
+
+            owns_pause, need_pause_call = chat_pause_coordinator.prepare_pause(listener, this_turn_id)
+            if job:
+                job.owns_pause = owns_pause
+            if need_pause_call:
                 pause_fut = loop.run_in_executor(None, listener.pause)
                 try:
                     await asyncio.shield(pause_fut)
@@ -263,10 +344,25 @@ async def run_chat(message: str, cancelled=None):
                     try:
                         await pause_fut
                     except Exception:
-                        pass
+                        chat_pause_coordinator.rollback_failed_pause(listener, this_turn_id)
+                        owns_pause = False
+                        if job:
+                            job.owns_pause = False
+                    raise
+                except Exception:
+                    chat_pause_coordinator.rollback_failed_pause(listener, this_turn_id)
+                    owns_pause = False
+                    if job:
+                        job.owns_pause = False
                     raise
 
             if globals().get('shutting_down', False):
+                if owns_pause:
+                    try:
+                        chat_pause_coordinator.release(listener, this_turn_id, is_shutting_down=True)
+                    except Exception:
+                        pass
+                    owns_pause = False
                 _finish_job("unsubmitted_cancelled", "Server is shutting down during preparation")
                 raise RuntimeError("Server is shutting down: rejecting new chat requests")
 
@@ -274,10 +370,19 @@ async def run_chat(message: str, cancelled=None):
             if job:
                 job.state = "queued"
 
-            active_chat_turn_id += 1
-            this_turn_id = active_chat_turn_id
             active_chat_turn_task = current_task
             active_chat_turn_cancel = turn_cancel
+
+            def _release_pause_safely():
+                if owns_pause and listener:
+                    try:
+                        chat_pause_coordinator.release(
+                            listener,
+                            this_turn_id,
+                            is_shutting_down=globals().get('shutting_down', False),
+                        )
+                    except Exception as resume_ex:
+                        print(f"[WebServer] 恢复收音异常: {resume_ex}")
 
             def _sync_chat_worker():
                 nonlocal worker_started
@@ -289,13 +394,8 @@ async def run_chat(message: str, cancelled=None):
                 if (job and job.cancel_requested) or effective_cancel.is_set():
                     if 'active_chat_threads' in globals():
                         active_chat_threads.discard(th)
+                    _release_pause_safely()
                     _finish_job("queued_cancelled", "Cancelled while queued in thread pool")
-                    if owns_pause and listener and not globals().get('shutting_down', False):
-                        if active_chat_turn_id == this_turn_id:
-                            try:
-                                listener.resume()
-                            except Exception:
-                                pass
                     return None
 
                 worker_started = True
@@ -313,12 +413,7 @@ async def run_chat(message: str, cancelled=None):
                         job.error = str(ex)
                     raise
                 finally:
-                    if owns_pause and listener and not globals().get('shutting_down', False):
-                        if active_chat_turn_id == this_turn_id:
-                            try:
-                                listener.resume()
-                            except Exception as resume_ex:
-                                print(f"[WebServer] 恢复收音异常: {resume_ex}")
+                    _release_pause_safely()
 
                     if 'active_chat_threads' in globals():
                         active_chat_threads.discard(th)
@@ -330,12 +425,8 @@ async def run_chat(message: str, cancelled=None):
             try:
                 executor_fut = loop.run_in_executor(None, _sync_chat_worker)
             except Exception as submit_ex:
+                _release_pause_safely()
                 _finish_job("unsubmitted_failed", f"Failed to submit to executor: {submit_ex}")
-                if owns_pause and listener and not globals().get('shutting_down', False):
-                    try:
-                        listener.resume()
-                    except Exception:
-                        pass
                 raise
 
         try:
@@ -364,9 +455,13 @@ async def run_chat(message: str, cancelled=None):
         if job and not worker_started and not job.is_done():
             cancel_st = "queued_cancelled" if job.state == "queued_cancelled" else "unsubmitted_cancelled"
             _finish_job(cancel_st if isinstance(outer_ex, asyncio.CancelledError) else "failed", str(outer_ex))
-            if owns_pause and listener and not globals().get('shutting_down', False):
+            if owns_pause and listener:
                 try:
-                    listener.resume()
+                    chat_pause_coordinator.release(
+                        listener,
+                        this_turn_id,
+                        is_shutting_down=globals().get('shutting_down', False),
+                    )
                 except Exception:
                     pass
         raise
@@ -740,6 +835,14 @@ async def handle_ws(request: web.Request):
                     if action == "ping":
                         await ws.send_str(json.dumps({"type": "pong"}))
                     elif payload.get('type')=='mcp':
+                        policy = request.app.get('access_policy')
+                        if policy is not None and not policy.has_admin_auth(request):
+                            await ws.send_json({
+                                "jsonrpc": "2.0",
+                                "id": payload.get("id"),
+                                "error": {"code": -32001, "message": "pairing_required"},
+                            })
+                            continue
                         response=await asyncio.to_thread(mcp.dispatch,payload)
                         if response:await ws.send_json(response)
                 except Exception:
@@ -968,9 +1071,10 @@ async def on_startup(app: web.Application):
     from wifi_gateway import get_wifi_gateway
     HOST_IP = get_local_ip(get_wifi_gateway().board_sta_ip)
     from service_discovery import ServiceAdvertisement
-    app['discovery']=ServiceAdvertisement()
+    pairing_required = not app['access_policy'].trust_private
+    app['discovery']=ServiceAdvertisement(pairing_required=pairing_required)
     await asyncio.to_thread(app['discovery'].start,HOST_IP,WEB_PORT)
-    print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT}")
+    print(f"[WebServer] 手机控制地址：http://{HOST_IP}:{WEB_PORT} (pairing_required={pairing_required})")
 
     if not (app.get('no_audio') or app.get('xiaozhi_bridge')):
         app['voice_startup_state'] = 'preparing_voice'
@@ -1378,9 +1482,9 @@ def create_app(simulate=False,no_audio=False) -> web.Application:
     check_reinit_allowed()
     global shutting_down
     shutting_down = False
-    from access_control import AccessPolicy, access_middleware, pair, auth_challenge
+    from access_control import AccessPolicy, access_middleware, pair, auth_challenge, resolve_trust_private
     app = web.Application(client_max_size=21*1024*1024, middlewares=[access_middleware, no_cache_cors_middleware])
-    trust_private = os.environ.get('KURISU_TRUST_PRIVATE', '1') == '1'
+    trust_private = resolve_trust_private()
     app['access_policy'] = AccessPolicy(token=os.environ.get('KURISU_ACCESS_TOKEN'),
         origins=filter(None, os.environ.get('KURISU_ALLOWED_ORIGINS','').split(',')),
         trust_private=trust_private)
@@ -1447,7 +1551,8 @@ if __name__ == "__main__":
     parser.add_argument('--port',type=int,default=8080)
     args=parser.parse_args();WEB_PORT=args.port
     if args.simulate:os.environ['KURISU_SIMULATE']='1'
-    if 'KURISU_MUSIC_GAIN' not in os.environ:os.environ['KURISU_MUSIC_GAIN']='0.62'
+    from music_engine import DEFAULT_MUSIC_GAIN
+    if 'KURISU_MUSIC_GAIN' not in os.environ:os.environ['KURISU_MUSIC_GAIN']=str(DEFAULT_MUSIC_GAIN)
     from access_control import load_access_token
     os.environ['KURISU_ACCESS_TOKEN'] = load_access_token()
     app = create_app(args.simulate,args.no_audio)

@@ -22,8 +22,65 @@ class ControlArbiter:
             return self.clock() >= self.until
 
 
+class _RemoteMediaPipeHandle:
+    """Reference-counted MediaPipe session resource preventing concurrent process() and close()."""
+
+    def __init__(self, hands, face):
+        self.hands = hands
+        self.face = face
+        self.infer_lock = threading.Lock()
+        self._ref_lock = threading.Lock()
+        self._active_refs = 0
+        self._close_requested = False
+        self._closed = False
+
+    def try_acquire(self) -> bool:
+        with self._ref_lock:
+            if self._close_requested or self._closed:
+                return False
+            self._active_refs += 1
+            return True
+
+    def infer(self, rgb):
+        with self.infer_lock:
+            if self._closed:
+                return None, None
+            return self.hands.process(rgb), self.face.process(rgb)
+
+    def release(self):
+        should_close = False
+        with self._ref_lock:
+            if self._active_refs > 0:
+                self._active_refs -= 1
+            if self._close_requested and self._active_refs == 0 and not self._closed:
+                self._closed = True
+                should_close = True
+        if should_close:
+            self._close_models()
+
+    def request_close(self):
+        should_close = False
+        with self._ref_lock:
+            self._close_requested = True
+            if self._active_refs == 0 and not self._closed:
+                self._closed = True
+                should_close = True
+        if should_close:
+            self._close_models()
+
+    def _close_models(self):
+        with self.infer_lock:
+            for model in (self.hands, self.face):
+                if model is not None:
+                    try:
+                        model.close()
+                    except Exception:
+                        pass
+
+
 class MultimodalHub:
     MODES = {"pet", "fingertip", "sandbox", "gesture_game", "gaze_game", "identity"}
+    MAX_REMOTE_PENDING_FRAMES = 2
 
     def __init__(self, controller, voice=None):
         self.controller = controller
@@ -59,6 +116,58 @@ class MultimodalHub:
         self.observed_at = 0
         self.latest_jpeg = None
         self.frame_lock = threading.RLock()
+        self._state_lock = threading.RLock()
+        self._remote_mp_handle = None
+        self._remote_hands = None
+        self._remote_face = None
+        self._remote_pending_frames = 0
+        self.input_rotation = 0
+        self.input_mirrored = True
+        self.input_width = 0
+        self.input_height = 0
+        self.calibration_invalidated_reason = None
+        self.last_device_command_attempted = False
+        self.last_device_command_acknowledged = None
+        self.last_device_command_at = 0.0
+        self.last_device_error = None
+
+    def current_calibration_profile(self, source=None, camera_id=None, rotation=None, mirrored=None, width=None, height=None):
+        src = source if source is not None else (self.source if self.source in ("camera", "remote") else "camera")
+        cam = self.camera if camera_id is None else camera_id
+        rot = self.input_rotation if rotation is None else rotation
+        mir = self.input_mirrored if mirrored is None else mirrored
+        w = self.input_width if width is None else width
+        h = self.input_height if height is None else height
+        return self.features.gaze.normalize_profile({
+            "source": src,
+            "camera_id": cam,
+            "rotation": rot,
+            "mirrored": mir,
+            "width": w,
+            "height": h,
+        })
+
+    def _check_calibration_compatibility(self, profile=None):
+        prof = profile or self.current_calibration_profile()
+        ok, reason = self.features.gaze.is_compatible_with(prof)
+        self.calibration_invalidated_reason = None if ok else reason
+        return ok, reason
+
+    def _detach_remote_mp(self):
+        with self._state_lock:
+            handle = self._remote_mp_handle
+            self._remote_mp_handle = None
+            self._remote_hands = None
+            self._remote_face = None
+        if handle is not None:
+            handle.request_close()
+
+    def _record_device_command(self, ok):
+        self.last_device_command_attempted = True
+        self.last_device_command_acknowledged = bool(ok)
+        self.last_device_command_at = time.time()
+        self.last_device_error = None if ok else "板端未确认视觉联动指令"
+        return bool(ok)
 
     def get_latest_jpeg(self):
         if hasattr(self, "frame_lock"):
@@ -66,7 +175,7 @@ class MultimodalHub:
                 return self.latest_jpeg
         return None
 
-    def _prepare_mode_and_takeover(self, mode):
+    def _prepare_mode_and_takeover(self, mode, target_source="camera", target_camera=0, target_rotation=None, target_mirrored=None):
         if mode not in self.MODES:
             raise ValueError(f"不支持的视觉交互模式: {mode}")
 
@@ -98,17 +207,31 @@ class MultimodalHub:
 
             if mode == "gaze_game":
                 gaze = getattr(getattr(self, "features", None), "gaze", None)
-                if gaze is not None and gaze.coefficients is None:
-                    raise ValueError("视线游戏需要先完成视线校准，请先在视线校准区域完成校准。")
+                if gaze is not None:
+                    if gaze.coefficients is None:
+                        raise ValueError("视线游戏需要先完成视线校准，请先在视线校准区域完成校准。")
+                    # Check source compatibility if the calibration has an explicit source profile bound
+                    if getattr(gaze, "profile", None) is not None:
+                        ok, reason = self._check_calibration_compatibility(
+                            self.current_calibration_profile(
+                                source=target_source,
+                                camera_id=target_camera,
+                                rotation=target_rotation,
+                                mirrored=target_mirrored,
+                            )
+                        )
+                        if not ok:
+                            raise ValueError(f"摄像头来源或几何配置已变更（{reason}），旧视线校准已失效，请重新完成视线校准。")
 
         desired = {"pet": 17, "identity": 17, "fingertip": 26, "sandbox": 27}.get(mode)
         if desired is not None:
-            if not self.controller.send_json({"cmd": "mode", "val": desired}):
+            if not self._record_device_command(self.controller.send_json({"cmd": "mode", "val": desired})):
                 raise ConnectionError(f"视觉显示模式切换失败 (mode {desired})，未收到板端回执")
 
         self.automatic_enabled = True
         self.arbiter.until = 0
-        self.session_epoch += 1
+        with self._state_lock:
+            self.session_epoch += 1
 
     def start(self, mode="pet", camera=0):
         if camera in ("remote", -1, "phone"):
@@ -117,9 +240,16 @@ class MultimodalHub:
             raise ValueError("Invalid vision mode/camera")
         if self.thread and self.thread.is_alive() and camera != self.camera:
             raise ValueError("Stop the camera before changing its index")
-        self._prepare_mode_and_takeover(mode)
-        self.active_session_id = f"cam_{self.session_epoch}_{int(time.time())}"
-        self.source = "camera"
+        # Detach any lingering remote MediaPipe session when switching to local PC camera
+        if self.source == "remote":
+            self.stop_remote()
+        self._prepare_mode_and_takeover(mode, target_source="camera", target_camera=camera, target_rotation=0, target_mirrored=True)
+        with self._state_lock:
+            self.active_session_id = f"cam_{self.session_epoch}_{int(time.time())}"
+            self.source = "camera"
+            self.input_rotation = 0
+            self.input_mirrored = True
+        self._check_calibration_compatibility()
         if self.thread and self.thread.is_alive():
             if camera != self.camera:
                 raise ValueError("Stop the camera before changing its index")
@@ -133,18 +263,25 @@ class MultimodalHub:
         self.thread = threading.Thread(target=self._capture, daemon=True)
         self.thread.start()
 
-    def start_remote(self, mode="pet"):
+    def start_remote(self, mode="pet", rotation=0, mirrored=True):
         if mode not in self.MODES:
             raise ValueError("Invalid vision mode")
         if self.thread and self.thread.is_alive():
             raise RuntimeError("Stop the local camera before starting remote session")
+        self._detach_remote_mp()
         self.stop_event.clear()
-        self._prepare_mode_and_takeover(mode)
-        self.active_session_id = f"remote_{self.session_epoch}_{int(time.time())}"
-        self.source = "remote"
-        self.mode = mode
-        self.started = True
-        self.error = None
+        self._prepare_mode_and_takeover(mode, target_source="remote", target_camera=None, target_rotation=rotation, target_mirrored=mirrored)
+        with self._state_lock:
+            self.active_session_id = f"remote_{self.session_epoch}_{int(time.time())}"
+            self.source = "remote"
+            self.mode = mode
+            self.input_rotation = int(rotation) % 360
+            self.input_mirrored = bool(mirrored)
+            self.input_width = 0
+            self.input_height = 0
+            self.started = True
+            self.error = None
+        self._check_calibration_compatibility()
         return self.active_session_id
 
     def manual_mode(self, mode):
@@ -161,31 +298,29 @@ class MultimodalHub:
         if was_enabled and not self.automatic_enabled:
             # User manually switched to a mode incompatible with current vision interaction.
             # Invalidate in-flight frames immediately so late frames don't override user choice.
-            self.session_epoch += 1
+            with self._state_lock:
+                self.session_epoch += 1
 
     def stop_remote(self, session_id=None):
         """Only stops an active remote vision session.
         If local PC camera is running (source == 'camera'), local camera is never touched."""
-        if self.source == "remote":
-            if session_id is None or self.active_session_id == session_id:
-                self.started = False
-                self.source = "none"
-                self.active_session_id = None
-                self.session_epoch += 1
-                self._record_face(None)
-                if hasattr(self, "frame_lock"):
-                    with self.frame_lock:
-                        self.latest_jpeg = None
-                if hasattr(self, "_remote_hands") and self._remote_hands:
-                    try:
-                        self._remote_hands.close()
-                        self._remote_face.close()
-                    except Exception:
-                        pass
-                    self._remote_hands = None
-                    self._remote_face = None
-                return True
-        return False
+        should_cleanup = False
+        with self._state_lock:
+            if self.source == "remote":
+                if session_id is None or self.active_session_id == session_id:
+                    self.started = False
+                    self.source = "none"
+                    self.active_session_id = None
+                    self.session_epoch += 1
+                    should_cleanup = True
+        if not should_cleanup:
+            return False
+        self._record_face(None)
+        if hasattr(self, "frame_lock"):
+            with self.frame_lock:
+                self.latest_jpeg = None
+        self._detach_remote_mp()
+        return True
 
     def stop(self):
         self.stop_event.set()
@@ -193,22 +328,16 @@ class MultimodalHub:
             self.thread.join(timeout=4)
         if self.thread and self.thread.is_alive():
             raise RuntimeError("Camera has not released yet")
-        self.started = False
-        self.source = "none"
-        self.active_session_id = None
-        self.session_epoch += 1
+        with self._state_lock:
+            self.started = False
+            self.source = "none"
+            self.active_session_id = None
+            self.session_epoch += 1
         self._record_face(None)
         if hasattr(self, "frame_lock"):
             with self.frame_lock:
                 self.latest_jpeg = None
-        if hasattr(self, "_remote_hands") and self._remote_hands:
-            try:
-                self._remote_hands.close()
-                self._remote_face.close()
-            except Exception:
-                pass
-            self._remote_hands = None
-            self._remote_face = None
+        self._detach_remote_mp()
 
     def _record_face(self, image):
         """Publish a detached sample; a missing/invalid crop invalidates enrollment."""
@@ -224,17 +353,18 @@ class MultimodalHub:
                 return True
             return self.started and not self.stop_event.is_set()
         source, session_id, epoch = frame_meta
-        if not self.started or self.stop_event.is_set():
-            return False
-        if self.source != source:
-            return False
-        if self.session_epoch != epoch:
-            return False
-        if self.active_session_id != session_id:
-            return False
-        return True
+        with self._state_lock:
+            if not self.started or self.stop_event.is_set():
+                return False
+            if self.source != source:
+                return False
+            if self.session_epoch != epoch:
+                return False
+            if self.active_session_id != session_id:
+                return False
+            return True
 
-    def _process_cv_frame(self, image, hands, face, is_flipped=False, frame_meta=None):
+    def _process_cv_frame(self, image, hands_or_handle, face=None, is_flipped=False, frame_meta=None):
         import cv2
         import numpy as np
         import mediapipe as mp
@@ -246,10 +376,20 @@ class MultimodalHub:
         image = image[
             (h - side) // 2 : (h + side) // 2, (w - side) // 2 : (w + side) // 2
         ]
+        self.input_width = int(w)
+        self.input_height = int(h)
+        active_profile = self.current_calibration_profile(mirrored=bool(is_flipped or True), width=w, height=h)
+        self._check_calibration_compatibility(active_profile)
+
         preview = image.copy()
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        hand = hands.process(rgb)
-        faces = face.process(rgb)
+        if isinstance(hands_or_handle, _RemoteMediaPipeHandle):
+            hand, faces = hands_or_handle.infer(rgb)
+            if hand is None or faces is None:
+                return {"present": False, "stale": True}
+        else:
+            hand = hands_or_handle.process(rgb)
+            faces = face.process(rgb)
 
         # Check validity right after ML inference; if session was stopped or switched, discard
         if not self._is_frame_valid(frame_meta):
@@ -273,7 +413,7 @@ class MultimodalHub:
         if faces.multi_face_landmarks:
             fl = faces.multi_face_landmarks[0]
             points = [[v.x, v.y, v.z] for v in fl.landmark]
-            observation.update(self.features.face(points, time.monotonic(), side, side))
+            observation.update(self.features.face(points, time.monotonic(), side, side, active_profile=active_profile))
 
             pts = np.array(points)
             lo = np.clip(pts[:, :2].min(axis=0), 0, 1)
@@ -315,44 +455,82 @@ class MultimodalHub:
             self.process(observation, frame_meta=frame_meta)
         return observation
 
-    def process_remote_frame(self, raw_bytes, mode=None, session_id=None):
-        if not self.started or self.stop_event.is_set():
-            raise RuntimeError("Vision session is stopped")
-        if self.source == "camera":
-            raise RuntimeError("Local camera is active; remote frame rejected")
-        if self.source != "remote":
-            raise RuntimeError("No remote vision session active")
-        if not session_id:
-            raise RuntimeError("Missing vision session ID")
-        if session_id != self.active_session_id:
-            raise RuntimeError("Stale or invalid session ID")
-
+    def process_remote_frame(self, raw_bytes, mode=None, session_id=None, rotation=None, mirrored=None):
         import cv2
         import numpy as np
         import mediapipe as mp
-
-        if mode and mode in self.MODES:
-            self.mode = mode
-
-        # Bind this frame to the active session generation snapshot
-        frame_meta = (self.source, session_id, self.session_epoch)
-
-        if not hasattr(self, "_remote_hands") or self._remote_hands is None:
-            if hasattr(mp, "solutions"):
-                self._remote_hands = mp.solutions.hands.Hands(max_num_hands=1, model_complexity=0)
-                self._remote_face = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
-            else:
-                self._remote_hands = None
-                self._remote_face = None
 
         nparr = np.frombuffer(raw_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("Failed to decode image")
 
-        if self._remote_hands and self._remote_face:
-            return self._process_cv_frame(img, self._remote_hands, self._remote_face, is_flipped=True, frame_meta=frame_meta)
-        return {"present": False}
+        handle = None
+        acquired_slot = False
+        with self._state_lock:
+            if not self.started or self.stop_event.is_set():
+                raise RuntimeError("Vision session is stopped")
+            if self.source == "camera":
+                raise RuntimeError("Local camera is active; remote frame rejected")
+            if self.source != "remote":
+                raise RuntimeError("No remote vision session active")
+            if not session_id:
+                raise RuntimeError("Missing vision session ID")
+            if session_id != self.active_session_id:
+                raise RuntimeError("Stale or invalid session ID")
+            if self._remote_pending_frames >= self.MAX_REMOTE_PENDING_FRAMES:
+                return {"present": False, "dropped": True, "reason": "queue_full"}
+            self._remote_pending_frames += 1
+            acquired_slot = True
+
+            try:
+                if mode and mode in self.MODES:
+                    self.mode = mode
+                if rotation is not None:
+                    self.input_rotation = int(rotation) % 360
+                if mirrored is not None:
+                    self.input_mirrored = bool(mirrored)
+
+                frame_meta = (self.source, session_id, self.session_epoch)
+
+                if self._remote_hands is not None or self._remote_face is not None:
+                    if (
+                        self._remote_mp_handle is None
+                        or self._remote_mp_handle.hands is not self._remote_hands
+                        or self._remote_mp_handle.face is not self._remote_face
+                    ):
+                        if self._remote_mp_handle is not None:
+                            self._remote_mp_handle.request_close()
+                        self._remote_mp_handle = _RemoteMediaPipeHandle(
+                            self._remote_hands,
+                            self._remote_face,
+                        )
+                elif self._remote_mp_handle is None and hasattr(mp, "solutions"):
+                    hands_obj = mp.solutions.hands.Hands(max_num_hands=1, model_complexity=0)
+                    face_obj = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
+                    self._remote_hands = hands_obj
+                    self._remote_face = face_obj
+                    self._remote_mp_handle = _RemoteMediaPipeHandle(hands_obj, face_obj)
+                handle = self._remote_mp_handle
+                if handle is not None and not handle.try_acquire():
+                    handle = None
+            except Exception:
+                self._remote_pending_frames = max(0, self._remote_pending_frames - 1)
+                raise
+
+        try:
+            if handle is not None:
+                return self._process_cv_frame(img, handle, is_flipped=True, frame_meta=frame_meta)
+            return {"present": False}
+        except Exception as exc:
+            self.error = f"远程视觉推理异常: {exc}"
+            raise
+        finally:
+            if handle is not None:
+                handle.release()
+            if acquired_slot:
+                with self._state_lock:
+                    self._remote_pending_frames = max(0, self._remote_pending_frames - 1)
 
     def _capture(self):
         cap = None
@@ -435,21 +613,25 @@ class MultimodalHub:
             if mode != desired:
                 if not self._is_frame_valid(frame_meta):
                     return
-                if not self.controller.send_json({"cmd": "mode", "val": desired}):
+                if not self._record_device_command(self.controller.send_json({"cmd": "mode", "val": desired})):
                     return
             if not self._is_frame_valid(frame_meta):
                 return
             if self.mode == "fingertip":
-                self.controller.track(
-                    hand.get("x", 0.5), hand.get("y", 0.5), bool(hand), 1 if hand else 0
+                self._record_device_command(
+                    self.controller.track(
+                        hand.get("x", 0.5), hand.get("y", 0.5), bool(hand), 1 if hand else 0
+                    )
                 )
             else:
-                self.controller.hand(
-                    hand.get("x", 0.5),
-                    hand.get("y", 0.5),
-                    hand.get("z", 0),
-                    hand.get("pinch", False),
-                    bool(hand),
+                self._record_device_command(
+                    self.controller.hand(
+                        hand.get("x", 0.5),
+                        hand.get("y", 0.5),
+                        hand.get("z", 0),
+                        hand.get("pinch", False),
+                        bool(hand),
+                    )
                 )
         elif self.mode in ("gaze_game", "gesture_game") and mode in (19, 21,32):
             if not self._is_frame_valid(frame_meta):
@@ -518,19 +700,21 @@ class MultimodalHub:
                     dx, dy = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}[
                         direction
                     ]
-                    self.controller.snake_move(dx, dy)
+                    self._record_device_command(self.controller.snake_move(dx, dy))
                 else:
-                    self.controller.tetris_action(
-                        {"left": "left", "right": "right", "up": "rot", "down": "drop"}[direction]
+                    self._record_device_command(
+                        self.controller.tetris_action(
+                            {"left": "left", "right": "right", "up": "rot", "down": "drop"}[direction]
+                        )
                     )
         elif self.mode == "pet":
             if not self._is_frame_valid(frame_meta):
                 return
             if now - self.last_seen > 15 and mode == 17:
-                if self.controller.send_json({"cmd": "mode", "val": 31}):
+                if self._record_device_command(self.controller.send_json({"cmd": "mode", "val": 31})):
                     self.previous_auto_mode = 17
             elif present and mode == 31 and self.previous_auto_mode == 17:
-                self.controller.send_json({"cmd": "mode", "val": 17})
+                self._record_device_command(self.controller.send_json({"cmd": "mode", "val": 17}))
                 self.previous_auto_mode = None
             if (
                 (observation.get("tired")
@@ -539,7 +723,7 @@ class MultimodalHub:
                 and now - self.last_greet > 120
             ):
                 self.last_greet = now
-                if self.controller.send_json({"cmd": "mode", "val": 31}):
+                if self._record_device_command(self.controller.send_json({"cmd": "mode", "val": 31})):
                     self.previous_auto_mode = 17
                 if self.voice and self._is_frame_valid(frame_meta):
                     self.voice.speak("休息一下眼睛吧。\n少し目を休めてね。", block=False)
@@ -549,7 +733,7 @@ class MultimodalHub:
                 and now - self.smile_since > 1
                 and now - self.last_celebration > 20
             ):
-                if self.controller.send_json({"cmd": "celebrate"}):
+                if self._record_device_command(self.controller.send_json({"cmd": "celebrate"})):
                     self.last_celebration = now
         elif self.mode == "identity" and observation.get("identity") and now - self.last_greet > 15:
             self.last_greet = now
@@ -577,6 +761,7 @@ class MultimodalHub:
 
     def status(self):
         age = time.time() - self.observed_at if self.observed_at else None
+        cal_ok, cal_reason = self._check_calibration_compatibility()
         return dict(
             running=self.started,
             source=self.source,
@@ -587,4 +772,10 @@ class MultimodalHub:
             age_seconds=age,
             fresh=bool(self.started and age is not None and age < 3),
             observation=self.last_observation,
+            calibration_valid=cal_ok,
+            calibration_profile=getattr(self.features.gaze, "profile", None),
+            calibration_invalidated_reason=cal_reason,
+            device_command_attempted=self.last_device_command_attempted,
+            device_command_acknowledged=self.last_device_command_acknowledged,
+            device_error=self.last_device_error,
         )

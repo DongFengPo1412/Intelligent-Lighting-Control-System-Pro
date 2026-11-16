@@ -44,6 +44,9 @@ public:
 
     // 播放单声道 16-bit PCM (根据音量系数映射至 32-bit，对齐中阶 NoAudioCodecSimplex)
     esp_err_t PlayMonoPcm(const int16_t* mono_samples, size_t count);
+    esp_err_t FlushPcmStream();
+    void ResetPcmStream();
+    bool HasPendingPcmStream() const;
     void NotifyExternalPlayback();
     void GuardGameAudioForCapture(bool active){playback_priority_.Capture(active);if(active)NotifyExternalPlayback();}
     arcade::AudioWriteResult TryPlayGamePcm(const int16_t* mono_samples,size_t count);
@@ -94,6 +97,8 @@ private:
     size_t pending_game_frames_ = 0;
     size_t pending_game_offset_ = 0;
     audio_pcm::Resampler16kTo24k game_resampler_;
+    audio_pcm::PcmPlaybackPipeline pcm_pipeline_;
+    std::atomic<uint32_t> pcm_stream_generation_{1};
     std::atomic<int> output_volume_;
     std::atomic<uint32_t> volume_factor_;
     int saved_volume_;

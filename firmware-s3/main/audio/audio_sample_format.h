@@ -92,6 +92,86 @@ public:
     }
 };
 
+// Stateful continuous 16kHz -> 24kHz PCM playback pipeline with stream generation tracking.
+// Preserves resampler state across arbitrarily-sized ringbuffer chunks within the same stream,
+// and resets cleanly on stream boundary, preemption, abort, or I2S write error.
+class PcmPlaybackPipeline {
+public:
+    static constexpr size_t kChunkFramesIn = 160; // 160 @ 16kHz -> <=241 @ 24kHz
+
+    void Reset() {
+        resampler_.Reset();
+        active_generation_ = 0;
+        has_active_stream_ = false;
+    }
+
+    bool HasBufferedHistory() const {
+        return has_active_stream_ && resampler_.has_history_;
+    }
+
+    uint32_t ActiveGeneration() const {
+        return active_generation_;
+    }
+
+    template <typename EmitFn>
+    bool ProcessChunk(const int16_t* mono_samples,
+                      size_t count,
+                      uint32_t volume_factor,
+                      uint32_t stream_generation,
+                      int32_t* scratch_24k,
+                      EmitFn&& emit_fn,
+                      bool is_final = false) {
+        if (!mono_samples || count == 0 || !scratch_24k || stream_generation == 0) {
+            return false;
+        }
+        if (!has_active_stream_ || active_generation_ != stream_generation) {
+            resampler_.Reset();
+            active_generation_ = stream_generation;
+            has_active_stream_ = true;
+        }
+
+        size_t written_total = 0;
+        while (written_total < count) {
+            size_t frames_in = std::min(kChunkFramesIn, count - written_total);
+            bool flush_now = is_final && (written_total + frames_in >= count);
+            size_t frames_out = resampler_.Process(
+                mono_samples + written_total, frames_in, volume_factor, scratch_24k, flush_now);
+            if (frames_out > 0 && !emit_fn(scratch_24k, frames_out)) {
+                Reset();
+                return false;
+            }
+            written_total += frames_in;
+        }
+        if (is_final) {
+            has_active_stream_ = false;
+        }
+        return true;
+    }
+
+    template <typename EmitFn>
+    bool FlushStream(uint32_t volume_factor,
+                     uint32_t stream_generation,
+                     int32_t* scratch_24k,
+                     EmitFn&& emit_fn) {
+        if (!has_active_stream_ || active_generation_ != stream_generation || !scratch_24k) {
+            Reset();
+            return true;
+        }
+        size_t tail_frames = resampler_.Flush(volume_factor, scratch_24k);
+        bool ok = true;
+        if (tail_frames > 0) {
+            ok = emit_fn(scratch_24k, tail_frames);
+        }
+        Reset();
+        return ok;
+    }
+
+private:
+    Resampler16kTo24k resampler_;
+    uint32_t active_generation_ = 0;
+    bool has_active_stream_ = false;
+};
+
 inline Resampler16kTo24k& GlobalResampler16kTo24k() {
     static Resampler16kTo24k s_resampler;
     return s_resampler;

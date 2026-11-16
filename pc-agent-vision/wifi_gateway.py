@@ -174,8 +174,11 @@ class WiFiGateway:
             addr = ipaddress.ip_address(ip_str)
             if addr.is_loopback:
                 return True
-            trusted_net = ipaddress.ip_network(os.environ.get("KURISU_HOTSPOT_SUBNET", "192.168.186.0/24"), strict=False)
-            return addr in trusted_net
+            from access_control import AccessPolicy
+            for trusted_net in AccessPolicy.get_trusted_subnets():
+                if addr in trusted_net:
+                    return True
+            return False
         except (ValueError, TypeError):
             return False
 
@@ -188,12 +191,12 @@ class WiFiGateway:
         targets: List[str] = []
         if self.board_sta_ip:
             targets.append(self.board_sta_ip)
-        trusted_net = os.environ.get("KURISU_HOTSPOT_SUBNET", "192.168.186.0/24")
         try:
-            net = ipaddress.ip_network(trusted_net, strict=False)
-            bcast = str(net.broadcast_address)
-            if bcast not in targets:
-                targets.append(bcast)
+            from access_control import AccessPolicy
+            for net in AccessPolicy.get_trusted_subnets():
+                bcast = str(net.broadcast_address)
+                if bcast not in targets:
+                    targets.append(bcast)
         except Exception:
             pass
         if "255.255.255.255" not in targets:

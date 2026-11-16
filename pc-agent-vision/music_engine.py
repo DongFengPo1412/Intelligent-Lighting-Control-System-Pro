@@ -70,51 +70,95 @@ class MusicFeatures:
         )
 
 
-def process_speaker_audio(pcm_bytes, gain=0.62):
+DEFAULT_MUSIC_GAIN = 0.25
+DEFAULT_MUSIC_HIGHPASS_HZ = 105.0
+DEFAULT_MUSIC_DIGITAL_CEILING = 0.85
+
+
+class SpeakerAudioProcessor:
+    """Explicit, continuous digital speaker pre-processing chain.
+
+    Maintains separate responsibility from ESP32 hardware output volume (0..100%).
+    All gains follow the same linear filter + gain + digital-ceiling chain without
+    gain-specific filter bypasses or automatic loudness maximization.
     """
-    Studio-grade speaker mastering chain aligned to MAX98357A 5V rail headroom:
-    1. Baseline passthrough for gain == 0.25 (unit test / headroom verification baseline).
-    2. 105Hz 2nd-order Butterworth High-Pass Filter:
-       Eliminates inaudible sub-bass rumble (<105Hz) that mechanically bottoms out
-       small speaker voice coils and sags the 5V power supply, freeing up massive headroom.
-    3. Robust percentile loudness normalization aligned to safe 5V rail ceiling:
-       Locks peak voltage output at MAX98357A so it NEVER clips into the 5V power rail.
-    4. Soft-Knee Studio Limiter (threshold 0.84 of ceiling):
-       Signal is 100% linear and untouched in normal listening range.
-       Extreme transient peaks are softly and musically rounded to prevent hard rail clipping.
-    """
-    g = float(gain)
-    if abs(g - 0.25) < 1e-4:
-        return (
-            np.clip(
-                np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32) * g,
-                -32768,
-                32767,
+
+    def __init__(
+        self,
+        gain=DEFAULT_MUSIC_GAIN,
+        highpass_hz=DEFAULT_MUSIC_HIGHPASS_HZ,
+        max_ceiling=DEFAULT_MUSIC_DIGITAL_CEILING,
+        sample_rate=16000,
+    ):
+        self.gain = float(gain)
+        if not math.isfinite(self.gain) or not 0 < self.gain <= 5.0:
+            raise ValueError("Music digital gain must be in (0, 5.0]")
+        self.highpass_hz = float(highpass_hz) if highpass_hz else 0.0
+        self.max_ceiling = float(max_ceiling)
+        if not math.isfinite(self.max_ceiling) or not 0 < self.max_ceiling <= 0.99:
+            raise ValueError("max_ceiling must be in (0, 0.99]")
+        self.sample_rate = int(sample_rate)
+        self._zi = None
+        if self.highpass_hz > 0:
+            import scipy.signal
+
+            self._b_hp, self._a_hp = scipy.signal.butter(
+                2, self.highpass_hz / (self.sample_rate / 2.0), btype="high"
             )
-            .astype("<i2")
-            .tobytes()
-        )
-    import scipy.signal
-    s = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32) / 32768.0
-    sr = 16000
-    b_hp, a_hp = scipy.signal.butter(2, 105.0 / (sr / 2.0), btype="high")
-    hp = scipy.signal.lfilter(b_hp, a_hp, s)
+            self._zi = np.zeros(max(len(self._a_hp), len(self._b_hp)) - 1, dtype=np.float64)
+        else:
+            self._b_hp, self._a_hp = None, None
 
-    target_ceiling = min(0.85, max(0.40, g))
-    peak = float(np.max(np.abs(hp)))
-    if peak < 1e-4:
-        return (np.clip(hp, -target_ceiling, target_ceiling) * 32767.0).astype("<i2").tobytes()
+    def reset(self):
+        if self._zi is not None:
+            self._zi[:] = 0.0
 
-    # 纯线性增益缩放，杜绝非线性 tanh 饱和失真与削顶变糊
-    # 保持 -2.5dB (~0.75) 干净数字余量，避免 MAX98357A 在 5V 供电轨 100% 音量下发生模拟轨削顶
-    if peak > target_ceiling:
-        gain_scale = target_ceiling / peak
-    else:
-        # 对于较轻柔的曲目，允许最高 1.25x 线性轻度增益，且严格受限于 target_ceiling
-        gain_scale = min(1.25, target_ceiling / peak) if peak > 0 else 1.0
+    def process_chunk(self, pcm_bytes, reference_peak=None):
+        if not pcm_bytes:
+            return b""
+        s = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float64) / 32768.0
+        in_peak = float(np.max(np.abs(s))) if s.size else 0.0
+        if self._b_hp is not None:
+            import scipy.signal
 
-    out = hp * gain_scale
-    return (np.clip(out, -target_ceiling, target_ceiling) * 32767.0).astype("<i2").tobytes()
+            hp, self._zi = scipy.signal.lfilter(self._b_hp, self._a_hp, s, zi=self._zi)
+        else:
+            hp = s
+
+        peak = float(np.max(np.abs(hp))) if hp.size else 0.0
+        ref_peak = float(reference_peak) if reference_peak is not None else peak
+        if ref_peak <= 0.0:
+            return np.zeros(len(hp), dtype="<i2").tobytes()
+        if reference_peak is not None:
+            scale = min(self.gain, self.max_ceiling / ref_peak)
+        else:
+            # Cap transient HPF step overshoot so output peak stays <= min(max_ceiling, in_peak * gain).
+            allowed_peak = min(self.max_ceiling, max(in_peak * self.gain, 1e-12)) if in_peak > 0 else self.max_ceiling
+            scale = min(self.gain, allowed_peak / ref_peak)
+        out = hp * scale
+        return (np.clip(out, -self.max_ceiling, self.max_ceiling) * 32767.0).astype("<i2").tobytes()
+
+
+def process_speaker_audio(
+    pcm_bytes,
+    gain=DEFAULT_MUSIC_GAIN,
+    highpass_hz=DEFAULT_MUSIC_HIGHPASS_HZ,
+    max_ceiling=DEFAULT_MUSIC_DIGITAL_CEILING,
+):
+    """Unified, continuous digital speaker pre-processing for 16kHz mono PCM16.
+
+    - Applies a single continuous 2nd-order Butterworth high-pass filter (default 105 Hz,
+      explicitly disabled only when highpass_hz <= 0 or None).
+    - Applies pure linear digital scaling (`gain`) bounded only by `max_ceiling` (0.85 digital peak);
+      does not boost quiet tracks above `gain` and does not make unverified analog hardware guarantees.
+    """
+    processor = SpeakerAudioProcessor(
+        gain=gain,
+        highpass_hz=highpass_hz,
+        max_ceiling=max_ceiling,
+        sample_rate=16000,
+    )
+    return processor.process_chunk(pcm_bytes)
 
 
 def decode_audio(raw):
@@ -174,7 +218,7 @@ class MusicPlayer:
         self.analysis_stats = {}
         self.running = False
         self.visual_fluid = True
-        self.gain = float(os.environ.get("KURISU_MUSIC_GAIN", "0.25"))
+        self.gain = float(os.environ.get("KURISU_MUSIC_GAIN", str(DEFAULT_MUSIC_GAIN)))
         if not math.isfinite(self.gain) or not 0 < self.gain <= 5.0:
             raise ValueError("KURISU_MUSIC_GAIN must be in (0, 5.0]")
         self.duration = 0.0

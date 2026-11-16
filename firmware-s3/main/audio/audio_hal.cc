@@ -325,8 +325,10 @@ esp_err_t AudioHAL::PlayBeep(uint32_t freq_hz, uint32_t duration_ms) {
         samples[i] = (int16_t)(std::sin(6.28318530718f * freq_hz * i / 24000.0f) * 6000.0f);
     }
     if (!initialized_ || !tx_chan_) return ESP_ERR_INVALID_STATE;
+    ResetPcmStream();
     if (!playback_mutex_ || xSemaphoreTake(playback_mutex_, pdMS_TO_TICKS(500)) != pdTRUE) return ESP_ERR_TIMEOUT;
     if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
+    pcm_pipeline_.Reset();
     esp_err_t ret = EnableSpeaker(true);
     if (ret != ESP_OK) {
         xSemaphoreGive(playback_mutex_);
@@ -354,6 +356,66 @@ esp_err_t AudioHAL::PlayPcm(const int16_t* pcm_data, size_t samples, size_t* byt
     return PlayMonoPcm(pcm_data, samples);
 }
 
+void AudioHAL::ResetPcmStream() {
+    uint32_t next = pcm_stream_generation_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (next == 0) {
+        pcm_stream_generation_.fetch_add(1, std::memory_order_acq_rel);
+    }
+    if (playback_mutex_ && xSemaphoreTake(playback_mutex_, 0) == pdTRUE) {
+        pcm_pipeline_.Reset();
+        xSemaphoreGive(playback_mutex_);
+    }
+}
+
+bool AudioHAL::HasPendingPcmStream() const {
+    return pcm_pipeline_.HasBufferedHistory();
+}
+
+esp_err_t AudioHAL::FlushPcmStream() {
+    if (!initialized_ || !tx_chan_) return ESP_ERR_INVALID_STATE;
+    if (!playback_mutex_ || xSemaphoreTake(playback_mutex_, pdMS_TO_TICKS(200)) != pdTRUE) return ESP_ERR_TIMEOUT;
+    if (!pcm_pipeline_.HasBufferedHistory()) {
+        pcm_pipeline_.Reset();
+        xSemaphoreGive(playback_mutex_);
+        return ESP_OK;
+    }
+    if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
+    esp_err_t ret = EnableSpeaker(true);
+    if (ret != ESP_OK) {
+        pcm_pipeline_.Reset();
+        xSemaphoreGive(playback_mutex_);
+        return ret;
+    }
+    const uint32_t v_factor = volume_factor_.load();
+    const uint32_t stream_gen = pcm_stream_generation_.load(std::memory_order_acquire);
+    pcm_pipeline_.FlushStream(v_factor, stream_gen, tx_buffer_, [&](const int32_t* frames, size_t frame_count) {
+        size_t written_frames = 0;
+        while (written_frames < frame_count) {
+            if (pcm_stream_generation_.load(std::memory_order_acquire) != stream_gen) {
+                ret = ESP_ERR_INVALID_STATE;
+                return false;
+            }
+            size_t bytes_out = 0;
+            ret = i2s_channel_write(tx_chan_, frames + written_frames,
+                                    (frame_count - written_frames) * audio_pcm::kI2sBytesPerSample,
+                                    &bytes_out, 200);
+            if (ret != ESP_OK || bytes_out == 0) {
+                if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
+                return false;
+            }
+            written_frames += bytes_out / audio_pcm::kI2sBytesPerSample;
+        }
+        return true;
+    });
+    uint32_t next = pcm_stream_generation_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (next == 0) {
+        pcm_stream_generation_.fetch_add(1, std::memory_order_acq_rel);
+    }
+    ResetSpeakerTimer();
+    xSemaphoreGive(playback_mutex_);
+    return ret;
+}
+
 esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
     NotifyExternalPlayback();
     if (!initialized_ || !tx_chan_ || !mono_samples || count == 0) return ESP_ERR_INVALID_STATE;
@@ -361,37 +423,49 @@ esp_err_t AudioHAL::PlayMonoPcm(const int16_t* mono_samples, size_t count) {
     if (spk_power_timer_) esp_timer_stop(spk_power_timer_);
     esp_err_t ret = EnableSpeaker(true);
     if (ret != ESP_OK) {
+        pcm_pipeline_.Reset();
         xSemaphoreGive(playback_mutex_);
         return ret;
     }
 
-    const size_t chunk_size = 160; // 160 frames @ 16kHz -> 240 frames @ 24kHz
-    int32_t* bit32_buf = tx_buffer_;
-    size_t written_total = 0;
-
-    // 采用对齐中阶 NoAudioCodec 的音量平方律映射与 16k -> 24k 重采样:
+    // Preserve 16k -> 24k resampler state across consecutive chunks of the same stream;
+    // reset cleanly only when stream_generation advances (abort, flush, beep preemption, or error).
     const uint32_t v_factor = volume_factor_.load();
-    audio_pcm::ResetResampler16kTo24k();
+    uint32_t stream_gen = pcm_stream_generation_.load(std::memory_order_acquire);
+    if (stream_gen == 0) {
+        stream_gen = pcm_stream_generation_.fetch_add(1, std::memory_order_acq_rel) + 1;
+    }
 
-    while (written_total < count) {
-        size_t frames_in = std::min(chunk_size, count - written_total);
-        bool is_last_chunk = (written_total + frames_in >= count);
-        size_t frames_out = audio_pcm::PackMono16kTo24k(mono_samples + written_total, frames_in, v_factor, bit32_buf, is_last_chunk);
-        size_t written_frames = 0;
-        while (written_frames < frames_out) {
-            size_t bytes_out = 0;
-            ret = i2s_channel_write(tx_chan_, bit32_buf + written_frames,
-                                    (frames_out - written_frames) * audio_pcm::kI2sBytesPerSample,
-                                    &bytes_out, 200);
-            if (ret != ESP_OK || bytes_out == 0) {
-                if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
-                ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
-                break;
+    bool ok = pcm_pipeline_.ProcessChunk(
+        mono_samples,
+        count,
+        v_factor,
+        stream_gen,
+        tx_buffer_,
+        [&](const int32_t* frames, size_t frames_out) {
+            size_t written_frames = 0;
+            while (written_frames < frames_out) {
+                if (pcm_stream_generation_.load(std::memory_order_acquire) != stream_gen) {
+                    ret = ESP_ERR_INVALID_STATE;
+                    return false;
+                }
+                size_t bytes_out = 0;
+                ret = i2s_channel_write(tx_chan_, frames + written_frames,
+                                        (frames_out - written_frames) * audio_pcm::kI2sBytesPerSample,
+                                        &bytes_out, 200);
+                if (ret != ESP_OK || bytes_out == 0) {
+                    if (ret == ESP_OK) ret = ESP_ERR_TIMEOUT;
+                    ESP_LOGW(TAG, "I2S playback incomplete: %s (%u bytes)", esp_err_to_name(ret), (unsigned)bytes_out);
+                    return false;
+                }
+                written_frames += bytes_out / audio_pcm::kI2sBytesPerSample;
             }
-            written_frames += bytes_out / audio_pcm::kI2sBytesPerSample;
-        }
-        if (written_frames < frames_out) break;
-        written_total += frames_in;
+            return true;
+        },
+        false
+    );
+    if (!ok && ret == ESP_OK) {
+        ret = ESP_FAIL;
     }
 
     ResetSpeakerTimer();

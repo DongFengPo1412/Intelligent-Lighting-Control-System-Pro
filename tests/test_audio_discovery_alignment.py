@@ -84,13 +84,15 @@ class AccessControlTokenRevocationTests(unittest.TestCase):
 class ThreePartyDiscoveryTests(unittest.TestCase):
     def test_wifi_gateway_target_ips_includes_broadcasts_when_offline(self):
         from wifi_gateway import WiFiGateway
+        from unittest.mock import patch
         gw = WiFiGateway.__new__(WiFiGateway)
         gw.board_sta_ip = ""
         gw.board_ap_ip = "192.168.4.1"
         gw.last_seen = 0.0
 
-        targets = gw.get_target_ips()
-        self.assertIn("192.168.186.255", targets)
+        with patch("access_control.detect_active_local_subnets", return_value=[ipaddress.ip_network("192.168.43.0/24")]):
+            targets = gw.get_target_ips()
+        self.assertIn("192.168.43.255", targets)
         self.assertIn("255.255.255.255", targets)
         self.assertIn("192.168.4.1", targets)
 

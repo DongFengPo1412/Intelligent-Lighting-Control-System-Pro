@@ -18,15 +18,24 @@ def _is_private_lan_ip(ip_str: str) -> bool:
 
 
 class ServiceAdvertisement:
-    def __init__(self):
+    def __init__(self, pairing_required=None):
         self.zeroconf = None
         self.info = None
         self.error = None
         self.udp_sock = None
         self.udp_running = False
         self.udp_thread = None
+        self._pairing_required = pairing_required
 
-    def start(self, host, port):
+    def _effective_pairing_required(self) -> bool:
+        if self._pairing_required is not None:
+            return bool(self._pairing_required)
+        from access_control import resolve_trust_private
+        return not resolve_trust_private()
+
+    def start(self, host, port, pairing_required=None):
+        if pairing_required is not None:
+            self._pairing_required = bool(pairing_required)
         if host == "127.0.0.1" or os.environ.get("KURISU_SIMULATE") == "1":
             return
         self._start_udp_responder(host, port)
@@ -39,7 +48,11 @@ class ServiceAdvertisement:
                 "KurisuPro._kurisupro._tcp.local.",
                 addresses=[socket.inet_aton(host)],
                 port=port,
-                properties={"path": "/pro.html", "version": "2"},
+                properties={
+                    "path": "/pro.html",
+                    "version": "2",
+                    "pairing_required": "1" if self._effective_pairing_required() else "0",
+                },
             )
             self.zeroconf.register_service(self.info, allow_name_change=True)
         except Exception as exc:
@@ -82,8 +95,8 @@ class ServiceAdvertisement:
         except Exception:
             pass
         # Security: Never transmit access_token or control_token over unauthenticated discovery broadcast.
-        # In trusted private hotspot mode (KURISU_TRUST_PRIVATE=1), pairing_required is False.
-        pairing_req = not (os.environ.get("KURISU_TRUST_PRIVATE") == "1")
+        # Derive pairing_required from the unified AccessPolicy trust_private configuration.
+        pairing_req = self._effective_pairing_required()
         return json.dumps({
             "service": "KurisuPro",
             "server_url": f"http://{host_ip}:{port}",

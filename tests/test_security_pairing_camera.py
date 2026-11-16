@@ -26,11 +26,16 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
         self.assertNotIn("access_token", payload, "Security violation: access_token leaked in discovery payload!")
         self.assertNotIn("control_token", payload, "Security violation: control_token leaked in discovery payload!")
 
-        # MUST contain non-sensitive metadata only
+        # MUST contain non-sensitive metadata only and match unified trust_private default (False = zero-config hotspot default)
         self.assertEqual(payload.get("service"), "KurisuPro")
         self.assertEqual(payload.get("port"), 8080)
         self.assertIn("server_url", payload)
-        self.assertTrue(payload.get("pairing_required"))
+        self.assertFalse(payload.get("pairing_required"))
+
+        # Explicit pairing-required configuration must match too
+        advert_locked = ServiceAdvertisement(pairing_required=True)
+        payload_locked = json.loads(advert_locked._build_discovery_payload("192.168.1.50", "192.168.1.100", 8080).decode("utf-8"))
+        self.assertTrue(payload_locked.get("pairing_required"))
 
     def test_access_policy_rejects_unauthorized_token(self):
         policy = AccessPolicy(token="a" * 32)
@@ -615,61 +620,74 @@ class TestSecurityPairingAndDiscovery(unittest.TestCase):
             self.assertTrue(ok, f"Sensitive packet '{pkt}' with valid token must be dispatched, got {reason}")
 
     def test_access_policy_graded_private_network_security(self):
-        """Graded security: trusted LAN peers get non-sensitive control, but sensitive APIs strictly require pairing."""
+        """Graded security: active hotspot LAN peers get ordinary controls (including GET library, music, vision start),
+        while sensitive APIs strictly require pairing or scoped capability."""
+        import ipaddress
+        from unittest.mock import patch
         from access_control import SENSITIVE_ENDPOINTS
         token = "c" * 32
         policy = AccessPolicy(token=token, trust_private=True)
 
         class MockRequest:
-            def __init__(self, path, remote="192.168.186.50", token_header=""):
+            def __init__(self, path, remote="192.168.43.50", token_header="", method="POST"):
                 self.path = path
+                self.method = method
                 self.remote = remote
                 self.headers = {"Authorization": f"Bearer {token_header}"} if token_header else {}
                 self.query = {}
                 self.cookies = {}
                 self.scheme = "http"
-                self.host = "192.168.186.90:8080"
+                self.host = "192.168.43.90:8080"
 
-        # A. Trusted LAN peer without token:
-        # Non-sensitive endpoints -> ALLOWED
-        for safe_path in ["/api/status", "/api/command", "/api/mode", "/api/pro/chat", "/api/preview"]:
-            req = MockRequest(safe_path)
-            self.assertTrue(policy.authorized(req), f"Safe path {safe_path} should be allowed on trusted private network")
+        with patch("access_control.detect_active_local_subnets", return_value=[ipaddress.ip_network("192.168.43.0/24")]):
+            # A. Trusted LAN peer without token:
+            # Non-sensitive ordinary endpoints -> ALLOWED
+            for safe_path, method in [
+                ("/api/status", "GET"),
+                ("/api/command", "POST"),
+                ("/api/mode", "POST"),
+                ("/api/pro/chat", "POST"),
+                ("/api/preview", "GET"),
+                ("/api/pro/library", "GET"),
+                ("/api/pro/music", "POST"),
+                ("/api/pro/vision", "POST"),
+            ]:
+                req = MockRequest(safe_path, method=method)
+                self.assertTrue(policy.authorized(req), f"Safe path {method} {safe_path} should be allowed on active hotspot network")
 
-        # Sensitive endpoints -> REJECTED without token
-        for sens_path in SENSITIVE_ENDPOINTS:
-            req = MockRequest(sens_path)
-            self.assertFalse(policy.authorized(req), f"Sensitive path {sens_path} MUST be rejected without token even on trusted network")
+            # Sensitive endpoints -> REJECTED without token (POST library configure/scan is sensitive)
+            for sens_path in SENSITIVE_ENDPOINTS:
+                req = MockRequest(sens_path, method="POST")
+                self.assertFalse(policy.authorized(req), f"Sensitive path {sens_path} MUST be rejected without token even on active hotspot")
 
-        # Explicit Default-Deny check on critical sensitive endpoints
-        for unlisted_sens_path in [
-            "/api/pro/camera/feed",
-            "/api/pro/camera/frame",
-            "/api/pro/vision/frame",
-            "/api/pro/enroll",
-            "/api/pro/calibrate",
-            "/api/pro/device-tool",
-            "/api/pro/library",
-            "/api/pro/unknown_action",
-        ]:
-            req = MockRequest(unlisted_sens_path)
-            self.assertFalse(
-                policy.authorized(req),
-                f"Unlisted/dynamic path {unlisted_sens_path} MUST be default-denied on LAN without token"
-            )
+            # Explicit Default-Deny check on critical sensitive endpoints & unknown paths
+            for unlisted_sens_path in [
+                "/api/pro/camera/feed",
+                "/api/pro/camera/frame",
+                "/api/pro/vision/frame",
+                "/api/pro/enroll",
+                "/api/pro/calibrate",
+                "/api/pro/device-tool",
+                "/api/pro/unknown_action",
+            ]:
+                req = MockRequest(unlisted_sens_path, method="POST")
+                self.assertFalse(
+                    policy.authorized(req),
+                    f"Unlisted/dynamic path {unlisted_sens_path} MUST be default-denied on LAN without token"
+                )
 
-        # B. Trusted LAN peer WITH token -> ALLOWED everywhere
-        for sens_path in list(SENSITIVE_ENDPOINTS) + [
-            "/api/pro/camera/feed",
-            "/api/pro/camera/frame",
-            "/api/pro/vision/frame",
-            "/api/pro/enroll",
-            "/api/pro/calibrate",
-            "/api/pro/device-tool",
-            "/api/pro/library",
-        ]:
-            req = MockRequest(sens_path, token_header=token)
-            self.assertTrue(policy.authorized(req), f"Sensitive path {sens_path} with token must be allowed")
+            # B. Trusted LAN peer WITH master token -> ALLOWED everywhere
+            for sens_path in list(SENSITIVE_ENDPOINTS) + [
+                "/api/pro/camera/feed",
+                "/api/pro/camera/frame",
+                "/api/pro/vision/frame",
+                "/api/pro/enroll",
+                "/api/pro/calibrate",
+                "/api/pro/device-tool",
+                "/api/pro/library",
+            ]:
+                req = MockRequest(sens_path, token_header=token, method="POST")
+                self.assertTrue(policy.authorized(req), f"Sensitive path {sens_path} with token must be allowed")
 
     def test_android_camera_session_isolation_prevents_stale_stop(self):
         """Stale camera session stop requests must not interrupt an active newer session."""

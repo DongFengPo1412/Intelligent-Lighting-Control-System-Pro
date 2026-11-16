@@ -16,8 +16,92 @@ def clipped(x, lo=0.0, hi=1.0):
 class GazeCalibration:
     def __init__(self):
         self.coefficients = None
+        self.profile = None
+        self.invalidated_reason = None
 
-    def fit(self, samples):
+    @staticmethod
+    def normalize_profile(profile):
+        if not isinstance(profile, dict):
+            return None
+        source = str(profile.get("source") or "camera").strip().lower()
+        if source == "phone":
+            source = "remote"
+        try:
+            camera_id = int(profile.get("camera_id", profile.get("camera", 0)))
+        except (TypeError, ValueError):
+            camera_id = 0
+        try:
+            rotation = int(profile.get("rotation", 0)) % 360
+        except (TypeError, ValueError):
+            rotation = 0
+        mirrored = bool(profile.get("mirrored", True))
+        try:
+            width = int(profile.get("width", 0) or 0)
+            height = int(profile.get("height", 0) or 0)
+        except (TypeError, ValueError):
+            width, height = 0, 0
+        return {
+            "source": source,
+            "camera_id": camera_id if source == "camera" else None,
+            "rotation": rotation,
+            "mirrored": mirrored,
+            "width": width,
+            "height": height,
+        }
+
+    def is_compatible_with(self, active_profile):
+        if self.coefficients is None:
+            return False, "uncalibrated"
+        target = self.normalize_profile(active_profile)
+        if target is None:
+            return True, None
+        saved = self.normalize_profile(self.profile)
+        if saved is None:
+            return False, "legacy_calibration_missing_source_profile"
+        diffs = []
+        if saved["source"] != target["source"]:
+            diffs.append("source")
+        elif saved["source"] == "camera" and saved["camera_id"] != target["camera_id"]:
+            diffs.append("camera_id")
+        if saved["rotation"] != target["rotation"]:
+            diffs.append("rotation")
+        if saved["mirrored"] != target["mirrored"]:
+            diffs.append("mirrored")
+        if (
+            saved["width"] > 0 and saved["height"] > 0
+            and target["width"] > 0 and target["height"] > 0
+        ):
+            saved_aspect = saved["width"] / saved["height"]
+            target_aspect = target["width"] / target["height"]
+            if abs(saved_aspect - target_aspect) > 0.15:
+                diffs.append("aspect_ratio")
+        if diffs:
+            return False, "calibration_mismatch:" + ",".join(diffs)
+        return True, None
+
+    def to_payload(self):
+        if self.coefficients is None:
+            return None
+        return {
+            "version": 2,
+            "coefficients": self.coefficients.tolist(),
+            "profile": self.normalize_profile(self.profile),
+        }
+
+    def load_payload(self, payload):
+        if isinstance(payload, dict) and "coefficients" in payload:
+            value = np.array(payload["coefficients"], float)
+            prof = self.normalize_profile(payload.get("profile"))
+        else:
+            value = np.array(payload, float)
+            prof = None
+        if value.shape != (3, 2) or not np.isfinite(value).all():
+            raise ValueError("Invalid saved gaze coefficients")
+        self.coefficients = value
+        self.profile = prof
+        self.invalidated_reason = None if prof is not None else "legacy_calibration_missing_source_profile"
+
+    def fit(self, samples, profile=None):
         data = np.asarray(samples, dtype=float)
         if data.ndim != 2 or data.shape[1] != 4 or len(data) < 5 or not np.isfinite(data).all():
             raise ValueError("Need >=5 samples [iris_x,iris_y,target_x,target_y]")
@@ -26,11 +110,17 @@ class GazeCalibration:
             raise ValueError("Calibration points do not cover both axes")
         coefficients = np.linalg.lstsq(design, data[:, 2:], rcond=None)[0]
         self.coefficients = coefficients
+        self.profile = self.normalize_profile(profile)
+        self.invalidated_reason = None
         return float(np.sqrt(np.mean((design @ coefficients - data[:, 2:]) ** 2)))
 
-    def predict(self, x, y):
+    def predict(self, x, y, active_profile=None):
         if self.coefficients is None:
             return (clipped(x), clipped(y))
+        if active_profile is not None:
+            ok, _ = self.is_compatible_with(active_profile)
+            if not ok:
+                return (clipped(x), clipped(y))
         value = np.array([x, y, 1]) @ self.coefficients
         return tuple(clipped(v) for v in value)
 
@@ -41,7 +131,7 @@ class VisualFeatures:
         self.history = deque()
         self.gaze = GazeCalibration()
 
-    def face(self, points, now, width=640, height=480):
+    def face(self, points, now, width=640, height=480, active_profile=None):
         p = np.asarray(points, float)
         if p.ndim != 2 or p.shape[0] < 478 or p.shape[1] != 3 or not np.isfinite(p).all():
             raise ValueError("Expected 478 finite face landmarks")
@@ -78,13 +168,14 @@ class VisualFeatures:
             y = (p[center, 1] - p[top, 1]) / max(1e-6, p[bottom, 1] - p[top, 1])
             iris.append((clipped(x), clipped(y)))
         raw = np.mean(iris, axis=0)
-        gx, gy = self.gaze.predict(*raw)
+        calibrated_ok, _ = self.gaze.is_compatible_with(active_profile)
+        gx, gy = self.gaze.predict(*raw, active_profile=active_profile)
         return dict(
             gaze_x=gx,
             gaze_y=gy,
             iris_x=float(raw[0]),
             iris_y=float(raw[1]),
-            calibrated=self.gaze.coefficients is not None,
+            calibrated=calibrated_ok,
             ear=ear,
             perclos=perclos,
             tired=bool(tired),

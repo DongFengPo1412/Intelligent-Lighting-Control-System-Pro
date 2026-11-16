@@ -45,13 +45,9 @@ class ProApi:
         )
         calibration = data_dir() / "gaze-calibration.json"
         if calibration.exists():
-            import numpy as np
-
             try:
-                value = np.array(json.loads(calibration.read_text()), float)
-                if value.shape != (3, 2) or not np.isfinite(value).all():
-                    raise ValueError("Invalid saved gaze coefficients")
-                self.vision.features.gaze.coefficients = value
+                payload = json.loads(calibration.read_text(encoding="utf-8"))
+                self.vision.features.gaze.load_payload(payload)
             except (OSError, ValueError, TypeError) as exc:
                 self.vision.error = str(exc)
 
@@ -233,6 +229,9 @@ class ProApi:
                         "Simulation does not open a camera; use observations"
                     )
                 source = data.get("source", "camera")
+                policy = request.app.get("access_policy")
+                vision_cap_cookie = None
+                clear_vision_cookie = False
                 if data.get("enabled"):
                     if source in ("remote", "phone"):
                         session_id = None
@@ -240,8 +239,18 @@ class ProApi:
                             session_id = await asyncio.to_thread(
                                 self.vision.start_remote,
                                 data.get("mode", "pet"),
+                                data.get("rotation", 0),
+                                data.get("mirrored", True),
                             )
                             result = self.vision.status()
+                            if policy is not None and session_id:
+                                vtok = policy.issue_vision_capability(
+                                    session_id,
+                                    request.remote or "127.0.0.1",
+                                    source="remote",
+                                )
+                                result["vision_token"] = vtok
+                                vision_cap_cookie = vtok
                         except Exception:
                             if session_id:
                                 await asyncio.to_thread(self.vision.stop_remote, session_id)
@@ -253,14 +262,41 @@ class ProApi:
                             data.get("camera", 0),
                         )
                         result = self.vision.status()
+                        if policy is not None and result.get("session_id"):
+                            vtok = policy.issue_vision_capability(
+                                result["session_id"],
+                                request.remote or "127.0.0.1",
+                                source="camera",
+                            )
+                            result["vision_token"] = vtok
+                            vision_cap_cookie = vtok
                 else:
                     if source in ("remote", "phone"):
                         session_id = data.get("session_id")
-                        await asyncio.to_thread(self.vision.stop_remote, session_id)
+                        stopped = await asyncio.to_thread(self.vision.stop_remote, session_id)
+                        if policy is not None and stopped:
+                            policy.revoke_vision_capability(session_id)
+                            clear_vision_cookie = True
                         result = self.vision.status()
                     else:
+                        prev_sid = getattr(self.vision, "active_session_id", None)
                         await asyncio.to_thread(self.vision.stop)
+                        if policy is not None:
+                            policy.revoke_vision_capability(prev_sid)
+                            clear_vision_cookie = True
                         result = self.vision.status()
+                resp = web.json_response(result)
+                if vision_cap_cookie:
+                    resp.set_cookie(
+                        "kurisu_vision_session",
+                        vision_cap_cookie,
+                        httponly=True,
+                        samesite="Strict",
+                        secure=request.secure,
+                    )
+                elif clear_vision_cookie:
+                    resp.del_cookie("kurisu_vision_session")
+                return resp
             elif action == "observations":
                 if data.get("mode", "pet") not in self.vision.MODES or not isinstance(
                     data.get("observation"), dict
@@ -272,14 +308,24 @@ class ProApi:
                 await asyncio.to_thread(self.vision.process, data["observation"])
                 result = self.vision.status()
             elif action == "calibrate":
-                error = self.vision.features.gaze.fit(data["samples"])
+                profile = self.vision.current_calibration_profile(
+                    source=data.get("source"),
+                    camera_id=data.get("camera"),
+                    rotation=data.get("rotation"),
+                    mirrored=data.get("mirrored"),
+                    width=data.get("width"),
+                    height=data.get("height"),
+                )
+                error = self.vision.features.gaze.fit(data["samples"], profile=profile)
+                self.vision.calibration_invalidated_reason = None
                 (data_dir() / "gaze-calibration.json").write_text(
-                    json.dumps(self.vision.features.gaze.coefficients.tolist()),
+                    json.dumps(self.vision.features.gaze.to_payload()),
                     encoding="utf-8",
                 )
                 result = {
                     "rms_training_error": error,
                     "independent_accuracy_measured": False,
+                    "profile": profile,
                 }
             elif action == "enroll":
                 result = await asyncio.to_thread(self.vision.enroll, data["name"])
@@ -523,13 +569,30 @@ def register(app, api_getter):
             return web.Response(status=400, text="Empty frame")
         mode = request.headers.get("X-Vision-Mode") or request.query.get("mode")
         session_id = request.headers.get("X-Vision-Session") or request.query.get("session_id")
+        rot_hdr = request.headers.get("X-Camera-Rotation")
+        mir_hdr = request.headers.get("X-Camera-Mirrored")
+        rotation = int(rot_hdr) if rot_hdr is not None and rot_hdr.lstrip("-").isdigit() else None
+        mirrored = None if mir_hdr is None else (mir_hdr.lower() in ("1", "true", "yes"))
         try:
-            obs = await asyncio.to_thread(api.vision.process_remote_frame, raw, mode, session_id)
+            obs = await asyncio.to_thread(
+                api.vision.process_remote_frame,
+                raw,
+                mode,
+                session_id,
+                rotation,
+                mirrored,
+            )
+            vision_status = api.vision.status()
             return web.json_response(
                 {
                     "status": "ok",
+                    "upload_accepted": True,
+                    "observation_fresh": bool(not obs.get("stale") and not obs.get("dropped") and vision_status.get("fresh")),
+                    "device_command_attempted": vision_status.get("device_command_attempted", False),
+                    "device_command_acknowledged": vision_status.get("device_command_acknowledged"),
+                    "device_error": vision_status.get("device_error"),
                     "observation": obs,
-                    "vision": api.vision.status(),
+                    "vision": vision_status,
                 }
             )
         except Exception as exc:

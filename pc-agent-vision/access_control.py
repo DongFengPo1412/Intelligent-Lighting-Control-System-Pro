@@ -7,7 +7,12 @@ This policy does not encrypt HTTP; use TLS or a trusted isolated LAN.
 import hmac
 import ipaddress
 import os
+import re
 import secrets
+import socket
+import subprocess
+import sys
+import threading
 import time
 from urllib.parse import urlsplit
 from aiohttp import web
@@ -17,13 +22,162 @@ REVOKED_TOKENS = frozenset({
     "dPBYG-Ew4zA8U3rMAAS5tX6sA0_fWrbsWTrr1IjBMZk",
 })
 
+_VIRTUAL_IFACE_PATTERN = re.compile(
+    r"(?:vpn|radmin|wireguard|openvpn|tailscale|zerotier|hamachi|"
+    r"vethernet|hyper-v|vmware|virtualbox|vbox|wsl|docker|virbr|vmnet|"
+    r"loopback|teredo|isatap|clash|mihomo|sing-box|nekobox|utun|\btun\d|\btap\d)",
+    re.IGNORECASE,
+)
+
+_SUBNET_CACHE_LOCK = threading.Lock()
+_SUBNET_CACHE = {"ts": 0.0, "subnets": ()}
+
+
+def resolve_trust_private(trust_private=None) -> bool:
+    """Single source of truth for whether trusted hotspot zero-config mode is enabled."""
+    if trust_private is not None:
+        return bool(trust_private)
+    return os.environ.get("KURISU_TRUST_PRIVATE", "1") == "1"
+
+
+def invalidate_subnet_cache():
+    with _SUBNET_CACHE_LOCK:
+        _SUBNET_CACHE["ts"] = 0.0
+        _SUBNET_CACHE["subnets"] = ()
+
+
+def _is_usable_lan_network(net: ipaddress.IPv4Network) -> bool:
+    if net.prefixlen < 16 or net.prefixlen > 30:
+        return False
+    ip = net.network_address
+    return ip.is_private and not ip.is_loopback and not ip.is_link_local and not ip.is_multicast
+
+
+def _parse_windows_ipconfig(text: str):
+    subnets = []
+    current_adapter = ""
+    is_virtual = False
+    media_disconnected = False
+    cur_ip = None
+    cur_mask = None
+
+    def flush():
+        nonlocal cur_ip, cur_mask
+        if cur_ip and cur_mask and not is_virtual and not media_disconnected:
+            try:
+                addr = ipaddress.IPv4Address(cur_ip)
+                if addr.is_private and not addr.is_loopback and not addr.is_link_local:
+                    net = ipaddress.IPv4Network(f"{cur_ip}/{cur_mask}", strict=False)
+                    if _is_usable_lan_network(net) and net not in subnets:
+                        subnets.append(net)
+            except ValueError:
+                pass
+        cur_ip = None
+        cur_mask = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        if not line[0].isspace() and line.endswith(":"):
+            flush()
+            current_adapter = line[:-1].strip()
+            is_virtual = bool(_VIRTUAL_IFACE_PATTERN.search(current_adapter))
+            media_disconnected = False
+            continue
+        if re.search(r"Media disconnected|媒体已断开连接", line, re.IGNORECASE):
+            media_disconnected = True
+            continue
+        m_ip = re.search(r"(?:IPv4\s*Address|IPv4\s*地址)[^:]*:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", line, re.IGNORECASE)
+        if m_ip:
+            cur_ip = m_ip.group(1)
+            continue
+        m_mask = re.search(r"(?:Subnet\s*Mask|子网掩码)[^:]*:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", line, re.IGNORECASE)
+        if m_mask:
+            cur_mask = m_mask.group(1)
+            continue
+    flush()
+    return subnets
+
+
+def _parse_posix_ip_addr(text: str):
+    subnets = []
+    for raw_line in text.splitlines():
+        m = re.match(r"^\d+:\s+([^\s:]+)\s+inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/\d+)", raw_line.strip())
+        if not m:
+            continue
+        iface, cidr = m.group(1), m.group(2)
+        if _VIRTUAL_IFACE_PATTERN.search(iface) or iface == "lo":
+            continue
+        try:
+            iface_ip = ipaddress.IPv4Interface(cidr)
+            addr = iface_ip.ip
+            if addr.is_private and not addr.is_loopback and not addr.is_link_local:
+                net = iface_ip.network
+                if _is_usable_lan_network(net) and net not in subnets:
+                    subnets.append(net)
+        except ValueError:
+            continue
+    return subnets
+
+
+def detect_active_local_subnets(max_age: float = 2.0):
+    """Detect active non-VPN/non-virtual local IPv4 interface subnets dynamically."""
+    now = time.monotonic()
+    with _SUBNET_CACHE_LOCK:
+        if max_age > 0 and (now - _SUBNET_CACHE["ts"]) < max_age and _SUBNET_CACHE["subnets"]:
+            return list(_SUBNET_CACHE["subnets"])
+
+    subnets = []
+    try:
+        if sys.platform == "win32":
+            out = subprocess.check_output(
+                ["ipconfig"],
+                stderr=subprocess.DEVNULL,
+                timeout=2.0,
+            ).decode("mbcs", errors="replace")
+            subnets.extend(_parse_windows_ipconfig(out))
+        else:
+            out = subprocess.check_output(
+                ["ip", "-4", "-o", "addr", "show", "up"],
+                stderr=subprocess.DEVNULL,
+                timeout=2.0,
+            ).decode("utf-8", errors="replace")
+            subnets.extend(_parse_posix_ip_addr(out))
+    except Exception:
+        pass
+
+    if not subnets:
+        # Lightweight stdlib route fallback if OS command is unavailable in a minimal container.
+        for probe_target in ("192.168.4.1", "8.8.8.8"):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    sock.connect((probe_target, 80))
+                    local_ip = sock.getsockname()[0]
+                finally:
+                    sock.close()
+                addr = ipaddress.IPv4Address(local_ip)
+                if addr.is_private and not addr.is_loopback and not addr.is_link_local:
+                    net = ipaddress.IPv4Network(f"{local_ip}/24", strict=False)
+                    if net not in subnets:
+                        subnets.append(net)
+            except Exception:
+                continue
+
+    with _SUBNET_CACHE_LOCK:
+        _SUBNET_CACHE["ts"] = now
+        _SUBNET_CACHE["subnets"] = tuple(subnets)
+    return subnets
+
 
 # Explicit safe unauthenticated LAN endpoints (Default-Deny policy).
-# Only safe telemetry, basic lighting commands, and general chat are permitted
-# unauthenticated from trusted private LAN subnets when trust_private is enabled.
-# ALL other endpoints (camera feeds, face enroll, device tools, music library/upload,
-# memory, documents, MCP, settings, restart, calibration, dynamic actions) strictly
-# require valid token/cookie or localhost loopback.
+# Only safe telemetry, basic lighting controls, chat, local library browsing & playback control,
+# and user-initiated vision mode start/stop are permitted from verified active hotspot subnets
+# when trust_private is enabled.
+# ALL sensitive endpoints (camera live feeds/frames without scoped vision capability, face enroll,
+# memory, documents, library root/scan writes, music-upload, device tools, MCP, settings, restart,
+# dynamic/unlisted actions) strictly require valid admin token/cookie or localhost loopback.
 SAFE_UNAUTHENTICATED_LAN_ENDPOINTS = frozenset({
     "/api/health",
     "/api/auth/challenge",
@@ -45,12 +199,36 @@ SAFE_UNAUTHENTICATED_LAN_ENDPOINTS = frozenset({
     "/api/ceremony",
     "/api/chat",
     "/api/pro/chat",
+    "/api/pro/music",
+    "/api/pro/vision",
+    "/api/pro/canvas",
+    "/api/pro/difficulty",
     "/api/retry_warmup",
     "/ws",
 })
 
-# Sensitive endpoints strictly requiring token/cookie pairing or localhost loopback,
-# even if client IP belongs to trusted private network.
+# Method-specific ordinary paths allowed on trusted hotspot (GET only, POST mutates config/disk)
+SAFE_UNAUTHENTICATED_LAN_GET_ENDPOINTS = frozenset({
+    "/api/pro/library",
+})
+
+# Paths that may use a short-lived, single-session, peer-bound vision capability credential
+SCOPED_VISION_FRAME_PATHS = frozenset({
+    "/api/pro/camera/frame",
+    "/api/pro/vision/frame",
+})
+
+SCOPED_VISION_FEED_PATHS = frozenset({
+    "/api/pro/camera/feed",
+    "/api/pro/camera/frame",
+})
+
+SCOPED_VISION_CALIBRATE_PATHS = frozenset({
+    "/api/pro/calibrate",
+})
+
+# Sensitive endpoints strictly requiring admin token/cookie pairing, localhost loopback,
+# or (for camera frames/calibration) an active scoped vision capability credential.
 SENSITIVE_ENDPOINTS = (
     "/api/pro/documents",
     "/api/pro/memories",
@@ -58,11 +236,11 @@ SENSITIVE_ENDPOINTS = (
     "/api/pro/face",
     "/api/pro/enroll",
     "/api/pro/camera",
-    "/api/pro/vision",
     "/api/pro/device-tool",
     "/api/pro/library",
     "/api/pro/calibrate",
     "/api/pro/music-upload",
+    "/api/pro/observations",
     "/api/config",
     "/api/restart",
     "/api/pro/settings",
@@ -98,23 +276,26 @@ class AccessPolicy:
         self.xiaozhi_token = os.environ.get('KURISU_XIAOZHI_TOKEN','')
         self.origins = frozenset(origins)
         self.buckets = {}
-        if trust_private is None:
-            self.trust_private = os.environ.get("KURISU_TRUST_PRIVATE") == "1"
-        else:
-            self.trust_private = bool(trust_private)
+        self.trust_private = resolve_trust_private(trust_private)
+        self._vision_caps = {}
+        self._vision_lock = threading.Lock()
 
     @classmethod
     def get_trusted_subnets(cls):
-        subnets = [
-            ipaddress.ip_network("127.0.0.0/8"),
-            ipaddress.ip_network("192.168.186.0/24"),
-        ]
-        custom = os.environ.get("KURISU_HOTSPOT_SUBNET")
+        subnets = []
+        custom = os.environ.get("KURISU_HOTSPOT_SUBNET", "").strip()
         if custom:
-            try:
-                subnets.append(ipaddress.ip_network(custom, strict=False))
-            except ValueError:
-                pass
+            for item in custom.split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                try:
+                    subnets.append(ipaddress.ip_network(item, strict=False))
+                except ValueError:
+                    pass
+        for detected in detect_active_local_subnets():
+            if detected not in subnets:
+                subnets.append(detected)
         return subnets
 
     @classmethod
@@ -122,7 +303,8 @@ class AccessPolicy:
         try:
             addr = ipaddress.ip_address(remote)
             if addr.is_loopback:
-                return True
+                # Loopback is governed exclusively by AccessPolicy.local(request), never LAN trust.
+                return False
             for net in cls.get_trusted_subnets():
                 if addr in net:
                     return True
@@ -140,11 +322,73 @@ class AccessPolicy:
 
     def permitted_origin(self, request):
         origin = request.headers.get("Origin")
-        if not origin and request.headers.get('Sec-Fetch-Site') == 'cross-site':
+        if origin == "null":
+            return False
+        if request.headers.get('Sec-Fetch-Site') == 'cross-site':
             return False
         return not origin or origin == f"{request.scheme}://{request.host}" or origin in self.origins
 
-    def authorized(self, request):
+    def issue_vision_capability(self, session_id: str, peer_ip: str, source: str = "remote", ttl_seconds: float = 600.0) -> str:
+        """Issue an unguessable, short-lived capability token bound to one vision session and peer IP."""
+        if not session_id or not peer_ip:
+            raise ValueError("session_id and peer_ip required for vision capability")
+        cap_token = secrets.token_urlsafe(32)
+        now = time.monotonic()
+        with self._vision_lock:
+            # Prune expired entries boundedly
+            self._vision_caps = {
+                k: v for k, v in self._vision_caps.items()
+                if not v["revoked"] and v["expires_at"] > now
+            }
+            # Revoke previous caps for different sessions from this hub so old tokens die cleanly
+            for meta in self._vision_caps.values():
+                if meta["session_id"] != session_id:
+                    meta["revoked"] = True
+            self._vision_caps[cap_token] = {
+                "session_id": session_id,
+                "peer_ip": peer_ip,
+                "source": source,
+                "expires_at": now + float(ttl_seconds),
+                "revoked": False,
+            }
+        return cap_token
+
+    def revoke_vision_capability(self, session_id: str = None):
+        with self._vision_lock:
+            for meta in self._vision_caps.values():
+                if session_id is None or meta["session_id"] == session_id:
+                    meta["revoked"] = True
+
+    def _has_valid_vision_capability(self, request, required_session_id=None) -> bool:
+        headers = getattr(request, "headers", {}) or {}
+        query = getattr(request, "query", {}) or {}
+        cookies = getattr(request, "cookies", {}) or {}
+        supplied = headers.get("Authorization", "")
+        bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
+        cap_candidate = (
+            headers.get("X-Vision-Token", "")
+            or bearer
+            or cookies.get("kurisu_vision_session", "")
+        )
+        if not cap_candidate or cap_candidate in REVOKED_TOKENS:
+            return False
+        req_session = required_session_id or headers.get("X-Vision-Session") or query.get("session_id") or ""
+        peer_ip = getattr(request, "remote", "") or ""
+        now = time.monotonic()
+        with self._vision_lock:
+            meta = self._vision_caps.get(cap_candidate)
+            if not meta or meta["revoked"] or meta["expires_at"] <= now:
+                return False
+            if meta["peer_ip"] != peer_ip:
+                return False
+            if meta["source"] == "remote":
+                if not req_session or meta["session_id"] != req_session:
+                    return False
+            meta["expires_at"] = max(meta["expires_at"], now + 300.0)
+            return True
+
+    def has_admin_auth(self, request) -> bool:
+        """True only for full master pairing credential or verified localhost loopback."""
         supplied = request.headers.get("Authorization", "")
         bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
         query_token = request.query.get("token", "")
@@ -153,30 +397,43 @@ class AccessPolicy:
         cookie = request.cookies.get("kurisu_session", "")
         if token_candidate in REVOKED_TOKENS or cookie in REVOKED_TOKENS:
             return False
-
-        # 1. Explicit token / session cookie authentication or localhost loopback has full authorization
-        is_token_valid = (
+        return bool(
             (token_candidate and hmac.compare_digest(token_candidate.encode('utf-8'), self.token.encode('utf-8'))) or
             (cookie and hmac.compare_digest(cookie.encode('utf-8'), self.token.encode('utf-8'))) or
             self.local(request)
         )
-        if is_token_valid:
+
+    def authorized(self, request):
+        supplied = request.headers.get("Authorization", "")
+        bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
+        # 1. Explicit master token / session cookie authentication or localhost loopback has full authorization
+        if self.has_admin_auth(request):
             return True
 
         if request.path == '/xiaozhi/v1/' and len(self.xiaozhi_token) >= 32 and hmac.compare_digest(
                 bearer.encode('utf-8'), self.xiaozhi_token.encode('utf-8')):
             return True # Scoped compatibility with the existing optional native adapter.
 
-        # 2. Strict Default-Deny LAN security policy:
-        # Trusted private network peers can perform everyday non-sensitive control (lighting, status, chat)
-        # without pairing, ONLY IF the endpoint is explicitly in SAFE_UNAUTHENTICATED_LAN_ENDPOINTS.
-        # ALL other endpoints (camera feed/frame, face enrollment, device tools, music library/upload,
-        # documents, memories, MCP tools, settings, restart, calibration, dynamic actions) strictly
-        # require explicit token/cookie pairing or localhost loopback.
+        path = getattr(request, "path", "")
+        norm_path = path.rstrip("/") if path != "/" else "/"
+        method = str(getattr(request, "method", "GET") or "GET").upper()
+
+        # 2. Scoped single-session vision capability (active on trusted hotspot or paired peer)
         if self.trust_private and self.is_trusted_peer(request.remote or ""):
-            path = getattr(request, "path", "")
-            norm_path = path.rstrip("/") if path != "/" else "/"
+            if norm_path in SCOPED_VISION_FRAME_PATHS and method == "POST":
+                if self._has_valid_vision_capability(request):
+                    return True
+            if norm_path == "/api/pro/camera/feed" and method == "GET":
+                if self._has_valid_vision_capability(request):
+                    return True
+            if norm_path in SCOPED_VISION_CALIBRATE_PATHS and method == "POST":
+                if self._has_valid_vision_capability(request):
+                    return True
+
+            # 3. Strict Default-Deny LAN security policy for ordinary controls:
             if norm_path in SAFE_UNAUTHENTICATED_LAN_ENDPOINTS:
+                return True
+            if norm_path in SAFE_UNAUTHENTICATED_LAN_GET_ENDPOINTS and method == "GET":
                 return True
             return False
 

@@ -54,18 +54,32 @@ function createEnvironment(options = {}) {
     return elements[id];
   }
 
+  const proto = options.protocol || 'http:';
+  const host = options.host || 'localhost:8080';
+  const hostname = options.hostname || host.split(':')[0];
+  const origin = `${proto}//${host}`;
+
   const mockWindow = {
     addEventListener: () => {},
     removeEventListener: () => {},
     dispatchEvent: () => true,
     scrollTo: () => {},
-    location: { hash: '', protocol: 'http:', host: 'localhost:8080', pathname: '/' },
+    isSecureContext: options.isSecureContext !== undefined ? options.isSecureContext : (proto === 'https:' || hostname === 'localhost' || hostname === '127.0.0.1'),
+    location: {
+      hash: '',
+      search: '',
+      protocol: proto,
+      host: host,
+      hostname: hostname,
+      origin: origin,
+      pathname: '/',
+    },
     history: { replaceState: () => {}, pushState: () => {} },
     localStorage: { getItem: () => 'test_token', setItem: () => {} },
     sessionStorage: { getItem: () => 'test_token', setItem: () => {} },
-    setTimeout: (fn, ms) => 1,
+    setTimeout: options.setTimeout || ((fn, ms) => 1),
     clearTimeout: () => {},
-    setInterval: (fn, ms) => 1,
+    setInterval: options.setInterval || ((fn, ms) => 1),
     clearInterval: () => {},
     fetch: async (url, opts = {}) => {
       const body = opts.body ? JSON.parse(opts.body) : {};
@@ -131,6 +145,8 @@ function createEnvironment(options = {}) {
 
   const context = {
     ...mockWindow,
+    URL: global.URL,
+    URLSearchParams: global.URLSearchParams,
     AbortController: global.AbortController,
     Event: class Event { constructor(type) { this.type = type; } },
     CustomEvent: class CustomEvent { constructor(type, detail) { this.type = type; this.detail = detail; } },
@@ -495,7 +511,126 @@ async function runTests() {
     console.log("  -> PASS: Missing running field properly handled: unconfirmed state displayed, session_id preserved, retry remained remote stop.");
   }
 
-  console.log("ALL 9 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
+  // 10. HTTP non-localhost insecure context rejected & rolled back vs HTTPS secure context accepted
+  {
+    console.log("Test 10: HTTP non-localhost rejected vs HTTPS secure context accepted...");
+    const httpEnv = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_http_lan_insecure',
+      protocol: 'http:',
+      host: '192.168.43.10:8080',
+      isSecureContext: false,
+    });
+    await httpEnv.eventListeners['visionStart:click']({ preventDefault: () => {} });
+    const httpReqs = httpEnv.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(httpReqs.length, 2, "HTTP non-localhost must trigger start + targeted rollback stop");
+    assert.strictEqual(httpReqs[1].body.enabled, false);
+    assert.strictEqual(httpReqs[1].body.session_id, 'sess_http_lan_insecure');
+
+    const httpsEnv = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_https_secure',
+      protocol: 'https:',
+      host: '192.168.43.10:8443',
+      isSecureContext: true,
+    });
+    await httpsEnv.eventListeners['visionStart:click']({ preventDefault: () => {} });
+    const httpsReqs = httpsEnv.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(httpsReqs.length, 1, "HTTPS secure context must succeed with 1 start request");
+    assert.strictEqual(httpsEnv.elements['visionBadge'].textContent, '运行中');
+    console.log("  -> PASS: Non-localhost HTTP safely rejected & rolled back; HTTPS accepted.");
+  }
+
+  // 11. Async Native requestFrontCamera lifecycle + stale session callback isolation + honest device ACK semantics
+  {
+    console.log("Test 11: Async requestFrontCamera lifecycle, epoch isolation & honest device ACK semantics...");
+    const asyncEnv = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_async_002',
+      AmadeusNative: {
+        hasNativeCamera: () => true,
+        requestFrontCamera: (reqId, uploadUrl, mode, visionToken) => {
+          asyncEnv._lastReq = { reqId, uploadUrl, mode, visionToken };
+          // Simulate UI-thread async approval on next microtask
+          Promise.resolve().then(() => {
+            asyncEnv.context.window.onNativeCameraStatus({
+              request_id: reqId,
+              status: 'started',
+              state: 'camera_opened',
+              session_id: 'sess_async_002',
+              epoch: 42,
+            });
+          });
+          return JSON.stringify({ status: 'pending', request_id: reqId });
+        },
+        stopFrontCamera: () => {},
+      },
+    });
+    await asyncEnv.eventListeners['visionStart:click']({ preventDefault: () => {} });
+    assert.strictEqual(asyncEnv.elements['visionBadge'].textContent, '运行中');
+    assert(asyncEnv._lastReq.uploadUrl.includes('session_id=sess_async_002'));
+
+    // Stale frame/observation from older session/epoch MUST be ignored
+    asyncEnv.elements['phoneCameraImg'].src = '';
+    asyncEnv.context.window.onNativeCameraFrame('U1RBTEU=', 'sess_old_001', 41);
+    assert.strictEqual(asyncEnv.elements['phoneCameraImg'].src, '', "Stale session frame must be ignored");
+
+    // Current session/epoch frame updates preview honestly
+    asyncEnv.context.window.onNativeCameraFrame('TkVX', 'sess_async_002', 42);
+    assert.strictEqual(asyncEnv.elements['phoneCameraImg'].src, 'data:image/jpeg;base64,TkVX');
+
+    // Observation where ESP32 has NOT acknowledged command vs acknowledged command
+    asyncEnv.context.window.onNativeCameraObservation({
+      upload_accepted: true,
+      observation_fresh: true,
+      device_command_attempted: true,
+      device_command_acknowledged: false,
+      observation: { present: true },
+    }, 'sess_async_002', 42);
+    assert(asyncEnv.elements['phoneDetectionInfo'].textContent.includes('灯板未确认'));
+
+    asyncEnv.context.window.onNativeCameraObservation({
+      upload_accepted: true,
+      observation_fresh: true,
+      device_command_attempted: true,
+      device_command_acknowledged: true,
+      observation: { present: true },
+    }, 'sess_async_002', 42);
+    assert(asyncEnv.elements['phoneDetectionInfo'].textContent.includes('device_command_acknowledged'));
+    console.log("  -> PASS: Async requestFrontCamera, epoch isolation, and device ACK semantics verified.");
+  }
+
+  // 12. Async Native requestFrontCamera user denial rolls back session cleanly
+  {
+    console.log("Test 12: Async requestFrontCamera denial rolls back targeted session...");
+    const denyEnv = createEnvironment({
+      cameraSource: 'phone',
+      nextSessionId: 'sess_async_deny',
+      AmadeusNative: {
+        hasNativeCamera: () => true,
+        requestFrontCamera: (reqId, uploadUrl, mode, visionToken) => {
+          Promise.resolve().then(() => {
+            denyEnv.context.window.onNativeCameraStatus({
+              request_id: reqId,
+              status: 'denied',
+              reason: 'user_denied',
+              session_id: 'sess_async_deny',
+            });
+          });
+          return JSON.stringify({ status: 'pending', request_id: reqId });
+        },
+        stopFrontCamera: () => {},
+      },
+    });
+    await denyEnv.eventListeners['visionStart:click']({ preventDefault: () => {} });
+    const reqs = denyEnv.capturedRequests.filter(r => r.url.includes('/api/pro/vision'));
+    assert.strictEqual(reqs.length, 2);
+    assert.strictEqual(reqs[1].body.enabled, false);
+    assert.strictEqual(reqs[1].body.session_id, 'sess_async_deny');
+    console.log("  -> PASS: Async camera denial cleanly rolled back targeted session.");
+  }
+
+  console.log("ALL 12 JS VISION CAMERA LIFECYCLE TESTS PASSED!");
 }
 
 runTests().catch(err => {

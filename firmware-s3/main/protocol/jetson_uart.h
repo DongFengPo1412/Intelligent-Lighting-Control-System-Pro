@@ -14,8 +14,12 @@ typedef uint32_t UBaseType_t;
 typedef long BaseType_t;
 typedef void* TaskHandle_t;
 typedef void* SemaphoreHandle_t;
+#ifndef ESP_OK
 #define ESP_OK 0
+#endif
+#ifndef ESP_FAIL
 #define ESP_FAIL -1
+#endif
 #define UART_NUM_1 1
 #define GPIO_NUM_8 8
 #define GPIO_NUM_9 9

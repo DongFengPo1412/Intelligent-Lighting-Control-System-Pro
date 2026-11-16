@@ -102,21 +102,42 @@ class KurisuAgent:
                 if result.get("status") not in ("success", "ok")]
 
     def chat(self, user_message: str, speak=True, cancelled=None) -> str:
+        from conversation_session import ConversationSession
+
+        turn_internal_cancel = threading.Event()
+
+        class _TurnCancel:
+            def __init__(self, external, internal):
+                self._external = external
+                self._internal = internal
+
+            def is_set(self):
+                return self._internal.is_set() or (self._external is not None and self._external.is_set())
+
+            def set(self):
+                self._internal.set()
+
+        turn_cancel = _TurnCancel(cancelled, turn_internal_cancel)
+        turn_started = time.perf_counter()
+
         with self._chat_lock:
+            prev_cancel = getattr(self, '_active_turn_internal_cancel', None)
+            if prev_cancel is not None:
+                prev_cancel.set()
             self._turn_counter = getattr(self, '_turn_counter', 0) + 1
             turn_id = self._turn_counter
             self._active_turn_id = turn_id
+            self._active_turn_internal_cancel = turn_internal_cancel
             self._speak_turn = speak
-            self._cancel_turn = cancelled
+            self._cancel_turn = turn_cancel
             self._pending_speech = None
-            if cancelled and cancelled.is_set():
+            if turn_cancel.is_set():
                 return ''
             self._tool_results = {}
             self.last_model_error = None
             self.last_translation_error = None
             self.last_tts_error = None
             self.last_turn_timings = {}
-            turn_started = time.perf_counter()
             self._turn_started = turn_started
             # Keep complete user turns so tool messages are never orphaned.
             users = [i for i, msg in enumerate(self.history) if msg.get("role") == "user"]
@@ -131,118 +152,111 @@ class KurisuAgent:
             if chat_hook:
                 return chat_hook(user_message)
 
-            from conversation_session import ConversationSession
+            shortcut_reply = None
             if ConversationSession.should_end(user_message):
-                reply = self._finish_reply('好，需要时再叫我。\n分かったわ。また必要になったら呼んでね。', turn_id=turn_id)
-                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
-                pending = self._pending_speech
-                self._pending_speech = None
-                if pending and reply:
-                    reply = self._execute_speech(pending)
-                return reply
+                shortcut_reply = self._finish_reply('好，需要时再叫我。\n分かったわ。また必要になったら呼んでね。', turn_id=turn_id)
+            else:
+                remember = re.fullmatch(r'请?记住[：:，,\s]*(.+)', user_message.strip(), re.S)
+                if remember:
+                    if hasattr(self.memory, 'remember_preference'):
+                        self.memory.remember_preference(remember.group(1))
+                    else:
+                        self.memory.remember(remember.group(1))
+                    shortcut_reply = self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。', turn_id=turn_id)
+                elif re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
+                    self.history = self.history[:1]
+                    self.memory.clear()
+                    shortcut_reply = self._finish_reply('已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。', turn_id=turn_id)
 
-            remember = re.fullmatch(r'请?记住[：:，,\s]*(.+)', user_message.strip(), re.S)
-            if remember:
-                if hasattr(self.memory, 'remember_preference'):
-                    self.memory.remember_preference(remember.group(1))
-                else:
-                    self.memory.remember(remember.group(1))
-                reply = self._finish_reply('我记住了，可以在记忆管理中查看或删除。\n覚えたわ。記憶の管理画面で確認や削除ができるわよ。', turn_id=turn_id)
-                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
-                pending = self._pending_speech
-                self._pending_speech = None
-                if pending and reply:
-                    reply = self._execute_speech(pending)
-                return reply
+            if shortcut_reply is None:
+                is_query = bool(re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', user_message.strip()))
+                auto_mem_pattern = (
+                    r'(?:(?:我)?希望(?:你)?(?:以后)?(?:叫我|称呼我|把?我称作)|(?:我)?希望被称(?:作|呼)|'
+                    r'以后请?(?:改)?叫我|请(?:改)?叫我|改叫我|叫我|称呼我|'
+                    r'(?:不用|不要|别)(?:再)?(?:叫我|称呼我)|'
+                    r'我的(?:本名|真名|名字|姓名)是|我(?:本名|真名)?叫|'
+                    r'我(?:最|改|也|还)?喜欢|我不再喜欢|我不喜欢|我习惯|我每天)'
+                )
+                if not is_query and os.environ.get('KURISU_AUTO_MEMORY', '1') == '1' and re.search(auto_mem_pattern, user_message.strip()):
+                    if hasattr(self.memory, 'remember_preference'):
+                        self.memory.remember_preference(user_message.strip())
+                    else:
+                        self.memory.remember(user_message, kind='preference')
 
-            if re.fullmatch(r'(?:请?帮我)?(?:清空|清除)(?:所有|全部)?记忆[。！!.!?\s]*', user_message.strip()):
-                self.history = self.history[:1]
-                self.memory.clear()
-                reply = self._finish_reply('已清空保存的记忆和当前对话记录。\n保存した記憶と現在の会話履歴を消去したわ。', turn_id=turn_id)
-                self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
-                pending = self._pending_speech
-                self._pending_speech = None
-                if pending and reply:
-                    reply = self._execute_speech(pending)
-                return reply
+                context = [m for m in self.history[1:] if m.get('_turn_id') != turn_id or m.get('role') != 'user']
 
-            is_query = bool(re.search(r'[?？]|什么|哪个|哪些|是谁|谁是|如何|怎样|怎么样|吗[。！!]*$|呢[。！!]*$', user_message.strip()))
-            auto_mem_pattern = (
-                r'(?:(?:我)?希望(?:你)?(?:以后)?(?:叫我|称呼我|把?我称作)|(?:我)?希望被称(?:作|呼)|'
-                r'以后请?(?:改)?叫我|请(?:改)?叫我|改叫我|叫我|称呼我|'
-                r'(?:不用|不要|别)(?:再)?(?:叫我|称呼我)|'
-                r'我的(?:本名|真名|名字|姓名)是|我(?:本名|真名)?叫|'
-                r'我(?:最|改|也|还)?喜欢|我不再喜欢|我不喜欢|我习惯|我每天)'
-            )
-            if not is_query and os.environ.get('KURISU_AUTO_MEMORY','1')=='1' and re.search(auto_mem_pattern, user_message.strip()):
-                if hasattr(self.memory, 'remember_preference'):
-                    self.memory.remember_preference(user_message.strip())
-                else:
-                    self.memory.remember(user_message, kind='preference')
-
+        # Execute all slow planning, music playback, LLM conversation, and blocking TTS outside _chat_lock
+        # so preemption / cancellation can acquire _chat_lock without waiting for old turn's TTS.
+        if shortcut_reply is not None:
+            reply = shortcut_reply
+        else:
+            reply = None
             music_commands = getattr(self, 'music_commands', None)
             if music_commands:
                 music_result = music_commands.handle(user_message)
                 if music_result is not None:
-                    reply = self._finish_reply(music_result['reply'], turn_id=turn_id, speak=music_result['speak'],
-                                              speech_text=music_result.get('spoken_reply'))
-                    self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
-                    pending = self._pending_speech
-                    self._pending_speech = None
-                    if pending and reply:
-                        reply = self._execute_speech(pending)
-                    return reply
+                    reply = self._finish_reply(
+                        music_result['reply'],
+                        turn_id=turn_id,
+                        speak=music_result['speak'],
+                        speech_text=music_result.get('spoken_reply'),
+                    )
 
-            context = [m for m in self.history[1:] if m.get('_turn_id') != turn_id or m.get('role') != 'user']
+            if reply is None:
+                plan = None
+                try:
+                    if turn_cancel.is_set() or self._active_turn_id != turn_id:
+                        return ''
+                    planning_started = time.perf_counter()
+                    plan = self.semantic.plan(user_message, context)
+                    self.last_turn_timings['planning_ms'] = round((time.perf_counter() - planning_started) * 1000, 1)
+                    print(f'[语义控制计划]: {json.dumps(plan, ensure_ascii=False)}')
+                except Exception as error:
+                    if self._active_turn_id == turn_id:
+                        self.last_model_error = str(error)
+                    print(f'[语义规划错误]: {type(error).__name__}: {error}')
+                    reply = self._finish_reply(
+                        '控制意图暂时无法确认，请稍后重试。\n操作の意図を確認できなかったわ。少し待ってからもう一度お願い。',
+                        turn_id=turn_id,
+                    )
 
-        try:
-            if (cancelled and cancelled.is_set()) or self._active_turn_id != turn_id:
-                return ''
-            planning_started = time.perf_counter()
-            plan = self.semantic.plan(user_message, context)
-            self.last_turn_timings['planning_ms'] = round((time.perf_counter()-planning_started)*1000, 1)
-            print(f'[语义控制计划]: {json.dumps(plan, ensure_ascii=False)}')
-        except Exception as error:
-            self.last_model_error = str(error)
-            print(f'[语义规划错误]: {type(error).__name__}: {error}')
-            reply = self._finish_reply('控制意图暂时无法确认，请稍后重试。\n操作の意図を確認できなかったわ。少し待ってからもう一度お願い。', turn_id=turn_id)
-            self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
-            return reply
+                if plan is not None:
+                    if turn_cancel.is_set() or self._active_turn_id != turn_id:
+                        return ''
 
-        if (cancelled and cancelled.is_set()) or self._active_turn_id != turn_id:
-            return ''
+                    if plan['kind'] == 'clarify':
+                        reply = self._finish_reply('请说清想要哪一种灯效；如果是倒计时，也请告诉我时长。\nどの光の効果にするか教えて。カウントダウンなら時間も教えてね。', turn_id=turn_id)
+                    elif plan['kind'] == 'control':
+                        zh, ja = [], []
+                        for action in plan['actions']:
+                            if turn_cancel.is_set() or self._active_turn_id != turn_id:
+                                return ''
+                            tool, value = action['tool'], action['value']
+                            arguments = {ARGUMENTS[tool]: value} if tool in ARGUMENTS else {}
+                            result = self._execute_action(tool, arguments)
+                            if result.get('status') not in ('success', 'ok'):
+                                zh.append('板端没有确认这项操作，请检查连接。')
+                                ja.append('この操作は確認できなかったわ。接続を確認してね。')
+                                break
+                            if tool == 'get_device_status':
+                                zh.append(f"板端在线，当前显示模式为{result.get('current_mode')}。")
+                                ja.append(f"デバイスはオンラインで、表示モードは{result.get('current_mode')}よ。")
+                            else:
+                                line_zh, line_ja = describe_action(action)
+                                zh.append(line_zh); ja.append(line_ja)
+                        reply = self._finish_reply(''.join(zh) + '\n' + ''.join(ja), turn_id=turn_id)
+                    else:
+                        reply = self._converse(user_message=user_message, turn_id=turn_id, cancelled=turn_cancel)
 
-        if plan['kind'] == 'clarify':
-            reply = self._finish_reply('请说清想要哪一种灯效；如果是倒计时，也请告诉我时长。\nどの光の効果にするか教えて。カウントダウンなら時間も教えてね。', turn_id=turn_id)
-        elif plan['kind'] == 'control':
-            zh, ja = [], []
-            for action in plan['actions']:
-                if (cancelled and cancelled.is_set()) or self._active_turn_id != turn_id:
-                    return ''
-                tool, value = action['tool'], action['value']
-                arguments = {ARGUMENTS[tool]: value} if tool in ARGUMENTS else {}
-                result = self._execute_action(tool, arguments)
-                if result.get('status') not in ('success', 'ok'):
-                    zh.append('板端没有确认这项操作，请检查连接。')
-                    ja.append('この操作は確認できなかったわ。接続を確認してね。')
-                    break
-                if tool == 'get_device_status':
-                    zh.append(f"板端在线，当前显示模式为{result.get('current_mode')}。")
-                    ja.append(f"デバイスはオンラインで、表示モードは{result.get('current_mode')}よ。")
-                else:
-                    line_zh, line_ja = describe_action(action)
-                    zh.append(line_zh); ja.append(line_ja)
-            reply = self._finish_reply(''.join(zh) + '\n' + ''.join(ja), turn_id=turn_id)
-        else:
-            reply = self._converse(user_message=user_message, turn_id=turn_id, cancelled=cancelled)
-
-        self.last_turn_timings['total_ms'] = round((time.perf_counter()-turn_started)*1000, 1)
+        self.last_turn_timings['total_ms'] = round((time.perf_counter() - turn_started) * 1000, 1)
 
         with self._chat_lock:
-            if self._active_turn_id == turn_id:
+            if self._active_turn_id == turn_id and not turn_cancel.is_set():
                 pending = self._pending_speech
                 self._pending_speech = None
             else:
+                if self._pending_speech and self._pending_speech.get('turn_id') == turn_id:
+                    self._pending_speech = None
                 pending = None
                 reply = ''
 
@@ -285,10 +299,18 @@ class KurisuAgent:
         if hasattr(self.voice, 'last_tts_error'):
             self.voice.last_tts_error = None
         dispatch_started = time.perf_counter()
-        if cancel is not None:
-            self.voice.speak(speech_text or reply, block=True, cancelled=cancel)
-        else:
-            self.voice.speak(speech_text or reply, block=True)
+        try:
+            if cancel is not None:
+                try:
+                    self.voice.speak(speech_text or reply, block=True, cancelled=cancel)
+                except TypeError:
+                    self.voice.speak(speech_text or reply, block=True)
+            else:
+                self.voice.speak(speech_text or reply, block=True)
+        except Exception as exc:
+            if turn_id is None or self._active_turn_id == turn_id:
+                self.last_tts_error = str(exc)
+            return reply
         if cancel is not None and cancel.is_set():
             return ''
         if turn_id is not None and self._active_turn_id != turn_id:

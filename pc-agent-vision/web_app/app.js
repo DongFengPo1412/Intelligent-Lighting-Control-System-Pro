@@ -1920,10 +1920,30 @@
   let phoneUploading = false;
   let currentVisionSessionId = null;
   let activeVisionSource = null;
+  let phoneVisionEpoch = 0;
+  let activeNativeEpoch = 0;
+  let activeVisionToken = "";
+  let pendingNativeCameraResolver = null;
+  let pendingCameraRequestId = "";
 
   function releaseLocalPhoneCapture() {
+    phoneVisionEpoch += 1;
+    activeNativeEpoch = 0;
+    pendingCameraRequestId = "";
+    if (pendingNativeCameraResolver) {
+      try {
+        pendingNativeCameraResolver({ status: "cancelled", reason: "local_stop" });
+      } catch (e) { }
+      pendingNativeCameraResolver = null;
+    }
     if (window.AmadeusNative && window.AmadeusNative.stopFrontCamera) {
-      try { window.AmadeusNative.stopFrontCamera(); } catch (e) { }
+      try {
+        if (currentVisionSessionId && window.AmadeusNative.stopFrontCamera.length >= 1) {
+          window.AmadeusNative.stopFrontCamera(currentVisionSessionId);
+        } else {
+          window.AmadeusNative.stopFrontCamera();
+        }
+      } catch (e) { }
     }
     if (phoneUploadTimer) {
       clearInterval(phoneUploadTimer);
@@ -1950,8 +1970,9 @@
   }
 
   async function stopPhoneCamera() {
-    releaseLocalPhoneCapture();
     const sidToStop = currentVisionSessionId;
+    releaseLocalPhoneCapture();
+    activeVisionToken = "";
     if (!sidToStop) {
       activeVisionSource = null;
       return { running: false };
@@ -1998,8 +2019,98 @@
     if (!vRes || vRes.error || !vRes.session_id) {
       throw Error(vRes && vRes.error ? vRes.error : "无法在服务端创建手机视觉会话");
     }
-    currentVisionSessionId = vRes.session_id;
+    const sessionId = vRes.session_id;
+    const sessionEpoch = ++phoneVisionEpoch;
+    currentVisionSessionId = sessionId;
     activeVisionSource = "remote";
+    activeVisionToken = vRes.vision_token || "";
+
+    let hasLocalPreview = false;
+    let hasUploadAccepted = false;
+
+    const handleStatus = (st) => {
+      if (!st || typeof st !== "object") return;
+      if (st.request_id && pendingNativeCameraResolver && st.request_id === pendingCameraRequestId) {
+        const resolveFn = pendingNativeCameraResolver;
+        pendingNativeCameraResolver = null;
+        pendingCameraRequestId = "";
+        resolveFn(st);
+      }
+      if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
+      if (st.session_id && st.session_id !== sessionId) return;
+      if (st.epoch && activeNativeEpoch && Number(st.epoch) !== activeNativeEpoch) return;
+      if (st.epoch && st.status === "started") {
+        activeNativeEpoch = Number(st.epoch);
+      }
+      if (st.state === "camera_opened" || st.status === "started") {
+        if (info) info.textContent = "📷 摄像头已打开 (camera_opened)";
+      } else if (st.state === "upload_error") {
+        if (info) info.textContent = `⚠️ 上传失败: ${st.detail || "网络/权限异常"}`;
+      } else if (st.state === "local_error") {
+        if (info) info.textContent = `⚠️ 本地相机帧异常: ${st.detail || ""}`;
+      }
+    };
+    window.onNativeCameraStatus = handleStatus;
+
+    window.onNativeCameraFrame = function (b64, sid, epoch) {
+      if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
+      if (sid && sid !== sessionId) return;
+      if (epoch && activeNativeEpoch && Number(epoch) !== activeNativeEpoch) return;
+      if (img) img.src = "data:image/jpeg;base64," + b64;
+      if (!hasLocalPreview) {
+        hasLocalPreview = true;
+        if (info && !hasUploadAccepted) info.textContent = "🖼 本地预览已就绪 (local_preview_ready)";
+      }
+    };
+
+    window.onNativeCameraObservation = function (res, sid, epoch) {
+      if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
+      if (sid && sid !== sessionId) return;
+      if (epoch && activeNativeEpoch && Number(epoch) !== activeNativeEpoch) return;
+      if (!res || res.error) {
+        if (info) info.textContent = `⚠️ 服务端处理异常: ${(res && res.error) || "未知错误"}`;
+        return;
+      }
+      hasUploadAccepted = true;
+      const obs = res.observation || {};
+      const fresh = Boolean(res.observation_fresh !== undefined ? res.observation_fresh : !obs.stale);
+      const devAck = res.device_command_acknowledged === true;
+      const devAttempted = Boolean(res.device_command_attempted);
+      const devSuffix = devAttempted
+        ? (devAck ? " · 灯板已确认 (device_command_acknowledged)" : " · ⚠️ 灯板未确认")
+        : "";
+      if (overlay && img) {
+        overlay.width = img.clientWidth || 320;
+        overlay.height = img.clientHeight || 240;
+        const octx = overlay.getContext("2d");
+        octx.clearRect(0, 0, overlay.width, overlay.height);
+
+        if (obs.hand) {
+          const h = obs.hand;
+          const hx = (1 - h.x) * overlay.width;
+          const hy = h.y * overlay.height;
+          octx.beginPath();
+          octx.arc(hx, hy, 16, 0, Math.PI * 2);
+          octx.fillStyle = h.pinch
+            ? "rgba(255, 235, 59, 0.9)"
+            : "rgba(76, 175, 80, 0.9)";
+          octx.fill();
+          octx.lineWidth = 3;
+          octx.strokeStyle = "#fff";
+          octx.stroke();
+
+          if (info) {
+            info.textContent = (h.pinch ? "✋ 捏合抓取" : "👆 食指追踪中") + (fresh ? " (observation_fresh)" : "") + devSuffix;
+          }
+        } else if (obs.present) {
+          if (info) {
+            info.textContent = (obs.identity ? `👤 识别: ${obs.identity}` : "👤 人脸就绪") + (fresh ? " (observation_fresh)" : "") + devSuffix;
+          }
+        } else {
+          if (info) info.textContent = "📤 帧已被服务端接收 (upload_accepted) · 正在捕捉手势/人脸..." + devSuffix;
+        }
+      }
+    };
 
     // 1. Android APK native hardware camera bridge
     if (window.AmadeusNative && window.AmadeusNative.hasNativeCamera && window.AmadeusNative.hasNativeCamera()) {
@@ -2007,88 +2118,78 @@
       if (img) img.style.display = "block";
       if (wrapper) wrapper.style.display = "block";
 
-      let hasUploadedFirstFrame = false;
-      let hasServerIdentified = false;
-
-      window.onNativeCameraFrame = function (b64) {
-        if (img) img.src = "data:image/jpeg;base64," + b64;
-        if (!hasUploadedFirstFrame) {
-          hasUploadedFirstFrame = true;
-          if (info) info.textContent = "📤 摄像头已打开 · 首帧已上传";
-        }
-      };
-
-      window.onNativeCameraObservation = function (res) {
-        if (!hasServerIdentified) {
-          hasServerIdentified = true;
-          if (info) info.textContent = "✨ 服务端已识别";
-        }
-        const obs = res.observation || {};
-        if (overlay && img) {
-          overlay.width = img.clientWidth || 320;
-          overlay.height = img.clientHeight || 240;
-          const octx = overlay.getContext("2d");
-          octx.clearRect(0, 0, overlay.width, overlay.height);
-
-          if (obs.hand) {
-            const h = obs.hand;
-            const hx = (1 - h.x) * overlay.width;
-            const hy = h.y * overlay.height;
-            octx.beginPath();
-            octx.arc(hx, hy, 16, 0, Math.PI * 2);
-            octx.fillStyle = h.pinch
-              ? "rgba(255, 235, 59, 0.9)"
-              : "rgba(76, 175, 80, 0.9)";
-            octx.fill();
-            octx.lineWidth = 3;
-            octx.strokeStyle = "#fff";
-            octx.stroke();
-
-            if (info) {
-              info.textContent = h.pinch ? "✋ 捏合抓取" : "👆 食指追踪中";
-            }
-          } else if (obs.present) {
-            if (info) {
-              info.textContent = obs.identity
-                ? `👤 识别: ${obs.identity}`
-                : "👤 人脸就绪";
-            }
-          } else {
-            if (info) info.textContent = "正在捕捉手势/人脸...";
-          }
-        }
-      };
-
-      let serverBase = state.serverOrigin || window.location.origin;
+      let serverBase = state.serverOrigin || (window.location && window.location.origin) || "";
       if (!serverBase || serverBase.startsWith("file:")) {
         const savedUrl = localStorage.getItem("server_url") || "";
         serverBase = savedUrl;
       }
       if (!serverBase || serverBase.startsWith("file:")) {
-        await stopPhoneCamera(true);
+        await stopPhoneCamera();
         throw Error("手机直连灯板模式下无法使用视觉交互，体感视觉需要连接电脑服务");
       }
       serverBase = serverBase.replace(/\/+$/, "");
-      const uploadUrl = `${serverBase}/api/pro/camera/frame?mode=${encodeURIComponent(mode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
+      const uploadUrl = `${serverBase}/api/pro/camera/frame?mode=${encodeURIComponent(mode)}&session_id=${encodeURIComponent(sessionId)}`;
 
       if (info) info.textContent = "⏳ 等待授权...";
+      if (typeof window.AmadeusNative.requestFrontCamera === "function") {
+        const reqId = `cam_${Date.now()}_${sessionEpoch}`;
+        pendingCameraRequestId = reqId;
+        const statusPromise = new Promise((resolve) => {
+          pendingNativeCameraResolver = resolve;
+          setTimeout(() => {
+            if (pendingCameraRequestId === reqId && pendingNativeCameraResolver) {
+              const r = pendingNativeCameraResolver;
+              pendingNativeCameraResolver = null;
+              pendingCameraRequestId = "";
+              r({ request_id: reqId, status: "timeout", reason: "client_timeout" });
+            }
+          }, 32000);
+        });
+        let initAckRaw = "";
+        try {
+          initAckRaw = window.AmadeusNative.requestFrontCamera(reqId, uploadUrl, mode, activeVisionToken);
+        } catch (err) {
+          await stopPhoneCamera();
+          throw Error("无法发起原生前置摄像头请求: " + (err.message || err));
+        }
+        let initAck = null;
+        try { initAck = typeof initAckRaw === "string" ? JSON.parse(initAckRaw) : initAckRaw; } catch (_) { }
+        if (initAck && (initAck.status === "denied" || initAck.status === "failed")) {
+          await stopPhoneCamera();
+          throw Error("硬件前置摄像头未授权或不可用: " + (initAck.reason || initAck.status));
+        }
+        const finalSt = await statusPromise;
+        if (sessionEpoch !== phoneVisionEpoch || !finalSt || finalSt.status !== "started") {
+          await stopPhoneCamera();
+          const rsn = (finalSt && (finalSt.reason || finalSt.status)) || "cancelled";
+          throw Error("前置摄像头启动未完成: " + rsn);
+        }
+        activeNativeEpoch = Number(finalSt.epoch || 0);
+        if (info) info.textContent = "📷 摄像头已打开 (camera_opened)";
+        phoneStream = { isNative: true, sessionId, epoch: sessionEpoch };
+        return;
+      }
+
       const started = window.AmadeusNative.startFrontCamera(uploadUrl, mode);
       if (!started) {
-        await stopPhoneCamera(true);
+        await stopPhoneCamera();
         throw Error("硬件前置摄像头无法打开或未授予相机权限");
       }
-      if (info) info.textContent = "📷 摄像头已打开";
-      phoneStream = { isNative: true };
+      if (info) info.textContent = "📷 摄像头已打开 (camera_opened)";
+      phoneStream = { isNative: true, sessionId, epoch: sessionEpoch };
       return;
     }
 
     // 2. WebRTC getUserMedia for secure browser contexts
-    if (typeof window !== "undefined" && !window.isSecureContext && window.location.protocol !== "https:" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-      await stopPhoneCamera(true);
+    const locHost = (window.location && window.location.hostname) || "";
+    const locProto = (window.location && window.location.protocol) || "";
+    const isLocalHost = locHost === "localhost" || locHost === "127.0.0.1" || locHost === "::1";
+    if (typeof window !== "undefined" && !window.isSecureContext && locProto !== "https:" && !isLocalHost) {
+      await stopPhoneCamera();
       throw Error("手机浏览器在非安全上下文 (HTTP) 下禁止访问摄像头，请使用正式 APK 或通过 HTTPS / 电脑摄像头 访问");
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      await stopPhoneCamera(true);
+      await stopPhoneCamera();
       throw Error("当前浏览器运行环境未开放 WebRTC 权限，请使用最新版 APK 或选择【电脑摄像头】");
     }
     if (img) img.style.display = "none";
@@ -2106,47 +2207,68 @@
         audio: false,
       });
     } catch (err) {
-      await stopPhoneCamera(true);
+      await stopPhoneCamera();
       throw Error("未授予摄像头权限或摄像头无法打开: " + (err.message || err));
+    }
+    if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) {
+      try { stream.getTracks().forEach((t) => t.stop()); } catch (_) { }
+      return;
     }
     phoneStream = stream;
     video.srcObject = stream;
     if (video.play) { await video.play().catch(() => { }); }
     if (wrapper) wrapper.style.display = "block";
+    if (info) info.textContent = "📷 摄像头已打开 · 本地预览就绪 (local_preview_ready)";
 
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext("2d");
+    const vTokenSnapshot = activeVisionToken;
 
     phoneUploadTimer = setInterval(async () => {
       if (phoneUploading || !phoneStream || video.readyState < 2) return;
+      if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
       phoneUploading = true;
       try {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise((res) =>
           canvas.toBlob(res, "image/jpeg", 0.65)
         );
-        if (!blob) return;
+        if (!blob || sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
 
         const currentMode = $("visionMode") ? $("visionMode").value : "fingertip";
-        const url = `/api/pro/camera/frame?mode=${encodeURIComponent(currentMode)}&session_id=${encodeURIComponent(currentVisionSessionId)}`;
+        const url = `/api/pro/camera/frame?mode=${encodeURIComponent(currentMode)}&session_id=${encodeURIComponent(sessionId)}`;
+
+        const headers = {
+          "Content-Type": "image/jpeg",
+          "X-Vision-Mode": currentMode,
+          "X-Vision-Session": sessionId,
+          "X-Camera-Mirrored": "true",
+        };
+        if (vTokenSnapshot) headers["X-Vision-Token"] = vTokenSnapshot;
+        if (tok) {
+          headers["Authorization"] = "Bearer " + tok;
+          headers["X-Access-Token"] = tok;
+        }
 
         const response = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "image/jpeg",
-            "X-Vision-Mode": currentMode,
-            "X-Vision-Session": currentVisionSessionId,
-            ...(tok ? { "Authorization": "Bearer " + tok, "X-Access-Token": tok } : {}),
-          },
+          headers,
           body: blob,
         });
 
+        if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
         if (response.ok) {
           const res = await response.json();
-          window.onNativeCameraObservation && window.onNativeCameraObservation(res);
+          if (sessionEpoch !== phoneVisionEpoch || sessionId !== currentVisionSessionId) return;
+          window.onNativeCameraObservation && window.onNativeCameraObservation(res, sessionId);
+        } else {
+          if (info) info.textContent = `⚠️ 上传被拒绝 (HTTP ${response.status})`;
         }
       } catch (e) {
+        if (sessionEpoch === phoneVisionEpoch && info) {
+          info.textContent = `⚠️ 帧上传失败: ${e.message || "网络异常"}`;
+        }
       } finally {
         phoneUploading = false;
       }

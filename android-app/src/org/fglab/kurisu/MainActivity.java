@@ -4,11 +4,17 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.PermissionRequest;
@@ -34,8 +40,20 @@ public class MainActivity extends Activity {
     private volatile String authenticatedOrigin = "";
     private volatile String candidateOrigin = "";
     private volatile String cameraAuthorizedOrigin = "";
+    private volatile String mainFrameOrigin = "";
+    private volatile String mainFrameUrl = "";
     private volatile boolean bridgeTrusted=false, backgrounded=false, destroyed=false;
     private final java.util.concurrent.atomic.AtomicInteger bridgeEpoch=new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger pageNavigationEpoch=new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger discoveryGen=new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicReference<String> activeCameraRequestId=new java.util.concurrent.atomic.AtomicReference<>("");
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private AlertDialog activeCameraDialog = null;
+    private Runnable activeCameraTimeout = null;
+    private volatile int discoveryRetryCount = 0;
+    private volatile int consecutiveHealthFailures = 0;
+    private ConnectivityManager connectivityManager = null;
+    private ConnectivityManager.NetworkCallback networkCallback = null;
     private final DeviceUdpClient udpClient=new DeviceUdpClient();
     private FrontCameraBridge frontCameraBridge;
     private final DeviceUdpClient readClient=new DeviceUdpClient();
@@ -80,7 +98,41 @@ public class MainActivity extends Activity {
         frontCameraBridge = new FrontCameraBridge(this, webView);
         initWebSettings();
         webView.loadUrl(OFFLINE);
+        registerNetworkCallback();
         autoDiscoverAndConnect(false);
+        scheduleHealthCheck(8000L);
+    }
+
+    private void registerNetworkCallback() {
+        try {
+            connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (connectivityManager == null) return;
+            NetworkRequest req = new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .build();
+            networkCallback = new ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(Network network) {
+                    if (destroyed) return;
+                    discoveryRetryCount = 0;
+                    consecutiveHealthFailures = 0;
+                    mainHandler.post(() -> {
+                        if (!destroyed && !isFinishing() && !backgrounded) {
+                            autoDiscoverAndConnect(false);
+                        }
+                    });
+                }
+                @Override public void onLost(Network network) {
+                    if (destroyed) return;
+                    consecutiveHealthFailures = 0;
+                    mainHandler.post(() -> {
+                        if (!destroyed && !isFinishing() && !backgrounded) {
+                            scheduleDiscoveryRetry(1200L);
+                        }
+                    });
+                }
+            };
+            connectivityManager.registerNetworkCallback(req, networkCallback);
+        } catch (Exception ignored) {}
     }
 
     private void purgeCookiesAndStorage() {
@@ -313,15 +365,17 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new NativeUdpBridge(), "AmadeusNative");
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon) {
+                cancelPendingCameraRequest("navigation");
                 if (frontCameraBridge != null) frontCameraBridge.stop();
                 if(bridgeTrusted)releaseDeviceInput();
-                bridgeTrusted=false;bridgeEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
+                bridgeTrusted=false;bridgeEpoch.incrementAndGet();pageNavigationEpoch.incrementAndGet();udpClient.interrupt();readClient.interrupt();
+                mainFrameUrl = url != null ? url : "";
+                mainFrameOrigin = extractOrigin(url);
                 if (!isPageAuthenticated(view)) {
                     purgeCookiesAndStorage();
                 }
                 if (url != null && !isOfflinePage(url)) {
-                    Uri u = Uri.parse(url);
-                    String curOrig = new Uri.Builder().scheme(u.getScheme()).encodedAuthority(u.getEncodedAuthority()).build().toString();
+                    String curOrig = mainFrameOrigin;
                     if (!curOrig.equalsIgnoreCase(cameraAuthorizedOrigin)) {
                         cameraAuthorizedOrigin = "";
                     }
@@ -331,6 +385,8 @@ public class MainActivity extends Activity {
                 super.onPageStarted(view,url,favicon);
             }
             @Override public void onPageFinished(WebView view,String url) {
+                mainFrameUrl = url != null ? url : "";
+                mainFrameOrigin = extractOrigin(url);
                 bridgeTrusted=isOfflinePage(url) || isPageAuthenticated(view);super.onPageFinished(view,url);
                 if (isPageAuthenticated(view)) {
                     android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
@@ -450,12 +506,193 @@ public class MainActivity extends Activity {
         if (dot > 0) prefixes.add(ip.substring(0, dot + 1));
     }
 
+    private static String extractOrigin(String rawUrl) {
+        if (rawUrl == null || rawUrl.trim().isEmpty() || rawUrl.startsWith("file:")) return "";
+        try {
+            Uri uri = Uri.parse(rawUrl.trim());
+            if (uri.getScheme() == null || uri.getEncodedAuthority() == null) return "";
+            return new Uri.Builder().scheme(uri.getScheme()).encodedAuthority(uri.getEncodedAuthority()).build().toString();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static boolean verifyServerHealth(String candidateUrl) {
+        if (candidateUrl == null || candidateUrl.trim().isEmpty()) return false;
+        java.net.HttpURLConnection conn = null;
+        try {
+            java.net.URL healthUrl = new java.net.URL(candidateUrl.replaceAll("/+$", "") + "/api/health");
+            conn = (java.net.HttpURLConnection) healthUrl.openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(800);
+            conn.setReadTimeout(800);
+            conn.setRequestMethod("GET");
+            if (conn.getResponseCode() != 200) return false;
+            try (java.io.InputStream in = conn.getInputStream();
+                 java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+                long deadlineRead = System.nanoTime() + 800_000_000L;
+                byte[] buf = new byte[256];
+                int r;
+                while ((r = in.read(buf)) != -1) {
+                    if (System.nanoTime() >= deadlineRead) return false;
+                    out.write(buf, 0, r);
+                    if (out.size() > 16384) return false;
+                }
+                org.json.JSONObject obj = new org.json.JSONObject(out.toString("UTF-8"));
+                return "ok".equals(obj.optString("status")) && "KurisuPro".equals(obj.optString("service"));
+            }
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private final Runnable discoveryRetryRunnable = () -> {
+        if (!destroyed && !isFinishing() && !backgrounded) {
+            autoDiscoverAndConnect(false);
+        }
+    };
+
+    private final Runnable healthCheckRunnable = () -> {
+        if (destroyed || isFinishing() || backgrounded) return;
+        final String curOrigin = serverOrigin;
+        if (curOrigin != null && !curOrigin.isEmpty()) {
+            new Thread(() -> {
+                if (destroyed) return;
+                boolean ok = verifyServerHealth(curOrigin);
+                mainHandler.post(() -> {
+                    if (destroyed || isFinishing() || backgrounded) return;
+                    if (!curOrigin.equals(serverOrigin)) return;
+                    if (ok) {
+                        consecutiveHealthFailures = 0;
+                        discoveryRetryCount = 0;
+                    } else {
+                        consecutiveHealthFailures++;
+                        if (consecutiveHealthFailures >= 2) {
+                            consecutiveHealthFailures = 0;
+                            serverOrigin = "";
+                            authenticatedOrigin = "";
+                            cameraAuthorizedOrigin = "";
+                            if (frontCameraBridge != null) frontCameraBridge.stop();
+                            autoDiscoverAndConnect(false);
+                        }
+                    }
+                    scheduleHealthCheck(12000L);
+                });
+            }).start();
+        } else {
+            scheduleHealthCheck(12000L);
+        }
+    };
+
+    private void scheduleDiscoveryRetry(long delayMs) {
+        if (destroyed || isFinishing() || backgrounded) return;
+        mainHandler.removeCallbacks(discoveryRetryRunnable);
+        mainHandler.postDelayed(discoveryRetryRunnable, delayMs);
+    }
+
+    private void scheduleHealthCheck(long delayMs) {
+        if (destroyed || isFinishing() || backgrounded) return;
+        mainHandler.removeCallbacks(healthCheckRunnable);
+        mainHandler.postDelayed(healthCheckRunnable, delayMs);
+    }
+
+    private void cancelPendingCameraRequest(String reason) {
+        final String cancelledId = activeCameraRequestId.getAndSet("");
+        mainHandler.post(() -> {
+            if (activeCameraTimeout != null) {
+                mainHandler.removeCallbacks(activeCameraTimeout);
+                activeCameraTimeout = null;
+            }
+            if (activeCameraDialog != null) {
+                try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
+                activeCameraDialog = null;
+            }
+            if (cancelledId != null && !cancelledId.isEmpty() && webView != null && !destroyed) {
+                emitCameraStatusJson(cancelledId, "cancelled", reason, "", 0L);
+            }
+        });
+    }
+
+    private void emitCameraStatusJson(String requestId, String status, String reason, String sessionId, long epoch) {
+        if (destroyed || webView == null) return;
+        try {
+            org.json.JSONObject obj = new org.json.JSONObject();
+            obj.put("request_id", requestId != null ? requestId : "");
+            obj.put("status", status != null ? status : "failed");
+            if (reason != null && !reason.isEmpty()) obj.put("reason", reason);
+            if (sessionId != null && !sessionId.isEmpty()) obj.put("session_id", sessionId);
+            if (epoch > 0) obj.put("epoch", epoch);
+            final String js = "if(window.onNativeCameraStatus)window.onNativeCameraStatus(" + obj.toString() + ");";
+            mainHandler.post(() -> {
+                if (!destroyed && webView != null) {
+                    webView.evaluateJavascript(js, null);
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void applyDiscoveredEndpoints(final String sUrl, final String bIp, final boolean manual) {
+        mainHandler.post(() -> {
+            discovering = false;
+            if (isFinishing() || destroyed) return;
+            android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
+            android.content.SharedPreferences.Editor ed = prefs.edit();
+            String finalBoardIp = bIp != null ? bIp : deviceTarget.host;
+            if (BridgePolicy.privateIpv4(finalBoardIp)) {
+                deviceTarget = new DeviceTarget(finalBoardIp, deviceTarget.token);
+                ed.putString("device_host", finalBoardIp);
+            }
+            if (sUrl != null) {
+                candidateOrigin = sUrl;
+                boolean alreadySameOrigin = sUrl.equalsIgnoreCase(serverOrigin) && sUrl.equalsIgnoreCase(mainFrameOrigin);
+                serverOrigin = sUrl;
+                consecutiveHealthFailures = 0;
+                discoveryRetryCount = 0;
+                ed.putString("server_url", sUrl + "/").apply();
+                String curUrl = webView != null ? webView.getUrl() : null;
+                if (!alreadySameOrigin && (curUrl == null || curUrl.equals(OFFLINE) || !sUrl.equalsIgnoreCase(extractOrigin(curUrl)))) {
+                    Toast.makeText(MainActivity.this, "已连接电脑服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
+                    if (webView != null) webView.loadUrl(sUrl + "/");
+                }
+            } else if (BridgePolicy.privateIpv4(finalBoardIp)) {
+                ed.apply();
+                String curUrl = webView != null ? webView.getUrl() : null;
+                if (curUrl == null || (!isOfflinePage(curUrl) && (serverOrigin == null || serverOrigin.isEmpty()))) {
+                    Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
+                    if (webView != null) webView.loadUrl(OFFLINE);
+                }
+                if (!backgrounded && discoveryRetryCount < 8) {
+                    long backoff = Math.min(30000L, 2000L << Math.min(discoveryRetryCount, 4));
+                    discoveryRetryCount++;
+                    scheduleDiscoveryRetry(backoff);
+                }
+            } else {
+                ed.apply();
+                if (!backgrounded && discoveryRetryCount < 8) {
+                    long backoff = Math.min(30000L, 2000L << Math.min(discoveryRetryCount, 4));
+                    discoveryRetryCount++;
+                    scheduleDiscoveryRetry(backoff);
+                }
+                if (manual) {
+                    Toast.makeText(MainActivity.this, "未发现同一局域网下的服务，请确认手机与设备在同一热点/Wi-Fi", Toast.LENGTH_LONG).show();
+                    discoverServer();
+                }
+            }
+        });
+    }
+
     private void autoDiscoverAndConnect(final boolean manual) {
-        if (discovering) return;
+        if (discovering || destroyed || isFinishing()) return;
         discovering = true;
-        if (manual) Toast.makeText(this, "正在自动搜索局域网内的电脑服务与灯板…", Toast.LENGTH_SHORT).show();
+        final int myGen = discoveryGen.incrementAndGet();
+        if (manual) {
+            discoveryRetryCount = 0;
+            Toast.makeText(this, "正在自动搜索局域网内的电脑服务与灯板…", Toast.LENGTH_SHORT).show();
+        }
         new Thread(() -> {
-            String foundServerUrl = null, foundAccessToken = null, foundBoardIp = null, foundControlToken = null;
+            String foundServerUrl = null, foundBoardIp = null;
             try (java.net.DatagramSocket sock = new java.net.DatagramSocket()) {
                 sock.setBroadcast(true);
                 sock.setSoTimeout(45);
@@ -477,7 +714,6 @@ public class MainActivity extends Activity {
                 if (!savedUrl.isEmpty()) {
                     try { addSubnetPrefix(prefixes, Uri.parse(savedUrl).getHost()); } catch (Exception ignored) {}
                 }
-                prefixes.add("192.168.186.");
                 prefixes.add("192.168.4.");
 
                 byte[] pcProbe = "{\"cmd\":\"kurisu_discover\"}".getBytes(StandardCharsets.UTF_8);
@@ -507,7 +743,7 @@ public class MainActivity extends Activity {
                 // Phase 1: Fast receive window after broadcast (600ms)
                 long deadline = System.nanoTime() + 600_000_000L;
                 byte[] buf = new byte[2048];
-                while (System.nanoTime() < deadline) {
+                while (System.nanoTime() < deadline && discoveryGen.get() == myGen) {
                     java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
                     try {
                         sock.receive(pkt);
@@ -543,7 +779,7 @@ public class MainActivity extends Activity {
                 }
 
                 // Phase 2: If either is missing, do targeted fallback scan
-                if (foundServerUrl == null || foundBoardIp == null) {
+                if ((foundServerUrl == null || foundBoardIp == null) && discoveryGen.get() == myGen) {
                     for (String prefix : prefixes) {
                         for (int host = 1; host <= 254; host++) {
                             try {
@@ -554,7 +790,7 @@ public class MainActivity extends Activity {
                         }
                     }
                     deadline = System.nanoTime() + 1_000_000_000L;
-                    while (System.nanoTime() < deadline) {
+                    while (System.nanoTime() < deadline && discoveryGen.get() == myGen) {
                         java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
                         try {
                             sock.receive(pkt);
@@ -591,116 +827,38 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception ignored) {}
 
-            if (foundServerUrl != null) {
-                try {
-                    java.net.URL healthUrl = new java.net.URL(foundServerUrl + "/api/health");
-                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) healthUrl.openConnection();
-                    conn.setInstanceFollowRedirects(false);
-                    conn.setConnectTimeout(800);
-                    conn.setReadTimeout(800);
-                    conn.setRequestMethod("GET");
-                    int code = conn.getResponseCode();
-                    if (code == 200) {
-                        try (java.io.InputStream in = conn.getInputStream();
-                             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
-                            long deadlineRead = System.nanoTime() + 800_000_000L;
-                            byte[] buf = new byte[256];
-                            int r;
-                            boolean rejected = false;
-                            while ((r = in.read(buf)) != -1) {
-                                if (System.nanoTime() >= deadlineRead) {
-                                    rejected = true;
-                                    break;
-                                }
-                                out.write(buf, 0, r);
-                                if (out.size() > 16384) {
-                                    rejected = true;
-                                    break;
-                                }
-                            }
-                            if (rejected) {
-                                foundServerUrl = null;
-                            } else {
-                                String body = out.toString("UTF-8");
-                                org.json.JSONObject obj = new org.json.JSONObject(body);
-                                if (!"ok".equals(obj.optString("status")) || !"KurisuPro".equals(obj.optString("service"))) {
-                                    foundServerUrl = null;
-                                }
-                            }
-                        } catch (Exception e) {
-                            foundServerUrl = null;
-                        }
-                    } else {
-                        foundServerUrl = null;
-                    }
-                    conn.disconnect();
-                } catch (Exception e) {
-                    foundServerUrl = null;
-                }
+            if (foundServerUrl != null && !verifyServerHealth(foundServerUrl)) {
+                foundServerUrl = null;
             }
-
-            final String sUrl = foundServerUrl, bIp = foundBoardIp;
-            if (sUrl != null) {
-                candidateOrigin = sUrl;
-            }
-            runOnUiThread(() -> {
+            if (discoveryGen.get() != myGen) {
                 discovering = false;
-                if (isFinishing() || destroyed) return;
-                android.content.SharedPreferences prefs = getSharedPreferences("config", MODE_PRIVATE);
-                android.content.SharedPreferences.Editor ed = prefs.edit();
-                String finalBoardIp = bIp != null ? bIp : deviceTarget.host;
-                if (BridgePolicy.privateIpv4(finalBoardIp)) {
-                    deviceTarget = new DeviceTarget(finalBoardIp, deviceTarget.token);
-                    ed.putString("device_host", finalBoardIp);
-                }
-                if (sUrl != null) {
-                    serverOrigin = sUrl;
-                    ed.putString("server_url", sUrl + "/").apply();
-                    String curUrl = webView.getUrl();
-                    if (curUrl == null || curUrl.equals(OFFLINE) || !curUrl.startsWith(sUrl)) {
-                        Toast.makeText(MainActivity.this, "已连接电脑服务 (" + sUrl + ")", Toast.LENGTH_SHORT).show();
-                        webView.loadUrl(sUrl + "/");
-                    }
-                } else if (BridgePolicy.privateIpv4(finalBoardIp)) {
-                    ed.apply();
-                    String curUrl = webView.getUrl();
-                    if (curUrl == null || (!isOfflinePage(curUrl) && (serverOrigin == null || serverOrigin.isEmpty()))) {
-                        Toast.makeText(MainActivity.this, "已自动直连灯板 (" + finalBoardIp + ")", Toast.LENGTH_SHORT).show();
-                        webView.loadUrl(OFFLINE);
-                    }
-                } else {
-                    ed.apply();
-                    if (manual) {
-                        Toast.makeText(MainActivity.this, "未发现同一局域网下的服务，请确认手机与设备在同一热点/Wi-Fi", Toast.LENGTH_LONG).show();
-                        discoverServer();
-                    }
-                }
-            });
+                return;
+            }
+            applyDiscoveredEndpoints(foundServerUrl, foundBoardIp, manual);
         }).start();
     }
 
     private void discoverServer() {
         autoDiscoverAndConnect(true);
-        if (discovery != null) return;
+        if (discovery != null || destroyed || isFinishing()) return;
         nsd = (NsdManager) getSystemService(NSD_SERVICE);
+        if (nsd == null) return;
         discovery = new NsdManager.DiscoveryListener() {
-            public void onDiscoveryStarted(String type) { runOnUiThread(() -> Toast.makeText(MainActivity.this, "正在发现服务；也可手动输入地址", Toast.LENGTH_LONG).show()); }
+            public void onDiscoveryStarted(String type) { runOnUiThread(() -> { if (!isFinishing() && !destroyed) Toast.makeText(MainActivity.this, "正在发现服务；也可手动输入地址", Toast.LENGTH_LONG).show(); }); }
             public void onServiceFound(NsdServiceInfo service) {
-                if (!service.getServiceName().startsWith("KurisuPro")) return;
+                if (destroyed || !service.getServiceName().startsWith("KurisuPro")) return;
                 nsd.resolveService(service, new NsdManager.ResolveListener() {
                     public void onResolveFailed(NsdServiceInfo s, int code) {}
                     public void onServiceResolved(NsdServiceInfo s) {
-                        String host=s.getHost().getHostAddress(); if (host.indexOf(':')>=0) host="["+host+"]";
-                        final String url="http://"+host+":"+s.getPort();
-                        runOnUiThread(() -> {
-                            if (!isFinishing()) {
-                                serverOrigin = url;
-                                getSharedPreferences("config", MODE_PRIVATE).edit().putString("server_url", url + "/").apply();
-                                Toast.makeText(MainActivity.this, "已自动连接电脑服务 (" + url + ")", Toast.LENGTH_SHORT).show();
-                                webView.loadUrl(url + "/");
-                            }
-                        });
-                        stopDiscovery();
+                        if (destroyed || s.getHost() == null) return;
+                        String host = s.getHost().getHostAddress();
+                        if (!BridgePolicy.privateIpv4(host)) return;
+                        final String url = "http://" + host + ":" + s.getPort();
+                        new Thread(() -> {
+                            if (destroyed || !verifyServerHealth(url)) return;
+                            applyDiscoveredEndpoints(url, null, false);
+                            mainHandler.post(() -> stopDiscovery());
+                        }).start();
                     }
                 });
             }
@@ -710,22 +868,46 @@ public class MainActivity extends Activity {
             public void onStopDiscoveryFailed(String type,int code) { discovery=null; }
         };
         nsd.discoverServices("_kurisupro._tcp.",NsdManager.PROTOCOL_DNS_SD,discovery);
-        webView.postDelayed(this::stopDiscovery,15000);
+        mainHandler.postDelayed(this::stopDiscovery,15000);
     }
     private void stopDiscovery() { NsdManager.DiscoveryListener current=discovery;discovery=null;if(nsd!=null&&current!=null)try{nsd.stopServiceDiscovery(current);}catch(IllegalArgumentException ignored){} }
     @Override protected void onPause() {
+        cancelPendingCameraRequest("backgrounded");
         if (frontCameraBridge != null) frontCameraBridge.stop();
         backgrounded=true;releaseDeviceInput();
-        webView.evaluateJavascript("window.dispatchEvent(new Event('blur'))",null);
-        webView.onPause();super.onPause();
+        mainHandler.removeCallbacks(discoveryRetryRunnable);
+        mainHandler.removeCallbacks(healthCheckRunnable);
+        stopDiscovery();
+        if (webView != null) {
+            webView.evaluateJavascript("window.dispatchEvent(new Event('blur'))",null);
+            webView.onPause();
+        }
+        super.onPause();
     }
     @Override protected void onResume() {
         super.onResume();
         backgrounded=false;
+        discoveryRetryCount = 0;
         if(webView!=null)webView.onResume();
         autoDiscoverAndConnect(false);
+        scheduleHealthCheck(8000L);
     }
-    @Override protected void onDestroy() { if (frontCameraBridge != null) frontCameraBridge.stop(); releaseDeviceInput();destroyed=true;bridgeTrusted=false;udpExecutor.shutdown();readExecutor.shutdownNow();stopDiscovery();if(fileCallback!=null)fileCallback.onReceiveValue(null);if(webView!=null)webView.destroy();super.onDestroy(); }
+    @Override protected void onDestroy() {
+        cancelPendingCameraRequest("destroyed");
+        if (frontCameraBridge != null) frontCameraBridge.stop();
+        releaseDeviceInput();
+        destroyed=true;
+        bridgeTrusted=false;
+        mainHandler.removeCallbacksAndMessages(null);
+        if (connectivityManager != null && networkCallback != null) {
+            try { connectivityManager.unregisterNetworkCallback(networkCallback); } catch (Exception ignored) {}
+            networkCallback = null;
+        }
+        udpExecutor.shutdown();readExecutor.shutdownNow();stopDiscovery();
+        if(fileCallback!=null)fileCallback.onReceiveValue(null);
+        if(webView!=null)webView.destroy();
+        super.onDestroy();
+    }
     @Override public void onBackPressed() { if(webView.canGoBack())webView.goBack();else super.onBackPressed(); }
 
     private static boolean isOfflinePage(String url) {
@@ -754,100 +936,149 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        @android.webkit.JavascriptInterface
-        public boolean startFrontCamera(final String uploadUrl, final String mode) {
-            if (backgrounded || destroyed) return false;
-            String curUrl = webView != null ? webView.getUrl() : null;
-            if (curUrl == null || isOfflinePage(curUrl)) return false;
-            Uri curUri = Uri.parse(curUrl);
-            final String curOrigin = new Uri.Builder().scheme(curUri.getScheme()).encodedAuthority(curUri.getEncodedAuthority()).build().toString();
-
-            // Validate caller origin against authenticated serverOrigin
-            if (serverOrigin == null || serverOrigin.isEmpty() || !serverOrigin.equalsIgnoreCase(curOrigin)) {
-                android.util.Log.w("MainActivity", "Camera rejected: caller origin does not match authenticated serverOrigin");
-                return false;
-            }
-
-            // Verify Android OS camera permission
-            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                android.util.Log.w("MainActivity", "Camera rejected: OS Camera permission not granted");
-                return false;
-            }
-
-            if (!isCameraAuthorized(curOrigin)) {
-                android.util.Log.i("MainActivity", "Requesting camera authorization for origin: " + curOrigin);
-                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-                final boolean[] authorized = new boolean[]{false};
-                runOnUiThread(() -> {
-                    if (isFinishing() || destroyed) {
-                        latch.countDown();
-                        return;
-                    }
-                    new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("摄像头权限申请")
-                        .setMessage("网页 (" + curOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
-                        .setPositiveButton("允许", (d, w) -> {
-                            cameraAuthorizedOrigin = curOrigin;
-                            authorized[0] = true;
-                            latch.countDown();
-                        })
-                        .setNegativeButton("拒绝", (d, w) -> {
-                            authorized[0] = false;
-                            latch.countDown();
-                        })
-                        .setOnCancelListener(d -> {
-                            authorized[0] = false;
-                            latch.countDown();
-                        })
-                        .show();
-                });
-                try {
-                    boolean completed = latch.await(30, java.util.concurrent.TimeUnit.SECONDS);
-                    if (!completed || !authorized[0]) {
-                        android.util.Log.w("MainActivity", "Camera permission denied or timed out by user");
-                        return false;
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return false;
-                }
-            }
-            if (uploadUrl == null || uploadUrl.trim().isEmpty()) return false;
+        private boolean validateUploadTarget(String uploadUrl, String expectedOrigin) {
+            if (uploadUrl == null || uploadUrl.trim().isEmpty() || expectedOrigin == null || expectedOrigin.isEmpty()) return false;
             try {
                 Uri parsed = Uri.parse(uploadUrl.trim());
-                if (!("http".equalsIgnoreCase(parsed.getScheme()) || "https".equalsIgnoreCase(parsed.getScheme()))) {
-                    return false;
-                }
+                if (!("http".equalsIgnoreCase(parsed.getScheme()) || "https".equalsIgnoreCase(parsed.getScheme()))) return false;
                 String host = parsed.getHost();
                 int port = parsed.getPort() != -1 ? parsed.getPort() : ("https".equalsIgnoreCase(parsed.getScheme()) ? 443 : 80);
-                Uri authUri = Uri.parse(curOrigin);
+                Uri authUri = Uri.parse(expectedOrigin);
                 String authHost = authUri.getHost();
                 int authPort = authUri.getPort() != -1 ? authUri.getPort() : ("https".equalsIgnoreCase(authUri.getScheme()) ? 443 : 80);
-                if (host == null || !host.equalsIgnoreCase(authHost) || port != authPort) {
-                    android.util.Log.w("MainActivity", "Camera upload rejected: target origin does not match authorized server");
-                    return false;
-                }
+                if (host == null || !host.equalsIgnoreCase(authHost) || port != authPort) return false;
                 String path = parsed.getPath();
                 if (path == null || !(path.equals("/api/vision/phone_frame") || path.equals("/api/pro/vision/frame") || path.equals("/api/pro/camera/frame"))) {
-                    android.util.Log.w("MainActivity", "Camera upload rejected: endpoint not whitelisted");
                     return false;
                 }
                 String sessionId = parsed.getQueryParameter("session_id");
-                if (sessionId == null || sessionId.trim().isEmpty()) {
-                    android.util.Log.w("MainActivity", "Camera upload rejected: missing session_id");
-                    return false;
-                }
+                return sessionId != null && !sessionId.trim().isEmpty();
             } catch (Exception e) {
                 return false;
             }
-            if (frontCameraBridge != null) {
-                return frontCameraBridge.start(uploadUrl, mode, curOrigin);
+        }
+
+        @android.webkit.JavascriptInterface
+        public String requestFrontCamera(final String requestId, final String uploadUrl, final String mode, final String visionToken) {
+            if (!BridgePolicy.requestId(requestId) || backgrounded || destroyed) {
+                emitCameraStatusJson(requestId, "failed", "unavailable", "", 0L);
+                return "{\"status\":\"failed\",\"reason\":\"unavailable\"}";
             }
-            return false;
+            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                emitCameraStatusJson(requestId, "denied", "os_camera_permission_missing", "", 0L);
+                mainHandler.post(() -> {
+                    if (!destroyed && !isFinishing()) {
+                        requestPermissions(new String[]{android.Manifest.permission.CAMERA}, 102);
+                    }
+                });
+                return "{\"status\":\"denied\",\"reason\":\"os_camera_permission_missing\"}";
+            }
+            activeCameraRequestId.set(requestId);
+            final int startNavEpoch = pageNavigationEpoch.get();
+            mainHandler.post(() -> {
+                if (destroyed || isFinishing() || backgrounded || !requestId.equals(activeCameraRequestId.get()) || pageNavigationEpoch.get() != startNavEpoch) {
+                    emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", "", 0L);
+                    return;
+                }
+                // WebView.getUrl() MUST only be accessed on the UI / WebView thread.
+                String curUrl = webView != null ? webView.getUrl() : null;
+                if (curUrl == null || isOfflinePage(curUrl)) {
+                    activeCameraRequestId.compareAndSet(requestId, "");
+                    emitCameraStatusJson(requestId, "failed", "offline_or_untrusted_page", "", 0L);
+                    return;
+                }
+                final String curOrigin = extractOrigin(curUrl);
+                if (serverOrigin == null || serverOrigin.isEmpty() || !serverOrigin.equalsIgnoreCase(curOrigin) || !BridgePolicy.privateIpv4(Uri.parse(curUrl).getHost())) {
+                    activeCameraRequestId.compareAndSet(requestId, "");
+                    emitCameraStatusJson(requestId, "denied", "origin_mismatch", "", 0L);
+                    return;
+                }
+                if (!validateUploadTarget(uploadUrl, curOrigin)) {
+                    activeCameraRequestId.compareAndSet(requestId, "");
+                    emitCameraStatusJson(requestId, "denied", "invalid_upload_target", "", 0L);
+                    return;
+                }
+                final String reqSessId = Uri.parse(uploadUrl.trim()).getQueryParameter("session_id");
+                if (isCameraAuthorized(curOrigin)) {
+                    activeCameraRequestId.compareAndSet(requestId, "");
+                    boolean ok = frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, visionToken);
+                    emitCameraStatusJson(requestId, ok ? "started" : "failed", ok ? "" : "camera_open_failed", reqSessId, frontCameraBridge != null ? frontCameraBridge.getSessionEpoch() : 0L);
+                    return;
+                }
+                if (activeCameraDialog != null) {
+                    try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
+                    activeCameraDialog = null;
+                }
+                if (activeCameraTimeout != null) {
+                    mainHandler.removeCallbacks(activeCameraTimeout);
+                }
+                final Runnable timeoutTask = () -> {
+                    if (activeCameraRequestId.compareAndSet(requestId, "")) {
+                        if (activeCameraDialog != null) {
+                            try { activeCameraDialog.dismiss(); } catch (Exception ignored) {}
+                            activeCameraDialog = null;
+                        }
+                        emitCameraStatusJson(requestId, "timeout", "authorization_timeout", reqSessId, 0L);
+                    }
+                };
+                activeCameraTimeout = timeoutTask;
+                mainHandler.postDelayed(timeoutTask, 30000L);
+                activeCameraDialog = new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("摄像头权限申请")
+                    .setMessage("网页 (" + curOrigin + ") 申请使用摄像头进行体感与视觉交互。\n\n是否允许？")
+                    .setPositiveButton("允许", (d, w) -> {
+                        mainHandler.removeCallbacks(timeoutTask);
+                        activeCameraDialog = null;
+                        if (!activeCameraRequestId.compareAndSet(requestId, "") || destroyed || isFinishing() || backgrounded || pageNavigationEpoch.get() != startNavEpoch) {
+                            emitCameraStatusJson(requestId, "cancelled", "stale_lifecycle", reqSessId, 0L);
+                            return;
+                        }
+                        cameraAuthorizedOrigin = curOrigin;
+                        boolean ok = frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, visionToken);
+                        emitCameraStatusJson(requestId, ok ? "started" : "failed", ok ? "" : "camera_open_failed", reqSessId, frontCameraBridge != null ? frontCameraBridge.getSessionEpoch() : 0L);
+                    })
+                    .setNegativeButton("拒绝", (d, w) -> {
+                        mainHandler.removeCallbacks(timeoutTask);
+                        activeCameraDialog = null;
+                        activeCameraRequestId.compareAndSet(requestId, "");
+                        emitCameraStatusJson(requestId, "denied", "user_denied", reqSessId, 0L);
+                    })
+                    .setOnCancelListener(d -> {
+                        mainHandler.removeCallbacks(timeoutTask);
+                        activeCameraDialog = null;
+                        activeCameraRequestId.compareAndSet(requestId, "");
+                        emitCameraStatusJson(requestId, "denied", "user_cancelled", reqSessId, 0L);
+                    })
+                    .show();
+            });
+            return "{\"status\":\"pending\",\"request_id\":" + org.json.JSONObject.quote(requestId) + "}";
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean startFrontCamera(final String uploadUrl, final String mode) {
+            if (backgrounded || destroyed) return false;
+            final String curOrigin = mainFrameOrigin;
+            if (curOrigin == null || curOrigin.isEmpty()) return false;
+            if (serverOrigin == null || serverOrigin.isEmpty() || !serverOrigin.equalsIgnoreCase(curOrigin)) {
+                return false;
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+            if (!validateUploadTarget(uploadUrl, curOrigin)) {
+                return false;
+            }
+            if (!isCameraAuthorized(curOrigin)) {
+                // Non-blocking fallback: trigger async dialog cleanly instead of blocking JavaBridge thread.
+                requestFrontCamera("legacy_" + System.currentTimeMillis(), uploadUrl, mode, "");
+                return false;
+            }
+            return frontCameraBridge != null && frontCameraBridge.start(uploadUrl, mode, curOrigin, "");
         }
 
         @android.webkit.JavascriptInterface
         public void stopFrontCamera() {
+            cancelPendingCameraRequest("stopped");
             if (frontCameraBridge != null) {
                 frontCameraBridge.stop();
             }
@@ -855,6 +1086,7 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public void stopFrontCamera(final String sessionId) {
+            cancelPendingCameraRequest("stopped");
             if (frontCameraBridge != null) {
                 frontCameraBridge.stop(sessionId);
             }

@@ -88,6 +88,7 @@ bool CommandDispatcher::EnqueuePcm(const void* data,size_t bytes) {
     return true;
 }
 void CommandDispatcher::AbortAudio(){
+    AudioHAL::GetInstance().ResetPcmStream();
     if(!audio_ring_buf_)return;
     size_t bytes=0;void* block=nullptr;
     while((block=xRingbufferReceive(audio_ring_buf_,&bytes,0))!=nullptr){
@@ -209,6 +210,7 @@ void CommandDispatcher::AudioPlayTaskTrampoline(void* arg)
 void CommandDispatcher::AudioPlayTaskLoop()
 {
     ESP_LOGI(TAG, "Audio playback consumer task started (DMA RingBuffer Pipeline)");
+    uint32_t idle_ms = 0;
 
     while (is_running_) {
         if (!audio_ring_buf_) {
@@ -226,6 +228,7 @@ void CommandDispatcher::AudioPlayTaskLoop()
         );
 
         if (item && item_size > 0) {
+            idle_ms = 0;
             size_t sample_count = item_size / sizeof(int16_t);
             if (AudioHAL::GetInstance().PlayMonoPcm((const int16_t*)item, sample_count) == ESP_OK) {
                 audio_played_.fetch_add(sample_count);
@@ -234,10 +237,20 @@ void CommandDispatcher::AudioPlayTaskLoop()
             }
             vRingbufferReturnItem(audio_ring_buf_, (void*)item);
         } else {
+            if (AudioHAL::GetInstance().HasPendingPcmStream()) {
+                idle_ms += 60;
+                if (idle_ms >= 150) {
+                    AudioHAL::GetInstance().FlushPcmStream();
+                    idle_ms = 0;
+                }
+            } else {
+                idle_ms = 0;
+            }
             vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
 
+    AudioHAL::GetInstance().ResetPcmStream();
     vTaskDelete(NULL);
 }
 
