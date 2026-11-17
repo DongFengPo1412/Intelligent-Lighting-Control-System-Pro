@@ -118,8 +118,9 @@ class VoiceListener:
         self.wake_detector = None
         try:
             from wake_detector import WakeDetector
-            self.wake_detector = WakeDetector(threshold=.38, score=1.5)
-            print('[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 克里斯蒂娜 / 牧濑红莉栖；阈值 0.38 (score=1.5)')
+            kws_thresh = float(os.environ.get('KURISU_KWS_THRESHOLD', '0.46'))
+            self.wake_detector = WakeDetector(threshold=kws_thresh, score=1.5)
+            print(f'[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 克里斯蒂娜 / 牧濑红莉栖；阈值 {kws_thresh:.2f} (score=1.5)')
         except Exception as error:
             print(f'[VoiceListener] 声学唤醒未就绪，关闭自动唤醒，保留网页控制：{error}')
 
@@ -612,9 +613,9 @@ class VoiceListener:
                             # Use active 90th-percentile frame RMS so valid speech inside a longer window
                             # is not penalized by surrounding pauses, while low-energy fan hum stays gated.
                             low_conf = (
-                                (avg_lp < -1.65 or max_nsp > 0.45)
-                                if p90_rms >= 0.055
-                                else (avg_lp < -0.90 or (avg_lp < -0.75 and (max_nsp > 0.25 or len(compact_txt) <= 4)))
+                                (avg_lp < -1.55 or max_nsp > 0.45)
+                                if p90_rms >= 0.068
+                                else (avg_lp < -0.78 or (avg_lp < -0.65 and (max_nsp > 0.25 or len(compact_txt) <= 4)))
                             )
                             if low_conf:
                                 print(f"[语音过滤] 丢弃低置信噪声识别: text={text!r} avg_logprob={avg_lp:.3f} no_speech={max_nsp:.2f} raw_rms={raw_rms:.4f} p90_rms={p90_rms:.4f}")
@@ -1135,14 +1136,13 @@ class VoiceListener:
                 if warmup_frames > 0:
                     warmup_frames -= 1
                     preroll_frames.clear()
-                    ambient_energy = 0.9 * ambient_energy + 0.1 * ac_rms
+                    ambient_energy = min(900.0, 0.9 * ambient_energy + 0.1 * ac_rms)
                     continue
 
-                # 丢弃扬声器播报后的混响尾音
+                # 丢弃扬声器播报后的混响尾音（绝不用大音量语音/回声污染 ambient_energy）
                 if self._resume_warmup_frames > 0:
                     self._resume_warmup_frames -= 1
                     preroll_frames.clear()
-                    ambient_energy = 0.9 * ambient_energy + 0.1 * ac_rms
                     continue
 
                 # 3. 先执行 WebRTC VAD 判决，严防人声/尾音拖高环境底噪基线
@@ -1153,25 +1153,30 @@ class VoiceListener:
                     frame_vad_speech = False
 
                 # 4. 仅在非说话且非 VAD 语音的安静底噪帧更新环境基线
-                if not is_speaking and not frame_vad_speech and ac_rms < max(ambient_energy * 1.8, 900.0):
-                    ambient_energy = min(750.0, 0.98 * ambient_energy + 0.02 * ac_rms)
+                if not is_speaking and not frame_vad_speech and ac_rms < 1500.0:
+                    ambient_energy = max(300.0, min(950.0, 0.98 * ambient_energy + 0.02 * ac_rms))
 
-                # Schmitt-trigger 迟滞门限：高起振门槛拦住风扇底噪，低延续门槛 + 840ms 悬挂耐受句中短停顿
+                # 嘈杂/多人现场抗噪门限（可用环境变量现场微调）：
+                # 待命期高起振拦截旁人交谈误唤醒；唤醒后要求近场明确人声才点亮亮红拾音，停声后回落暗红并计时进入思考。
                 start_threshold, continue_threshold = self._speech_energy_thresholds(ambient_energy)
                 if self.is_awake:
-                    start_threshold = max(1050.0, min(max(start_threshold, ambient_energy * 2.2), 1300.0))
-                    continue_threshold = max(650.0, min(max(continue_threshold, ambient_energy * 1.35), 800.0))
+                    awake_start_floor = float(os.environ.get('KURISU_AWAKE_START_RMS', '2000'))
+                    awake_cont_floor = float(os.environ.get('KURISU_AWAKE_CONT_RMS', '1250'))
+                    start_threshold = max(awake_start_floor, min(max(start_threshold, ambient_energy * 3.2), 3200.0))
+                    continue_threshold = max(awake_cont_floor, min(max(continue_threshold, ambient_energy * 2.0), 1950.0))
                 else:
-                    start_threshold = max(900.0, min(max(start_threshold, ambient_energy * 1.9), 1150.0))
-                    continue_threshold = max(600.0, min(max(continue_threshold, ambient_energy * 1.3), 750.0))
+                    standby_start_floor = float(os.environ.get('KURISU_STANDBY_START_RMS', '1600'))
+                    standby_cont_floor = float(os.environ.get('KURISU_STANDBY_CONT_RMS', '1000'))
+                    start_threshold = max(standby_start_floor, min(max(start_threshold, ambient_energy * 2.8), 2800.0))
+                    continue_threshold = max(standby_cont_floor, min(max(continue_threshold, ambient_energy * 1.8), 1750.0))
 
                 # 5. 状态机：端点检测 (起始检测 vs 结束判定)
                 if not is_speaking:
                     preroll_frames.append(ac_bytes)
                     if frame_vad_speech and ac_rms >= start_threshold:
                         speech_trigger_count += 1
-                        # 连续 2 帧 (60ms) 语音即可敏锐确认起始，保留完整句首
-                        if speech_trigger_count >= 2:
+                        # 连续 3 帧 (90ms) 近场有效人声才确认起始，过滤拍桌/远场突刺
+                        if speech_trigger_count >= 3:
                             is_speaking = True
                             self._speech_active = True
                             silent_count = 0
@@ -1194,18 +1199,21 @@ class VoiceListener:
                     elif (not frame_vad_speech) or (ac_rms < continue_threshold):
                         continue_streak = 0
                         silent_count += 1
+                        # 说话人停止说话 120ms (4 帧) 即由亮红落回暗红，直观提示“静音倒数”
+                        if self.is_awake and silent_count >= 4:
+                            self._update_board_led("active")
                     else:
                         continue_streak += 1
-                        # Require 2 consecutive active frames (60ms) before resetting accumulated silence
-                        # so isolated 30ms room-hum spikes cannot pin the mic open for 8 seconds.
-                        if silent_count == 0 or continue_streak >= 2:
+                        # 一旦已经落入暗红倒数，需连续 3 帧 (90ms) 近场有效语音才重新点亮亮红并清零倒数
+                        need_streak = 3 if silent_count >= 4 else 2
+                        if silent_count == 0 or continue_streak >= need_streak:
                             silent_count = 0
                             self._update_board_led("hearing")
 
                     # 悬挂断句门限：
-                    # 待命唤醒期 14 帧 (~420ms 干净切断唤醒词)；
-                    # 等待指令期 28 帧 (~840ms 容忍句中自然换气/思考停顿不半途截断，说完后仍果断进思考)
-                    silent_limit = 28 if self.is_awake else 14
+                    # 待命唤醒期 14 帧 (~420ms)；
+                    # 等待指令期 26 帧 (~780ms 暗红倒数结束后收敛进入思考阶段)
+                    silent_limit = 26 if self.is_awake else 14
                     if silent_count >= silent_limit:
                         is_speaking = False
                         silent_count = 0
