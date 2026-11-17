@@ -11,13 +11,14 @@ def parse_music_request(text):
     text = re.sub(r"^(?:助手|红莉栖|克里斯|牧濑红莉栖|克里斯蒂娜)[，,\s]*", "", text)
     text = re.sub(r"^(?:请你?|麻烦你?)?(?:帮我|给我|跟我|替我|为我)?", "", text).strip()
     # ASR homophone repairs for music playback and demo tracks
-    text = re.sub(r"^(?:伯访|伯仿|拨放|播发|博访|泊放|百放|放播|波放|包放|不放)", "播放", text)
+    # A genuine negative '不放' must not be repaired into a playback instruction.
+    text = re.sub(r"^(?:伯访|伯仿|拨放|播发|博访|泊放|百放|放播|波放|包放)", "播放", text)
     text = re.sub(r"周杰[人仁轮伦]", "周杰伦", text)
     text = re.sub(r"米[津金斤今][玄弦悬元]?[师師诗思]?", "米津玄師", text)
     text = re.sub(r"(?:[七起气期漆7][里理米礼李你笔][香箱乡相湘祥])", "七里香", text)
     text = re.sub(r"(?:[青清轻倾春][花华画化][瓷词慈磁池辞])", "青花瓷", text)
     text = re.sub(r"(?:[发法伐花髮][如儒汝入][雪血学穴])", "发如雪", text)
-    text = re.sub(r"(?:莱蒙|雷蒙|来梦|乐门)", "Lemon", text)
+    text = re.sub(r"(?:莱蒙|雷蒙|来蒙|莱门|雷门|来梦|乐门)", "Lemon", text)
     if re.search(r"米津|播放|想听|要听|来一?首|放一?首", text) and "柠檬" in text:
         text = text.replace("柠檬", "Lemon")
     compact = normalized(text)
@@ -75,7 +76,7 @@ def parse_music_request(text):
         return dict(action=controls[compact])
     # Questions, negations and quoted discussions must not trigger playback.
     if re.search(
-        r"[？?]|不要|别放|别播|不想听|能不能不|怎么|如何|为什么|是什么|播放.*(?:吗|怎么样)$",
+        r"[？?]|不要|别放|别播|不放|不播|不想听|能不能不|怎么|如何|为什么|是什么|播放.*(?:吗|怎么样)$",
         text,
     ):
         return None

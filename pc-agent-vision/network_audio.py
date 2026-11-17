@@ -250,12 +250,22 @@ class WiFiPcmClient:
                 self.playback_active = True
                 self.controller.playback_started_at = start
                 total = 0
+                self.last_stream_stats = dict(segments=0, synthesis_gaps=0, max_synthesis_gap_ms=0)
                 for pcm in chain([first], chunks):
                     if not pcm or len(pcm) % 2:
                         raise ValueError('Invalid generated PCM segment')
                     # If synthesis really falls behind, pace from its arrival
                     # rather than bursting stale scheduled data into the board.
-                    start += max(0, time.monotonic() - (start + total/32000 + .12))
+                    arrived = time.monotonic()
+                    gap_ms = max(0.0, (arrived - (start + total / 32000)) * 1000) if total else 0.0
+                    self.last_stream_stats['segments'] += 1
+                    if gap_ms > 60:
+                        self.last_stream_stats['synthesis_gaps'] += 1
+                        self.last_stream_stats['max_synthesis_gap_ms'] = max(
+                            self.last_stream_stats['max_synthesis_gap_ms'], round(gap_ms, 1)
+                        )
+                        print(f'[PCM连续性] 等待下一合成段 {gap_ms:.0f}ms')
+                    start += max(0, arrived - (start + total/32000 + .12))
                     for offset in range(0, len(pcm), chunk_samples * 2):
                         if self.cancelled.is_set() or (cancelled is not None and cancelled.is_set()):
                             return False

@@ -55,7 +55,12 @@ class DeliveryTests(unittest.TestCase):
         with patch('semantic_control.urllib.request.build_opener', return_value=opener), \
                 patch.object(planner, 'plan', return_value={'kind': 'chat'}) as plan:
             self.assertTrue(planner.warmup()['done'])
-        plan.assert_called_once_with('你好，很高兴见到你', timeout=120)
+        plan.assert_called_once()
+        from semantic_control import exact_plan, has_control_intent
+        text = plan.call_args.args[0]
+        self.assertTrue(has_control_intent(text))
+        self.assertIsNone(exact_plan(text), 'Warmup must not exit through a local shortcut')
+        self.assertEqual(plan.call_args.kwargs['timeout'], 120)
 
     def test_failed_model_load_does_not_prime_planner(self):
         planner = SemanticControl()

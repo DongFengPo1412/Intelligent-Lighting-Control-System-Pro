@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 import os
 import time
 import uuid
@@ -79,6 +80,7 @@ class ProApi:
             analysis=self.music.analysis_stats,
             library=self.library.status(),
             gain=self.music.gain,
+            highpass_hz=self.music.highpass_hz,
             voice_wake=bool(getattr(self.controller, "_music_wake_active", False)),
         )
         return result
@@ -389,8 +391,13 @@ class ProApi:
                     )
                 elif operation == "gain" or "gain" in data:
                     new_gain = float(data.get("gain", 1.0))
-                    if 0 < new_gain <= 5.0:
-                        self.music.gain = new_gain
+                    highpass = float(data.get("highpass_hz", self.music.highpass_hz))
+                    if not math.isfinite(new_gain) or not 0 < new_gain <= 5.0:
+                        raise ValueError("Music gain must be finite and in (0, 5]")
+                    if not math.isfinite(highpass) or not 60 <= highpass <= 400:
+                        raise ValueError("Speaker highpass must be in 60..400 Hz")
+                    self.music.gain = new_gain
+                    self.music.highpass_hz = highpass
                 elif "track_id" in data:
                     await asyncio.to_thread(
                         self.playback.play,

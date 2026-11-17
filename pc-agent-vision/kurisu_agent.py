@@ -191,8 +191,10 @@ class KurisuAgent:
             reply = shortcut_reply
         else:
             reply = None
+            from music_commands import parse_music_request
+            music_request = parse_music_request(user_message) if getattr(self, 'music_commands', None) else None
             is_farewell = ConversationSession.should_end(user_message)
-            if not is_farewell and hasattr(self.semantic, 'is_farewell'):
+            if not is_farewell and music_request is None and hasattr(self.semantic, 'is_farewell'):
                 is_farewell = self.semantic.is_farewell(user_message)
             if is_farewell:
                 self.last_turn_should_end = True
@@ -268,13 +270,11 @@ class KurisuAgent:
                         if not hw_ok:
                             reply = self._finish_reply(fallback, turn_id=turn_id)
                         else:
-                            reply = self._converse(
-                                user_message=user_message,
-                                turn_id=turn_id,
-                                cancelled=turn_cancel,
-                                executed_facts=facts,
-                                fallback_reply=fallback,
-                            )
+                            # The planner already interpreted the instruction and
+                            # the device ACK confirmed it. Do not pay for another
+                            # LLM request before the first audible confirmation.
+                            self.last_turn_timings['reply_route'] = 'acknowledged_control'
+                            reply = self._finish_reply(fallback, turn_id=turn_id)
                     else:
                         reply = self._converse(user_message=user_message, turn_id=turn_id, cancelled=turn_cancel)
 
@@ -345,7 +345,11 @@ class KurisuAgent:
             return ''
         if turn_id is not None and self._active_turn_id != turn_id:
             return ''
-        first_pcm = getattr(self.voice, 'last_speech_timings', {}).get('first_pcm_ms')
+        speech_timings = getattr(self.voice, 'last_speech_timings', {})
+        if not isinstance(speech_timings, dict):
+            speech_timings = {}
+        self.last_turn_timings.update(speech_timings)
+        first_pcm = speech_timings.get('first_pcm_ms')
         if first_pcm is not None:
             self.last_turn_timings['first_audio_dispatch_ms'] = round(
                 (dispatch_started-self._turn_started)*1000 + first_pcm, 1)

@@ -437,7 +437,7 @@ def exact_plan(text):
     if re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:开始|启动|开启|打开|进入)?(?:倒计时|计时|沙漏)(?:模式)?(?:吧|一下)?', compact):
         return {'kind': 'clarify', 'actions': []}
 
-    from arcade_catalog import find_arcade_games, resolve_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
+    from arcade_catalog import find_arcade_games, resolve_arcade_game, resolve_spoken_arcade_game, RESERVED_LIGHTING_WORDS, _NAME_TO_ID
 
     # 2. Arcade negations, conditions, mixed clauses, and disclaimers
     has_game_intent = bool(re.search(r'(?:小?游戏|街机|卡带)', compact) or find_arcade_games(text) or find_arcade_games(compact))
@@ -486,12 +486,14 @@ def exact_plan(text):
     if game_m:
         candidate = game_m.group(1).strip()
         if not re.search(r'(?:不是|不要|别|但|不过|先不|暂不|吗|呢|\?|？)', candidate):
-            res = resolve_arcade_game(candidate)
+            res = resolve_spoken_arcade_game(candidate)
             if res:
                 return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
 
     # 6.1 Action-intent + single unambiguous game match (fast path for all 101 games when user says "我想玩XX", "来一局XX", etc.)
-    if len(games) == 1 and not has_non_exec_guard and re.search(r'(?:想|要|玩|完|来|开|打|启动|进入|运行|切|换|试|体验|局|盘|把)', compact):
+    if len(games) == 1 and not has_non_exec_guard and re.match(
+        r'^(?:请|麻烦)?(?:帮我|给我)?(?:我想|我要)?(?:玩|完|打开|开启|启动|进入|运行|来一[局盘把]|体验一下)', compact
+    ):
         return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': games[0]}]}
 
     # 7. Direct exact standalone game alias fallback
@@ -566,7 +568,7 @@ class SemanticControl:
 
         endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/generate'
         payload = {'model': self.model, 'prompt': '', 'stream': False,
-                   'keep_alive': '30m', 'options': {'num_ctx': 4096}}
+                   'keep_alive': '30m', 'options': {'num_ctx': 2048}}
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(),
                                          headers={'Content-Type': 'application/json'})
@@ -586,10 +588,13 @@ class SemanticControl:
 
         # Also populate the stable parsing prompt prefix while still offline
         # from the microphone. Merely loading weights leaves a slow first turn.
+        # A greeting exits through the chat shortcut and never primes Ollama.
+        # This unseen metaphor must exercise the real planner, without executing it.
+        warmup_text = '把灯光调成刚长出的嫩芽那样的颜色'
         if abort_event is not None:
-            self.plan('你好，很高兴见到你', timeout=req_timeout, abort_event=abort_event)
+            self.plan(warmup_text, timeout=req_timeout, abort_event=abort_event)
         else:
-            self.plan('你好，很高兴见到你', timeout=req_timeout)
+            self.plan(warmup_text, timeout=req_timeout)
         return result
 
     def plan(self, text, history=(), timeout=30, abort_event: Optional[threading.Event] = None):
@@ -637,18 +642,9 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
                    for item in list(history)[-2:] if item.get('role') in ('user', 'assistant')]
         examples = [
             ('像在北极看到柔和变化的光一样，让灯板也变成那样', [{'tool': 'set_light_mode', 'value': 5}]),
-            ('我想看大海的颜色', [{'tool': 'set_light_mode', 'value': 2}]),
-            ('我想看森林的颜色', [{'tool': 'set_light_mode', 'value': 3}]),
-            ('我想看彩虹的颜色', [{'tool': 'set_light_mode', 'value': 4}]),
             ('红色不用了，给我黑客屏幕上数字往下落的那种效果', [{'tool': 'set_light_mode', 'value': 24}]),
-            ('切到壁炉的感觉', [{'tool': 'set_light_mode', 'value': 23}]),
             ('星空模式并把灯光亮度设为二十', [{'tool': 'set_light_mode', 'value': 7}, {'tool': 'set_brightness', 'value': 20}]),
             ('天空为什么是蓝色的？', []),
-            ('我今天心情不好', []),
-            ('别改灯效，也不要关灯', []),
-            ('开始沙漏，时长两分钟', [{'tool': 'start_countdown', 'value': 120}]),
-            ('启动超级马里奥游戏', [{'tool': 'start_game', 'value': 1}]),
-            ('不要玩游戏', []),
         ]
         few_shot = []
         for utterance, actions in examples:
@@ -734,7 +730,10 @@ def describe_action(action):
         from arcade_catalog import resolve_arcade_game
         res = resolve_arcade_game(value)
         gname = res[1] if res else f'街机 #{value}'
-        return f'已为你启动{gname}。', f'{gname}を起動したわ。'
+        # Chinese-only glyphs in a Japanese sentence fail the language guard
+        # and force a needless translation round-trip for these common games.
+        ja_name = {1: 'スーパーマリオ', 33: 'スネークゲーム', 41: 'テトリス'}.get(value, gname)
+        return f'已为你启动{gname}。', f'{ja_name}を起動したわ。'
     if tool == 'set_light_mode':
         zh, ja, _ = EFFECTS[value]
         return f'已切换为{zh}。', f'{ja}に切り替えたわ。'

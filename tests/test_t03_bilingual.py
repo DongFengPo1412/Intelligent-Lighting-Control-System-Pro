@@ -806,7 +806,9 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
             eng._single_language_bundle = lambda text, lang: (order.append('synth-'+lang) or b'pcm', b'')
             eng.fake_ctrl.play_audio_pcm = lambda pcm: order.append('play') or True
             eng._translate_zh_to_ja_kurisu = lambda text: ''
-            text = '第一句话说明实验记录中只保留了成功的案例。第二句话说明我们还需要检查没有被保留下来的失败案例。'
+            text = ('第一句话说明实验记录中只保留了成功的案例。'
+                    '第二句话说明我们还需要检查没有被保留下来的失败案例。'
+                    '第三句话要求把每一个实验步骤和原始观察结果完整保留下来。')
             with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
                 eng.speak(text)
             self.assertEqual(order[:3], ['synth-zh', 'play', 'synth-zh'])
@@ -823,7 +825,9 @@ class T03BilingualThirtyCasesTests(unittest.TestCase):
                 streams.append(list(chunks))
                 return True
             eng.fake_ctrl.play_audio_stream = stream
-            text = '第一句话说明实验记录中只保留了成功的案例。第二句话说明我们还需要检查没有被保留下来的失败案例。'
+            text = ('第一句话说明实验记录中只保留了成功的案例。'
+                    '第二句话说明我们还需要检查没有被保留下来的失败案例。'
+                    '第三句话要求把每一个实验步骤和原始观察结果完整保留下来。')
             with patch('light_controller.get_light_controller', return_value=eng.fake_ctrl):
                 eng.speak(text)
             self.assertEqual(len(streams), 1)

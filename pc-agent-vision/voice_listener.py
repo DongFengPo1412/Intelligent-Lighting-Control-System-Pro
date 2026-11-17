@@ -117,8 +117,8 @@ class VoiceListener:
 
         self.wake_detector = None
         try:
-            from wake_detector import WakeDetector
-            kws_thresh = float(os.environ.get('KURISU_KWS_THRESHOLD', '0.46'))
+            from wake_detector import WakeDetector, DEFAULT_KWS_THRESHOLD
+            kws_thresh = float(os.environ.get('KURISU_KWS_THRESHOLD', str(DEFAULT_KWS_THRESHOLD)))
             self.wake_detector = WakeDetector(threshold=kws_thresh, score=1.5)
             print(f'[VoiceListener] 独立声学唤醒检测已就绪：助手 / 红莉栖 / 克里斯 / 克里斯蒂娜 / 牧濑红莉栖；阈值 {kws_thresh:.2f} (score=1.5)')
         except Exception as error:
@@ -578,6 +578,10 @@ class VoiceListener:
                             # hit (or in an already awake session). Proper-name
                             # hints help Whisper spell the character's name.
                             initial_prompt=prompt,
+                            hotwords=(
+                                '米津玄师 Lemon 周杰伦 发如雪 青花瓷 七里香 贪吃蛇 超级马里奥 俄罗斯方块 微光纪元'
+                                if self.is_awake else None
+                            ),
                             without_timestamps=True,
                             condition_on_previous_text=False,
                             vad_filter=False, # 关键：由外部 WebRTC VAD 精准切分，严禁内部二次截断破坏音节！
@@ -1167,9 +1171,9 @@ class VoiceListener:
                     start_threshold = max(awake_start_floor, min(max(start_threshold, ambient_energy * 3.0), 3000.0))
                     continue_threshold = max(awake_cont_floor, min(max(continue_threshold, ambient_energy * 1.35), 1100.0))
                 else:
-                    standby_start_floor = float(os.environ.get('KURISU_STANDBY_START_RMS', '1600'))
-                    standby_cont_floor = float(os.environ.get('KURISU_STANDBY_CONT_RMS', '900'))
-                    start_threshold = max(standby_start_floor, min(max(start_threshold, ambient_energy * 2.8), 2800.0))
+                    standby_start_floor = float(os.environ.get('KURISU_STANDBY_START_RMS', '1400'))
+                    standby_cont_floor = float(os.environ.get('KURISU_STANDBY_CONT_RMS', '800'))
+                    start_threshold = max(standby_start_floor, min(max(start_threshold, ambient_energy * 2.4), 2500.0))
                     continue_threshold = max(standby_cont_floor, min(max(continue_threshold, ambient_energy * 1.6), 1450.0))
 
                 # 5. 状态机：端点检测 (起始检测 vs 结束判定)

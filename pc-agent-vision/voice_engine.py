@@ -24,6 +24,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 import numpy as np
 import scipy.signal
+from speaker_dsp import SPEECH_TARGET_RMS, SPEECH_PEAK_CEILING, SPEECH_DSP_PROFILE
 try:
     import noisereduce as nr
     _HAS_NOISEREDUCE = True
@@ -195,7 +196,7 @@ class VoiceEngine:
         return zh_text, ja_text
 
     def _synthesize_raw(self, text: str, lang: str) -> Optional[np.ndarray]:
-        """调用 GPT-SoVITS 单独合成一段文本 (32kHz numpy float32)"""
+        """调用 GPT-SoVITS 单独合成一段文本 (32kHz PCM16 数值范围)。"""
         if not self.tts or not text or not text.strip():
             return None
 
@@ -238,13 +239,8 @@ class VoiceEngine:
 
     def _postprocess_audio_32k(self, audio_32k: np.ndarray) -> np.ndarray:
         """
-        声学滤波与电平塑形处理链 (保持已验收参数不变):
-        1. 95Hz 二阶高通滤波;
-        2. noisereduce 平稳降噪 (可选依赖);
-        3. 300Hz 去浑浊衰减 (-3.5dB);
-        4. 3800Hz 临场激励 (+3.5dB);
-        5. 14500Hz 二阶低通滤波;
-        6. 动态电平安全归一化 (保留 -1.2dB / 0.88 净空)。
+        135Hz 高通、300Hz 去浑浊、3.2kHz 临场与7.2kHz低通。
+        按 RMS 调整响度，再用平滑增益包络限制峰值；电平单独听音验收。
         """
         if audio_32k is None or len(audio_32k) == 0:
             return audio_32k
@@ -280,14 +276,14 @@ class VoiceEngine:
             b_lp, a_lp = scipy.signal.butter(2, 7200.0 / (sr / 2.0), btype='low')
             y = scipy.signal.lfilter(b_lp, a_lp, y)
 
-            # 5. 动态电平安全归一化（以 99.2% 分位抑制尖锐齿音突刺，提升整体人声响度同时严控峰值 <= 0.84 不破音）
-            peak = float(np.max(np.abs(y)))
-            if peak > 1e-4:
-                p99 = float(np.percentile(np.abs(y), 99.2))
-                ref = max(p99, peak * 0.72, 1e-4)
-                target_scale = 0.84
-                y = (y / ref) * target_scale
-                y = np.clip(y, -target_scale, target_scale) * 32767.0
+            # Match speech loudness without flattening high-amplitude waveforms.
+            # Digital headroom cannot guarantee the analog amplifier never clips.
+            from speaker_dsp import limit_peaks
+            y = y / 32768.0
+            rms = float(np.sqrt(np.mean(y * y)))
+            if rms > 1e-5:
+                y *= min(6.0, SPEECH_TARGET_RMS / rms)
+            y = limit_peaks(y, sample_rate=32000, ceiling=SPEECH_PEAK_CEILING) * 32767.0
             return np.clip(y, -32768, 32767).astype(np.int16)
         except Exception as e:
             print(f"[VoiceEngine 滤波异常]: {e}")
@@ -296,7 +292,8 @@ class VoiceEngine:
     def _synthesize_language_chunks(self, text: str, lang: str) -> Optional[np.ndarray]:
         """按完整句子分块合成单语音频，不切断 UTF-8 或句子；任一分块失败整体返回 None"""
         from bilingual_guard import chunk_sentences_safe
-        chunks_text = chunk_sentences_safe(text, max_chars=90)
+        from speaker_dsp import coalesce_speech_chunks
+        chunks_text = coalesce_speech_chunks(chunk_sentences_safe(text, max_chars=90), max_chars=90)
         if not chunks_text:
             return None
         audio_segments = []
@@ -359,7 +356,7 @@ class VoiceEngine:
                 cache_dir = runtime_cache_dir() / 'voice'
                 canonical_pair = f"{zh_text}\n{ja_text}"
                 cache_key = hashlib.sha256(
-                    f'bilingual-v3:{self.current_volume}:{canonical_pair}'.encode('utf-8')
+                    f'bilingual-v5:{SPEECH_DSP_PROFILE}:{canonical_pair}'.encode('utf-8')
                 ).hexdigest()
                 cache_file = cache_dir / (cache_key + '.wav')
 
@@ -439,7 +436,9 @@ class VoiceEngine:
         """Same voice/postprocessing as strict bundles, with per-language cache."""
         from pro_paths import cache_dir
         profile = os.environ.get('KURISU_TTS_BERT_DEVICE', 'inherit')
-        key = hashlib.sha256(f'single-v2:{profile}:{self.current_volume}:{lang}:{text}'.encode()).hexdigest()
+        # Hardware volume does not alter PCM: moving its slider must not force
+        # another GPU synthesis of an already prepared acknowledgement.
+        key = hashlib.sha256(f'single-v4:{profile}:{SPEECH_DSP_PROFILE}:{lang}:{text}'.encode()).hexdigest()
         folder = cache_dir() / 'voice-single'
         path = folder / (key + '.wav')
         with self._lock:
@@ -468,6 +467,24 @@ class VoiceEngine:
                 temporary.write_bytes(wav); temporary.replace(path)
             pcm = scipy.signal.resample_poly(audio.astype(np.float32), 1, 2)
             return np.clip(pcm, -32768, 32767).astype('<i2').tobytes(), wav
+
+    def prepare_control_replies(self):
+        """Populate real TTS caches before capture; never execute or play controls."""
+        from semantic_control import describe_action
+        from bilingual_guard import validate_bilingual_alignment
+        prepared = 0
+        actions = ([{'tool': 'set_light_mode', 'value': mode} for mode in (1, 2, 3)]
+                   + [{'tool': 'start_game', 'value': gid} for gid in (1, 33, 41)])
+        for action in actions:
+            zh, ja = describe_action(action)
+            if not validate_bilingual_alignment(zh, ja)[0]:
+                continue
+            for text, lang in ((zh, 'zh'), (ja, 'ja')):
+                pcm, _ = self._single_language_bundle(text, lang)
+                if not pcm:
+                    raise RuntimeError('控制短应答预生成失败')
+                prepared += 1
+        return prepared
 
     def prepare_wake_reply(self, keyword=None):
         """Prepare the short Chinese wake greeting once, never during capture."""
@@ -569,22 +586,30 @@ class VoiceEngine:
             if error or not text:
                 outcome['translation_error'] = error or '日语译文为空；中文回复保留'
                 return None
-            segments = chunk_sentences_safe(text, max_chars=28)
+            from speaker_dsp import coalesce_speech_chunks
+            segments = coalesce_speech_chunks(chunk_sentences_safe(text, max_chars=48))
             return text, segments, synth(segments[0], 'ja')
 
         def audio_segments():
-            segments = chunk_sentences_safe(zh, max_chars=22)
+            from speaker_dsp import coalesce_speech_chunks
+            segments = coalesce_speech_chunks(chunk_sentences_safe(zh, max_chars=48))
             pending = synthesis_pool.submit(synth, segments[0], 'zh')
             for index in range(len(segments)):
+                segment_wait_started = time.perf_counter()
                 pcm = wait(pending)
+                if index:
+                    timings['max_continuation_wait_ms'] = max(
+                        timings.get('max_continuation_wait_ms', 0),
+                        round((time.perf_counter() - segment_wait_started) * 1000, 1),
+                    )
                 if stopped():
                     return
-                # Start Japanese translation only after the first Chinese audio segment is ready
-                # so GPT-SoVITS gets 100% exclusive GPU priority for first_pcm_ms.
-                start_translation()
                 if index+1 < len(segments):
                     pending = synthesis_pool.submit(synth, segments[index+1], 'zh')
                 else:
+                    # Keep GPU translation out of every Chinese synthesis chunk,
+                    # not just the first: otherwise later Chinese packets stall.
+                    start_translation()
                     # The last Chinese PCM is now ready. Its playback gives
                     # Japanese's first chunk time to synthesize without racing
                     # Chinese for the shared model lock.

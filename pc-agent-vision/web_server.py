@@ -553,8 +553,9 @@ async def run_chat(message: str, cancelled=None):
                 "model_error": getattr(agent, 'last_model_error', None),
                 "translation_error": getattr(agent, 'last_translation_error', None),
                 "tts_error": getattr(agent, 'last_tts_error', None),
-                "timings": dict(getattr(agent, 'last_turn_timings', {}),
-                                **getattr(voice, 'last_speech_timings', {})),
+                # Music commands need no TTS. Never attach the preceding
+                # conversation's synthesis/translation timings to this turn.
+                "timings": dict(getattr(agent, 'last_turn_timings', {})),
             }
         except asyncio.CancelledError:
             turn_cancel.set()
@@ -921,6 +922,7 @@ async def handle_status(request: web.Request):
         "wifi": wifi_info,
         "volume": wifi_info.get('last_command', {}).get('volume', 70),
         "last_audio_error": getattr(controller, 'last_audio_error', None),
+        "audio_stream_stats": getattr(getattr(controller, '_network_audio', None), 'last_stream_stats', {}),
         "ready_sound_status": getattr(controller, 'ready_sound_status', 'not_attempted'),
         "ready_sound_error": getattr(controller, 'ready_sound_error', None),
         "pcm_connected": bool(getattr(controller, 'audio_connected', False)),
@@ -1221,6 +1223,9 @@ async def on_startup(app: web.Application):
                     raise RuntimeError('角色语音真实预热失败')
             t_synth = (time.perf_counter() - t_synth0) * 1000.0
             print(f"[WebServer 启动耗时] 阶段2 角色语音预热: {t_synth:.1f}ms")
+            if hasattr(voice, 'prepare_control_replies'):
+                count = await loop.run_in_executor(None, voice.prepare_control_replies)
+                print(f'[WebServer] 常用控制语音缓存已准备: {count} 段（未播放或执行硬件操作）')
         except Exception as synth_err:
             print(f"[WebServer] 角色语音预热异常: {synth_err}")
 

@@ -5,8 +5,11 @@ import threading
 import numpy as np
 
 
+DEFAULT_KWS_THRESHOLD = 0.43
+
+
 class WakeDetector:
-    def __init__(self, threshold=.46, score=1.5):
+    def __init__(self, threshold=DEFAULT_KWS_THRESHOLD, score=1.5):
         root = Path(__file__).resolve().parents[1]
         sys.path.insert(0, str(root / 'pc-agent-vision' / '.runtime_deps'))
         import sherpa_onnx

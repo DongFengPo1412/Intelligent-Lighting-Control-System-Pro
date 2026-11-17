@@ -139,6 +139,7 @@ class LibraryContracts(unittest.TestCase):
         self.assertEqual(self.queue.current["title"], "晴天")
 
     def test_music_headroom_does_not_attenuate_the_analysis_source(self):
+        self.player.gain = 0.25
         track = self.library.tracks[0]
         self.queue.play(track["id"], single=True)
         self.wait_idle()

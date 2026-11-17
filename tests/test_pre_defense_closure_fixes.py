@@ -332,7 +332,7 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
                 sys.modules, {"sherpa_onnx": fake_sherpa}
             ):
                 wake_detector.WakeDetector()
-        self.assertAlmostEqual(captured["keywords_threshold"], 0.46)
+        self.assertAlmostEqual(captured["keywords_threshold"], 0.43)
         self.assertAlmostEqual(captured["keywords_score"], 1.5)
 
     def test_awake_asr_prompt_and_roommate_noise_filter(self):

@@ -70,7 +70,8 @@ class MusicFeatures:
         )
 
 
-DEFAULT_MUSIC_GAIN = 0.55
+# Owner's Lemon listening comparison: M2 at hardware volume 100%.
+DEFAULT_MUSIC_GAIN = 0.20
 DEFAULT_MUSIC_HIGHPASS_HZ = 155.0
 DEFAULT_MUSIC_DIGITAL_CEILING = 0.82
 
@@ -120,7 +121,6 @@ class SpeakerAudioProcessor:
         in_peak = float(np.max(np.abs(s))) if s.size else 0.0
         if self._b_hp is not None:
             import scipy.signal
-
             hp, self._zi = scipy.signal.lfilter(self._b_hp, self._a_hp, s, zi=self._zi)
         else:
             hp = s
@@ -145,12 +145,10 @@ def process_speaker_audio(
     highpass_hz=DEFAULT_MUSIC_HIGHPASS_HZ,
     max_ceiling=DEFAULT_MUSIC_DIGITAL_CEILING,
 ):
-    """Unified, continuous digital speaker pre-processing for 16kHz mono PCM16.
+    """Keep the owner's existing linear music chain as the listening baseline.
 
-    - Applies a single continuous 2nd-order Butterworth high-pass filter (default 105 Hz,
-      explicitly disabled only when highpass_hz <= 0 or None).
-    - Applies pure linear digital scaling (`gain`) bounded only by `max_ceiling` (0.85 digital peak);
-      does not boost quiet tracks above `gain` and does not make unverified analog hardware guarantees.
+    Gain and bass cutoff can be compared independently; do not change the
+    processing algorithm without a successful physical listening comparison.
     """
     processor = SpeakerAudioProcessor(
         gain=gain,
@@ -219,8 +217,12 @@ class MusicPlayer:
         self.running = False
         self.visual_fluid = True
         self.gain = float(os.environ.get("KURISU_MUSIC_GAIN", str(DEFAULT_MUSIC_GAIN)))
+        self.highpass_hz = float(os.environ.get("KURISU_MUSIC_HIGHPASS_HZ", str(DEFAULT_MUSIC_HIGHPASS_HZ)))
+        self.digital_ceiling = DEFAULT_MUSIC_DIGITAL_CEILING
         if not math.isfinite(self.gain) or not 0 < self.gain <= 5.0:
             raise ValueError("KURISU_MUSIC_GAIN must be in (0, 5.0]")
+        if not math.isfinite(self.highpass_hz) or not 60 <= self.highpass_hz <= 400:
+            raise ValueError("KURISU_MUSIC_HIGHPASS_HZ must be in 60..400 Hz")
         self.duration = 0.0
         self._position = 0.0
         self._start_offset = 0.0
@@ -428,7 +430,9 @@ class MusicPlayer:
             # Music masters are much louder than the accepted speech/chime
             # baseline. Keep speaker headroom without weakening MIR features.
             rem_pcm = pcm[start_sample * 2 :] if start_sample > 0 else pcm
-            speaker_pcm = process_speaker_audio(rem_pcm, gain=self.gain) if rem_pcm else b""
+            speaker_pcm = process_speaker_audio(
+                rem_pcm, gain=self.gain, highpass_hz=self.highpass_hz, max_ceiling=self.digital_ceiling
+            ) if rem_pcm else b""
             if (
                 speaker_pcm
                 and not self.controller.play_audio_pcm(speaker_pcm)

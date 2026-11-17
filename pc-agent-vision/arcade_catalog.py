@@ -3,6 +3,8 @@
 import json
 import os
 import re
+from difflib import SequenceMatcher
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any
 
@@ -219,4 +221,37 @@ def resolve_arcade_game(query: Any) -> Optional[Tuple[int, str]]:
         return gid, _CATALOG_CACHE.get(gid, {}).get("name", stripped)
 
     return None
+
+
+@lru_cache(maxsize=512)
+def resolve_spoken_arcade_game(name: str) -> Optional[Tuple[int, str]]:
+    """Resolve a game-name slot after an explicit launch verb, never whole chat.
+
+    Only a unique, high-confidence phonetic match may auto-launch. Short aliases
+    and close competitors are left to the semantic planner for clarification.
+    """
+    exact = resolve_arcade_game(name)
+    if exact:
+        return exact
+    if len(name) < 3 or not re.fullmatch(r'[\u4e00-\u9fff]+', name):
+        return None
+    try:
+        from pypinyin import lazy_pinyin
+    except ImportError:
+        return None
+    sound = ''.join(lazy_pinyin(name))
+    scores = {}
+    for alias, gid in _NAME_TO_ID.items():
+        if len(alias) < 3 or not re.fullmatch(r'[\u4e00-\u9fff]+', alias):
+            continue
+        candidate = ''.join(lazy_pinyin(alias))
+        score = SequenceMatcher(None, sound, candidate).ratio()
+        scores[gid] = max(scores.get(gid, 0), score)
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if not ranked or ranked[0][1] < 0.92:
+        return None
+    if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < 0.08:
+        return None
+    gid = ranked[0][0]
+    return gid, _CATALOG_CACHE[gid]['name']
 
