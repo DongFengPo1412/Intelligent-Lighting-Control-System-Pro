@@ -541,6 +541,16 @@ class KurisuAgent:
             )
 
         conv_history = [{'role': m['role'], 'content': m['content']} for m in self.history[1:] if m.get('role') in ('user', 'assistant')]
+        if executed_facts and conv_history and conv_history[-1].get('role') == 'user':
+            facts_summary = '；'.join(executed_facts)
+            conv_history[-1] = {
+                'role': 'user',
+                'content': (
+                    f"{conv_history[-1]['content']}\n"
+                    f"（系统事实：你刚刚已为我完成实体灯板操作：{facts_summary}。"
+                    f"请以牧濑红莉栖的口吻只用1~2句简短中文回应（不超过40字），自然说明已将灯板调成与我所说意象对应的灯光颜色或模式，严禁说成找视频、找图片或查资料！）"
+                ),
+            }
         messages = [{'role': 'system', 'content': '\n\n'.join(system_sections)}] + conv_history
         payload = {'model': self.model, 'messages': messages, 'stream': False}
         if is_ollama:
@@ -573,6 +583,14 @@ class KurisuAgent:
             zh = clean_production_prose(zh_cand or raw_content, lang='zh')
             if not zh:
                 raise ValueError('Empty model response')
+            if executed_facts:
+                fact_head = executed_facts[0].rstrip('。！! ')
+                if any(bad in zh for bad in ('视频', '图片', '照片', '找一下', '搜索', '链接', '网页')):
+                    zh = f"哼，{fact_head}，这下满意了吧？"
+                    ja_cand = ''
+                elif not any(k in zh for k in ('灯', '光', '色', '模式', '亮', '暗', '游戏', '倒计时', '红', '蓝', '绿', '紫', '青', '黄', '粉', '白', '极光', '霓虹', '流星', '星空', '火焰', '烈焰', '森林', '海', '桌宠', '世界线', '关')):
+                    zh = f"{fact_head}。{zh}"
+                    ja_cand = ''
 
             if getattr(self.voice, 'chinese_first', False) and getattr(self, '_speak_turn', True):
                 return self._finish_reply(zh, turn_id=turn_id)

@@ -517,16 +517,17 @@ class VoiceListener:
                 self._is_processing = False
 
     def _asr_prompt(self):
-        # Concise domain hints without generic "开灯" that can pull short color phrases into "开灯".
-        prompt = (
-            "助手，红莉栖，牧濑红莉栖，克里斯，克里斯蒂娜。"
-            "结束对话，再见，灯光效果，红灯，蓝灯，绿灯，幻彩霓虹，呼吸极光，流星划过，繁星点点，赛博烈焰，代码雨，世界线，红莉栖桌宠，贪吃蛇，俄罗斯方块。"
-        )
+        # In standby, provide wake-word spelling hints after acoustic KWS hit;
+        # once awake, omit wake words and control nouns so Whisper never hallucinates them on background noise.
+        if not getattr(self, 'is_awake', False):
+            prompt = "助手，红莉栖，牧濑红莉栖，克里斯，克里斯蒂娜。"
+        else:
+            prompt = ""
         controller = getattr(self, 'controller', None)
         player = getattr(controller, '_music_player', None)
         music_active = bool(getattr(player, 'running', False) or
                             getattr(self, '_music_monitor', False))
-        library = getattr(controller, '_music_library', None)
+        library = getattr(self, 'controller', None) and getattr(controller, '_music_library', None)
         if music_active and library and getattr(library, 'speech_hints', None):
             hints = library.speech_hints()
             if hints:
@@ -560,18 +561,13 @@ class VoiceListener:
                         else:
                             p90_rms = raw_rms
                         audio_np = raw_float.copy()
-                        try:
-                            from scipy.signal import lfilter
-                            audio_np = lfilter([1.0, -1.0], [1.0, -0.965], audio_np).astype(np.float32)
-                        except Exception:
-                            pass
                         peak = float(np.max(np.abs(audio_np))) if len(audio_np) else 0
                         if peak > 1e-5:
                             audio_np *= min(8.0, .75 / peak)
 
                         t_asr_start = time.perf_counter()
-                        # 注入唤醒词与基础意图先验，杜绝 Whisper 对短音节猜想出 '呵呵'
-                        prompt = self._asr_prompt()
+                        # 注入唤醒词先验（仅待命期）或音乐词条先验，避免已唤醒期幻觉出唤醒词或固定指令
+                        prompt = self._asr_prompt() or None
                         segments, info = self.whisper_model.transcribe(
                             audio_np,
                             language="zh",
@@ -604,18 +600,20 @@ class VoiceListener:
                             if hasattr(s, 'avg_logprob'):
                                 scores.append(float(s.avg_logprob))
 
-                        text = "".join(parts).strip()
+                        text = "".join(parts).replace('\ufffd', '').strip()
                         dt_asr = (time.perf_counter() - t_asr_start) * 1000.0
                         avg_lp = (sum(scores) / len(scores)) if scores else None
                         max_nsp = max(no_speech_probs) if no_speech_probs else 0.0
                         compact_txt = re.sub(r'[，,。.!！?？、…~\s]', '', text)
                         if avg_lp is not None and not acoustic_keyword:
-                            # Use active 90th-percentile frame RMS so valid speech inside a longer window
-                            # is not penalized by surrounding pauses, while low-energy fan hum stays gated.
+                            # Reject far-field roommate chatter and noise hallucinations regardless of raw_rms,
+                            # including fullwidth digit artifacts (e.g. '４') that Whisper emits on unintelligible noise.
+                            has_fullwidth_digit = bool(re.search(r'[０-９]', text))
                             low_conf = (
-                                (avg_lp < -1.55 or max_nsp > 0.45)
-                                if p90_rms >= 0.068
-                                else (avg_lp < -0.78 or (avg_lp < -0.65 and (max_nsp > 0.25 or len(compact_txt) <= 4)))
+                                has_fullwidth_digit
+                                or avg_lp < -0.78
+                                or max_nsp > 0.42
+                                or (avg_lp < -0.64 and (max_nsp > 0.22 or len(compact_txt) <= 4))
                             )
                             if low_conf:
                                 print(f"[语音过滤] 丢弃低置信噪声识别: text={text!r} avg_logprob={avg_lp:.3f} no_speech={max_nsp:.2f} raw_rms={raw_rms:.4f} p90_rms={p90_rms:.4f}")
@@ -743,10 +741,12 @@ class VoiceListener:
 
                     # 提取纯汉字与字母数字有效字符
                     clean_words = re.sub(r'[，。！？、…~\s\da-zA-Z]', '', cmd_to_exec).strip()
-                    hesitation_words = {"我", "看", "说", "我说", "那个", "这个", "在", "喂", "啊", "嗯", "哦", "好的", "对", "呢", "吧"}
+                    hesitation_words = {
+                        "我", "看", "说", "我说", "那个", "这个", "在", "喂", "啊", "嗯", "哦", "好的", "对", "呢", "吧",
+                        "诶", "哎", "唉", "哈", "咦", "红莉", "牧濑", "克里", "蒂娜",
+                    }
                     if len(clean_words) < 2 or clean_words in hesitation_words:
                         print(f"[等待指令]: 捕获到过渡字词/停顿 (仅听到: '{cmd_to_exec}')，保持唤醒状态，静候完整有效指令...")
-                        self.last_awake_time = time.time()
                         self._update_board_led("active")
                         return
 
@@ -1157,18 +1157,19 @@ class VoiceListener:
                     ambient_energy = max(300.0, min(950.0, 0.98 * ambient_energy + 0.02 * ac_rms))
 
                 # 嘈杂/多人现场抗噪门限（可用环境变量现场微调）：
-                # 待命期高起振拦截旁人交谈误唤醒；唤醒后要求近场明确人声才点亮亮红拾音，停声后回落暗红并计时进入思考。
+                # 待命期高起振拦截旁人交谈误唤醒；唤醒后近场人声触发后保持稳定亮红（绝不随音节间隙闪烁），
+                # 停声满 0.66s 后稳定转为暗红，暗红再持续约 2.1s（共约 2.76s 停顿冗余）确认说完话才进入思考。
                 start_threshold, continue_threshold = self._speech_energy_thresholds(ambient_energy)
                 if self.is_awake:
-                    awake_start_floor = float(os.environ.get('KURISU_AWAKE_START_RMS', '2000'))
-                    awake_cont_floor = float(os.environ.get('KURISU_AWAKE_CONT_RMS', '1250'))
-                    start_threshold = max(awake_start_floor, min(max(start_threshold, ambient_energy * 3.2), 3200.0))
-                    continue_threshold = max(awake_cont_floor, min(max(continue_threshold, ambient_energy * 2.0), 1950.0))
+                    awake_start_floor = float(os.environ.get('KURISU_AWAKE_START_RMS', '1900'))
+                    awake_cont_floor = float(os.environ.get('KURISU_AWAKE_CONT_RMS', '720'))
+                    start_threshold = max(awake_start_floor, min(max(start_threshold, ambient_energy * 3.0), 3000.0))
+                    continue_threshold = max(awake_cont_floor, min(max(continue_threshold, ambient_energy * 1.35), 1100.0))
                 else:
                     standby_start_floor = float(os.environ.get('KURISU_STANDBY_START_RMS', '1600'))
-                    standby_cont_floor = float(os.environ.get('KURISU_STANDBY_CONT_RMS', '1000'))
+                    standby_cont_floor = float(os.environ.get('KURISU_STANDBY_CONT_RMS', '900'))
                     start_threshold = max(standby_start_floor, min(max(start_threshold, ambient_energy * 2.8), 2800.0))
-                    continue_threshold = max(standby_cont_floor, min(max(continue_threshold, ambient_energy * 1.8), 1750.0))
+                    continue_threshold = max(standby_cont_floor, min(max(continue_threshold, ambient_energy * 1.6), 1450.0))
 
                 # 5. 状态机：端点检测 (起始检测 vs 结束判定)
                 if not is_speaking:
@@ -1182,8 +1183,9 @@ class VoiceListener:
                             silent_count = 0
                             speech_trigger_count = 0
                             continue_streak = 0
+                            speaker_ema_rms = float(ac_rms)
                             speech_frames = list(preroll_frames)
-                            # 对齐中阶 single_led.cc: 说话时点亮鲜红 hearing (HIGH_BRIGHTNESS)
+                            # 对齐中阶 single_led.cc: 说话时稳定点亮鲜红 hearing (HIGH_BRIGHTNESS)
                             self._update_board_led("hearing")
                             tag = "【等待指令中】" if self.is_awake else "【待命·等待唤醒词】"
                             print(f"\n[ESP32 麦克风: {tag} 检测到语音输入 (VAD 触发, RMS: {ac_rms:.0f}, 门槛: {start_threshold:.0f}, 底噪: {ambient_energy:.0f})...]", end="", flush=True)
@@ -1192,29 +1194,46 @@ class VoiceListener:
                 else:
                     speech_frames.append(ac_bytes)
 
-                    # 最大拾音时长保护：待命期最多 3.3s (110帧)，等待指令期最多 6.0s (200帧)
-                    max_frames = 200 if self.is_awake else 110
-                    if len(speech_frames) >= max_frames:
-                        silent_count = 999 # 达到上限立即强制判停交付
-                    elif (not frame_vad_speech) or (ac_rms < continue_threshold):
-                        continue_streak = 0
-                        silent_count += 1
-                        # 说话人停止说话 120ms (4 帧) 即由亮红落回暗红，直观提示“静音倒数”
-                        if self.is_awake and silent_count >= 4:
-                            self._update_board_led("active")
-                    else:
-                        continue_streak += 1
-                        # 一旦已经落入暗红倒数，需连续 3 帧 (90ms) 近场有效语音才重新点亮亮红并清零倒数
-                        need_streak = 3 if silent_count >= 4 else 2
-                        if silent_count == 0 or continue_streak >= need_streak:
-                            silent_count = 0
-                            self._update_board_led("hearing")
+                    # 说话时长按是否说完话动态判定，不设 2s/6s 固定硬截断（唤醒期仅保留 30s 内存安全上限）
+                    max_frames = int(os.environ.get('KURISU_AWAKE_MAX_FRAMES', '1000')) if self.is_awake else 120
+                    dim_frames = int(os.environ.get('KURISU_AWAKE_DIM_FRAMES', '22')) if self.is_awake else 8
+                    silent_limit = int(os.environ.get('KURISU_AWAKE_SILENT_FRAMES', '92')) if self.is_awake else 15
 
-                    # 悬挂断句门限：
-                    # 待命唤醒期 14 帧 (~420ms)；
-                    # 等待指令期 26 帧 (~780ms 暗红倒数结束后收敛进入思考阶段)
-                    silent_limit = 26 if self.is_awake else 14
+                    if len(speech_frames) >= max_frames:
+                        silent_count = 999 # 达到 30s 安全上限才强制交付
+                    elif silent_count < dim_frames:
+                        # 阶段 1（亮红保持期，0 ~ 0.66s）：说话过程中轻声虚词/音节间隙保持亮红绝不闪烁
+                        if (frame_vad_speech and ac_rms >= continue_threshold) or (ac_rms >= start_threshold * 0.85):
+                            speaker_ema_rms = 0.85 * locals().get('speaker_ema_rms', float(ac_rms)) + 0.15 * min(float(ac_rms), 12000.0)
+                            silent_count = 0
+                            continue_streak = 0
+                        else:
+                            silent_count += 1
+                            continue_streak = 0
+                            # 连续停顿满 dim_frames (0.66s) 后，指示灯一次性平稳转为暗红（开始约 2.1s 完句观察倒数）
+                            if self.is_awake and silent_count == dim_frames:
+                                self._update_board_led("active")
+                    else:
+                        # 阶段 2（暗红完句观察期，0.66s ~ 2.76s）：
+                        # 说话人若尚未说完、继续开口（连续 3 帧近场人声），立即恢复稳定亮红继续录制同一句话；
+                        # 远场较低杂音不会打断暗红倒数，倒数满即进入青蓝灯思考状态。
+                        resume_rms = max(start_threshold * 0.82, min(locals().get('speaker_ema_rms', start_threshold) * 0.45, 2600.0))
+                        if frame_vad_speech and ac_rms >= resume_rms:
+                            continue_streak += 1
+                            if continue_streak >= 3:
+                                silent_count = 0
+                                continue_streak = 0
+                                self._update_board_led("hearing")
+                            else:
+                                silent_count += 1
+                        else:
+                            continue_streak = 0
+                            silent_count += 1
+
                     if silent_count >= silent_limit:
+                        # 裁剪掉暗红完句等待期末尾多余的 ~2.2s 环境空白帧，仅保留语音本体 + 0.48s 自然尾音送交 ASR
+                        if silent_count < 900 and silent_count > 16 and len(speech_frames) > (silent_count - 12):
+                            speech_frames = speech_frames[:-(silent_count - 16)]
                         is_speaking = False
                         silent_count = 0
                         speech_trigger_count = 0

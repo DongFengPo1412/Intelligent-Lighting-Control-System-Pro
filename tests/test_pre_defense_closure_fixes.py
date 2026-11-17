@@ -335,6 +335,41 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         self.assertAlmostEqual(captured["keywords_threshold"], 0.46)
         self.assertAlmostEqual(captured["keywords_score"], 1.5)
 
+    def test_awake_asr_prompt_and_roommate_noise_filter(self):
+        import types
+        from voice_listener import VoiceListener
+
+        listener = VoiceListener.__new__(VoiceListener)
+        listener.controller = None
+        listener._music_monitor = False
+        listener.is_awake = False
+        self.assertIn("红莉栖", listener._asr_prompt())
+
+        # Once awake, _asr_prompt must not prime Whisper with wake names or "结束对话"
+        listener.is_awake = True
+        self.assertEqual(listener._asr_prompt(), "")
+
+        # Low-confidence roommate noise (-1.20) or fullwidth digits ('海洋４') must be dropped even at high RMS
+        dispatched = []
+        listener._work_lock = mock.MagicMock()
+        listener._work_lock.__enter__ = mock.Mock(return_value=None)
+        listener._work_lock.__exit__ = mock.Mock(return_value=None)
+        listener._update_board_led = mock.Mock()
+        listener._dispatch_command = lambda cmd, **kw: dispatched.append(cmd)
+        listener.last_awake_time = 100.0
+        loud_pcm = (b"\x00\x20" * 16000)
+        for noisy_seg in (
+            types.SimpleNamespace(text="你去给这些机会，红莉栖?", avg_logprob=-1.199, no_speech_prob=0.15),
+            types.SimpleNamespace(text="人机而已４时刻玩个开４", avg_logprob=-0.55, no_speech_prob=0.10),
+            types.SimpleNamespace(text="红莉。", avg_logprob=-0.40, no_speech_prob=0.05),
+        ):
+            listener.whisper_model = types.SimpleNamespace(
+                transcribe=lambda *a, _seg=noisy_seg, **k: ([_seg], types.SimpleNamespace(no_speech_prob=0.1))
+            )
+            listener._process_utterance(loud_pcm)
+        self.assertEqual(dispatched, [])
+        self.assertEqual(listener.last_awake_time, 100.0)
+
 
 if __name__ == "__main__":
     unittest.main()
