@@ -271,6 +271,7 @@ class MultimodalHub:
             self.source = "camera"
             self.input_rotation = 0
             self.input_mirrored = True
+            self.started = True
         self._check_calibration_compatibility()
         if self.thread and self.thread.is_alive():
             if camera != self.camera:
