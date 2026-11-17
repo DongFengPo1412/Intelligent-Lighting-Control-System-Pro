@@ -211,6 +211,7 @@ SAFE_UNAUTHENTICATED_LAN_ENDPOINTS = frozenset({
 SAFE_UNAUTHENTICATED_LAN_GET_ENDPOINTS = frozenset({
     "/api/pro/library",
     "/api/pro/frame",
+    "/api/pro/camera/devices",
 })
 
 # Paths that may use a short-lived, single-session, peer-bound vision capability credential
@@ -368,6 +369,7 @@ class AccessPolicy:
         bearer = supplied[7:] if supplied.startswith("Bearer ") else ""
         cap_candidate = (
             headers.get("X-Vision-Token", "")
+            or query.get("vision_token", "")
             or bearer
             or cookies.get("kurisu_vision_session", "")
         )

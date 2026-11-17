@@ -874,13 +874,19 @@ async def handle_status(request: web.Request):
         if "mode" in probe:
             wifi_info["last_mode"] = probe["mode"]
     local_ip = get_local_ip(wifi_info.get("board_sta_ip"))
-    is_local_req = bool(request.app.get('access_policy') and request.app['access_policy'].local(request))
+    policy = request.app.get('access_policy')
+    is_trusted_client = bool(
+        policy and (
+            policy.local(request)
+            or (policy.trust_private and policy.is_trusted_peer(request.remote or ""))
+        )
+    )
 
     return web.json_response({
         "status": "online",
         "host_ip": local_ip,
         "lan_url": f"http://{local_ip}:{WEB_PORT}",
-        "pairing_token": request.app['access_policy'].token if is_local_req else None,
+        "pairing_token": policy.token if is_trusted_client else None,
         "port": controller.port,
         "is_connected": probe.get('status')=='ok' or (probe.get('error') in ('telemetry_busy', 'ack_timeout') and wifi_info['wifi_online']),
         "control_probe": probe.get('error') or probe.get('status'),

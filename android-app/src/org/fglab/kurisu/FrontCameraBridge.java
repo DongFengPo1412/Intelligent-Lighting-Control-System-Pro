@@ -28,7 +28,7 @@ public class FrontCameraBridge {
     private SurfaceTexture mSurface;
     private volatile boolean mRunning = false;
     private volatile boolean mUploading = false;
-    private volatile int mRotation = 90; // Default: 90 degrees clockwise as requested
+    private volatile int mRotation = 270; // Default: 270 degrees clockwise for Android front camera upright orientation
     private volatile String mAuthorizedOrigin = null;
     private volatile String mCurrentSessionId = null;
     private volatile String mVisionToken = "";

@@ -136,7 +136,20 @@
       return state.token || "";
     }
   }
-  function promptPairingToken() {
+  async function promptPairingToken() {
+    const existing = getAccessToken() || state.general?.pairing_token || "";
+    if (existing) return existing;
+    try {
+      const r = await fetch("/api/status", { cache: "no-store" });
+      if (r.ok) {
+        const st = await r.json();
+        if (st && st.pairing_token) {
+          state.token = st.pairing_token;
+          try { pairStorage.setItem("kurisu_access_token", st.pairing_token); } catch (_) { }
+          return st.pairing_token;
+        }
+      }
+    } catch (_) { }
     const dialog = $("pairDialog"), form = $("pairForm"), input = $("pairTokenInput");
     if (!dialog || typeof dialog.showModal !== "function" || !form || !input) {
       return window.prompt("请输入电脑服务的配对令牌（见电脑端 web-access-token 文件）");
@@ -241,6 +254,10 @@
     weekday: "long",
   }).format(new Date());
   function connection(s) {
+    if (s?.pairing_token) {
+      state.token = s.pairing_token;
+      try { pairStorage.setItem("kurisu_access_token", s.pairing_token); } catch (_) { }
+    }
     s = deviceHealth.observe(s);
     state.online = !!s;
     state.simulated = !!s?.simulated;
@@ -1921,6 +1938,7 @@
   let activeVisionToken = "";
   let pendingNativeCameraResolver = null;
   let pendingCameraRequestId = "";
+  let currentPhoneRotation = 270;
 
   function releaseLocalPhoneCapture() {
     phoneVisionEpoch += 1;
@@ -2104,7 +2122,7 @@
 
         if (obs.hand) {
           const h = obs.hand;
-          const hx = (1 - h.x) * overlay.width;
+          const hx = h.x * overlay.width;
           const hy = h.y * overlay.height;
           octx.beginPath();
           octx.arc(hx, hy, 16, 0, Math.PI * 2);
@@ -2134,6 +2152,9 @@
       if (video) video.style.display = "none";
       if (img) img.style.display = "block";
       if (wrapper) wrapper.style.display = "block";
+      if (typeof window.AmadeusNative.setCameraRotation === "function") {
+        try { window.AmadeusNative.setCameraRotation(currentPhoneRotation); } catch (_) { }
+      }
 
       let serverBase = state.serverOrigin || (window.location && window.location.origin) || "";
       if (!serverBase || serverBase.startsWith("file:")) {
@@ -2182,6 +2203,9 @@
           throw Error("前置摄像头启动未完成: " + rsn);
         }
         activeNativeEpoch = Number(finalSt.epoch || 0);
+        if (typeof window.AmadeusNative.setCameraRotation === "function") {
+          try { window.AmadeusNative.setCameraRotation(currentPhoneRotation); } catch (_) { }
+        }
         if (info) info.textContent = "📷 摄像头已打开 (camera_opened)";
         phoneStream = { isNative: true, sessionId, epoch: sessionEpoch };
         return;
@@ -2191,6 +2215,9 @@
       if (!started) {
         await stopPhoneCamera();
         throw Error("硬件前置摄像头无法打开或未授予相机权限");
+      }
+      if (typeof window.AmadeusNative.setCameraRotation === "function") {
+        try { window.AmadeusNative.setCameraRotation(currentPhoneRotation); } catch (_) { }
       }
       if (info) info.textContent = "📷 摄像头已打开 (camera_opened)";
       phoneStream = { isNative: true, sessionId, epoch: sessionEpoch };
@@ -2354,7 +2381,10 @@ bind("visionStart", async () => {
         $("cameraStreamWrapper").style.display = "block";
         const tok = getAccessToken();
         state.token = tok;
-        $("cameraStreamImg").src = `/api/pro/camera/feed?t=${Date.now()}`;
+        const authQs = (res && res.vision_token)
+          ? `&vision_token=${encodeURIComponent(res.vision_token)}`
+          : (tok ? `&token=${encodeURIComponent(tok)}` : "");
+        $("cameraStreamImg").src = `/api/pro/camera/feed?t=${Date.now()}${authQs}`;
       }
     }
   }
@@ -2403,7 +2433,9 @@ bind("visionStop", async () => {
     $("visionSummary").textContent = "停止未确认，点击可重试";
   }
 });
-let currentPhoneRotation = 90;
+if (window.AmadeusNative && typeof window.AmadeusNative.setCameraRotation === "function") {
+  try { window.AmadeusNative.setCameraRotation(currentPhoneRotation); } catch (_) { }
+}
 if ($("rotatePhoneCameraBtn")) {
   $("rotatePhoneCameraBtn").addEventListener("click", (e) => {
     e.stopPropagation();

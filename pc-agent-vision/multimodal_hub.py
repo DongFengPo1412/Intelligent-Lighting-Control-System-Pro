@@ -612,9 +612,9 @@ class MultimodalHub:
                 obs = self._process_cv_frame(
                     img,
                     handle,
-                    is_flipped=frame_mirrored,
-                    raw_mirrored=frame_mirrored,
-                    apply_flip=False,
+                    is_flipped=False,
+                    raw_mirrored=False,
+                    apply_flip=bool(frame_mirrored),
                     source="remote",
                     rotation=frame_rotation,
                     apply_rotation=bool(apply_rotation),

@@ -370,6 +370,42 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         self.assertEqual(dispatched, [])
         self.assertEqual(listener.last_awake_time, 100.0)
 
+    def test_stage_d_remote_camera_horizontal_mirror_and_lan_status_token(self):
+        import cv2
+        import numpy as np
+        import types
+        from multimodal_hub import MultimodalHub
+        from simulator import SimulatedController
+
+        ctrl = SimulatedController()
+        hub = MultimodalHub(ctrl, None)
+        sid = hub.start_remote(mode="fingertip", rotation=270, mirrored=True)
+
+        # Create a 64x64 image where left half is black (0) and right half is bright (250)
+        img = np.zeros((64, 64, 3), dtype=np.uint8)
+        img[:, 32:] = 250
+        _, buf = cv2.imencode(".jpg", img)
+
+        captured_rgb = []
+
+        class _FakeHands:
+            def process(self, rgb):
+                captured_rgb.append(rgb.copy())
+                return types.SimpleNamespace(multi_hand_landmarks=None)
+
+        class _FakeFace:
+            def process(self, rgb):
+                return types.SimpleNamespace(multi_face_landmarks=None)
+
+        hub._remote_hands = _FakeHands()
+        hub._remote_face = _FakeFace()
+        hub.process_remote_frame(buf.tobytes(), mode="fingertip", session_id=sid, rotation=270, mirrored=True)
+        self.assertEqual(len(captured_rgb), 1)
+        # Because mirrored=True flips the remote frame horizontally, the bright right half (x>=32)
+        # must now be on the left half (x<32) so moving hand left moves LED ball left!
+        self.assertGreater(float(np.mean(captured_rgb[0][:, :20])), 200.0)
+        self.assertLess(float(np.mean(captured_rgb[0][:, 44:])), 30.0)
+
 
 if __name__ == "__main__":
     unittest.main()
