@@ -252,18 +252,11 @@ class VoiceEngine:
             sr = 32000.0
             y = audio_32k.astype(np.float32)
 
-            # 1. 95Hz 二阶高通滤波
-            b_hp, a_hp = scipy.signal.butter(2, 95.0 / (sr / 2.0), btype='high')
+            # 1. 135Hz 二阶高通滤波（滤除微型腔体喇叭无法还原且易引发破音与电源跌落的低频）
+            b_hp, a_hp = scipy.signal.butter(2, 135.0 / (sr / 2.0), btype='high')
             y = scipy.signal.lfilter(b_hp, a_hp, y)
 
-            # 2. noisereduce 神经平稳降噪
-            if _HAS_NOISEREDUCE:
-                try:
-                    y = nr.reduce_noise(y=y, sr=32000, prop_decrease=0.75, stationary=True)
-                except Exception as ne:
-                    print(f"[VoiceEngine 降噪提示]: {ne}")
-
-            # 3. 300Hz 陷波去浑浊 (De-mud: f0=300Hz, Q=1.0, gain=-3.5dB)
+            # 2. 300Hz 陷波去浑浊 (De-mud: f0=300Hz, Q=1.0, gain=-3.5dB)
             w0 = 2 * np.pi * 300.0 / sr
             alpha0 = np.sin(w0) / (2 * 1.0)
             A0 = 10.0 ** (-3.5 / 40.0)
@@ -273,25 +266,28 @@ class VoiceEngine:
             a_demud = [c / a_demud[0] for c in a_demud]
             y = scipy.signal.lfilter(b_demud, a_demud, y)
 
-            # 4. 3800Hz 临场透亮激励 (Presence Boost: f1=3800Hz, Q=1.2, gain=+3.5dB)
-            w1 = 2 * np.pi * 3800.0 / sr
-            alpha1 = np.sin(w1) / (2 * 1.2)
-            A1 = 10.0 ** (3.5 / 40.0)
+            # 3. 3200Hz 人声清晰度临场激励 (Presence Boost: f1=3200Hz, Q=1.1, gain=+2.5dB)
+            w1 = 2 * np.pi * 3200.0 / sr
+            alpha1 = np.sin(w1) / (2 * 1.1)
+            A1 = 10.0 ** (2.5 / 40.0)
             b_pres = [(1 + alpha1 * A1), (-2 * np.cos(w1)), (1 - alpha1 * A1)]
             a_pres = [(1 + alpha1 / A1), (-2 * np.cos(w1)), (1 - alpha1 / A1)]
             b_pres = [c / a_pres[0] for c in b_pres]
             a_pres = [c / a_pres[0] for c in a_pres]
             y = scipy.signal.lfilter(b_pres, a_pres, y)
 
-            # 5. 14500Hz 二阶低通滤波
-            b_lp, a_lp = scipy.signal.butter(2, 14500.0 / (sr / 2.0), btype='low')
+            # 4. 7200Hz 二阶抗混叠低通滤波（消除 16kHz 下采样高频毛刺与 MAX98357A 高频底噪）
+            b_lp, a_lp = scipy.signal.butter(2, 7200.0 / (sr / 2.0), btype='low')
             y = scipy.signal.lfilter(b_lp, a_lp, y)
 
-            # 6. 动态电平安全归一化 (对齐中阶：板端硬件独立做二次方音量控制，PC 端保持纯净 0.88 数字余量，彻底消除双重音量缩放导致的三次方劣化)
+            # 5. 动态电平安全归一化（以 99.2% 分位抑制尖锐齿音突刺，提升整体人声响度同时严控峰值 <= 0.84 不破音）
             peak = float(np.max(np.abs(y)))
             if peak > 1e-4:
-                target_scale = 0.88
-                y = (y / peak) * 32767.0 * target_scale
+                p99 = float(np.percentile(np.abs(y), 99.2))
+                ref = max(p99, peak * 0.72, 1e-4)
+                target_scale = 0.84
+                y = (y / ref) * target_scale
+                y = np.clip(y, -target_scale, target_scale) * 32767.0
             return np.clip(y, -32768, 32767).astype(np.int16)
         except Exception as e:
             print(f"[VoiceEngine 滤波异常]: {e}")
@@ -363,7 +359,7 @@ class VoiceEngine:
                 cache_dir = runtime_cache_dir() / 'voice'
                 canonical_pair = f"{zh_text}\n{ja_text}"
                 cache_key = hashlib.sha256(
-                    f'bilingual-v2:{self.current_volume}:{canonical_pair}'.encode('utf-8')
+                    f'bilingual-v3:{self.current_volume}:{canonical_pair}'.encode('utf-8')
                 ).hexdigest()
                 cache_file = cache_dir / (cache_key + '.wav')
 
@@ -443,7 +439,7 @@ class VoiceEngine:
         """Same voice/postprocessing as strict bundles, with per-language cache."""
         from pro_paths import cache_dir
         profile = os.environ.get('KURISU_TTS_BERT_DEVICE', 'inherit')
-        key = hashlib.sha256(f'single-v1:{profile}:{self.current_volume}:{lang}:{text}'.encode()).hexdigest()
+        key = hashlib.sha256(f'single-v2:{profile}:{self.current_volume}:{lang}:{text}'.encode()).hexdigest()
         folder = cache_dir() / 'voice-single'
         path = folder / (key + '.wav')
         with self._lock:
@@ -558,26 +554,34 @@ class VoiceEngine:
             timings[key] = round(timings.get(key, 0)+(time.perf_counter()-started)*1000, 1)
             return pcm
 
-        translation = translation_pool.submit(translated)
+        translation_holder = {'future': None}
+
+        def start_translation():
+            if translation_holder['future'] is None:
+                translation_holder['future'] = translation_pool.submit(translated)
+            return translation_holder['future']
 
         def japanese_first_chunk():
-            result = wait(translation)
+            result = wait(start_translation())
             if result is None:
                 return None
             text, error = result
             if error or not text:
                 outcome['translation_error'] = error or '日语译文为空；中文回复保留'
                 return None
-            segments = chunk_sentences_safe(text, max_chars=32)
+            segments = chunk_sentences_safe(text, max_chars=28)
             return text, segments, synth(segments[0], 'ja')
 
         def audio_segments():
-            segments = chunk_sentences_safe(zh, max_chars=32)
+            segments = chunk_sentences_safe(zh, max_chars=22)
             pending = synthesis_pool.submit(synth, segments[0], 'zh')
             for index in range(len(segments)):
                 pcm = wait(pending)
                 if stopped():
                     return
+                # Start Japanese translation only after the first Chinese audio segment is ready
+                # so GPT-SoVITS gets 100% exclusive GPU priority for first_pcm_ms.
+                start_translation()
                 if index+1 < len(segments):
                     pending = synthesis_pool.submit(synth, segments[index+1], 'zh')
                 else:

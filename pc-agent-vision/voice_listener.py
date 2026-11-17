@@ -518,11 +518,12 @@ class VoiceListener:
 
     def _asr_prompt(self):
         # In standby, provide wake-word spelling hints after acoustic KWS hit;
-        # once awake, omit wake words and control nouns so Whisper never hallucinates them on background noise.
+        # once awake, provide Simplified Chinese game/song vocabulary without wake words or "结束对话"
+        # so Whisper outputs Simplified Chinese and accurate song/game names without wake hallucinations.
         if not getattr(self, 'is_awake', False):
             prompt = "助手，红莉栖，牧濑红莉栖，克里斯，克里斯蒂娜。"
         else:
-            prompt = ""
+            prompt = "简体中文：贪吃蛇，俄罗斯方块，超级马里奥，打砖块，吃豆人，微光纪元，米津玄师，Lemon，周杰伦，发如雪，青花瓷，七里香。"
         controller = getattr(self, 'controller', None)
         player = getattr(controller, '_music_player', None)
         music_active = bool(getattr(player, 'running', False) or

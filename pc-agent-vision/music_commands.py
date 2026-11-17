@@ -8,12 +8,18 @@ from music_library import normalized, search_words
 
 def parse_music_request(text):
     text = text.strip().strip("。！!，, ")
-    text = re.sub(r"^(?:助手|红莉栖|克里斯)[，,\s]*", "", text)
-    text = re.sub(r"^(?:请你?|麻烦你?)?(?:帮我|给我)?", "", text).strip()
-    # ASR homophone repairs for music playback
-    text = re.sub(r"^(?:伯访|伯仿|拨放|播发|博访|泊放|百放|放播|波放|包放)", "播放", text)
-    text = re.sub(r"周杰[人仁]", "周杰伦", text)
-    text = re.sub(r"气[笔里][箱香祥]", "七里香", text)
+    text = re.sub(r"^(?:助手|红莉栖|克里斯|牧濑红莉栖|克里斯蒂娜)[，,\s]*", "", text)
+    text = re.sub(r"^(?:请你?|麻烦你?)?(?:帮我|给我|跟我|替我|为我)?", "", text).strip()
+    # ASR homophone repairs for music playback and demo tracks
+    text = re.sub(r"^(?:伯访|伯仿|拨放|播发|博访|泊放|百放|放播|波放|包放|不放)", "播放", text)
+    text = re.sub(r"周杰[人仁轮伦]", "周杰伦", text)
+    text = re.sub(r"米[津金斤今][玄弦悬元]?[师師诗思]?", "米津玄師", text)
+    text = re.sub(r"(?:[七起气期漆7][里理米礼李你笔][香箱乡相湘祥])", "七里香", text)
+    text = re.sub(r"(?:[青清轻倾春][花华画化][瓷词慈磁池辞])", "青花瓷", text)
+    text = re.sub(r"(?:[发法伐花髮][如儒汝入][雪血学穴])", "发如雪", text)
+    text = re.sub(r"(?:莱蒙|雷蒙|来梦|乐门)", "Lemon", text)
+    if re.search(r"米津|播放|想听|要听|来一?首|放一?首", text) and "柠檬" in text:
+        text = text.replace("柠檬", "Lemon")
     compact = normalized(text)
     controls = {
         "下一首": "next",
@@ -74,7 +80,7 @@ def parse_music_request(text):
     ):
         return None
     pick = re.fullmatch(
-        r"(?:播放|选|就)?第([一二三四五六七八九十]|\d{1,2})首(?:吧)?", text
+        r"(?:播放|选|就)?第([一二三四五六七八九十]|\d{1,2})[首手个](?:吧)?", text
     )
     if pick:
         raw = pick[1]
@@ -85,7 +91,7 @@ def parse_music_request(text):
             ),
         )
     match = re.fullmatch(
-        r"(?:我想听|我想要听|我要听|想听|播放|放一下|放一首|放首|来一首|来首|来点|放点)(.*)",
+        r"(?:(?:我)?(?:想听|想要听|要听|想放|要放|点播|点一首|点首)|播放|放一下|放一首|放首|来一首|来首|来点|放点|播一首|播首)(.*)",
         text,
     )
     if not match:

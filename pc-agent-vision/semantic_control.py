@@ -326,22 +326,57 @@ _LIGHT_MODE_ALIASES = {
 def exact_plan(text):
     """Fast path for an entire literal command; everything else uses semantic planning."""
     compact = re.sub(r'[，,。.!！\s]', '', text)
-    compact = compact.replace('音乐流体','音乐光环')
-    compact = re.sub(r'(?:哗翅车|滩翅舌|滩吃蛇|贪吃车|探吃蛇|探池蛇|弹吃蛇|弹翅车)', '贪吃蛇', compact)
+    compact = compact.replace('音乐流体', '音乐光环')
+    compact = (
+        compact.replace('顏色', '颜色')
+        .replace('紅', '红')
+        .replace('藍', '蓝')
+        .replace('綠', '绿')
+        .replace('極光', '极光')
+        .replace('閃', '闪')
+        .replace('開', '开')
+        .replace('關', '关')
+        .replace('燈', '灯')
+        .replace('遊戲', '游戏')
+        .replace('街機', '街机')
+        .replace('貪吃蛇', '贪吃蛇')
+        .replace('俄羅斯方塊', '俄罗斯方块')
+        .replace('俄羅斯風範', '俄罗斯方块')
+        .replace('俄罗斯风范', '俄罗斯方块')
+        .replace('俄罗斯方快', '俄罗斯方块')
+        .replace('俄罗斯方框', '俄罗斯方块')
+        .replace('馬里奧', '马里奥')
+        .replace('瑪麗奧', '马里奥')
+        .replace('玛丽奥', '马里奥')
+        .replace('马力欧', '马里奥')
+        .replace('磚塊', '砖块')
+    )
+    compact = re.sub(r'(?:碳之蛇|炭之蛇|攤吃蛇|探知蛇|贪食蛇|哗翅车|滩翅舌|滩吃蛇|贪吃车|探吃蛇|探池蛇|弹吃蛇|弹翅车)', '贪吃蛇', compact)
+    compact = re.sub(r'^(?:请|麻烦)?(?:帮我|给我)?(我想|我要)完', r'\1玩', compact)
     compact_lower = compact.lower()
     has_non_exec_guard = bool(
         re.search(r'(?:不要|别|不想|不用|不能|不准|禁止|不是|没让|如果|假如|要是|假设)', compact)
         or re.search(r'(?:吗|呢|什么|怎么|怎样|如何|多少|哪个|还是|或者|为什么|\?|？)', compact)
     )
 
-    # 1. Auxiliary fast-path for unambiguous explicit color & named modes only.
-    # Vague ("开灯") or metaphorical ("大海的颜色") phrases intentionally fall through to LLM semantic planning.
+    # 1. Auxiliary fast-path for unambiguous explicit color, common imagery, & named modes.
+    # Unseen creative metaphors still fall through to LLM semantic planning.
     if not has_non_exec_guard:
         if re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:关闭|关掉|关上|关|熄灭)?(?:全部|所有)?(?:关灯|熄灯|清屏|把灯关了|把灯关掉|把灯关上|关掉灯|关掉灯光|关闭灯光|关闭灯板|灯光关闭|灯关掉)(?:吧|一下)?', compact):
             return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': 0}]}
         color = re.fullmatch(r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|我想|我要|想看|要看|开机|打开|开启|开一下|开个|开|切换成|切换到|切到|切成|换成|换个|改回|改成|把灯切换成|把灯换成|把灯调成|把灯变成|调成|变成|显示|展示|来个)?(?:纯)?([红蓝绿])(?:色灯|灯|色)(?:模式|效果)?(?:吧|一下)?', compact)
         if color:
             return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': {'红': 1, '蓝': 2, '绿': 3}[color[1]]}]}
+        imagery_prefix = r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|我想体验|我想感受|我想|我要|想看|要看|给我看|把灯调成|把灯变成|把灯换成|切到|切换到|切换成|调成|变成|换成|显示|展示|点亮|来个|来点|来一点)?'
+        imagery_suffix = r'(?:那样|般)?(?:的)?(?:颜色|色彩|灯光|灯效|光效|氛围|感觉|画面|光)?(?:吧|一下)?'
+        for img_mode, img_pattern in (
+            (2, r'(?:大海|海洋|海水|深海|海浪|天空|晴空|蓝天|蓝宝石)'),
+            (3, r'(?:森林|草原|草地|树林|竹林|树叶|春天|大自然|翡翠|西瓜|西兰花|抹茶|青草)'),
+            (1, r'(?:夕阳|火烧云|春联|红灯笼|灯笼|玫瑰|红玫瑰|苹果|红苹果|草莓|喜庆|火焰山)'),
+            (4, r'(?:晚霞|彩虹|五彩|五颜六色|绚丽)'),
+        ):
+            if re.fullmatch(imagery_prefix + img_pattern + imagery_suffix, compact) and re.search(r'(?:想看|要看|给我|调成|变成|换成|切到|切换|显示|展示|点亮|来个|来点|颜色|色彩|灯光|灯效|氛围|感觉)', compact):
+                return {'kind': 'control', 'actions': [{'tool': 'set_light_mode', 'value': img_mode}]}
         light_prefix = r'(?:请|麻烦)?(?:帮我|给我)?(?:我想看|我要看|我想|我要|想看|要看|开机|打开|开启|开一下|开个|开|切换成|切换到|切到|切成|换成|换个|换一下|改回|改成|调成|变成|显示|展示|启动|进入|来个|来一点|来点|点亮|放个|回到|返回)?'
         light_suffix = r'(?:模式|灯效|效果|画面|动画|灯)?(?:吧|一下)?'
         for mode, aliases in _LIGHT_MODE_ALIASES.items():
@@ -433,8 +468,8 @@ def exact_plan(text):
                 return {'kind': 'clarify', 'actions': []}
         return {'kind': 'chat', 'actions': []}
 
-    # 3. Question / explanation inquiries (e.g. "马里奥是什么", "什么是超级马里奥", "贪吃蛇怎么玩", "打开打砖块吗")
-    if has_game_intent and re.search(r'(?:吗|呢|好吗|行吗|可以吗|是什么|是什么意思|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则是什么|有什么|多少关|哪个好玩|\?|？)', compact):
+    # 3. Question / explanation inquiries (e.g. "马里奥是什么", "超级马里奥是一款什么样的游戏", "贪吃蛇怎么玩", "打开打砖块吗")
+    if has_game_intent and re.search(r'(?:吗|呢|好吗|行吗|可以吗|是什么|什么样的|什么游戏|是谁|好玩吗|怎么玩|怎样玩|如何玩|规则|介绍|讲讲|说说|有什么|多少关|哪个好玩|\?|？)', compact):
         return {'kind': 'chat', 'actions': []}
 
     # 4. Multiple games / comparison (e.g. "马里奥还是贪吃蛇", "玩马里奥还是贪吃蛇") -> clarify
@@ -447,13 +482,17 @@ def exact_plan(text):
         return {'kind': 'clarify', 'actions': []}
 
     # 6. Specific arcade game launch with explicit intent (e.g. "启动马里奥", "玩超级马里奥", "启动第1款游戏", "打开#041")
-    game_m = re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:启动|打开|开启|玩|运行|切换到|进入|来[个局把]|玩一[局把下])\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:吧|一下)?', compact)
+    game_m = re.fullmatch(r'(?:请)?(?:帮我|给我)?(?:我想|我要)?(?:启动|打开|开启|玩|完|运行|切换到|进入|来[个局把]|玩一[局把下])\s*(?:街机|游戏)?\s*(.+?)(?:游戏|街机|卡带)?(?:吧|一下)?', compact)
     if game_m:
         candidate = game_m.group(1).strip()
         if not re.search(r'(?:不是|不要|别|但|不过|先不|暂不|吗|呢|\?|？)', candidate):
             res = resolve_arcade_game(candidate)
             if res:
                 return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': res[0]}]}
+
+    # 6.1 Action-intent + single unambiguous game match (fast path for all 101 games when user says "我想玩XX", "来一局XX", etc.)
+    if len(games) == 1 and not has_non_exec_guard and re.search(r'(?:想|要|玩|完|来|开|打|启动|进入|运行|切|换|试|体验|局|盘|把)', compact):
+        return {'kind': 'control', 'actions': [{'tool': 'start_game', 'value': games[0]}]}
 
     # 7. Direct exact standalone game alias fallback
     if compact not in RESERVED_LIGHTING_WORDS and compact in _NAME_TO_ID:
@@ -560,7 +599,7 @@ class SemanticControl:
         if (
             re.match(r'^(?:如果|假如|要是|假设).*(?:会怎样|会怎么样|怎么办|什么效果|如何)$', compact)
             or re.match(r'^(?:我)?(?:不是|并不是|没|没有|并非)(?:让你|叫你|要你).*', compact)
-            or re.fullmatch(r'(?:请)?(?:不要|别|先不要|先别|不想|不用)(?:打开|开)?(?:灯光?|亮灯)', compact)
+            or re.fullmatch(r'(?:请)?(?:不要|别|先不要|先别|不想|不用|不准|禁止)(?:打开|开启|开|切到|切换成|换成|调成|变成)?(?:红|蓝|绿|幻彩|霓虹|极光|流星|星空|雨滴|波纹|火焰|代码雨|全屏)?(?:色)?(?:灯光?|灯效|模式|亮灯)', compact)
         ):
             return {'kind': 'chat', 'actions': []}
         direct = exact_plan(text)
@@ -595,33 +634,20 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
 目录：
 """ + catalog
         context = [{'role': item['role'], 'content': item.get('content', '')}
-                   for item in list(history)[-4:] if item.get('role') in ('user', 'assistant')]
+                   for item in list(history)[-2:] if item.get('role') in ('user', 'assistant')]
         examples = [
             ('像在北极看到柔和变化的光一样，让灯板也变成那样', [{'tool': 'set_light_mode', 'value': 5}]),
             ('我想看大海的颜色', [{'tool': 'set_light_mode', 'value': 2}]),
-            ('我想看天空的颜色', [{'tool': 'set_light_mode', 'value': 2}]),
             ('我想看森林的颜色', [{'tool': 'set_light_mode', 'value': 3}]),
             ('我想看彩虹的颜色', [{'tool': 'set_light_mode', 'value': 4}]),
-            ('试试手势指尖追踪', [{'tool': 'set_light_mode', 'value': 26}]),
-            ('玩一下光球沙盒', [{'tool': 'set_light_mode', 'value': 27}]),
             ('红色不用了，给我黑客屏幕上数字往下落的那种效果', [{'tool': 'set_light_mode', 'value': 24}]),
             ('切到壁炉的感觉', [{'tool': 'set_light_mode', 'value': 23}]),
-            ('灯太刺眼了，亮度设为十', [{'tool': 'set_brightness', 'value': 10}]),
-            ('播报太小了，音量设为八十', [{'tool': 'set_volume', 'value': 80}]),
             ('星空模式并把灯光亮度设为二十', [{'tool': 'set_light_mode', 'value': 7}, {'tool': 'set_brightness', 'value': 20}]),
-            ('灯板设成纯红', [{'tool': 'set_light_mode', 'value': 1}]),
-            ('灯板设成纯蓝', [{'tool': 'set_light_mode', 'value': 2}]),
-            ('灯板设成纯绿', [{'tool': 'set_light_mode', 'value': 3}]),
             ('天空为什么是蓝色的？', []),
-            ('森林为什么是绿色的？', []),
-            ('你喜欢什么颜色？', []),
             ('我今天心情不好', []),
             ('别改灯效，也不要关灯', []),
-            ('我想让红莉栖的半身立绘回到灯板上', [{'tool': 'set_light_mode', 'value': 17}]),
             ('开始沙漏，时长两分钟', [{'tool': 'start_countdown', 'value': 120}]),
             ('启动超级马里奥游戏', [{'tool': 'start_game', 'value': 1}]),
-            ('来局双人乒乓', [{'tool': 'start_game', 'value': 20}]),
-            ('打开微光纪元', [{'tool': 'start_game', 'value': 101}]),
             ('不要玩游戏', []),
         ]
         few_shot = []
@@ -631,7 +657,7 @@ chat或clarify的字段必须是 effect保持现状,timer_seconds0,brightness-1,
         payload = {'model': self.model, 'messages': [{'role': 'system', 'content': prompt}] + few_shot + context +
                    [{'role': 'user', 'content': text}], 'stream': False,
                    'format': WIRE_SCHEMA, 'keep_alive': '30m',
-                   'options': {'temperature': 0, 'num_predict': 250, 'num_ctx': 4096}}
+                   'options': {'temperature': 0, 'num_predict': 90, 'num_ctx': 2048}}
         if not self.is_ollama:
             raise ConnectionError('Semantic planning requires the configured local Ollama endpoint')
         endpoint = self.api_base.removesuffix('/v1').rstrip('/') + '/api/chat'

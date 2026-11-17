@@ -557,8 +557,8 @@ class KurisuAgent:
             payload['options'] = {
                 'temperature': 0.55,
                 'repeat_penalty': 1.05,
-                'num_predict': 75 if executed_facts else 120,
-                'num_ctx': 4096,
+                'num_predict': 45 if executed_facts else 75,
+                'num_ctx': 2048,
                 'stop': ['\n', '<|im_end|>', '<|endoftext|>'],
             }
             payload['keep_alive'] = '30m'

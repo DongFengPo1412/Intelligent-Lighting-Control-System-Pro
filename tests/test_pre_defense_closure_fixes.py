@@ -345,9 +345,14 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         listener.is_awake = False
         self.assertIn("红莉栖", listener._asr_prompt())
 
-        # Once awake, _asr_prompt must not prime Whisper with wake names or "结束对话"
+        # Once awake, _asr_prompt must not prime Whisper with wake names or "结束对话",
+        # while providing Simplified Chinese hints for arcade games and songs.
         listener.is_awake = True
-        self.assertEqual(listener._asr_prompt(), "")
+        awake_prompt = listener._asr_prompt()
+        self.assertNotIn("红莉栖", awake_prompt)
+        self.assertNotIn("结束对话", awake_prompt)
+        self.assertIn("贪吃蛇", awake_prompt)
+        self.assertIn("七里香", awake_prompt)
 
         # Low-confidence roommate noise (-1.20) or fullwidth digits ('海洋４') must be dropped even at high RMS
         dispatched = []
@@ -405,6 +410,32 @@ class PreDefenseClosureFixesTests(unittest.TestCase):
         # must now be on the left half (x<32) so moving hand left moves LED ball left!
         self.assertGreater(float(np.mean(captured_rgb[0][:, :20])), 200.0)
         self.assertLess(float(np.mean(captured_rgb[0][:, 44:])), 30.0)
+
+    def test_outdoor_demo_asr_song_game_homophones_and_fast_imagery(self):
+        from music_commands import parse_music_request
+        from music_library import search_words
+        from semantic_control import exact_plan
+
+        self.assertEqual(parse_music_request("跟我播放一首起理箱"), {"action": "play", "query": "七里香", "collection": False})
+        self.assertEqual(parse_music_request("播放一首七米香"), {"action": "play", "query": "七里香", "collection": False})
+        self.assertEqual(parse_music_request("播放米津玄师的莱蒙"), {"action": "play", "query": "米津玄師的Lemon", "collection": False})
+        self.assertEqual(parse_music_request("播放第一手"), {"action": "choose", "number": 1})
+        self.assertIn("米津玄師", search_words("米津玄师"))
+        self.assertIn("lemon", search_words("莱蒙"))
+
+        # Game ASR homophones & action vs question disambiguation
+        self.assertEqual(exact_plan("我想完碳之蛇"), {"kind": "control", "actions": [{"tool": "start_game", "value": 33}]})
+        self.assertEqual(exact_plan("我想玩攤吃蛇"), {"kind": "control", "actions": [{"tool": "start_game", "value": 33}]})
+        self.assertEqual(exact_plan("我想玩俄羅斯風範"), {"kind": "control", "actions": [{"tool": "start_game", "value": 41}]})
+        self.assertEqual(exact_plan("我想玩超级马里奥"), {"kind": "control", "actions": [{"tool": "start_game", "value": 1}]})
+        self.assertEqual(exact_plan("超级马里奥是一款什么样的游戏？"), {"kind": "chat", "actions": []})
+
+        # Common imagery fast-path (<1ms) while preserving question guard
+        self.assertEqual(exact_plan("我想看森林的颜色"), {"kind": "control", "actions": [{"tool": "set_light_mode", "value": 3}]})
+        self.assertEqual(exact_plan("给我西瓜的颜色"), {"kind": "control", "actions": [{"tool": "set_light_mode", "value": 3}]})
+        self.assertEqual(exact_plan("我想看春联的颜色"), {"kind": "control", "actions": [{"tool": "set_light_mode", "value": 1}]})
+        self.assertEqual(exact_plan("我想看大海的颜色"), {"kind": "control", "actions": [{"tool": "set_light_mode", "value": 2}]})
+        self.assertIsNone(exact_plan("森林为什么是绿色的？"))
 
 
 if __name__ == "__main__":
