@@ -166,7 +166,7 @@ class WiFiPcmClient:
             raise ValueError("Invalid PCM input")
         return self.play_stream(iter([pcm]), chunk_samples, cancelled=cancelled)
 
-    def abort(self, timeout=1.2):
+    def abort(self, timeout=2.2):
         """Stop the old producer, fence TCP PCM, then drain board playback.
 
         UDP abort alone can overtake old TCP audio. The existing kind-5 echo

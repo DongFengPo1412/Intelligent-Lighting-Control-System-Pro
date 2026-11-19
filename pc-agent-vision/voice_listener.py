@@ -299,7 +299,10 @@ class VoiceListener:
             saved = getattr(self, '_wake_diagnostic_saved', 0)
             if phase == 'standby' and saved < limit and 0 < len(pcm) <= 160000:
                 from pro_paths import cache_dir
-                folder = cache_dir() / 'voice-diagnostics' / f'wake-probe-{os.getpid()}'
+                from pathlib import Path
+                diagnostic_root = os.environ.get('KURISU_WAKE_DIAGNOSTIC_DIR')
+                folder = ((Path(diagnostic_root) if diagnostic_root else cache_dir() / 'voice-diagnostics')
+                          / f'wake-probe-{os.getpid()}')
                 folder.mkdir(parents=True, exist_ok=True)
                 name = f'attempt-{saved+1:02d}'
                 with wave.open(str(folder / (name+'.wav')), 'wb') as recording:
@@ -610,6 +613,20 @@ class VoiceListener:
                         avg_lp = (sum(scores) / len(scores)) if scores else None
                         max_nsp = max(no_speech_probs) if no_speech_probs else 0.0
                         compact_txt = re.sub(r'[，,。.!！?？、…~\s]', '', text)
+                        # A short wake name can have poor ASR confidence (e.g.
+                        # 助手 -> 住手). Check independent acoustic evidence before
+                        # rejecting it, but never rescue an attached low-confidence
+                        # command or ordinary chatter through this exception.
+                        if self.is_awake and not acoustic_keyword and (
+                            self._has_wake_homophone_prefix(text) or self._check_wake_word(text)[0]
+                        ):
+                            detector = getattr(self, 'wake_detector', None)
+                            candidate = detector.detect(pcm_bytes) if detector else ''
+                            normalized_name = self._normalize_acoustic_name(text, candidate)
+                            confirmed_name, remainder = self._check_wake_word(normalized_name)
+                            if candidate and confirmed_name and not remainder.strip('，,。！？!? '):
+                                acoustic_keyword = candidate
+                                text = normalized_name
                         if avg_lp is not None and not acoustic_keyword:
                             # Reject far-field roommate chatter and noise hallucinations regardless of raw_rms,
                             # including fullwidth digit artifacts (e.g. '４') that Whisper emits on unintelligible noise.
@@ -718,7 +735,7 @@ class VoiceListener:
                 else:
                     # A name can be misspelled during continuous listening too.
                     # Correct only with fresh acoustic evidence, never from text alone.
-                    if self._has_wake_homophone_prefix(text):
+                    if not acoustic_keyword and self._has_wake_homophone_prefix(text):
                         detector = getattr(self, 'wake_detector', None)
                         acoustic_keyword = detector.detect(pcm_bytes) if detector else ''
                         text = self._normalize_acoustic_name(text, acoustic_keyword)
@@ -1208,7 +1225,7 @@ class VoiceListener:
                         silent_count = 999 # 达到 30s 安全上限才强制交付
                     elif silent_count < dim_frames:
                         # 阶段 1（亮红保持期，0 ~ 0.66s）：说话过程中轻声虚词/音节间隙保持亮红绝不闪烁
-                        if (frame_vad_speech and ac_rms >= continue_threshold) or (ac_rms >= start_threshold * 0.85):
+                        if frame_vad_speech and ac_rms >= continue_threshold:
                             speaker_ema_rms = 0.85 * locals().get('speaker_ema_rms', float(ac_rms)) + 0.15 * min(float(ac_rms), 12000.0)
                             silent_count = 0
                             continue_streak = 0
@@ -1240,6 +1257,7 @@ class VoiceListener:
                         if silent_count < 900 and silent_count > 16 and len(speech_frames) > (silent_count - 12):
                             speech_frames = speech_frames[:-(silent_count - 16)]
                         is_speaking = False
+                        self._speech_active = False
                         silent_count = 0
                         speech_trigger_count = 0
                         continue_streak = 0

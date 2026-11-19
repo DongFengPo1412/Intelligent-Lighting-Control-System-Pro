@@ -5,7 +5,7 @@ import threading
 import numpy as np
 
 
-DEFAULT_KWS_THRESHOLD = 0.43
+DEFAULT_KWS_THRESHOLD = 0.40
 
 
 class WakeDetector:
